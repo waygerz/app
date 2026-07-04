@@ -1,0 +1,206 @@
+name: Build & Deploy Service (Waygerz, ARM64)
+
+# Builds one (or all) Waygerz service image(s) for arm64, pushes to ECR
+# (waygerz/<service>), and optionally rolls the matching ECS service.
+#
+# Prereqs (see _docs/INF_PROD.md "ECR / CI-CD" + step 8/9):
+#   - GitHub OIDC provider + role waygerz-gha-deploy (trusts repo:waygerz/app)
+#   - ECR repos waygerz/<service> exist
+#   - ECS cluster waygerz-prod + the service exist (for deploy)
+# Repo secrets: AWS_REGION, AWS_ACCOUNT_ID, AWS_GHA_ROLE_ARN, AWS_ECS_CLUSTER
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to build/deploy"
+        required: true
+        type: choice
+        options:
+          - all
+          - auth
+          - friends
+          - comments
+          - messaging
+          - ingestor
+          - wallet
+          - contests
+          - leagues
+          - media
+          - notifications
+          - webui
+          - scheduler
+      register_taskdef:
+        description: "Register new task def revision from <service>/taskdef.json?"
+        required: true
+        type: boolean
+        default: false
+      deploy:
+        description: "Roll the ECS service after push?"
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: build-waygerz-${{ github.event.inputs.service || 'unknown' }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ROLE_ARN: ${{ secrets.AWS_GHA_ROLE_ARN }}
+  ECS_CLUSTER: ${{ secrets.AWS_ECS_CLUSTER }}
+  IMAGE_TAG: ${{ github.sha }}
+  LATEST_TAG: latest
+  PLATFORM: linux/arm64
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.services.outputs.matrix }}
+    steps:
+      - name: Determine services to build
+        id: services
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event.inputs.service }}" = "all" ]; then
+            SERVICES='["auth","friends","comments","messaging","ingestor","wallet","contests","leagues","media","notifications","webui","scheduler"]'
+          else
+            SERVICES='["${{ github.event.inputs.service }}"]'
+          fi
+          echo "matrix=$SERVICES" >> "$GITHUB_OUTPUT"
+
+  build-push:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        service: ${{ fromJson(needs.setup.outputs.services) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Derive service config
+        id: svc
+        run: |
+          set -euo pipefail
+          SVC="${{ matrix.service }}"
+          echo "CTX=${SVC}" >> "$GITHUB_OUTPUT"
+          echo "REPO=waygerz/${SVC}" >> "$GITHUB_OUTPUT"
+          echo "ECS_SERVICE=${SVC}" >> "$GITHUB_OUTPUT"
+          # webui: build the prod image and bake the API base ("" -> browser
+          # calls /v1/... directly, matching the ALB path rules).
+          if [ "${SVC}" = "webui" ]; then
+            echo "DOCKERFILE=${SVC}/Dockerfile.prod" >> "$GITHUB_OUTPUT"
+            echo "BUILD_ARGS=VITE_API_URL=" >> "$GITHUB_OUTPUT"
+          else
+            echo "DOCKERFILE=${SVC}/Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "BUILD_ARGS=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail fast if build context missing
+        run: |
+          set -euo pipefail
+          [ -d "${{ steps.svc.outputs.CTX }}" ] || { echo "Build context not found: ${{ steps.svc.outputs.CTX }}"; exit 1; }
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.ROLE_ARN }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Verify ECR repository exists
+        run: |
+          set -euo pipefail
+          aws ecr describe-repositories \
+            --region "${AWS_REGION}" \
+            --repository-names "${{ steps.svc.outputs.REPO }}" >/dev/null
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ steps.svc.outputs.CTX }}
+          file: ${{ steps.svc.outputs.DOCKERFILE }}
+          build-args: ${{ steps.svc.outputs.BUILD_ARGS }}
+          platforms: ${{ env.PLATFORM }}
+          push: true
+          provenance: false
+          tags: |
+            ${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ steps.svc.outputs.REPO }}:${{ env.IMAGE_TAG }}
+            ${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ steps.svc.outputs.REPO }}:${{ env.LATEST_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify ECS service exists
+        if: ${{ github.event.inputs.deploy == 'true' }}
+        run: |
+          set -euo pipefail
+          aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${{ steps.svc.outputs.ECS_SERVICE }}" \
+            --query 'services[0].status' --output text >/dev/null
+
+      - name: Register new task definition revision
+        if: ${{ github.event.inputs.deploy == 'true' && github.event.inputs.register_taskdef == 'true' }}
+        id: taskdef
+        run: |
+          set -euo pipefail
+          TASKDEF_PATH="${{ steps.svc.outputs.CTX }}/taskdef.json"
+          [ -f "${TASKDEF_PATH}" ] || { echo "Task definition file not found: ${TASKDEF_PATH}"; exit 1; }
+          NEW_TD_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "file://${TASKDEF_PATH}" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "Registered ${NEW_TD_ARN}"
+          echo "arn=${NEW_TD_ARN}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy (roll ECS service)
+        if: ${{ github.event.inputs.deploy == 'true' }}
+        run: |
+          set -euo pipefail
+          SERVICE="${{ steps.svc.outputs.ECS_SERVICE }}"
+          NEW_TD="${{ steps.taskdef.outputs.arn }}"
+          if [ -n "${NEW_TD}" ]; then
+            echo "Deploying ${SERVICE} with ${NEW_TD}"
+            aws ecs update-service --cluster "${ECS_CLUSTER}" --service "${SERVICE}" \
+              --task-definition "${NEW_TD}" --force-new-deployment >/dev/null
+          else
+            echo "Rolling ${SERVICE} (force-new-deployment, re-pulls :latest)"
+            aws ecs update-service --cluster "${ECS_CLUSTER}" --service "${SERVICE}" \
+              --force-new-deployment >/dev/null
+          fi
+          echo "Waiting for ${SERVICE} to stabilize..."
+          aws ecs wait services-stable --cluster "${ECS_CLUSTER}" --services "${SERVICE}"
+          echo "${SERVICE} deployed."
+
+      - name: Print ECS service status on failure
+        if: ${{ failure() && github.event.inputs.deploy == 'true' }}
+        run: |
+          aws ecs describe-services \
+            --cluster "${ECS_CLUSTER}" \
+            --services "${{ steps.svc.outputs.ECS_SERVICE }}" \
+            --output json
