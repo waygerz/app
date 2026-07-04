@@ -1,0 +1,1166 @@
+import { useEffect, useState, type ReactNode } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import {
+  leaguesApi,
+  type LeagueDetail,
+  type PickRow,
+} from '@/lib/leagues';
+import { wagersApi, type Wager } from '@/lib/wagers';
+import { poolsApi } from '@/lib/pools';
+import {
+  fetchUpcomingEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
+} from '@/lib/ingestor';
+import { TeamLogo } from '@/components/event-card';
+import { fetchTransactions, formatCredits } from '@/lib/wallet';
+import { useAuth } from '@/auth/AuthContext';
+import { EventCard } from '@/components/event-card';
+import { Card } from '@/components/ui/card';
+import { UserAvatar } from '@/components/user-avatar';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle } from 'lucide-react';
+import { friendsApi } from '@/lib/friends';
+import { messagingApi } from '@/lib/messaging';
+import { dispatchOpenChat } from '@/lib/open-chat';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+function CenterCard({ children }: { children: ReactNode }) {
+  return <Card className="items-center gap-2 p-6 text-center sm:p-10">{children}</Card>;
+}
+
+// Scheduled games restricted to a league's own sport-leagues (so an NBA league
+// never shows college-football games). Pass the league's sport_league_ids.
+function useScheduled(sportLeagueIds: string[]) {
+  return useQuery({
+    queryKey: ['schedule', [...sportLeagueIds].sort()],
+    queryFn: () => fetchUpcomingEvents(50, sportLeagueIds),
+    enabled: sportLeagueIds.length > 0,
+  });
+}
+
+// ===================== PLAY (type-aware) =====================
+export function LeaguePlay() {
+  const lg = useOutletContext<LeagueDetail>();
+  if (lg.status !== 'active') {
+    return <CenterCard><p className="text-sm text-muted-foreground">This league isn’t active yet.</p></CenterCard>;
+  }
+  if (lg.league_type === 'pickem') return <PickemPlay lg={lg} />;
+  if (lg.league_type === 'pool') return <PoolPlay lg={lg} />;
+  return <HeadToHeadPlay lg={lg} />;
+}
+
+// ---- Pick'em ----
+function PickemPlay({ lg }: { lg: LeagueDetail }) {
+  const qc = useQueryClient();
+  const period = lg.current_period;
+  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
+  const existing = useQuery({
+    queryKey: ['picks', lg.id, period?.id],
+    queryFn: () => leaguesApi.getPicks(lg.id, period!.id),
+    enabled: !!period,
+  });
+  const [sel, setSel] = useState<Record<string, 'home' | 'away'>>({});
+
+  const graded = new Map((existing.data ?? []).map((p: PickRow) => [p.event_id, p]));
+  const pick = (eid: string) => sel[eid] ?? graded.get(eid)?.pick_side;
+
+  const save = useMutation({
+    mutationFn: () =>
+      leaguesApi.submitPicks(
+        lg.id, period!.id,
+        Object.entries(sel).map(([event_id, side]) => ({ event_id, side })),
+      ),
+    onSuccess: () => {
+      toast.success('Picks saved');
+      setSel({});
+      qc.invalidateQueries({ queryKey: ['picks', lg.id, period?.id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (!period || period.status !== 'open') {
+    return <CenterCard><p className="text-sm text-muted-foreground">Picks are locked — no open period.</p></CenterCard>;
+  }
+  const evs = events.data ?? [];
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-base font-semibold text-foreground sm:text-lg">Make your Picks · {period.label}</h2>
+        <Button size="sm" className="w-full shrink-0 sm:w-auto" disabled={save.isPending || Object.keys(sel).length === 0} onClick={() => save.mutate()}>
+          {save.isPending ? 'Saving…' : 'Save picks'}
+        </Button>
+      </div>
+      {events.isLoading && <Skeleton className="h-24 rounded-xl" />}
+      {!events.isLoading && evs.length === 0 && <p className="text-sm text-muted-foreground">No games scheduled right now.</p>}
+      {evs.map((ev) => {
+        const g = graded.get(ev.external_id);
+        const locked = g && g.correct !== null;
+        const cur = pick(ev.external_id);
+        return (
+          <Card key={ev.external_id} className="gap-2 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="min-w-0 text-sm font-medium text-foreground">{ev.away_team} @ {ev.home_team}</span>
+              {locked && (
+                <Badge size="sm" appearance="light" variant={g!.correct ? 'success' : 'destructive'}>
+                  {g!.correct ? '✓ correct' : '✗ wrong'}
+                </Badge>
+              )}
+            </div>
+            {!locked && (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {(['away', 'home'] as const).map((side) => (
+                  <button
+                    key={side}
+                    type="button"
+                    onClick={() => setSel((s) => ({ ...s, [ev.external_id]: side }))}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm transition-colors sm:text-center ${
+                      cur === side ? 'border-primary bg-primary/10 text-foreground' : 'border-input text-muted-foreground'
+                    }`}
+                  >
+                    {side === 'away' ? ev.away_team : ev.home_team}
+                  </button>
+                ))}
+              </div>
+            )}
+            {locked && <span className="text-xs text-muted-foreground">You picked {g!.pick_side === 'home' ? ev.home_team : ev.away_team}</span>}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+type BetSectionTone = 'pending' | 'awaiting' | 'active' | 'history';
+
+const BET_SECTION_TONE: Record<BetSectionTone, { accent: string; header: string }> = {
+  pending: {
+    accent: 'border-l-amber-500 bg-amber-500/5',
+    header: 'text-amber-700 dark:text-amber-400',
+  },
+  awaiting: {
+    accent: 'border-l-blue-500 bg-blue-500/5',
+    header: 'text-blue-700 dark:text-blue-400',
+  },
+  active: {
+    accent: 'border-l-green-600 bg-green-500/5',
+    header: 'text-green-700 dark:text-green-400',
+  },
+  history: {
+    accent: 'border-l-border bg-muted/30',
+    header: 'text-muted-foreground',
+  },
+};
+
+const pickBtn = (selected: boolean) =>
+  `rounded-lg border text-sm transition-colors ${
+    selected
+      ? 'border-green-700 bg-green-100 text-green-900 dark:border-green-600 dark:bg-green-950 dark:text-green-200'
+      : 'border-input text-muted-foreground hover:border-foreground/30'
+  }`;
+
+function wagerStatusBadge(w: Wager, me?: string) {
+  if (w.status === 'open' && w.acceptor_id === me) {
+    return <Badge size="sm" variant="warning" appearance="light">Needs response</Badge>;
+  }
+  if (w.status === 'open') {
+    return <Badge size="sm" variant="info" appearance="light">Awaiting</Badge>;
+  }
+  if (w.status === 'accepted') {
+    return <Badge size="sm" variant="success" appearance="light">Live</Badge>;
+  }
+  if (w.status === 'settled') {
+    const won = w.winner_user_id === me;
+    return (
+      <Badge size="sm" variant={won ? 'success' : 'destructive'} appearance="light">
+        {won ? 'Won' : 'Lost'}
+      </Badge>
+    );
+  }
+  if (w.status === 'refunded') {
+    return <Badge size="sm" variant="secondary" appearance="light">Push</Badge>;
+  }
+  if (w.status === 'declined') {
+    return <Badge size="sm" variant="secondary" appearance="light">Declined</Badge>;
+  }
+  if (w.status === 'cancelled') {
+    return <Badge size="sm" variant="secondary" appearance="light">Cancelled</Badge>;
+  }
+  return null;
+}
+
+function WagerBetCard({
+  w,
+  me,
+  ev,
+  actions,
+  accentClass,
+}: {
+  w: Wager;
+  me?: string;
+  ev?: SportEvent | null;
+  actions?: ReactNode;
+  accentClass: string;
+}) {
+  const awayName = ev?.away_team ?? w.away_team;
+  const homeName = ev?.home_team ?? w.home_team;
+  const proposerIsHome = w.proposer_side === 'home';
+  const acceptorIsHome = w.acceptor_side === 'home';
+  const proposerTeam = proposerIsHome ? homeName : awayName;
+  const acceptorTeam = acceptorIsHome ? homeName : awayName;
+  const proposerLogo = proposerIsHome ? ev?.home_logo : ev?.away_logo;
+  const acceptorLogo = acceptorIsHome ? ev?.home_logo : ev?.away_logo;
+  const proposerAbbr = proposerIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName);
+  const acceptorAbbr = acceptorIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName);
+  const pickLogo = 'size-10 text-xs sm:size-10';
+
+  return (
+    <Card className={cn('min-w-0 gap-3 border-l-4 p-4', accentClass)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {wagerStatusBadge(w, me)}
+        <Badge size="sm" appearance="outline" variant="primary">
+          {formatCredits(w.amount_cents)} each
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <div className={cn('flex flex-col items-center gap-1.5 rounded-lg px-2 py-2', pickBtn(true))}>
+          <UserAvatar userId={w.proposer_id} name={w.proposer_name} className="size-10" />
+          <span className="max-w-full truncate text-center text-xs font-medium">{w.proposer_name}</span>
+          <div className="flex max-w-full items-center gap-2">
+            <TeamLogo src={proposerLogo} name={proposerAbbr} className={pickLogo} />
+            <span className="truncate text-sm font-medium text-foreground">{proposerTeam}</span>
+          </div>
+        </div>
+        <span className="text-xs font-semibold text-muted-foreground">vs</span>
+        <div className={cn('flex flex-col items-center gap-1.5 rounded-lg px-2 py-2', pickBtn(w.status !== 'open'))}>
+          <UserAvatar userId={w.acceptor_id} name={w.acceptor_name} className="size-10" />
+          <span className="max-w-full truncate text-center text-xs font-medium">{w.acceptor_name}</span>
+          <div className="flex max-w-full items-center gap-2">
+            <TeamLogo src={acceptorLogo} name={acceptorAbbr} className={pickLogo} />
+            <span className="truncate text-sm font-medium text-foreground">{acceptorTeam}</span>
+          </div>
+        </div>
+      </div>
+
+      {actions && <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">{actions}</div>}
+    </Card>
+  );
+}
+
+function BetSection({
+  title,
+  tone,
+  wagers,
+  me,
+  eventMap,
+  actions,
+}: {
+  title: string;
+  tone: BetSectionTone;
+  wagers: Wager[];
+  me?: string;
+  eventMap: Record<string, SportEvent>;
+  actions?: (w: Wager) => ReactNode;
+}) {
+  if (wagers.length === 0) return null;
+  const style = BET_SECTION_TONE[tone];
+  return (
+    <section>
+      <h3 className={cn('mb-3 text-sm font-semibold', style.header)}>
+        {title} ({wagers.length})
+      </h3>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {wagers.map((w) => (
+          <WagerBetCard
+            key={w.id}
+            w={w}
+            me={me}
+            ev={eventMap[w.event_id]}
+            accentClass={style.accent}
+            actions={actions?.(w)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ---- Head-to-head: "My Bets" — games you've bet against friends. Placing a
+// bet now happens from the Schedule tab (tap a game), so this is the list view.
+function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const me = user?.id;
+  const bets = useQuery({ queryKey: ['wagers', lg.id], queryFn: () => wagersApi.mine(lg.id) });
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['wagers', lg.id] });
+    qc.invalidateQueries({ queryKey: ['wagers-all'] });
+  };
+  const onErr = (e: Error) => toast.error(e.message);
+  const acceptM = useMutation({ mutationFn: (id: string) => wagersApi.accept(id), onSuccess: refresh, onError: onErr });
+  const declineM = useMutation({ mutationFn: (id: string) => wagersApi.decline(id), onSuccess: refresh, onError: onErr });
+  const cancelM = useMutation({ mutationFn: (id: string) => wagersApi.cancel(id), onSuccess: refresh, onError: onErr });
+
+  const all = bets.data ?? [];
+  const pending = all.filter((w) => w.status === 'open');
+  const active = all.filter((w) => w.status === 'accepted');
+  const history = all.filter((w) => ['settled', 'declined', 'cancelled', 'refunded'].includes(w.status));
+
+  const eventIds = [...new Set(all.map((w) => w.event_id))];
+  const eventsQ = useQuery({
+    queryKey: ['wager-events', lg.id, [...eventIds].sort().join(',')],
+    queryFn: async () => {
+      const map: Record<string, SportEvent> = {};
+      await Promise.all(
+        eventIds.map(async (id) => {
+          const ev = await fetchEvent(id);
+          if (ev) map[id] = ev;
+        }),
+      );
+      return map;
+    },
+    enabled: eventIds.length > 0,
+    staleTime: 5 * 60_000,
+  });
+  const eventMap = eventsQ.data ?? {};
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-base font-semibold text-foreground sm:text-lg">My Bets</h2>
+        <Button size="sm" className="w-full shrink-0 sm:w-auto" onClick={() => navigate(`/leagues/${lg.id}/schedule`)}>
+          Place a bet
+        </Button>
+      </div>
+
+      <BetSection
+        title="Pending"
+        tone="pending"
+        wagers={pending}
+        me={me}
+        eventMap={eventMap}
+        actions={(w) =>
+          w.acceptor_id === me ? (
+            <>
+              <Button size="sm" onClick={() => acceptM.mutate(w.id)}>Accept</Button>
+              <Button size="sm" variant="outline" onClick={() => declineM.mutate(w.id)}>Decline</Button>
+            </>
+          ) : w.proposer_id === me ? (
+            <Button size="sm" variant="outline" onClick={() => cancelM.mutate(w.id)}>Cancel</Button>
+          ) : null
+        }
+      />
+      <BetSection title="Active" tone="active" wagers={active} me={me} eventMap={eventMap} />
+      <BetSection title="History" tone="history" wagers={history} me={me} eventMap={eventMap} />
+
+      {bets.isLoading && <Skeleton className="h-32 rounded-xl" />}
+      {!bets.isLoading && all.length === 0 && (
+        <CenterCard>
+          <CalendarDays className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            No bets yet — open the Schedule and tap a game to challenge a friend.
+          </p>
+        </CenterCard>
+      )}
+    </div>
+  );
+}
+
+// ---- Pool ----
+function PoolPlay({ lg }: { lg: LeagueDetail }) {
+  const qc = useQueryClient();
+  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
+  const pools = useQuery({ queryKey: ['pools', lg.id], queryFn: () => poolsApi.list(lg.id) });
+  const [eventId, setEventId] = useState('');
+  const [side, setSide] = useState<'home' | 'away'>('home');
+  const [credits, setCredits] = useState('10');
+
+  const evs = events.data ?? [];
+  const selEvent = evs.find((e) => e.external_id === eventId);
+  const stake = useMutation({
+    mutationFn: () => poolsApi.stake({ league_id: lg.id, event_id: eventId, side, amount_cents: Math.round(Number(credits) * 100) }),
+    onSuccess: () => { toast.success('Stake placed'); qc.invalidateQueries({ queryKey: ['pools', lg.id] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card className="gap-3 p-4">
+        <h2 className="text-base font-semibold text-foreground">Stake on a game</h2>
+        <select className={selectCls} value={eventId} onChange={(e) => setEventId(e.target.value)}>
+          <option value="">Select a game…</option>
+          {evs.map((e) => <option key={e.external_id} value={e.external_id}>{e.away_team} @ {e.home_team}</option>)}
+        </select>
+        {selEvent && (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {(['away', 'home'] as const).map((s) => (
+              <button key={s} type="button" onClick={() => setSide(s)}
+                className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm sm:text-center ${side === s ? 'border-primary bg-primary/10 text-foreground' : 'border-input text-muted-foreground'}`}>
+                {s === 'away' ? selEvent.away_team : selEvent.home_team}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} className="sm:max-w-[140px]" />
+          <Button disabled={!eventId || Number(credits) <= 0 || stake.isPending} onClick={() => stake.mutate()} className="sm:self-auto self-start">
+            {stake.isPending ? 'Staking…' : 'Add stake'}
+          </Button>
+        </div>
+      </Card>
+
+      <section>
+        <h3 className="mb-2 text-sm font-semibold text-foreground">Pools</h3>
+        {pools.isLoading && <Skeleton className="h-20 rounded-xl" />}
+        {!pools.isLoading && (pools.data ?? []).length === 0 && (
+          <p className="text-sm text-muted-foreground">No pools yet — stake on a game to start one.</p>
+        )}
+        <div className="flex flex-col gap-2">
+          {(pools.data ?? []).map((pv) => (
+            <Card key={pv.pool.id} className="gap-1 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="min-w-0 text-sm font-medium text-foreground">{pv.pool.away_team} @ {pv.pool.home_team}</span>
+                <Badge size="sm" appearance="light" variant={pv.pool.status === 'open' ? 'success' : 'outline'}>{pv.pool.status}</Badge>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Pot {formatCredits(pv.totals.total_cents)} · {pv.pool.home_team} {formatCredits(pv.totals.home_cents)} / {pv.pool.away_team} {formatCredits(pv.totals.away_cents)}
+                {pv.pool.winner_side ? ` · winner: ${pv.pool.winner_side === 'home' ? pv.pool.home_team : pv.pool.away_team}` : ''}
+              </div>
+              {pv.my_stakes.length > 0 && (
+                <div className="text-xs text-foreground">
+                  Your stake: {pv.my_stakes.map((s) => `${formatCredits(s.amount_cents)} ${s.side === 'home' ? pv.pool.home_team : pv.pool.away_team}`).join(', ')}
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+const selectCls = 'h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground';
+
+// ===================== STANDINGS =====================
+function standingRankClass(rank: number) {
+  if (rank === 1) return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+  if (rank === 2) return 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+  if (rank === 3) return 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300';
+  return 'bg-muted text-muted-foreground';
+}
+
+function formatRecord(wins: number, losses: number, pushes?: number) {
+  if (pushes) return `${wins}–${losses}–${pushes}`;
+  return `${wins}–${losses}`;
+}
+
+export function LeagueStandings() {
+  const lg = useOutletContext<LeagueDetail>();
+  const { user } = useAuth();
+  const me = String(user?.id ?? '');
+  const q = useQuery({ queryKey: ['standings', lg.id], queryFn: () => leaguesApi.standings(lg.id) });
+  if (q.isLoading) return <Skeleton className="h-40 rounded-xl" />;
+  const rows = q.data?.standings ?? [];
+  if (rows.length === 0) {
+    return (
+      <CenterCard>
+        <Trophy className="size-6 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">No standings yet.</p>
+      </CenterCard>
+    );
+  }
+  const money = rows[0].balance_cents !== undefined;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="text-lg font-semibold text-foreground">Standings ({rows.length})</h2>
+      <div className="flex flex-col gap-3">
+        {rows.map((r, i) => {
+          const rank = i + 1;
+          const isMe = String(r.user_id) === me;
+          return (
+            <Card key={r.user_id} className="flex w-full min-w-0 flex-row items-center gap-3 p-4">
+              <div
+                className={cn(
+                  'flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+                  standingRankClass(rank),
+                )}
+              >
+                {rank}
+              </div>
+              <UserAvatar
+                userId={r.user_id}
+                name={r.display_name}
+                className="size-14 shrink-0"
+                fallbackClassName="text-base"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {r.display_name}
+                  {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {formatRecord(r.wins, r.losses, r.pushes)} W–L
+                </p>
+              </div>
+              {money ? (
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-semibold text-foreground">
+                    {formatCredits(r.balance_cents ?? 0)}
+                  </p>
+                  <p
+                    className={cn(
+                      'text-xs font-medium',
+                      (r.net_cents ?? 0) >= 0
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-destructive',
+                    )}
+                  >
+                    {(r.net_cents ?? 0) >= 0 ? '+' : ''}
+                    {formatCredits(r.net_cents ?? 0)} net
+                  </p>
+                </div>
+              ) : (
+                <div className="shrink-0 text-right">
+                  <p className="text-lg font-bold tabular-nums text-foreground">
+                    {formatRecord(r.wins, r.losses, r.pushes)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">W–L</p>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ===================== SCHEDULE =====================
+export function LeagueSchedule() {
+  const lg = useOutletContext<LeagueDetail>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
+  const evs = events.data ?? [];
+  const [selected, setSelected] = useState<SportEvent | null>(null);
+
+  // Betting against friends only applies to an active head-to-head league.
+  const canBet = lg.league_type === 'head_to_head' && lg.status === 'active';
+
+  return (
+    <div>
+      <p className="mb-3 text-sm text-muted-foreground">
+        Bettable games for this league’s sports.{canBet ? ' Tap a game to challenge a friend.' : ''}
+      </p>
+      {events.isLoading && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
+        </div>
+      )}
+      {!events.isLoading && evs.length === 0 && (
+        <CenterCard>
+          <CalendarDays className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            No upcoming games for this league’s sport{lg.sports.length === 1 ? '' : 's'}
+            {lg.sports.length ? ` (${lg.sports.map((s) => s.name || s.sport_league_id).join(', ')})` : ''}.
+          </p>
+          {lg.my_role === 'commissioner' && (
+            <Button size="sm" variant="outline" onClick={() => navigate(`/leagues/${lg.id}/manage`)}>
+              Add more leagues
+            </Button>
+          )}
+        </CenterCard>
+      )}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {evs.map((ev: SportEvent) => (
+          <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
+        ))}
+      </div>
+      {canBet && (
+        <ScheduleBetDialog
+          lg={lg}
+          event={selected}
+          me={user?.id}
+          open={!!selected}
+          onOpenChange={(o) => { if (!o) setSelected(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Two-step bet flow opened from a Schedule game card. Step 1 configures the bet
+// (team, straight-up vs ATS + spread, amount); step 2 checks off which members
+// to challenge. Each checked member gets a head-to-head request via propose.
+function ScheduleBetDialog({
+  lg, event, me, open, onOpenChange,
+}: {
+  lg: LeagueDetail;
+  event: SportEvent | null;
+  me?: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [step, setStep] = useState<'config' | 'members'>('config');
+  const [side, setSide] = useState<'home' | 'away'>('away');
+  const [betType, setBetType] = useState<'straight_up' | 'ats'>('straight_up');
+  const [line, setLine] = useState('');
+  const [credits, setCredits] = useState('10');
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const oddsQ = useQuery({
+    queryKey: ['odds', event?.external_id],
+    queryFn: () => fetchEventOdds(event!.sport, event!.league, event!.external_id),
+    enabled: open && !!event && !event.odds,
+    initialData: event?.odds ?? undefined,
+    staleTime: 5 * 60_000,
+  });
+  const spread = oddsQ.data?.spread;
+  // home line is spread.line; the away side is its negation.
+  const lineFor = (s: 'home' | 'away') => (spread ? (s === 'home' ? spread.line : -spread.line) : null);
+
+  // Reset the flow whenever a new game is opened.
+  useEffect(() => {
+    if (open) {
+      setStep('config'); setSide('away'); setBetType('straight_up'); setLine(''); setCredits('10'); setSelected([]);
+    }
+  }, [open, event?.external_id]);
+
+  // Default the spread input to the current line for the picked side.
+  useEffect(() => {
+    if (betType === 'ats') {
+      const def = lineFor(side);
+      if (def !== null) setLine(String(def));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [betType, side, spread]);
+
+  const opponents = lg.members.filter((m) => m.user_id !== me);
+  const toggle = (uid: string) =>
+    setSelected((cur) => (cur.includes(uid) ? cur.filter((x) => x !== uid) : [...cur, uid]));
+
+  const propose = useMutation({
+    mutationFn: () => wagersApi.propose({
+      league_id: lg.id, event_id: event!.external_id, side,
+      amount_cents: Math.round(Number(credits) * 100), acceptor_ids: selected,
+      bet_type: betType, line: betType === 'ats' ? Number(line) : null,
+    }),
+    onSuccess: (r) => {
+      if (r.created.length) toast.success(`Bet sent to ${r.created.length} member${r.created.length === 1 ? '' : 's'}`);
+      r.errors.forEach((e) => toast.error(e.error));
+      qc.invalidateQueries({ queryKey: ['wagers', lg.id] });
+      qc.invalidateQueries({ queryKey: ['wagers-all'] });
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (!event) return null;
+  const teamName = (s: 'home' | 'away') => (s === 'away' ? event.away_team : event.home_team);
+  const teamLogo = (s: 'home' | 'away') => (s === 'away' ? event.away_logo : event.home_logo);
+  const teamAbbr = (s: 'home' | 'away') => (s === 'away' ? event.away_abbr : event.home_abbr);
+  const configReady = Number(credits) > 0 && (betType !== 'ats' || line.trim() !== '');
+  const canSubmit = selected.length > 0 && configReady;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{event.away_team} @ {event.home_team}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Configure and send a head-to-head bet to league members.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="flex flex-col gap-4 py-2">
+          {step === 'config' ? (
+            <>
+              <p className="text-sm text-muted-foreground">Pick the team you want to back.</p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {(['away', 'home'] as const).map((s) => {
+                  const logo = teamLogo(s);
+                  return (
+                    <button key={s} type="button" onClick={() => setSide(s)} className={`flex flex-1 flex-col items-center gap-2 px-3 py-3 text-center ${pickBtn(side === s)}`}>
+                      {logo ? (
+                        <img src={logo} alt="" className="size-10 object-contain" />
+                      ) : (
+                        <span className="flex size-10 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+                          {(teamAbbr(s) || teamName(s)).slice(0, 3).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="text-sm font-medium sm:text-base">{teamName(s)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2">
+                {([['straight_up', 'Straight Up'], ['ats', 'ATS']] as const).map(([v, lbl]) => (
+                  <button key={v} type="button" onClick={() => setBetType(v)} className={`flex-1 px-3 py-2 ${pickBtn(betType === v)}`}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              {betType === 'ats' && (
+                <div className="flex items-center justify-between gap-3">
+                  <Label>Spread</Label>
+                  <Input
+                    type="number" step="0.5" value={line} onChange={(e) => setLine(e.target.value)}
+                    placeholder={oddsQ.isLoading ? 'Loading line…' : 'e.g. -3.5'} className="max-w-40"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-3">
+                <Label>Amount (credits)</Label>
+                <Input type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} className="max-w-40" />
+              </div>
+
+              <Button className="w-full self-stretch sm:w-auto sm:self-end" disabled={!configReady} onClick={() => setStep('members')}>Next</Button>
+            </>
+          ) : (
+            <>
+              <div className="text-sm text-foreground">
+                Backing <span className="font-semibold">{teamName(side)}</span>
+                {' · '}{betType === 'ats' ? `ATS ${line || '—'}` : 'Straight up'}
+                {' · '}{formatCredits(Math.round(Number(credits) * 100))}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Challenge members</Label>
+                {opponents.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No other members to challenge yet.</p>
+                )}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {opponents.map((m) => {
+                    const on = selected.includes(m.user_id);
+                    return (
+                      <button
+                        key={m.user_id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggle(m.user_id)}
+                        className={`flex flex-col items-center gap-2 px-3 py-3 text-center ${pickBtn(on)}`}
+                      >
+                        <UserAvatar userId={m.user_id} name={m.display_name} className="size-9" />
+                        <span className="line-clamp-2 text-sm font-medium">{m.display_name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => setStep('config')}>Back</Button>
+                <Button className="w-full sm:w-auto" disabled={!canSubmit || propose.isPending} onClick={() => propose.mutate()}>
+                  {propose.isPending
+                    ? 'Sending…'
+                    : `Send bet${selected.length > 1 ? `s (${selected.length})` : ''}`}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ===================== ACTIVITY =====================
+const TXN_LABEL: Record<string, string> = {
+  league_grant: 'Starting grant', wager_hold: 'Bet hold', wager_payout: 'Bet payout',
+  wager_refund: 'Bet refund', pool_payout: 'Pool payout',
+};
+export function LeagueActivity() {
+  const lg = useOutletContext<LeagueDetail>();
+  const isMoney = lg.league_type !== 'pickem';
+  const q = useQuery({
+    queryKey: ['wallet-txns', lg.id],
+    queryFn: () => fetchTransactions(`league:${lg.id}`),
+    enabled: isMoney,
+  });
+  if (!isMoney) {
+    return <CenterCard><Wallet className="size-6 text-muted-foreground" /><p className="text-sm text-muted-foreground">Pick’em leagues don’t use money — see Standings for results.</p></CenterCard>;
+  }
+  if (q.isLoading) return <Skeleton className="h-40 rounded-xl" />;
+  const txns = q.data ?? [];
+  if (txns.length === 0) return <CenterCard><Wallet className="size-6 text-muted-foreground" /><p className="text-sm text-muted-foreground">No transactions yet.</p></CenterCard>;
+  return (
+    <Card className="min-w-0 overflow-x-auto p-0">
+      <table className="w-full min-w-[26rem] text-sm">
+        <tbody>
+          {txns.map((t) => (
+            <tr key={t.id} className="border-b border-border last:border-0">
+              <td className="px-4 py-2 text-foreground">{TXN_LABEL[t.type] ?? t.type}</td>
+              <td className={`px-4 py-2 text-right ${t.amount_cents >= 0 ? 'text-green-500' : 'text-destructive'}`}>
+                {t.amount_cents >= 0 ? '+' : ''}{formatCredits(t.amount_cents)}
+              </td>
+              <td className="px-4 py-2 text-right text-muted-foreground">{formatCredits(t.balance_after_cents)}</td>
+              <td className="px-4 py-2 text-right text-xs text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+const MEMBER_ROLE_LABELS: Record<string, string> = {
+  commissioner: 'Commish',
+  member: 'Member',
+  moderator: 'Moderator',
+};
+
+function memberRoleLabel(role: string) {
+  return MEMBER_ROLE_LABELS[role] ?? role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+// ===================== MEMBERS =====================
+export function LeagueMembers() {
+  const lg = useOutletContext<LeagueDetail>();
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  const me = String(user?.id ?? '');
+  const isCommish = lg.my_role === 'commissioner';
+
+  const friendsQ = useQuery({ queryKey: ['friends'], queryFn: friendsApi.list });
+  const reqsQ = useQuery({ queryKey: ['friend-requests'], queryFn: friendsApi.requests });
+  const friendIds = new Set((friendsQ.data ?? []).map((f) => String(f.user_id)));
+  const pendingIds = new Set([
+    ...(reqsQ.data?.outgoing ?? []).map((r) => String(r.user_id)),
+    ...(reqsQ.data?.incoming ?? []).map((r) => String(r.user_id)),
+  ]);
+
+  const onErr = (e: Error) => toast.error(e.message);
+  const remove = useMutation({
+    mutationFn: (uid: string) => leaguesApi.removeMember(lg.id, uid),
+    onSuccess: () => { toast.success('Member removed'); qc.invalidateQueries({ queryKey: ['league', lg.id] }); },
+    onError: onErr,
+  });
+  const addFriend = useMutation({
+    mutationFn: (uid: string) => friendsApi.addByUserId(uid),
+    onSuccess: () => { toast.success('Friend request sent'); qc.invalidateQueries({ queryKey: ['friend-requests'] }); },
+    onError: onErr,
+  });
+  const openMessage = useMutation({
+    mutationFn: (uid: string) => messagingApi.openDirect(uid),
+    onSuccess: (conv) => {
+      dispatchOpenChat(conv.id);
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+    },
+    onError: onErr,
+  });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="text-lg font-semibold text-foreground">Members ({lg.members.length})</h2>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {lg.members.map((m) => {
+          const uid = String(m.user_id);
+          const isMe = uid === me;
+          return (
+            <Card
+              key={m.user_id}
+              className="flex min-w-0 flex-row items-center gap-3 p-4"
+            >
+              <UserAvatar
+                userId={m.user_id}
+                name={m.display_name}
+                className="size-14 shrink-0"
+                fallbackClassName="text-base"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {m.display_name}
+                  {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{memberRoleLabel(m.role)}</p>
+              </div>
+              {!isMe && (
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={openMessage.isPending}
+                    onClick={() => openMessage.mutate(uid)}
+                  >
+                    <MessageCircle className="size-4" />
+                    <span className="hidden sm:inline">Message</span>
+                  </Button>
+                  {friendIds.has(uid) ? (
+                    <Button size="sm" variant="outline" disabled>
+                      Friends
+                    </Button>
+                  ) : pendingIds.has(uid) ? (
+                    <Button size="sm" variant="outline" disabled>
+                      Pending
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={addFriend.isPending}
+                      onClick={() => addFriend.mutate(uid)}
+                    >
+                      <UserPlus className="size-4" />
+                      <span className="hidden sm:inline">Add friend</span>
+                    </Button>
+                  )}
+                  {isCommish && m.role !== 'commissioner' && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="icon" variant="outline" className="size-8 shrink-0" aria-label="Member actions">
+                          <EllipsisVertical className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={remove.isPending}
+                          onClick={() => {
+                            if (confirm(`Remove ${m.display_name} from this league?`)) remove.mutate(m.user_id);
+                          }}
+                        >
+                          Remove from league
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ===================== MANAGE =====================
+// Edit the league's name, description, and which sport-leagues members can bet
+// on. Mirrors the Create-League sports picker, seeded with the current values.
+function EditLeagueDetails({ lg }: { lg: LeagueDetail }) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(lg.name);
+  const [description, setDescription] = useState(lg.description ?? '');
+  const [chosen, setChosen] = useState<{ id: string; label: string }[]>(
+    lg.sports.map((s) => ({ id: s.sport_league_id, label: s.name || s.sport_league_id })),
+  );
+
+  const sportsQ = useQuery({ queryKey: ['sports'], queryFn: fetchSports });
+  const [activeSport, setActiveSport] = useState('');
+  const leaguesQ = useQuery({
+    queryKey: ['sport-leagues', activeSport],
+    queryFn: () => fetchLeagues(activeSport),
+    enabled: !!activeSport,
+  });
+  const toggleLeague = (id: string, label: string) =>
+    setChosen((cur) => (cur.some((c) => c.id === id) ? cur.filter((c) => c.id !== id) : [...cur, { id, label }]));
+
+  const save = useMutation({
+    mutationFn: () => leaguesApi.update(lg.id, {
+      name: name.trim(),
+      description: description.trim() || null,
+      sports: chosen.map((c) => ({ sport_league_id: c.id, name: c.label })),
+    }),
+    onSuccess: () => {
+      toast.success('League updated');
+      qc.invalidateQueries({ queryKey: ['league', lg.id] });
+      qc.invalidateQueries({ queryKey: ['leagues'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const canSave = name.trim().length > 0 && chosen.length > 0;
+
+  return (
+    <Card className="gap-3 p-5">
+      <h2 className="text-base font-semibold text-foreground">League details</h2>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Name</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Description</Label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="What's this league about? (shown on the invite page)"
+          className="min-h-[72px] rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>Available leagues</Label>
+        <div className="flex flex-wrap gap-2">
+          {(sportsQ.data ?? []).map((s) => (
+            <button key={s.id} type="button" onClick={() => setActiveSport(s.slug)}
+              className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeSport === s.slug ? 'border-primary bg-primary/5 text-foreground' : 'border-input text-muted-foreground'}`}>
+              {s.displayName || s.name}
+            </button>
+          ))}
+        </div>
+        {activeSport && (
+          <div className="mt-1 flex flex-wrap gap-2">
+            {leaguesQ.isLoading && <span className="text-sm text-muted-foreground">Loading leagues…</span>}
+            {(leaguesQ.data ?? []).map((l) => {
+              const label = l.abbreviation || l.name;
+              const id = l.sport_league_id || l.id;
+              const on = chosen.some((c) => c.id === id);
+              return (
+                <button key={l.id} type="button" onClick={() => toggleLeague(id, label)}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${on ? 'border-primary bg-primary text-primary-foreground' : 'border-input text-muted-foreground'}`}>
+                  {l.logo && (
+                    <img src={l.logo} alt="" className="size-4 object-contain" loading="lazy"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  )}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {chosen.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {chosen.map((c) => (
+              <span key={c.id} className="flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-foreground">
+                {c.label}
+                <button type="button" onClick={() => toggleLeague(c.id, c.label)}><X className="size-3" /></button>
+              </span>
+            ))}
+          </div>
+        )}
+        <span className="text-xs text-muted-foreground">The only games members can bet on.</span>
+      </div>
+
+      <Button className="self-start" disabled={!canSave || save.isPending} onClick={() => save.mutate()}>
+        {save.isPending ? 'Saving…' : 'Save details'}
+      </Button>
+    </Card>
+  );
+}
+
+export function LeagueManage() {
+  const lg = useOutletContext<LeagueDetail>();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: ['league', lg.id] });
+  const onErr = (e: Error) => toast.error(e.message);
+
+  const isMoney = lg.league_type !== 'pickem';
+  const isH2H = lg.league_type === 'head_to_head';
+  const [minC, setMinC] = useState(lg.min_wager_cents ? String(lg.min_wager_cents / 100) : '');
+  const [maxC, setMaxC] = useState(lg.max_wager_cents ? String(lg.max_wager_cents / 100) : '');
+  const [whoCanPropose, setWhoCanPropose] = useState(
+    ((lg.rules || {}) as Record<string, unknown>).who_can_propose === 'commissioner' ? 'commissioner' : 'any',
+  );
+
+  const save = useMutation({
+    mutationFn: () => leaguesApi.update(lg.id, {
+      min_wager_cents: minC ? Math.round(Number(minC) * 100) : null,
+      max_wager_cents: maxC ? Math.round(Number(maxC) * 100) : null,
+      rules: { ...(lg.rules || {}), who_can_propose: whoCanPropose },
+    }),
+    onSuccess: () => { toast.success('Rules saved'); refresh(); },
+    onError: onErr,
+  });
+  const advance = useMutation({
+    mutationFn: () => leaguesApi.advancePeriod(lg.id),
+    onSuccess: () => { toast.success('Period advanced'); refresh(); },
+    onError: onErr,
+  });
+  const archive = useMutation({
+    mutationFn: () => leaguesApi.archive(lg.id),
+    onSuccess: () => { toast.success('League archived'); qc.invalidateQueries({ queryKey: ['leagues'] }); navigate('/'); },
+    onError: onErr,
+  });
+
+  if (lg.my_role !== 'commissioner') {
+    return <CenterCard><Settings className="size-6 text-muted-foreground" /><p className="text-sm text-muted-foreground">Only the commissioner can manage this league.</p></CenterCard>;
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      <EditLeagueDetails lg={lg} />
+
+      {/* Rules */}
+      <Card className="gap-3 p-5">
+        <div className="flex items-center gap-2"><Settings className="size-5 text-muted-foreground" /><h2 className="text-base font-semibold text-foreground">Rules</h2></div>
+        {isMoney ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label>Min wager (credits)</Label>
+                <Input type="number" min={0} value={minC} onChange={(e) => setMinC(e.target.value)} placeholder="none" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Max wager (credits)</Label>
+                <Input type="number" min={0} value={maxC} onChange={(e) => setMaxC(e.target.value)} placeholder="none" />
+              </div>
+            </div>
+            {isH2H && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Who can propose bets</Label>
+                <select className={selectCls} value={whoCanPropose} onChange={(e) => setWhoCanPropose(e.target.value)}>
+                  <option value="any">Any member</option>
+                  <option value="commissioner">Commissioner only</option>
+                </select>
+              </div>
+            )}
+            <Button className="self-start" disabled={save.isPending} onClick={() => save.mutate()}>
+              {save.isPending ? 'Saving…' : 'Save rules'}
+            </Button>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">Pick’em leagues have no wager rules.</p>
+        )}
+      </Card>
+
+      {/* Period control */}
+      {lg.status === 'active' && (
+        <Card className="gap-2 p-5">
+          <h2 className="text-base font-semibold text-foreground">Period</h2>
+          <p className="text-sm text-muted-foreground">
+            Current: {lg.current_period ? `${lg.current_period.label} (${lg.current_period.status})` : '—'}
+          </p>
+          <Button
+            variant="outline" className="self-start" disabled={advance.isPending}
+            onClick={() => { if (confirm('Close the current period now and open the next?')) advance.mutate(); }}
+          >
+            {advance.isPending ? 'Advancing…' : 'Advance period'}
+          </Button>
+        </Card>
+      )}
+
+      {/* Danger zone */}
+      <Card className="gap-2 p-5">
+        <h2 className="text-base font-semibold text-foreground">Danger zone</h2>
+        <p className="text-sm text-muted-foreground">Archiving removes the league from everyone’s dashboard. Balances and history are preserved.</p>
+        <Button
+          variant="outline" className="self-start text-destructive" disabled={archive.isPending}
+          onClick={() => { if (confirm(`Archive "${lg.name}"? It will disappear from dashboards.`)) archive.mutate(); }}
+        >
+          {archive.isPending ? 'Archiving…' : 'Archive league'}
+        </Button>
+      </Card>
+    </div>
+  );
+}
+

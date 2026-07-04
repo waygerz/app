@@ -1,0 +1,27 @@
+# --- Secrets / environment (NEVER commit) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Certbot runtime data (real TLS certs + private keys)
+gateway/certbot/conf/
+gateway/certbot/www/
+
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# --- Node / Vite (webui) ---
+node_modules/
+dist/
+.vite/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db

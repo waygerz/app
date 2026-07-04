@@ -1,0 +1,11 @@
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.7
+flask-jwt-extended==4.6.0
+flask-cors==4.0.1
+psycopg2-binary==2.9.9
+redis==5.0.8
+gunicorn==22.0.0
+python-dotenv==1.0.1
+phonenumbers==8.13.45
+pytest==8.3.2

@@ -1,0 +1,4 @@
+.env
+.env*
+certbot/conf
+certbot/www

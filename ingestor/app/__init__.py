@@ -1,0 +1,31 @@
+from flask import Flask
+from sqlalchemy import text
+
+from app.utils.config import Config
+from app.extensions import cors, db, init_redis, jwt, migrate
+
+
+def create_app(config_class=Config):
+    app = Flask(__name__)
+    app.config.from_object(config_class)
+
+    db.init_app(app)
+    migrate.init_app(app, db)
+    jwt.init_app(app)
+    cors.init_app(app, resources={r"/*": {"origins": "*"}})
+    init_redis(app)
+
+    from app import models  # noqa: F401  (register models on metadata)
+    from app.routes import register_blueprints
+
+    register_blueprints(app)
+
+    @app.cli.command("init-schema")
+    def init_schema():
+        """Create this service's Postgres schema if it doesn't exist."""
+        schema = app.config["DB_SCHEMA"]
+        db.session.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
+        db.session.commit()
+        print(f"schema ready: {schema}")
+
+    return app

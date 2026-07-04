@@ -1,0 +1,324 @@
+name: waygerz
+
+# Single source of truth for DB creds: POSTGRES_* (in .env) build DATABASE_URL
+# here, merged into each app service below, so the connection string can never
+# drift from the values Postgres is initialized with.
+x-app-db: &app-db
+  DATABASE_URL: "postgresql+psycopg2://${POSTGRES_USER:-waygerz}:${POSTGRES_PASSWORD:-waygerz}@pgsql:5432/${POSTGRES_DB:-waygerz}"
+
+# waygerz — single-host stack behind the nginx gateway (t4g.small: 2 GB RAM).
+#
+# Memory budget (limits are cgroup ceilings, not reservations — containers
+# typically use far less at idle). Target ~300 MB headroom for the OS/Docker;
+# add 1–2 GB swap on the host if you see OOM kills under load.
+#
+#   Service      Limit   Notes
+#   ---------    -----   -----
+#   pgsql        384M    shared_buffers=64M, max_connections=30
+#   redis         96M    maxmemory 64mb LRU
+#   messaging    192M    gthread ×4 (SSE)
+#   leagues      160M    busiest gameplay API
+#   auth         128M    login / sessions
+#   contests     128M    wagers + pools
+#   media        112M    S3 presign only (no upload proxy)
+#   wallet        96M
+#   ingestor      96M
+#   friends       80M
+#   comments      80M
+#   gateway       64M    nginx + certbot renew
+#   scheduler     48M    poll loop only
+#   webui         32M    static nginx
+#   ───────────────────
+#   sum limits  ~1796M
+#
+# Run all compose commands from this directory (app/). Deploy scripts cd here
+# automatically: bash _scripts/deploy.sh from the repo root.
+
+services:
+  # ---- Infra ----------------------------------------------------------------
+  pgsql:
+    image: postgres:16-alpine
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c effective_cache_size=192MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=24MB
+      -c max_connections=30
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-waygerz}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-waygerz}
+      POSTGRES_DB: ${POSTGRES_DB:-waygerz}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-waygerz}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 256M
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+        reservations:
+          memory: 48M
+    restart: unless-stopped
+
+  # ---- Services -------------------------------------------------------------
+  auth:
+    build: ./auth
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: core
+      SERVICE_NAME: auth
+      DB_SCHEMA: auth
+    depends_on:
+      pgsql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    restart: unless-stopped
+
+  friends:
+    build: ./friends
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: core
+      SERVICE_NAME: friends
+      DB_SCHEMA: friends
+    depends_on:
+      pgsql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 80M
+        reservations:
+          memory: 48M
+    restart: unless-stopped
+
+  comments:
+    build: ./comments
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: social
+      SERVICE_NAME: comments
+      DB_SCHEMA: comments
+    depends_on:
+      pgsql: { condition: service_healthy }
+      leagues: { condition: service_started }
+    deploy:
+      resources:
+        limits:
+          memory: 80M
+        reservations:
+          memory: 48M
+    restart: unless-stopped
+
+  messaging:
+    build: ./messaging
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: social
+      SERVICE_NAME: messaging
+      DB_SCHEMA: messaging
+    depends_on:
+      pgsql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      auth: { condition: service_started }
+      friends: { condition: service_started }
+      leagues: { condition: service_started }
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+        reservations:
+          memory: 96M
+    restart: unless-stopped
+
+  ingestor:
+    build: ./ingestor
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: data
+      SERVICE_NAME: ingestor
+      DB_SCHEMA: ingestor
+    depends_on:
+      pgsql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+        reservations:
+          memory: 64M
+    restart: unless-stopped
+
+  wallet:
+    build: ./wallet
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: gameplay
+      SERVICE_NAME: wallet
+      DB_SCHEMA: wallet
+    depends_on:
+      pgsql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+        reservations:
+          memory: 64M
+    restart: unless-stopped
+
+  contests:
+    build: ./contests
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: gameplay
+      SERVICE_NAME: contests
+      DB_SCHEMA: contests
+    depends_on:
+      pgsql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    restart: unless-stopped
+
+  leagues:
+    build: ./leagues
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: gameplay
+      SERVICE_NAME: leagues
+      DB_SCHEMA: leagues
+    depends_on:
+      pgsql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 160M
+        reservations:
+          memory: 96M
+    restart: unless-stopped
+
+  media:
+    build: ./media
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: platform
+      SERVICE_NAME: media
+      DB_SCHEMA: media
+    depends_on:
+      pgsql: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 112M
+        reservations:
+          memory: 64M
+    restart: unless-stopped
+
+  scheduler:
+    build: ./scheduler
+    env_file: .env
+    environment:
+      SCHEDULER_INTERVAL_SECONDS: "30"
+    depends_on:
+      - contests
+      - leagues
+    deploy:
+      resources:
+        limits:
+          memory: 48M
+        reservations:
+          memory: 32M
+    restart: unless-stopped
+
+  webui:
+    build:
+      context: ./webui
+      dockerfile: Dockerfile.prod
+      args:
+        # Single same-origin API base. "/api" behind the nginx gateway; set to
+        # "" for the ALB so the browser calls /v1/... directly.
+        VITE_API_URL: /api
+    depends_on:
+      - auth
+      - friends
+      - ingestor
+      - wallet
+      - contests
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+        reservations:
+          memory: 16M
+    restart: unless-stopped
+
+  # ---- Gateway --------------------------------------------------------------
+  gateway:
+    build: ./gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./gateway/certbot/conf:/etc/letsencrypt
+      - ./gateway/certbot/www:/var/www/certbot
+    depends_on:
+      - webui
+      - auth
+      - friends
+      - ingestor
+      - wallet
+      - contests
+      - leagues
+      - comments
+      - messaging
+      - media
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 32M
+    restart: unless-stopped
+
+volumes:
+  pgdata:
