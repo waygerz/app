@@ -4,7 +4,9 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 ENV CI=1
-COPY package.json package-lock.json* ./
+# .npmrc carries legacy-peer-deps=true — the lock was generated with it, so
+# npm ci needs it too or it re-resolves peers and rejects the lock.
+COPY package.json package-lock.json* .npmrc* ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund
 
