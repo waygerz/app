@@ -7,10 +7,12 @@
 FROM node:20-slim AS deps
 WORKDIR /app
 ENV CI=1
-# .npmrc carries legacy-peer-deps=true. Use `npm install` (not `npm ci`) so the
-# platform-native optional deps (lightningcss.linux-arm64-gnu for arm64) are
-# resolved for the build target — the Windows-generated lock omits them.
-COPY package.json package-lock.json* .npmrc* ./
+# Deliberately NO package-lock.json here: the committed lock is generated on
+# Windows and omits the linux native binaries (e.g. lightningcss for Tailwind
+# v4), so `npm ci` can't fetch them. Copying only package.json makes
+# `npm install` resolve fresh for the build target (arm64/glibc) and pull the
+# right native binaries. (.npmrc keeps legacy-peer-deps in sync with local.)
+COPY package.json .npmrc* ./
 RUN --mount=type=cache,target=/root/.npm \
     npm install --no-audit --no-fund
 
