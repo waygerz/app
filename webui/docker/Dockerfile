@@ -1,18 +1,20 @@
 # docker/Dockerfile — Waygerz webui (Next.js standalone)
 # syntax=docker/dockerfile:1.7
+# Debian (glibc) base, NOT Alpine/musl: Tailwind v4's lightningcss native
+# binary installs reliably on glibc (linux-arm64-gnu); the musl variant is
+# flaky to install under npm.
 
-FROM node:20-alpine AS deps
+FROM node:20-slim AS deps
 WORKDIR /app
 ENV CI=1
 # .npmrc carries legacy-peer-deps=true. Use `npm install` (not `npm ci`) so the
-# platform-specific native optional deps are resolved for the build target
-# (e.g. lightningcss.linux-arm64-musl for Alpine arm64) — a Windows-generated
-# lock omits them, and npm ci can only install what's in the lock.
+# platform-native optional deps (lightningcss.linux-arm64-gnu for arm64) are
+# resolved for the build target — the Windows-generated lock omits them.
 COPY package.json package-lock.json* .npmrc* ./
 RUN --mount=type=cache,target=/root/.npm \
     npm install --no-audit --no-fund
 
-FROM node:20-alpine AS build
+FROM node:20-slim AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV CI=1
@@ -29,13 +31,13 @@ COPY . .
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 
-FROM node:20-alpine AS run
+FROM node:20-slim AS run
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 
-RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
+RUN groupadd -r nextjs && useradd -r -g nextjs nextjs
 
 COPY --from=build /app/public ./public
 COPY --from=build /app/.next/standalone ./
