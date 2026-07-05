@@ -4,11 +4,13 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 ENV CI=1
-# .npmrc carries legacy-peer-deps=true — the lock was generated with it, so
-# npm ci needs it too or it re-resolves peers and rejects the lock.
+# .npmrc carries legacy-peer-deps=true. Use `npm install` (not `npm ci`) so the
+# platform-specific native optional deps are resolved for the build target
+# (e.g. lightningcss.linux-arm64-musl for Alpine arm64) — a Windows-generated
+# lock omits them, and npm ci can only install what's in the lock.
 COPY package.json package-lock.json* .npmrc* ./
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --no-audit --no-fund
+    npm install --no-audit --no-fund
 
 FROM node:20-alpine AS build
 WORKDIR /app
