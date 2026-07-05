@@ -99,16 +99,15 @@ jobs:
         run: |
           set -euo pipefail
           SVC="${{ matrix.service }}"
+          echo "CTX=${SVC}" >> "$GITHUB_OUTPUT"
           echo "REPO=waygerz/${SVC}" >> "$GITHUB_OUTPUT"
           echo "ECS_SERVICE=${SVC}" >> "$GITHUB_OUTPUT"
-          # webui is the Next.js standalone app in webui-next/. Bake the client
-          # API base as "" so the browser calls /v1/... directly (ALB path rules).
+          # webui is the Next.js standalone app: docker/Dockerfile + baked API
+          # base ("" so the browser calls /v1/... directly, matching ALB rules).
           if [ "${SVC}" = "webui" ]; then
-            echo "CTX=webui-next" >> "$GITHUB_OUTPUT"
-            echo "DOCKERFILE=webui-next/docker/Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "DOCKERFILE=webui/docker/Dockerfile" >> "$GITHUB_OUTPUT"
             echo "BUILD_ARGS=NEXT_PUBLIC_API_URL=" >> "$GITHUB_OUTPUT"
           else
-            echo "CTX=${SVC}" >> "$GITHUB_OUTPUT"
             echo "DOCKERFILE=${SVC}/Dockerfile" >> "$GITHUB_OUTPUT"
             echo "BUILD_ARGS=" >> "$GITHUB_OUTPUT"
           fi
