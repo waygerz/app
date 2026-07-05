@@ -15,8 +15,7 @@
       "essential": true,
       "environment": [{ "name": "NODE_ENV", "value": "production" }],
       "secrets": [
-        { "name": "API_INTERNAL_URL", "valueFrom": "/waygerz/ui/API_INTERNAL_URL" },
-        { "name": "NEXT_PUBLIC_API_URL", "valueFrom": "/waygerz/ui/NEXT_PUBLIC_API_URL" }
+        { "name": "API_INTERNAL_URL", "valueFrom": "/waygerz/ui/API_INTERNAL_URL" }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
