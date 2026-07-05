@@ -9,7 +9,7 @@ def _bool(value, default=False):
 
 
 class Config:
-    SERVICE_GROUP = os.environ.get("SERVICE_GROUP", "data")
+    SERVICE_GROUP = os.environ.get("SERVICE_GROUP", "platform")
     SERVICE_NAME = os.environ.get("SERVICE_NAME", "ingestor")
     APP_ENV = os.environ.get("APP_ENV", "development")
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")

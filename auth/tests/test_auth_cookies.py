@@ -11,7 +11,7 @@ def _cookie_value(set_cookie_headers: list[str], name: str) -> str | None:
 
 def _login(client, user, device_uuid):
     return client.post(
-        "/v1/core/auth/login",
+        "/v1/platform/auth/login",
         json={"phone": user["phone"], "pin": user["pin"], "device_uuid": device_uuid},
     )
 
@@ -39,7 +39,7 @@ def test_me_accepts_access_cookie(client, user, device_uuid):
 
     client.set_cookie("localhost", access_name, access_token)
     client.set_cookie("localhost", refresh_name, refresh_token)
-    me = client.get("/v1/core/auth/me")
+    me = client.get("/v1/platform/auth/me")
     assert me.status_code == 200
     assert me.get_json()["user"]["id"] == user["id"]
 
@@ -50,7 +50,7 @@ def test_me_accepts_bearer_header(client, app, user, device_uuid):
 
     with app.app_context():
         token = create_access_token(identity=user["id"], additional_claims={"phone": user["phone"]})
-    me = client.get("/v1/core/auth/me", headers={"Authorization": f"Bearer {token}"})
+    me = client.get("/v1/platform/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     assert me.get_json()["user"]["id"] == user["id"]
 
@@ -63,7 +63,7 @@ def test_refresh_rotates_tokens(client, user, device_uuid):
 
     client.set_cookie("localhost", refresh_name, refresh_cookie)
     refreshed = client.post(
-        "/v1/core/auth/refresh",
+        "/v1/platform/auth/refresh",
         headers={"X-Device-UUID": device_uuid},
     )
     assert refreshed.status_code == 200
@@ -80,7 +80,7 @@ def test_logout_clears_session(client, user, device_uuid):
     client.set_cookie("localhost", refresh_name, refresh_cookie)
 
     out = client.post(
-        "/v1/core/auth/logout",
+        "/v1/platform/auth/logout",
         headers={"X-Device-UUID": device_uuid},
     )
     assert out.status_code == 200
@@ -89,7 +89,7 @@ def test_logout_clears_session(client, user, device_uuid):
 
     client.set_cookie("localhost", refresh_name, refresh_cookie)
     again = client.post(
-        "/v1/core/auth/refresh",
+        "/v1/platform/auth/refresh",
         headers={"X-Device-UUID": device_uuid},
     )
     assert again.status_code == 403

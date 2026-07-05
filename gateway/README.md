@@ -11,12 +11,12 @@ Service map (`conf.d/default.conf`) — versioned public API:
 
 | Public path                    | Upstream                              |
 |--------------------------------|---------------------------------------|
-| `/api/v1/core/auth/*`          | `auth:8000/v1/core/auth/*`            |
-| `/api/v1/core/friends*`        | `friends:8000/v1/core/friends*`       |
+| `/api/v1/platform/auth/*`          | `auth:8000/v1/platform/auth/*`            |
+| `/api/v1/social/friends*`        | `friends:8000/v1/social/friends*`       |
 | `/api/v1/gameplay/wallet/*`    | `wallet:8000/v1/gameplay/wallet/*`    |
 | `/api/v1/gameplay/leagues*`    | `leagues:8000/v1/gameplay/leagues*`   |
 | `/api/v1/gameplay/contests*`   | `contests:8000/v1/gameplay/contests*` |
-| `/api/v1/data/ingestor*`      | `ingestor:8000/v1/data/ingestor*`     |
+| `/api/v1/platform/ingestor*`      | `ingestor:8000/v1/platform/ingestor*`     |
 | `/api/v1/social/messaging/*` | `messaging:8000/v1/social/messaging/*` (SSE) |
 | `/*`                           | `webui:80` (static SPA)               |
 

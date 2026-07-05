@@ -95,7 +95,7 @@ def ingestor_warm_cache(sport_league_ids) -> dict:
 
 def get_event(external_id):
     r = requests.get(
-        f"{current_app.config['INGESTOR_URL']}/v1/data/ingestor/events/{external_id}",
+        f"{current_app.config['INGESTOR_URL']}/v1/platform/ingestor/events/{external_id}",
         timeout=10,
     )
     if r.status_code == 404:

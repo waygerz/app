@@ -3,7 +3,7 @@ from datetime import timedelta
 
 
 class Config:
-    SERVICE_GROUP = os.environ.get("SERVICE_GROUP", "core")
+    SERVICE_GROUP = os.environ.get("SERVICE_GROUP", "social")
     SERVICE_NAME = os.environ.get("SERVICE_NAME", "friends")
     APP_ENV = os.environ.get("APP_ENV", "development")
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")

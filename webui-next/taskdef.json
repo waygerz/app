@@ -1,0 +1,32 @@
+{
+  "family": "waygerz-webui",
+  "networkMode": "bridge",
+  "requiresCompatibilities": ["EC2"],
+  "memory": "256",
+  "executionRoleArn": "arn:aws:iam::882781856019:role/waygerz-ecs-task-execution-role",
+  "containerDefinitions": [
+    {
+      "name": "webui",
+      "image": "882781856019.dkr.ecr.us-east-1.amazonaws.com/waygerz/webui:latest",
+      "cpu": 128,
+      "portMappings": [
+        { "containerPort": 3000, "hostPort": 0, "protocol": "tcp" }
+      ],
+      "essential": true,
+      "environment": [{ "name": "NODE_ENV", "value": "production" }],
+      "secrets": [
+        { "name": "API_INTERNAL_URL", "valueFrom": "/waygerz/ui/API_INTERNAL_URL" },
+        { "name": "NEXT_PUBLIC_API_URL", "valueFrom": "/waygerz/ui/NEXT_PUBLIC_API_URL" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/waygerz/webui",
+          "awslogs-create-group": "true",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

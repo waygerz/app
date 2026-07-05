@@ -27,9 +27,9 @@ x-app-db: &app-db
 #   comments      80M
 #   gateway       64M    nginx + certbot renew
 #   scheduler     48M    poll loop only
-#   webui         32M    static nginx
+#   webui        256M    Next.js SSR (Node standalone)
 #   ───────────────────
-#   sum limits  ~1796M
+#   sum limits  ~2020M
 #
 # Run all compose commands from this directory (app/). Deploy scripts cd here
 # automatically: bash _scripts/deploy.sh from the repo root.
@@ -86,7 +86,7 @@ services:
     env_file: .env
     environment:
       <<: *app-db
-      SERVICE_GROUP: core
+      SERVICE_GROUP: platform
       SERVICE_NAME: auth
       DB_SCHEMA: auth
     depends_on:
@@ -105,7 +105,7 @@ services:
     env_file: .env
     environment:
       <<: *app-db
-      SERVICE_GROUP: core
+      SERVICE_GROUP: social
       SERVICE_NAME: friends
       DB_SCHEMA: friends
     depends_on:
@@ -165,7 +165,7 @@ services:
     env_file: .env
     environment:
       <<: *app-db
-      SERVICE_GROUP: data
+      SERVICE_GROUP: platform
       SERVICE_NAME: ingestor
       DB_SCHEMA: ingestor
     depends_on:
@@ -271,13 +271,20 @@ services:
     restart: unless-stopped
 
   webui:
+    # Next.js (standalone) SSR container on :3000 — replaces the old static
+    # nginx build. The gateway proxies to webui:3000 (see gateway conf).
     build:
-      context: ./webui
-      dockerfile: Dockerfile.prod
+      context: ./webui-next
+      dockerfile: docker/Dockerfile
       args:
-        # Single same-origin API base. "/api" behind the nginx gateway; set to
-        # "" for the ALB so the browser calls /v1/... directly.
-        VITE_API_URL: /api
+        # Client API base baked at build. "/api" behind the nginx gateway;
+        # set to "" for the ALB so the browser calls /v1/... directly.
+        NEXT_PUBLIC_API_URL: /api
+    environment:
+      NODE_ENV: production
+      # SSR (server-side) calls reach the API through the gateway on the
+      # compose network. Not a depends_on (would cycle with gateway).
+      API_INTERNAL_URL: http://gateway
     depends_on:
       - auth
       - friends
@@ -287,9 +294,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 32M
+          memory: 256M
         reservations:
-          memory: 16M
+          memory: 128M
     restart: unless-stopped
 
   # ---- Gateway --------------------------------------------------------------

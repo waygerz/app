@@ -30,7 +30,7 @@ def _itoken():
 
 def get_event(external_id):
     base = current_app.config["INGESTOR_URL"]
-    resp = requests.get(f"{base}/v1/data/ingestor/events/{external_id}", timeout=10)
+    resp = requests.get(f"{base}/v1/platform/ingestor/events/{external_id}", timeout=10)
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
