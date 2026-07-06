@@ -51,6 +51,27 @@ class Config:
     DEFAULT_SPORT = os.environ.get("DEFAULT_SPORT", "basketball")
     DEFAULT_LEAGUE = os.environ.get("DEFAULT_LEAGUE", "nba")
 
+    # ---- ESPN public API (free) — covers what RealTimeSportsAPI can't: field
+    # sports (golf, racing), 1v1 (mma), and sports RTS lacks (cricket). Redis-only
+    # cache-aside, flat freshness window (serve cached; older than TTL -> refetch).
+    ESPN_BASE = os.environ.get("ESPN_BASE", "https://site.api.espn.com/apis/site/v2/sports")
+    ESPN_CACHE_TTL = int(os.environ.get("ESPN_CACHE_TTL", 600))  # 10 minutes
+    ESPN_TIMEOUT = int(os.environ.get("ESPN_TIMEOUT", 8))  # seconds; serve stale/empty on timeout
+    # Leagues/tours per ESPN sport (slug lists).
+    GOLF_TOURS = [t.strip() for t in os.environ.get("GOLF_TOURS", "pga").split(",") if t.strip()]
+    RACING_TOURS = [
+        t.strip() for t in os.environ.get("RACING_TOURS", "f1,nascar-premier,irl").split(",") if t.strip()
+    ]
+    MMA_TOURS = [t.strip() for t in os.environ.get("MMA_TOURS", "ufc,pfl").split(",") if t.strip()]
+    # ESPN cricket has no leagues-list endpoint — league IDs are numeric + curated
+    # (verified via scan): 8039 World Cup, 8048 IPL, 8044 Big Bash, 8037 Champions
+    # Trophy, 8040 T20 WC Qualifier, 8041 SuperSport, 8043 Sheffield Shield, 8050 Ranji.
+    CRICKET_LEAGUES = [
+        t.strip()
+        for t in os.environ.get("CRICKET_LEAGUES", "8039,8048,8044,8037,8040,8041,8043,8050").split(",")
+        if t.strip()
+    ]
+
     # Shared secret for service-to-service (internal) calls, e.g. event refresh.
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 
