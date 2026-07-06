@@ -12,7 +12,9 @@ class User(db.Model):
 
     id = db.Column(UUID(as_uuid=False), primary_key=True, server_default=db.text('gen_random_uuid()'))
     phone = db.Column(db.String(32), unique=True, nullable=False, index=True)
-    pin_hash = db.Column(db.String(255), nullable=False)
+    # Legacy: passwordless (phone + OTP) auth no longer sets or checks a PIN.
+    # Kept nullable so existing rows retain their hash; new users have none.
+    pin_hash = db.Column(db.String(255), nullable=True)
     display_name = db.Column(db.String(64), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 

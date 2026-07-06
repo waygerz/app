@@ -45,6 +45,15 @@ class Config:
         if o.strip()
     ]
     OTP_TTL_SECONDS = int(os.environ.get("AUTH_OTP_TTL_SECONDS", 300))
+    # Reveal the OTP in the API response (shown beneath the login card). Non-prod
+    # always reveals; in prod this flag turns it on for testing until real SMS is
+    # wired. WARNING: while on, there is no real phone verification.
+    AUTH_REVEAL_OTP = os.environ.get("AUTH_REVEAL_OTP", "false").lower() in ("1", "true", "yes")
+    # Anti-abuse for OTP-only auth.
+    AUTH_OTP_RESEND_COOLDOWN_SECONDS = int(os.environ.get("AUTH_OTP_RESEND_COOLDOWN_SECONDS", 30))
+    AUTH_OTP_MAX_ATTEMPTS = int(os.environ.get("AUTH_OTP_MAX_ATTEMPTS", 5))
+    # Short-lived "phone proven, awaiting profile" ticket for new-user signup.
+    AUTH_REG_TICKET_TTL_SECONDS = int(os.environ.get("AUTH_REG_TICKET_TTL_SECONDS", 900))
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 
     @classmethod

@@ -11,16 +11,16 @@ def _dispatch(result):
     return jsonify(body), status
 
 
-def signup_start():
-    return _dispatch(svc.signup_start(request.get_json(silent=True) or {}))
+def otp_start():
+    return _dispatch(svc.otp_start(request.get_json(silent=True) or {}))
 
 
-def signup_verify():
-    return _dispatch(svc.signup_verify(request.get_json(silent=True) or {}))
+def otp_verify():
+    return _dispatch(svc.otp_verify(request.get_json(silent=True) or {}))
 
 
-def login():
-    return _dispatch(svc.login(request.get_json(silent=True) or {}))
+def otp_complete():
+    return _dispatch(svc.otp_complete(request.get_json(silent=True) or {}))
 
 
 @jwt_required(locations=["cookies", "headers"])

@@ -10,17 +10,20 @@ import {
 import { authApi, tryRefreshSession, type AuthUser } from '@/lib/auth';
 import { hasSessionMarker } from '@/lib/session';
 
+interface VerifyResult {
+  needsProfile: boolean;
+  ticket?: string;
+}
+
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
-  login: (phone: string, pin: string) => Promise<void>;
-  startSignup: (phone: string) => Promise<string | undefined>;
-  verifySignup: (
-    phone: string,
-    otp: string,
-    pin: string,
-    displayName: string,
-  ) => Promise<void>;
+  /** Send an OTP; returns the code only when the backend reveals it (dev/testing). */
+  startOtp: (phone: string) => Promise<string | undefined>;
+  /** Verify the OTP. Existing user → logged in; new user → needsProfile + ticket. */
+  verifyOtp: (phone: string, otp: string) => Promise<VerifyResult>;
+  /** Finish a new signup with the ticket + display name. */
+  completeProfile: (ticket: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -57,23 +60,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     bootstrap().finally(() => setLoading(false));
   }, []);
 
-  async function login(phone: string, pin: string) {
-    const { user: u } = await authApi.login(phone, pin);
-    setUser(u);
-  }
-
-  async function startSignup(phone: string) {
-    const res = await authApi.signupStart(phone);
+  async function startOtp(phone: string) {
+    const res = await authApi.otpStart(phone);
     return res.dev_otp;
   }
 
-  async function verifySignup(
-    phone: string,
-    otp: string,
-    pin: string,
-    displayName: string,
-  ) {
-    const { user: u } = await authApi.signupVerify(phone, otp, pin, displayName);
+  async function verifyOtp(phone: string, otp: string): Promise<VerifyResult> {
+    const res = await authApi.otpVerify(phone, otp);
+    if (res.user) {
+      setUser(res.user);
+      return { needsProfile: false };
+    }
+    return { needsProfile: true, ticket: res.ticket };
+  }
+
+  async function completeProfile(ticket: string, displayName: string) {
+    const { user: u } = await authApi.otpComplete(ticket, displayName);
     setUser(u);
   }
 
@@ -88,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, startSignup, verifySignup, logout }}
+      value={{ user, loading, startOtp, verifyOtp, completeProfile, logout }}
     >
       {children}
     </AuthContext.Provider>

@@ -5,19 +5,19 @@ from app.controllers import controller_auth as ctrl
 auth_bp = Blueprint("auth", __name__)
 
 
-@auth_bp.post("/signup/start")
-def signup_start():
-    return ctrl.signup_start()
+@auth_bp.post("/otp/start")
+def otp_start():
+    return ctrl.otp_start()
 
 
-@auth_bp.post("/signup/verify")
-def signup_verify():
-    return ctrl.signup_verify()
+@auth_bp.post("/otp/verify")
+def otp_verify():
+    return ctrl.otp_verify()
 
 
-@auth_bp.post("/login")
-def login():
-    return ctrl.login()
+@auth_bp.post("/otp/complete")
+def otp_complete():
+    return ctrl.otp_complete()
 
 
 @auth_bp.get("/me")

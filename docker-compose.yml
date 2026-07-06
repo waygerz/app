@@ -89,6 +89,10 @@ services:
       SERVICE_GROUP: platform
       SERVICE_NAME: auth
       DB_SCHEMA: auth
+      # TEMPORARY: no SMS provider yet, so reveal the OTP in the API response
+      # (shown beneath the login card) for testing. While this is "true" there is
+      # NO real phone verification. Set to "false" once real SMS is wired.
+      AUTH_REVEAL_OTP: "true"
     depends_on:
       pgsql: { condition: service_healthy }
       redis: { condition: service_healthy }

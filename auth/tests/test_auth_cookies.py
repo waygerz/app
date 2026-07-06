@@ -1,4 +1,4 @@
-"""Cookie auth: login sets cookies, refresh rotates, logout clears."""
+"""Passwordless OTP auth: login/signup set cookies, refresh rotates, logout clears."""
 from app.utils.cookies import SESSION_MARKER_COOKIE, auth_cookie_names
 
 
@@ -10,13 +10,17 @@ def _cookie_value(set_cookie_headers: list[str], name: str) -> str | None:
 
 
 def _login(client, user, device_uuid):
+    """Existing user: start → verify (returns cookies). dev_otp is revealed in tests."""
+    start = client.post("/v1/platform/auth/otp/start", json={"phone": user["phone"]})
+    assert start.status_code == 200
+    code = start.get_json()["dev_otp"]
     return client.post(
-        "/v1/platform/auth/login",
-        json={"phone": user["phone"], "pin": user["pin"], "device_uuid": device_uuid},
+        "/v1/platform/auth/otp/verify",
+        json={"phone": user["phone"], "otp": code, "device_uuid": device_uuid},
     )
 
 
-def test_login_sets_cookies_without_json_token(client, user, device_uuid):
+def test_otp_login_existing_user_sets_cookies(client, user, device_uuid):
     res = _login(client, user, device_uuid)
     assert res.status_code == 200
     data = res.get_json()
@@ -28,6 +32,49 @@ def test_login_sets_cookies_without_json_token(client, user, device_uuid):
     assert any(access_name in c for c in cookies)
     assert any(refresh_name in c for c in cookies)
     assert any(SESSION_MARKER_COOKIE in c for c in cookies)
+
+
+def test_signup_new_user_flow(client, device_uuid):
+    phone_raw = "9042398485"  # valid US number, not yet registered
+    start = client.post("/v1/platform/auth/otp/start", json={"phone": phone_raw})
+    assert start.status_code == 200
+    code = start.get_json()["dev_otp"]
+
+    verify = client.post(
+        "/v1/platform/auth/otp/verify",
+        json={"phone": phone_raw, "otp": code, "device_uuid": device_uuid},
+    )
+    assert verify.status_code == 200
+    body = verify.get_json()
+    assert body.get("needs_profile") is True
+    assert "user" not in body
+    ticket = body["ticket"]
+
+    done = client.post(
+        "/v1/platform/auth/otp/complete",
+        json={"ticket": ticket, "display_name": "Newbie", "device_uuid": device_uuid},
+    )
+    assert done.status_code == 201
+    assert done.get_json()["user"]["display_name"] == "Newbie"
+    access_name, _ = auth_cookie_names()
+    assert any(access_name in c for c in done.headers.getlist("Set-Cookie"))
+
+
+def test_verify_rejects_wrong_code(client, user, device_uuid):
+    client.post("/v1/platform/auth/otp/start", json={"phone": user["phone"]})
+    bad = client.post(
+        "/v1/platform/auth/otp/verify",
+        json={"phone": user["phone"], "otp": "000000", "device_uuid": device_uuid},
+    )
+    assert bad.status_code == 400
+
+
+def test_complete_rejects_bad_ticket(client, device_uuid):
+    res = client.post(
+        "/v1/platform/auth/otp/complete",
+        json={"ticket": "not-a-real-ticket", "display_name": "X", "device_uuid": device_uuid},
+    )
+    assert res.status_code == 400
 
 
 def test_me_accepts_access_cookie(client, user, device_uuid):

@@ -1,4 +1,4 @@
-// Client for the Waygerz auth service (HttpOnly cookie sessions).
+// Client for the Waygerz auth service (passwordless phone + OTP, cookie sessions).
 import { API } from './api-paths';
 import { getDeviceUuid } from './device';
 import { apiJson } from './http';
@@ -12,30 +12,31 @@ export interface AuthUser {
   created_at: string;
 }
 
+/** otp/verify: existing user → {user}; new user → {needs_profile, ticket}. */
+export interface OtpVerifyResult {
+  user?: AuthUser;
+  needs_profile?: boolean;
+  ticket?: string;
+}
+
 export const authApi = {
-  signupStart: (phone: string) =>
-    apiJson<{ dev_otp?: string; message: string; phone: string }>(`${AUTH_URL}${API.auth}/signup/start`, {
+  otpStart: (phone: string) =>
+    apiJson<{ message: string; phone: string; dev_otp?: string }>(`${AUTH_URL}${API.auth}/otp/start`, {
       method: 'POST',
       body: JSON.stringify({ phone }),
     }),
 
-  signupVerify: (phone: string, otp: string, pin: string, display_name: string) =>
-    apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/signup/verify`, {
+  otpVerify: (phone: string, otp: string) =>
+    apiJson<OtpVerifyResult>(`${AUTH_URL}${API.auth}/otp/verify`, {
       method: 'POST',
-      body: JSON.stringify({
-        phone,
-        otp,
-        pin,
-        display_name,
-        device_uuid: getDeviceUuid(),
-      }),
+      body: JSON.stringify({ phone, otp, device_uuid: getDeviceUuid() }),
       device: true,
     }),
 
-  login: (phone: string, pin: string) =>
-    apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/login`, {
+  otpComplete: (ticket: string, display_name: string) =>
+    apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/otp/complete`, {
       method: 'POST',
-      body: JSON.stringify({ phone, pin, device_uuid: getDeviceUuid() }),
+      body: JSON.stringify({ ticket, display_name, device_uuid: getDeviceUuid() }),
       device: true,
     }),
 

@@ -1,6 +1,6 @@
-"""Auth domain: signup, login, session."""
+"""Auth domain: passwordless phone + OTP login/signup, session."""
 import random
-import re
+import secrets
 
 import phonenumbers
 from flask import current_app, jsonify, make_response
@@ -8,14 +8,12 @@ from flask_jwt_extended import create_access_token, create_refresh_token
 
 from app.extensions import db, get_redis
 from app.models.user import User
-from app.services import _sessions
+from app.services import _sessions, service_sms
 from app.utils.config import Config
 from app.utils.cookies import attach_auth_cookies
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import generate_password_hash
 
-PIN_RE = re.compile(r"^[0-9]{4}$")
 _DEFAULT_REGION = "US"
-_DUMMY_PIN_HASH = generate_password_hash("0000")
 
 
 class InvalidPhone(ValueError):
@@ -33,22 +31,24 @@ def normalize_phone(raw: str) -> str:
 
 
 def hash_pin(pin: str) -> str:
+    """Retained for the `create-user` CLI; passwordless auth doesn't use PINs."""
     return generate_password_hash(pin)
-
-
-def _verify_pin(pin: str, pin_hash: str) -> bool:
-    return check_password_hash(pin_hash, pin)
-
-
-def _verify_pin_constant_time(pin: str, pin_hash: str | None) -> bool:
-    if not pin_hash:
-        check_password_hash(_DUMMY_PIN_HASH, pin)
-        return False
-    return check_password_hash(pin_hash, pin)
 
 
 def _otp_key(phone: str) -> str:
     return f"otp:{phone}"
+
+
+def _otp_cooldown_key(phone: str) -> str:
+    return f"otp:cooldown:{phone}"
+
+
+def _otp_attempts_key(phone: str) -> str:
+    return f"otp:attempts:{phone}"
+
+
+def _reg_ticket_key(token: str) -> str:
+    return f"regticket:{token}"
 
 
 def _generate_otp(phone: str) -> str:
@@ -66,7 +66,31 @@ def _verify_otp(phone: str, code: str) -> bool:
 
 
 def _reveal_otp() -> bool:
-    return current_app.config["APP_ENV"] != "production"
+    return (
+        current_app.config["APP_ENV"] != "production"
+        or current_app.config.get("AUTH_REVEAL_OTP", False)
+    )
+
+
+def _issue_reg_ticket(phone: str) -> str:
+    token = secrets.token_urlsafe(32)
+    get_redis().setex(
+        _reg_ticket_key(token),
+        current_app.config["AUTH_REG_TICKET_TTL_SECONDS"],
+        phone,
+    )
+    return token
+
+
+def _consume_reg_ticket(token: str) -> str | None:
+    if not token:
+        return None
+    key = _reg_ticket_key(token)
+    r = get_redis()
+    phone = r.get(key)
+    if phone is not None:
+        r.delete(key)
+    return phone
 
 
 def _refresh_ttl() -> int:
@@ -117,24 +141,28 @@ def _issue_auth_response(user, *, device_uuid: str | None, status: int = 200):
     return response
 
 
-def signup_start(data: dict) -> tuple[dict, int]:
+def otp_start(data: dict) -> tuple[dict, int]:
+    """Send a login/signup code. Same response for new and existing numbers."""
     try:
         phone = normalize_phone(data.get("phone"))
     except InvalidPhone:
         return {"error": "invalid phone number"}, 400
-    if User.query.filter_by(phone=phone).first():
-        return {"error": "phone already registered"}, 409
+    r = get_redis()
+    if r.get(_otp_cooldown_key(phone)):
+        return {"error": "a code was just sent — wait a moment before requesting another"}, 429
     code = _generate_otp(phone)
-    resp = {"message": "OTP sent", "phone": phone}
+    r.setex(_otp_cooldown_key(phone), current_app.config["AUTH_OTP_RESEND_COOLDOWN_SECONDS"], "1")
+    r.delete(_otp_attempts_key(phone))
+    service_sms.send_otp(phone, code)
+    resp = {"message": "code sent", "phone": phone}
     if _reveal_otp():
         resp["dev_otp"] = code
     return resp, 200
 
 
-def signup_verify(data: dict):
+def otp_verify(data: dict):
+    """Verify the code. Existing user → logged in. New user → needs_profile + ticket."""
     code = str(data.get("otp", ""))
-    pin = str(data.get("pin", ""))
-    display_name = (data.get("display_name") or "").strip()
     device_uuid = _device_uuid(data)
     if device_uuid is not None and not _sessions.is_valid_uuid(device_uuid):
         return {"error": "invalid device_uuid format"}, 400
@@ -142,36 +170,50 @@ def signup_verify(data: dict):
         phone = normalize_phone(data.get("phone"))
     except InvalidPhone:
         return {"error": "invalid phone number"}, 400
-    if not PIN_RE.match(pin):
-        return {"error": "pin must be exactly 4 digits"}, 400
-    if not display_name:
-        return {"error": "display_name is required"}, 400
-    if User.query.filter_by(phone=phone).first():
-        return {"error": "phone already registered"}, 409
+
+    r = get_redis()
+    attempts_key = _otp_attempts_key(phone)
+    attempts = r.incr(attempts_key)
+    if attempts == 1:
+        r.expire(attempts_key, current_app.config["OTP_TTL_SECONDS"])
+    if attempts > current_app.config["AUTH_OTP_MAX_ATTEMPTS"]:
+        r.delete(_otp_key(phone))
+        return {"error": "too many attempts — request a new code"}, 429
+
     if not _verify_otp(phone, code):
-        return {"error": "invalid or expired OTP"}, 400
-    user = User(phone=phone, pin_hash=hash_pin(pin), display_name=display_name)
-    db.session.add(user)
-    db.session.commit()
-    return _issue_auth_response(user, device_uuid=device_uuid, status=201)
+        return {"error": "invalid or expired code"}, 400
+
+    r.delete(attempts_key)
+    r.delete(_otp_cooldown_key(phone))
+
+    user = User.query.filter_by(phone=phone).first()
+    if user:
+        return _issue_auth_response(user, device_uuid=device_uuid)
+
+    ticket = _issue_reg_ticket(phone)
+    return {"needs_profile": True, "ticket": ticket}, 200
 
 
-def login(data: dict):
-    pin = str(data.get("pin", ""))
+def otp_complete(data: dict):
+    """Finalize a new signup: create the account from a reg ticket + display name."""
+    token = str(data.get("ticket", ""))
+    display_name = (data.get("display_name") or "").strip()
     device_uuid = _device_uuid(data)
     if device_uuid is not None and not _sessions.is_valid_uuid(device_uuid):
         return {"error": "invalid device_uuid format"}, 400
-    try:
-        phone = normalize_phone(data.get("phone"))
-    except InvalidPhone:
-        return {"error": "invalid phone or PIN"}, 401
-    user = User.query.filter_by(phone=phone).first()
-    if not user:
-        _verify_pin_constant_time(pin, None)
-        return {"error": "invalid phone or PIN"}, 401
-    if not _verify_pin_constant_time(pin, user.pin_hash):
-        return {"error": "invalid phone or PIN"}, 401
-    return _issue_auth_response(user, device_uuid=device_uuid)
+    if not display_name:
+        return {"error": "display_name is required"}, 400
+
+    phone = _consume_reg_ticket(token)
+    if not phone:
+        return {"error": "registration session expired — start again"}, 400
+    if User.query.filter_by(phone=phone).first():
+        return {"error": "phone already registered"}, 409
+
+    user = User(phone=phone, display_name=display_name)
+    db.session.add(user)
+    db.session.commit()
+    return _issue_auth_response(user, device_uuid=device_uuid, status=201)
 
 
 def me(user_id: str) -> tuple[dict, int]:
