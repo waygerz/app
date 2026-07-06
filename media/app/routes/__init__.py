@@ -14,4 +14,4 @@ for bp in [health_bp, uploads_bp]:
 
 def register_blueprints(app):
     app.register_blueprint(service_bp, url_prefix=Config.api_prefix())
-    app.register_blueprint(internal_bp, url_prefix="/internal")
+    app.register_blueprint(internal_bp, url_prefix=Config.api_prefix() + "/internal")

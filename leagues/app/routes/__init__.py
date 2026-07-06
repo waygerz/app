@@ -17,4 +17,4 @@ for bp in [
 
 def register_blueprints(app):
     app.register_blueprint(service_bp, url_prefix=Config.api_prefix())
-    app.register_blueprint(leagues_internal_bp, url_prefix="/internal")
+    app.register_blueprint(leagues_internal_bp, url_prefix=Config.api_prefix() + "/internal")
