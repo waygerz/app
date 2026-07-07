@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetchLeagues, type League } from '@/lib/ingestor';
+import { isEspnSport } from '@/lib/espn';
+import { EspnSportList } from '@/components/espn/sport-list';
 import { useFavorites, toggleFavorite } from '@/lib/favorites';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +14,13 @@ import { Star } from 'lucide-react';
 
 export default function SportPage() {
   const { slug = '' } = useParams<{ slug: string }>();
+  // ESPN-sourced sports (golf, racing, mma, cricket) have their own shapes and
+  // skip the two-team league→events flow entirely.
+  if (isEspnSport(slug)) return <EspnSportList sport={slug} />;
+  return <TeamLeagues slug={slug} />;
+}
+
+function TeamLeagues({ slug }: { slug: string }) {
   const title = slug.replace(/-/g, ' ');
   const favorites = useFavorites();
 
