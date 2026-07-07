@@ -2,7 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { fetchEspnDetail, ESPN_SPORTS } from '@/lib/espn';
+import { CalendarClock } from 'lucide-react';
+import { fetchEspnDetail, ESPN_SPORTS, type EspnDetail } from '@/lib/espn';
+import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EspnStatusBadge, formatDay } from './shared';
 import { Leaderboard } from './leaderboard';
@@ -43,11 +45,37 @@ export function EspnEventDetail({ sport, externalId }: { sport: string; external
             </p>
           </div>
 
-          {shape === 'field' && <Leaderboard field={q.data.field ?? []} />}
-          {shape === '1v1' && <FightCard fights={q.data.fights ?? []} />}
-          {shape === 'team' && <MatchCard summary={q.data.summary} />}
+          {renderBody(sport, shape, q.data)}
         </>
       )}
     </div>
   );
+}
+
+// Field sports (golf, racing) only have a field once play begins, so a scheduled
+// one shows a clear "upcoming" card rather than an empty list. MMA/cricket know
+// their matchups ahead of time, so those still render even when scheduled.
+function renderBody(sport: string, shape: string, d: EspnDetail) {
+  const hasData =
+    shape === 'field' ? (d.field?.length ?? 0) > 0
+    : shape === '1v1' ? (d.fights?.length ?? 0) > 0
+    : Boolean(d.summary.home || d.summary.away);
+
+  if (d.summary.status === 'scheduled' && !hasData) {
+    const noun = sport === 'racing' ? 'grid' : 'field';
+    return (
+      <Card className="items-center gap-2 p-8 text-center sm:p-10">
+        <CalendarClock className="size-7 text-muted-foreground" />
+        <p className="text-base font-semibold text-foreground">Upcoming</p>
+        <p className="text-sm text-muted-foreground">
+          {d.summary.start_date ? `Starts ${formatDay(d.summary.start_date)}. ` : ''}
+          The {noun} posts once play begins.
+        </p>
+      </Card>
+    );
+  }
+
+  if (shape === 'field') return <Leaderboard field={d.field ?? []} />;
+  if (shape === '1v1') return <FightCard fights={d.fights ?? []} />;
+  return <MatchCard summary={d.summary} />;
 }
