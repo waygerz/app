@@ -13,12 +13,19 @@ from app.extensions import db
 from app.models.wager import (
     ACCEPTED,
     CANCELLED,
+    COMPLETED,
     DECLINED,
     OPEN,
     REFUNDED,
     SETTLED,
     Wager,
 )
+
+# Once an event's start time is this far in the past we treat it as over, so a
+# wager can move to `completed` (awaiting the winner's confirmation) even when
+# our data never reports a definitive final — head-to-head results are settled
+# by the members themselves, not by feed data.
+COMPLETE_AFTER_HOURS = 6
 
 
 class InsufficientFunds(Exception):
@@ -295,16 +302,46 @@ def _post_settled_activity(wager, headline):
     })
 
 
+def _parse_start(wager):
+    if not wager.start_time:
+        return None
+    try:
+        return datetime.fromisoformat(wager.start_time.replace("Z", "+00:00")).replace(tzinfo=None)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _has_started(wager) -> bool:
+    dt = _parse_start(wager)
+    return dt is None or dt <= datetime.utcnow()
+
+
+def _likely_over(wager) -> bool:
+    """True once the event's start time is well past — our cue that it's done.
+
+    Unknown start time returns False: we won't declare an event "over" when we
+    can't tell, so those wait for a data `final` or a manual confirmation.
+    """
+    dt = _parse_start(wager)
+    if dt is None:
+        return False
+    return dt + timedelta(hours=COMPLETE_AFTER_HOURS) <= datetime.utcnow()
+
+
 def settle_one(wager):
-    """Settle an accepted wager if its event is final/cancelled. No-op otherwise."""
+    """Advance an accepted wager once its event is over.
+
+    Head-to-head results are peer-confirmed, so this does NOT pick a winner or
+    pay out — it just moves the wager to `completed` (awaiting the winner's
+    confirmation). A cancelled event is the one unambiguous case, so it refunds
+    both sides automatically. No-op until the event is over.
+    """
     if wager.status != ACCEPTED:
         return wager
     account = _account(wager.league_id)
     event = get_event(wager.event_id)
-    if not event:
-        return wager
+    status = event.get("status") if event else None
 
-    status = event.get("status")
     if status == "cancelled":
         refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
         refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
@@ -313,39 +350,77 @@ def settle_one(wager):
         db.session.commit()
         return wager
 
-    if status != "final":
-        return wager  # not finished yet
-
-    winner_side = event.get("winner_side")
-    if winner_side in ("home", "away"):
-        winner = wager.proposer_id if wager.proposer_side == winner_side else wager.acceptor_id
-        payout(account, winner, wager.amount_cents * 2, _ref(wager.id))
-        wager.winner_user_id = winner
-        wager.status = SETTLED
-        wager.settled_at = datetime.utcnow()
+    if status == "final" or _likely_over(wager):
+        wager.status = COMPLETED
+        wager.completed_at = datetime.utcnow()
         db.session.commit()
-        _post_settled_activity(wager, "A wager was settled")
-    else:  # draw / push
-        refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
-        refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
-        wager.status = REFUNDED
-        wager.settled_at = datetime.utcnow()
-        db.session.commit()
+        _post_completed_activity(wager)
     return wager
 
 
-def _has_started(wager) -> bool:
-    if not wager.start_time:
-        return True
-    try:
-        dt = datetime.fromisoformat(wager.start_time.replace("Z", "+00:00")).replace(tzinfo=None)
-    except (ValueError, AttributeError):
-        return True
-    return dt <= datetime.utcnow()
+def _post_completed_activity(wager):
+    post_league_activity(wager.league_id, {
+        "event_type": "wager_completed",
+        "title": "A bet is ready to settle",
+        "body": f"{wager.event_name} — the winner can now confirm the result.",
+        "dedup_key": f"wager_completed:{wager.id}",
+        "meta": {"wager_id": wager.id, "amount_cents": wager.amount_cents},
+    })
+
+
+def confirm(wager, user_id, result):
+    """Peer-settle a completed head-to-head wager.
+
+    ``result`` is relative to the caller: 'won' (caller took the pot), 'lost'
+    (caller concedes to the other side), or 'draw' (no contest — refund both).
+    Allowed once the event is over: from `completed`, or directly from
+    `accepted` if the event has already started (so it works before the
+    scheduled sweep flips it).
+    """
+    if not wager.involves(user_id):
+        raise WagerError("this wager isn't yours to settle")
+    if wager.status == COMPLETED:
+        pass
+    elif wager.status == ACCEPTED and _has_started(wager):
+        pass
+    elif wager.status in (ACCEPTED,):
+        raise WagerError("you can confirm the result once the event has started")
+    else:
+        raise WagerError("this wager has already been settled")
+
+    result = (result or "").lower()
+    account = _account(wager.league_id)
+    now = datetime.utcnow()
+
+    if result == "draw":
+        refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
+        refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
+        wager.status = REFUNDED
+        wager.confirmed_by_id = user_id
+        wager.settled_at = now
+        db.session.commit()
+        _post_settled_activity(wager, "A bet was called a draw")
+        return wager
+
+    if result == "won":
+        winner = user_id
+    elif result == "lost":
+        winner = wager.acceptor_id if user_id == wager.proposer_id else wager.proposer_id
+    else:
+        raise WagerError("result must be 'won', 'lost', or 'draw'")
+
+    payout(account, winner, wager.amount_cents * 2, _ref(wager.id))
+    wager.winner_user_id = winner
+    wager.confirmed_by_id = user_id
+    wager.status = SETTLED
+    wager.settled_at = now
+    db.session.commit()
+    _post_settled_activity(wager, "A wager was settled")
+    return wager
 
 
 def settle_due(refresh=True) -> int:
-    """Settle every accepted wager whose event has finished. Returns count settled."""
+    """Advance every accepted wager whose event has finished. Returns the count moved."""
     accepted = Wager.query.filter_by(status=ACCEPTED).all()
 
     if refresh:
@@ -359,7 +434,7 @@ def settle_due(refresh=True) -> int:
             except Exception:  # noqa: BLE001
                 pass
 
-    settled = 0
+    moved = 0
     for wager in accepted:
         before = wager.status
         try:
@@ -368,8 +443,8 @@ def settle_due(refresh=True) -> int:
             db.session.rollback()
             continue
         if wager.status != before:
-            settled += 1
-    return settled
+            moved += 1
+    return moved
 
 
 # ---- HTTP handlers --------------------------------------------------------
@@ -468,6 +543,20 @@ def decline_wager(wager_id, me):
 
 def cancel_wager(wager_id, me):
     return _act(wager_id, me, cancel)
+
+
+def confirm_wager(wager_id, me, data):
+    wager_id = str(wager_id)
+    w = db.session.get(Wager, wager_id)
+    if not w or not w.involves(me):
+        return {"error": "wager not found"}, 404
+    try:
+        confirm(w, me, (data or {}).get("result"))
+    except WagerError as e:
+        return {"error": str(e)}, 400
+    except InsufficientFunds:
+        return {"error": "insufficient balance to settle"}, 402
+    return {"wager": _enrich([w])[0]}, 200
 
 
 def settle_due_admin():

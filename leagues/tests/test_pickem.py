@@ -207,7 +207,7 @@ def test_money_league_standings_shape(client, auth_headers, monkeypatch):
                         lambda lid: {U1: {"wins": 3, "losses": 1, "pushes": 0}})
 
     payload = {
-        "name": "Money", "league_type": "pool", "period_type": "season",
+        "name": "Money", "league_type": "head_to_head", "period_type": "season",
         "starting_balance_cents": 100000, "sports": ["NBA"],
     }
     d = client.post(f"{API_PREFIX}/", json=payload, headers=auth_headers(U1)).get_json()["league"]

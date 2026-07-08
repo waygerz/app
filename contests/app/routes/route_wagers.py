@@ -43,6 +43,12 @@ def cancel(wager_id):
     return ctrl.cancel(wager_id)
 
 
+@wagers_bp.post("/wagers/<uuid:wager_id>/confirm")
+@jwt_required(locations=["cookies", "headers"])
+def confirm(wager_id):
+    return ctrl.confirm(wager_id)
+
+
 @wagers_bp.post("/admin/settle")
 @internal_only
 def settle_due():

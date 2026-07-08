@@ -12,7 +12,7 @@ import {
   Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { wagersApi } from '@/lib/wagers';
+import { wagersApi, type WagerResult } from '@/lib/wagers';
 import { friendsApi } from '@/lib/friends';
 import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
@@ -75,6 +75,7 @@ export function NotificationsSheet() {
   const acceptBet = useMutation({ mutationFn: (id: string) => wagersApi.accept(id), onSuccess: () => { toast.success('Bet accepted'); refreshWagers(); }, onError: onErr });
   const declineBet = useMutation({ mutationFn: (id: string) => wagersApi.decline(id), onSuccess: () => { toast.success('Bet declined'); refreshWagers(); }, onError: onErr });
   const cancelBet = useMutation({ mutationFn: (id: string) => wagersApi.cancel(id), onSuccess: () => { toast.success('Bet cancelled'); refreshWagers(); }, onError: onErr });
+  const confirmBet = useMutation({ mutationFn: ({ id, result }: { id: string; result: WagerResult }) => wagersApi.confirm(id, result), onSuccess: (_d, v) => { toast.success(v.result === 'draw' ? 'Called a draw' : 'Result confirmed'); refreshWagers(); }, onError: onErr });
   const acceptFriend = useMutation({ mutationFn: (id: number) => friendsApi.accept(id), onSuccess: () => { toast.success('Friend added'); qc.invalidateQueries({ queryKey: ['friend-requests'] }); qc.invalidateQueries({ queryKey: ['friends'] }); }, onError: onErr });
   const declineFriend = useMutation({ mutationFn: (id: number) => friendsApi.decline(id), onSuccess: () => { toast.success('Request declined'); qc.invalidateQueries({ queryKey: ['friend-requests'] }); }, onError: onErr });
 
@@ -111,6 +112,18 @@ export function NotificationsSheet() {
         };
       } else if (w.status === 'accepted') {
         n = { title: `Bet is live vs ${other}`, sub, time, actionable: false, badge: { label: 'Active', variant: 'info' } };
+      } else if (w.status === 'completed') {
+        n = {
+          title: `Confirm your result vs ${other}`, sub, time: w.completed_at ?? time, actionable: true,
+          badge: { label: 'Confirm', variant: 'warning' },
+          actions: (
+            <>
+              <Button size="sm" disabled={confirmBet.isPending} onClick={() => confirmBet.mutate({ id: w.id, result: 'won' })}>I won</Button>
+              <Button size="sm" variant="outline" disabled={confirmBet.isPending} onClick={() => confirmBet.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
+              <Button size="sm" variant="ghost" disabled={confirmBet.isPending} onClick={() => confirmBet.mutate({ id: w.id, result: 'draw' })}>Draw</Button>
+            </>
+          ),
+        };
       } else if (w.status === 'settled') {
         const won = String(w.winner_user_id ?? '') === me;
         n = {

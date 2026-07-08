@@ -5,7 +5,7 @@ import { API } from './api-paths';
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 const LEAGUES_API = API.leagues;
 
-export type LeagueType = 'head_to_head' | 'pool' | 'pickem';
+export type LeagueType = 'head_to_head' | 'pickem';
 
 export interface LeaguePeriod {
   id: string;
@@ -174,7 +174,6 @@ export interface PickRow {
 
 const TYPE_LABELS: Record<LeagueType, string> = {
   head_to_head: 'Head-to-head',
-  pool: 'Pool',
   pickem: "Pick'em",
 };
 export const leagueTypeLabel = (t: LeagueType) => TYPE_LABELS[t] ?? t;

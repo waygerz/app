@@ -1,7 +1,9 @@
 import pytest
 
 from app.services import service_wagers as svc
-from app.models.wager import ACCEPTED, CANCELLED, DECLINED, OPEN, REFUNDED, SETTLED
+from app.models.wager import (
+    ACCEPTED, CANCELLED, COMPLETED, DECLINED, OPEN, REFUNDED, SETTLED,
+)
 
 # User + league ids are UUIDs now.
 U1 = "11111111-1111-1111-1111-111111111111"
@@ -95,23 +97,22 @@ def test_cancel_refunds_proposer(app, calls):
     assert ("refund", U1, 5000) in calls
 
 
-def test_settle_pays_winner_double(app, calls, monkeypatch):
-    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)  # proposer takes home
-    svc.accept(w, U2)
-    monkeypatch.setattr(
-        svc, "get_event", lambda eid: {"status": "final", "winner_side": "home"}
-    )
-    svc.settle_one(w)
-    assert w.status == SETTLED and w.winner_user_id == U1
-    assert ("payout", U1, 10000) in calls
-
-
-def test_settle_draw_refunds_both(app, calls, monkeypatch):
+def test_settle_marks_completed_on_final(app, calls, monkeypatch):
+    # A final event no longer auto-pays — it moves to `completed`, awaiting the
+    # winner's confirmation. No money moves at this step.
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
-    monkeypatch.setattr(
-        svc, "get_event", lambda eid: {"status": "final", "winner_side": "draw"}
-    )
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    svc.settle_one(w)
+    assert w.status == COMPLETED and w.completed_at is not None
+    assert w.winner_user_id is None
+    assert not any(op == "payout" for op, *_ in calls)
+
+
+def test_settle_refunds_on_cancelled(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "cancelled"})
     svc.settle_one(w)
     assert w.status == REFUNDED
     assert ("refund", U1, 5000) in calls and ("refund", U2, 5000) in calls
@@ -120,8 +121,59 @@ def test_settle_draw_refunds_both(app, calls, monkeypatch):
 def test_settle_noop_when_event_not_final(app, calls):
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
-    svc.settle_one(w)  # default mocked event is still 'scheduled'
+    svc.settle_one(w)  # default mocked event is 'scheduled', start_time None
     assert w.status == ACCEPTED
+
+
+def test_confirm_won_pays_claimer_double(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    svc.settle_one(w)  # -> COMPLETED
+    svc.confirm(w, U1, "won")
+    assert w.status == SETTLED
+    assert w.winner_user_id == U1 and w.confirmed_by_id == U1
+    assert ("payout", U1, 10000) in calls
+
+
+def test_confirm_lost_pays_the_other_side(app, calls, monkeypatch):
+    # The loser can concede — marking 'lost' pays the opponent.
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    svc.settle_one(w)
+    svc.confirm(w, U1, "lost")
+    assert w.status == SETTLED and w.winner_user_id == U2
+    assert ("payout", U2, 10000) in calls
+
+
+def test_confirm_draw_refunds_both(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    svc.settle_one(w)
+    svc.confirm(w, U2, "draw")
+    assert w.status == REFUNDED and w.confirmed_by_id == U2
+    assert ("refund", U1, 5000) in calls and ("refund", U2, 5000) in calls
+
+
+def test_confirm_rejects_unrelated_user(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    svc.settle_one(w)
+    with pytest.raises(svc.WagerError):
+        svc.confirm(w, U99, "won")
+
+
+def test_confirm_rejects_after_settled(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    svc.settle_one(w)
+    svc.confirm(w, U1, "won")
+    with pytest.raises(svc.WagerError):
+        svc.confirm(w, U2, "won")
 
 
 def test_propose_many_creates_one_per_member(app, calls):

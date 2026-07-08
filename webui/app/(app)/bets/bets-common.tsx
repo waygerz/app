@@ -10,10 +10,11 @@ export type BetFilter = 'pending' | 'active' | 'closed';
 
 export const FILTERS: { key: BetFilter; label: string; description: string }[] = [
   { key: 'pending', label: 'Pending', description: 'Proposed bets awaiting accept, decline, or cancel' },
-  { key: 'active', label: 'Active', description: 'Accepted bets in play' },
+  { key: 'active', label: 'Active', description: 'Accepted bets in play, plus finished bets waiting on a result' },
   { key: 'closed', label: 'Closed', description: 'Settled, declined, cancelled, or refunded' },
 ];
 
+const ACTIVE_STATUSES: WagerStatus[] = ['accepted', 'completed'];
 const CLOSED_STATUSES: WagerStatus[] = ['settled', 'declined', 'cancelled', 'refunded'];
 
 export function filterWagers(wagers: Wager[], filter: BetFilter, me: string): Wager[] {
@@ -21,7 +22,7 @@ export function filterWagers(wagers: Wager[], filter: BetFilter, me: string): Wa
     case 'pending':
       return wagers.filter((w) => w.status === 'open');
     case 'active':
-      return wagers.filter((w) => w.status === 'accepted');
+      return wagers.filter((w) => ACTIVE_STATUSES.includes(w.status));
     case 'closed':
       return wagers.filter((w) => CLOSED_STATUSES.includes(w.status));
     default:
@@ -38,6 +39,9 @@ function statusBadge(w: Wager, me: string) {
   }
   if (w.status === 'accepted') {
     return <Badge size="sm" variant="info" appearance="light">Active</Badge>;
+  }
+  if (w.status === 'completed') {
+    return <Badge size="sm" variant="warning" appearance="light">Confirm result</Badge>;
   }
   if (w.status === 'settled') {
     const won = w.winner_user_id === me;

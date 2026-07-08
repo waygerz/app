@@ -19,7 +19,7 @@ x-app-db: &app-db
 #   messaging    192M    gthread ×4 (SSE)
 #   leagues      160M    busiest gameplay API
 #   auth         128M    login / sessions
-#   contests     128M    wagers + pools
+#   contests     128M    head-to-head wagers
 #   media        112M    S3 presign only (no upload proxy)
 #   wallet        96M
 #   ingestor      96M

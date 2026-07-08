@@ -8,10 +8,14 @@ const WAGERS_API = `${API.contests}/wagers`;
 export type WagerStatus =
   | 'open'
   | 'accepted'
+  | 'completed'
   | 'settled'
   | 'declined'
   | 'cancelled'
   | 'refunded';
+
+// Result a member reports when confirming a completed head-to-head wager.
+export type WagerResult = 'won' | 'lost' | 'draw';
 
 export interface Wager {
   id: string;
@@ -29,10 +33,12 @@ export interface Wager {
   amount_cents: number;
   status: WagerStatus;
   winner_user_id: string | null;
+  confirmed_by_id: string | null;
   proposer_name: string;
   acceptor_name: string;
   winner_name: string | null;
   created_at: string;
+  completed_at: string | null;
   settled_at: string | null;
 }
 
@@ -76,4 +82,8 @@ export const wagersApi = {
   accept: (id: string) => req(`${WAGERS_API}/${id}/accept`, { method: 'POST' }),
   decline: (id: string) => req(`${WAGERS_API}/${id}/decline`, { method: 'POST' }),
   cancel: (id: string) => req(`${WAGERS_API}/${id}/cancel`, { method: 'POST' }),
+  // Peer-confirm a completed wager: 'won' pays the caller, 'lost' concedes to
+  // the opponent, 'draw' refunds both.
+  confirm: (id: string, result: WagerResult) =>
+    req(`${WAGERS_API}/${id}/confirm`, { method: 'POST', body: JSON.stringify({ result }) }),
 };

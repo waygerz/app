@@ -14,7 +14,6 @@ import { X } from 'lucide-react';
 
 const TYPES: { value: LeagueType; blurb: string }[] = [
   { value: 'head_to_head', blurb: 'Challenge members 1v1. Winner takes the pot.' },
-  { value: 'pool', blurb: 'Everyone stakes on a game. Winners split the pot by stake.' },
   { value: 'pickem', blurb: 'No money — pick winners each round and climb the table.' },
 ];
 
@@ -128,7 +127,7 @@ export default function NewLeaguePage() {
         {/* Type */}
         <div className="flex flex-col gap-2">
           <Label>League type</Label>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2">
             {TYPES.map((t) => (
               <button
                 key={t.value}

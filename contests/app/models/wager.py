@@ -5,12 +5,13 @@ from sqlalchemy.dialects.postgresql import UUID
 from app.extensions import db
 
 # statuses
-OPEN = "open"          # proposed, awaiting friend's response
-ACCEPTED = "accepted"  # both staked, awaiting event result
-SETTLED = "settled"    # paid out to winner
-DECLINED = "declined"  # friend declined; proposer refunded
+OPEN = "open"            # proposed, awaiting friend's response
+ACCEPTED = "accepted"    # both staked, event in play
+COMPLETED = "completed"  # event over, stakes still held, awaiting the winner's confirmation
+SETTLED = "settled"      # winner confirmed; paid out
+DECLINED = "declined"    # friend declined; proposer refunded
 CANCELLED = "cancelled"  # proposer cancelled; refunded
-REFUNDED = "refunded"  # draw / event cancelled; both refunded
+REFUNDED = "refunded"    # draw / event cancelled; both refunded
 
 
 class Wager(db.Model):
@@ -42,8 +43,11 @@ class Wager(db.Model):
 
     status = db.Column(db.String(16), nullable=False, default=OPEN, index=True)
     winner_user_id = db.Column(UUID(as_uuid=False), nullable=True)
+    # Who confirmed the result (the winner self-claiming, or the loser conceding).
+    confirmed_by_id = db.Column(UUID(as_uuid=False), nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)  # when the event was marked over
     settled_at = db.Column(db.DateTime, nullable=True)
 
     @property
@@ -71,6 +75,8 @@ class Wager(db.Model):
             "amount_cents": self.amount_cents,
             "status": self.status,
             "winner_user_id": self.winner_user_id,
+            "confirmed_by_id": self.confirmed_by_id,
             "created_at": self.created_at.isoformat() + "Z",
+            "completed_at": self.completed_at.isoformat() + "Z" if self.completed_at else None,
             "settled_at": self.settled_at.isoformat() + "Z" if self.settled_at else None,
         }

@@ -6,10 +6,9 @@ from app.extensions import db
 
 # league_type
 HEAD_TO_HEAD = "head_to_head"
-POOL = "pool"
 PICKEM = "pickem"
-LEAGUE_TYPES = (HEAD_TO_HEAD, POOL, PICKEM)
-MONEY_TYPES = (HEAD_TO_HEAD, POOL)  # types that carry a wallet balance
+LEAGUE_TYPES = (HEAD_TO_HEAD, PICKEM)
+MONEY_TYPES = (HEAD_TO_HEAD,)  # types that carry a wallet balance
 
 # status
 DRAFT = "draft"

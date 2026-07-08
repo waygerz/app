@@ -10,8 +10,7 @@ import {
   type LeagueDetail,
   type PickRow,
 } from '@/lib/leagues';
-import { wagersApi, type Wager } from '@/lib/wagers';
-import { poolsApi } from '@/lib/pools';
+import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
 import {
   fetchUpcomingEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -62,7 +61,6 @@ export function LeaguePlay() {
     return <CenterCard><p className="text-sm text-muted-foreground">This league isn’t active yet.</p></CenterCard>;
   }
   if (lg.league_type === 'pickem') return <PickemPlay lg={lg} />;
-  if (lg.league_type === 'pool') return <PoolPlay lg={lg} />;
   return <HeadToHeadPlay lg={lg} />;
 }
 
@@ -184,6 +182,9 @@ function wagerStatusBadge(w: Wager, me?: string) {
   }
   if (w.status === 'accepted') {
     return <Badge size="sm" variant="success" appearance="light">Live</Badge>;
+  }
+  if (w.status === 'completed') {
+    return <Badge size="sm" variant="warning" appearance="light">Confirm result</Badge>;
   }
   if (w.status === 'settled') {
     const won = w.winner_user_id === me;
@@ -319,11 +320,26 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const acceptM = useMutation({ mutationFn: (id: string) => wagersApi.accept(id), onSuccess: refresh, onError: onErr });
   const declineM = useMutation({ mutationFn: (id: string) => wagersApi.decline(id), onSuccess: refresh, onError: onErr });
   const cancelM = useMutation({ mutationFn: (id: string) => wagersApi.cancel(id), onSuccess: refresh, onError: onErr });
+  const confirmM = useMutation({
+    mutationFn: ({ id, result }: { id: string; result: WagerResult }) => wagersApi.confirm(id, result),
+    onSuccess: (_d, v) => { toast.success(v.result === 'draw' ? 'Called a draw' : 'Result confirmed'); refresh(); },
+    onError: onErr,
+  });
 
   const all = bets.data ?? [];
   const pending = all.filter((w) => w.status === 'open');
   const active = all.filter((w) => w.status === 'accepted');
+  const awaiting = all.filter((w) => w.status === 'completed');
   const history = all.filter((w) => ['settled', 'declined', 'cancelled', 'refunded'].includes(w.status));
+
+  const confirmActions = (w: Wager) =>
+    w.proposer_id === me || w.acceptor_id === me ? (
+      <>
+        <Button size="sm" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'won' })}>I won</Button>
+        <Button size="sm" variant="outline" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
+        <Button size="sm" variant="ghost" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'draw' })}>Draw</Button>
+      </>
+    ) : null;
 
   const eventIds = Array.from(new Set(all.map((w) => w.event_id)));
   const eventsQ = useQuery({
@@ -370,6 +386,14 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
         }
       />
       <BetSection title="Active" tone="active" wagers={active} me={me} eventMap={eventMap} />
+      <BetSection
+        title="Awaiting result"
+        tone="awaiting"
+        wagers={awaiting}
+        me={me}
+        eventMap={eventMap}
+        actions={confirmActions}
+      />
       <BetSection title="History" tone="history" wagers={history} me={me} eventMap={eventMap} />
 
       {bets.isLoading && <Skeleton className="h-32 rounded-xl" />}
@@ -381,79 +405,6 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
           </p>
         </CenterCard>
       )}
-    </div>
-  );
-}
-
-// ---- Pool ----
-function PoolPlay({ lg }: { lg: LeagueDetail }) {
-  const qc = useQueryClient();
-  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
-  const pools = useQuery({ queryKey: ['pools', lg.id], queryFn: () => poolsApi.list(lg.id) });
-  const [eventId, setEventId] = useState('');
-  const [side, setSide] = useState<'home' | 'away'>('home');
-  const [credits, setCredits] = useState('10');
-
-  const evs = events.data ?? [];
-  const selEvent = evs.find((e) => e.external_id === eventId);
-  const stake = useMutation({
-    mutationFn: () => poolsApi.stake({ league_id: lg.id, event_id: eventId, side, amount_cents: Math.round(Number(credits) * 100) }),
-    onSuccess: () => { toast.success('Stake placed'); qc.invalidateQueries({ queryKey: ['pools', lg.id] }); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <div className="flex flex-col gap-5">
-      <Card className="gap-3 p-4">
-        <h2 className="text-base font-semibold text-foreground">Stake on a game</h2>
-        <select className={selectCls} value={eventId} onChange={(e) => setEventId(e.target.value)}>
-          <option value="">Select a game…</option>
-          {evs.map((e) => <option key={e.external_id} value={e.external_id}>{e.away_team} @ {e.home_team}</option>)}
-        </select>
-        {selEvent && (
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {(['away', 'home'] as const).map((s) => (
-              <button key={s} type="button" onClick={() => setSide(s)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm sm:text-center ${side === s ? 'border-primary bg-primary/10 text-foreground' : 'border-input text-muted-foreground'}`}>
-                {s === 'away' ? selEvent.away_team : selEvent.home_team}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Input type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} className="sm:max-w-[140px]" />
-          <Button disabled={!eventId || Number(credits) <= 0 || stake.isPending} onClick={() => stake.mutate()} className="sm:self-auto self-start">
-            {stake.isPending ? 'Staking…' : 'Add stake'}
-          </Button>
-        </div>
-      </Card>
-
-      <section>
-        <h3 className="mb-2 text-sm font-semibold text-foreground">Pools</h3>
-        {pools.isLoading && <Skeleton className="h-20 rounded-xl" />}
-        {!pools.isLoading && (pools.data ?? []).length === 0 && (
-          <p className="text-sm text-muted-foreground">No pools yet — stake on a game to start one.</p>
-        )}
-        <div className="flex flex-col gap-2">
-          {(pools.data ?? []).map((pv) => (
-            <Card key={pv.pool.id} className="gap-1 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="min-w-0 text-sm font-medium text-foreground">{pv.pool.away_team} @ {pv.pool.home_team}</span>
-                <Badge size="sm" appearance="light" variant={pv.pool.status === 'open' ? 'success' : 'outline'}>{pv.pool.status}</Badge>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Pot {formatCredits(pv.totals.total_cents)} · {pv.pool.home_team} {formatCredits(pv.totals.home_cents)} / {pv.pool.away_team} {formatCredits(pv.totals.away_cents)}
-                {pv.pool.winner_side ? ` · winner: ${pv.pool.winner_side === 'home' ? pv.pool.home_team : pv.pool.away_team}` : ''}
-              </div>
-              {pv.my_stakes.length > 0 && (
-                <div className="text-xs text-foreground">
-                  Your stake: {pv.my_stakes.map((s) => `${formatCredits(s.amount_cents)} ${s.side === 'home' ? pv.pool.home_team : pv.pool.away_team}`).join(', ')}
-                </div>
-              )}
-            </Card>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
@@ -788,7 +739,7 @@ function ScheduleBetDialog({
 // ===================== ACTIVITY =====================
 const TXN_LABEL: Record<string, string> = {
   league_grant: 'Starting grant', wager_hold: 'Bet hold', wager_payout: 'Bet payout',
-  wager_refund: 'Bet refund', pool_payout: 'Pool payout',
+  wager_refund: 'Bet refund',
 };
 export function LeagueActivity() {
   const lg = useLeague();

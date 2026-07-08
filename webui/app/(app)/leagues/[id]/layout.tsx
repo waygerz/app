@@ -17,7 +17,6 @@ import { LeagueProvider } from './league-context';
 
 const PLAY_TAB: Record<LeagueType, string> = {
   head_to_head: 'My Bets',
-  pool: 'My Pools',
   pickem: 'Picks',
 };
 

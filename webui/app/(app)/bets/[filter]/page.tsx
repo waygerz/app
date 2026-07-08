@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Ticket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi } from '@/lib/leagues';
-import { wagersApi, type Wager } from '@/lib/wagers';
+import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -59,8 +59,25 @@ export default function BetsView() {
     onSuccess: () => { toast.success('Bet cancelled'); refresh(); },
     onError: onErr,
   });
+  const confirmM = useMutation({
+    mutationFn: ({ id, result }: { id: string; result: WagerResult }) => wagersApi.confirm(id, result),
+    onSuccess: (_d, v) => {
+      toast.success(v.result === 'draw' ? 'Called a draw' : 'Result confirmed');
+      refresh();
+    },
+    onError: onErr,
+  });
 
   function actionsFor(w: Wager) {
+    if (w.status === 'completed' && (w.proposer_id === me || w.acceptor_id === me)) {
+      return (
+        <>
+          <Button size="sm" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'won' })}>I won</Button>
+          <Button size="sm" variant="outline" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
+          <Button size="sm" variant="ghost" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'draw' })}>Draw</Button>
+        </>
+      );
+    }
     if (activeFilter !== 'pending' || w.status !== 'open') return null;
     if (w.acceptor_id === me) {
       return (

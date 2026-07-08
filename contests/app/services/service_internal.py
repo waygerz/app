@@ -2,7 +2,6 @@
 from flask import request
 
 from app.models.wager import REFUNDED, SETTLED, Wager
-from app.services import service_pools as pool_service
 from app.services import service_wagers as wager_service
 
 
@@ -32,7 +31,6 @@ def league_record():
 
 
 def tick():
-    """Settle due wagers and pools. Called by the scheduler service."""
+    """Advance due wagers. Called by the scheduler service."""
     wagers = wager_service.settle_due()
-    pools = pool_service.settle_due_pools()
-    return {"wagers_settled": wagers, "pools_settled": pools}, 200
+    return {"wagers_settled": wagers}, 200
