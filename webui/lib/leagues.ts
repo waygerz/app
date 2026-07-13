@@ -143,9 +143,39 @@ export const leaguesApi = {
     req<{ periods: LeaguePeriod[] }>(`${LEAGUES_API}/${id}/periods`).then((d) => d.periods ?? []),
   getPicks: (id: string, periodId: string) =>
     req<{ picks: PickRow[] }>(`${LEAGUES_API}/${id}/periods/${periodId}/picks`).then((d) => d.picks ?? []),
-  submitPicks: (id: string, periodId: string, picks: { event_id: string; side: 'home' | 'away' }[]) =>
+  submitPicks: (
+    id: string,
+    periodId: string,
+    picks: { event_id: string; side: 'home' | 'away'; tiebreaker_total?: number }[],
+  ) =>
     req(`${LEAGUES_API}/${id}/periods/${periodId}/picks`, { method: 'PUT', body: JSON.stringify({ picks }) }),
+  periodResults: (id: string, periodId: string) =>
+    req<PeriodResults>(`${LEAGUES_API}/${id}/periods/${periodId}/results`),
 };
+
+export interface WeeklyResultRow {
+  user_id: string;
+  display_name: string;
+  avatar_key?: string | null;
+  correct: number;
+  graded: number;
+  total: number;
+  tiebreaker_total: number | null;
+  tiebreaker_diff: number | null;
+}
+
+export interface PeriodResults {
+  period: LeaguePeriod;
+  last_game: {
+    event_id: string;
+    name?: string | null;
+    home_team?: string | null;
+    away_team?: string | null;
+    final: boolean;
+    actual_total: number | null;
+  } | null;
+  rows: WeeklyResultRow[];
+}
 
 export interface StandingRow {
   user_id: string;
@@ -177,6 +207,7 @@ export interface PickRow {
   event_id: string;
   pick_side: 'home' | 'away';
   correct: boolean | null;
+  tiebreaker_total?: number | null;
   event?: PickEventInfo | null;
 }
 

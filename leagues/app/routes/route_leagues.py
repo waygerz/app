@@ -55,6 +55,11 @@ def list_periods(league_id):
     return ctrl.list_periods(league_id)
 
 
+@leagues_bp.get("/<uuid:league_id>/periods/<uuid:period_id>/results")
+def period_results(league_id, period_id):
+    return ctrl.period_results(league_id, period_id)
+
+
 @leagues_bp.get("/<uuid:league_id>/feed")
 def get_feed(league_id):
     return ctrl.get_feed(league_id)

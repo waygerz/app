@@ -9,6 +9,7 @@ import {
   leaguesApi,
   type LeagueDetail,
   type LeaguePeriod,
+  type PeriodResults,
   type PickRow,
 } from '@/lib/leagues';
 import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
@@ -75,16 +76,38 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
     enabled: !!period,
   });
   const [sel, setSel] = useState<Record<string, 'home' | 'away'>>({});
+  const [tiebreaker, setTiebreaker] = useState('');
 
   const graded = new Map((existing.data ?? []).map((p: PickRow) => [p.event_id, p]));
   const pick = (eid: string) => sel[eid] ?? graded.get(eid)?.pick_side;
 
+  const evs = events.data ?? [];
+  // The tie-breaker lives on the week's last game (latest start time).
+  const lastGame = evs.reduce<SportEvent | null>((latest, e) => {
+    const t = new Date(e.start_time ?? 0).getTime();
+    if (isNaN(t)) return latest;
+    return !latest || t > new Date(latest.start_time ?? 0).getTime() ? e : latest;
+  }, null);
+  const lastGameId = lastGame?.external_id ?? null;
+  const existingTb = lastGameId ? graded.get(lastGameId)?.tiebreaker_total ?? null : null;
+
+  useEffect(() => {
+    if (existingTb != null) setTiebreaker(String(existingTb));
+  }, [existingTb]);
+
   const save = useMutation({
-    mutationFn: () =>
-      leaguesApi.submitPicks(
-        lg.id, period!.id,
-        Object.entries(sel).map(([event_id, side]) => ({ event_id, side })),
-      ),
+    mutationFn: () => {
+      const picks: { event_id: string; side: 'home' | 'away'; tiebreaker_total?: number }[] =
+        Object.entries(sel).map(([event_id, side]) => ({ event_id, side }));
+      if (lastGameId && tiebreaker !== '') {
+        const tb = Math.max(0, Math.round(Number(tiebreaker)));
+        const side = sel[lastGameId] ?? graded.get(lastGameId)?.pick_side;
+        const found = picks.find((p) => p.event_id === lastGameId);
+        if (found) found.tiebreaker_total = tb;
+        else if (side) picks.push({ event_id: lastGameId, side, tiebreaker_total: tb });
+      }
+      return leaguesApi.submitPicks(lg.id, period!.id, picks);
+    },
     onSuccess: () => {
       toast.success('Picks saved');
       setSel({});
@@ -96,8 +119,6 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
   if (!period || period.status !== 'open') {
     return <CenterCard><p className="text-sm text-muted-foreground">Picks are locked — no open period.</p></CenterCard>;
   }
-  const evs = events.data ?? [];
-
   // Picks lock 1 hour before the first game of the week kicks off.
   const startTimes = evs
     .map((e) => e.start_time)
@@ -108,6 +129,8 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
   const lockAt = firstStart !== null ? firstStart - 60 * 60 * 1000 : null;
   const picksLocked = lockAt !== null && Date.now() >= lockAt;
   const unsaved = Object.keys(sel).length;
+  const tbDirty = tiebreaker !== '' && (existingTb === null || Number(tiebreaker) !== existingTb);
+  const hasChanges = unsaved > 0 || tbDirty;
 
   return (
     <div className="flex flex-col gap-4 pb-24">
@@ -173,6 +196,21 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                   );
                 })}
               </div>
+              {ev.external_id === lastGameId && (
+                <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+                  <span className="text-xs font-medium text-muted-foreground">Tie-breaker · total points</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={tiebreaker}
+                    onChange={(e) => setTiebreaker(e.target.value)}
+                    disabled={disabled}
+                    placeholder="e.g. 48"
+                    className="h-8 w-24"
+                  />
+                </div>
+              )}
             </Card>
           );
         })}
@@ -185,11 +223,11 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
             <span className="text-xs text-muted-foreground">
               {picksLocked
                 ? 'Picks are locked for this week.'
-                : unsaved > 0
-                  ? `${unsaved} unsaved pick${unsaved === 1 ? '' : 's'}`
+                : hasChanges
+                  ? `${unsaved} unsaved pick${unsaved === 1 ? '' : 's'}${tbDirty ? ' + tie-breaker' : ''}`
                   : 'Tap a team to make a pick.'}
             </span>
-            <Button className="shrink-0" disabled={save.isPending || picksLocked || unsaved === 0} onClick={() => save.mutate()}>
+            <Button className="shrink-0" disabled={save.isPending || picksLocked || !hasChanges} onClick={() => save.mutate()}>
               {save.isPending ? 'Saving…' : 'Save picks'}
             </Button>
           </div>
@@ -674,58 +712,68 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
 
 // Graded pick'em picks, one section per week.
 function PickemResults({ lg }: { lg: LeagueDetail }) {
+  const { user } = useAuth();
+  const me = String(user?.id ?? '');
   const periodsQ = useQuery({ queryKey: ['periods', lg.id], queryFn: () => leaguesApi.periods(lg.id) });
   const periods: LeaguePeriod[] = [...(periodsQ.data ?? [])].sort((a, b) => b.index - a.index);
-  const pickQueries = useQueries({
+  const resultQueries = useQueries({
     queries: periods.map((p) => ({
-      queryKey: ['picks', lg.id, p.id],
-      queryFn: () => leaguesApi.getPicks(lg.id, p.id),
+      queryKey: ['period-results', lg.id, p.id],
+      queryFn: () => leaguesApi.periodResults(lg.id, p.id),
     })),
   });
 
   if (periodsQ.isLoading) return <Skeleton className="h-40 rounded-xl" />;
 
   const sections = periods
-    .map((p, i) => ({ period: p, picks: (pickQueries[i]?.data ?? []) as PickRow[] }))
-    .filter((s) => s.picks.length > 0);
+    .map((p, i) => ({ period: p, res: resultQueries[i]?.data as PeriodResults | undefined }))
+    .filter((s) => s.res && s.res.rows.length > 0);
 
-  if (sections.length === 0) return <NoResults text="No results yet — your graded picks show up here by week." />;
+  if (sections.length === 0) return <NoResults text="No results yet — weekly standings show up here as picks are graded." />;
 
   return (
     <div className="flex flex-col gap-8">
-      {sections.map((s) => {
-        const correct = s.picks.filter((p) => p.correct === true).length;
-        const graded = s.picks.filter((p) => p.correct !== null).length;
+      {sections.map(({ period, res }) => {
+        const last = res!.last_game;
         return (
-          <section key={s.period.id} className="flex flex-col gap-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="text-base font-semibold text-foreground sm:text-lg">{s.period.label}</h2>
-              {graded > 0 && <span className="text-xs text-muted-foreground">{correct}/{graded} correct</span>}
+          <section key={period.id} className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-base font-semibold text-foreground sm:text-lg">{period.label}</h2>
+              {last?.final && last.actual_total !== null && (
+                <span className="text-xs text-muted-foreground">
+                  Tie-breaker: {last.away_team} @ {last.home_team} · {last.actual_total} pts
+                </span>
+              )}
             </div>
             <div className="flex flex-col gap-2">
-              {s.picks.map((p) => {
-                const ev = p.event;
-                const picked = p.pick_side === 'home' ? ev?.home_team : ev?.away_team;
+              {res!.rows.map((r, i) => {
+                const rank = i + 1;
+                const isMe = r.user_id === me;
                 return (
-                  <Card key={p.id ?? p.event_id} className="gap-2 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <TeamLogo src={ev?.away_logo} name={ev?.away_abbr || ev?.away_team || '?'} className="size-6 sm:size-7" />
-                        <span className="text-xs text-muted-foreground">@</span>
-                        <TeamLogo src={ev?.home_logo} name={ev?.home_abbr || ev?.home_team || '?'} className="size-6 sm:size-7" />
-                        <span className="ml-1 min-w-0 truncate text-sm text-foreground">
-                          {ev ? `${ev.away_team} @ ${ev.home_team}` : p.event_id}
-                        </span>
-                      </div>
-                      {p.correct === null ? (
-                        <Badge size="sm" appearance="light" variant="secondary">Pending</Badge>
-                      ) : (
-                        <Badge size="sm" appearance="light" variant={p.correct ? 'success' : 'destructive'}>
-                          {p.correct ? '✓' : '✗'}
-                        </Badge>
+                  <Card key={r.user_id} className="flex-row items-center gap-3 p-3">
+                    <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold', standingRankClass(rank))}>
+                      {rank}
+                    </div>
+                    <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-9 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {r.display_name}
+                        {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
+                      </p>
+                      {r.tiebreaker_total !== null && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          tie-breaker {r.tiebreaker_total}
+                          {r.tiebreaker_diff !== null ? ` · off by ${r.tiebreaker_diff}` : ''}
+                        </p>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">You picked {picked ?? p.pick_side}</span>
+                    <div className="shrink-0 text-right">
+                      <p className="text-lg font-bold tabular-nums text-foreground">
+                        {r.correct}
+                        <span className="text-xs font-normal text-muted-foreground">/{r.graded || r.total}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">correct</p>
+                    </div>
                   </Card>
                 );
               })}

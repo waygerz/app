@@ -27,6 +27,9 @@ class Pick(db.Model):
     event_id = db.Column(db.String(64), nullable=False)  # ingestor external_id
     pick_side = db.Column(db.String(8), nullable=False)  # home | away
     correct = db.Column(db.Boolean, nullable=True)  # null until graded
+    # Predicted combined score for the week's last game — the tie-breaker. Only
+    # set on the last-game pick; null elsewhere.
+    tiebreaker_total = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -41,6 +44,7 @@ class Pick(db.Model):
             "event_id": self.event_id,
             "pick_side": self.pick_side,
             "correct": self.correct,
+            "tiebreaker_total": self.tiebreaker_total,
             "created_at": self.created_at.isoformat() + "Z",
             "updated_at": self.updated_at.isoformat() + "Z",
         }

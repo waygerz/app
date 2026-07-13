@@ -597,20 +597,30 @@ def submit_picks(league_id, period_id, me, data):
             return {"error": "each pick needs an event_id"}, 400
         if side not in PICK_SIDES:
             return {"error": f"side must be one of {PICK_SIDES}"}, 400
-        cleaned.append((event_id, side))
+        # Optional tie-breaker (predicted total) — only on the week's last game.
+        tb = (p or {}).get("tiebreaker_total")
+        tb_val = None
+        if tb is not None and tb != "":
+            try:
+                tb_val = max(0, int(tb))
+            except (TypeError, ValueError):
+                return {"error": "tiebreaker_total must be a number"}, 400
+        cleaned.append((event_id, side, tb_val))
 
     existing = {
         row.event_id: row
         for row in Pick.query.filter_by(period_id=period_id, user_id=me).all()
     }
-    for event_id, side in cleaned:
+    for event_id, side, tb_val in cleaned:
         row = existing.get(event_id)
         if row:
             row.pick_side = side
+            if tb_val is not None:
+                row.tiebreaker_total = tb_val
         else:
             row = Pick(
                 league_id=league_id, period_id=period_id, user_id=me,
-                event_id=event_id, pick_side=side,
+                event_id=event_id, pick_side=side, tiebreaker_total=tb_val,
             )
             db.session.add(row)
             existing[event_id] = row
@@ -723,6 +733,93 @@ def list_periods(league_id, me):
         .all()
     )
     return {"periods": [p.to_dict() for p in periods]}, 200
+
+
+def period_results(league_id, period_id, me):
+    """Weekly leaderboard for a pick'em period: members ranked by correct picks,
+    ties broken by whose predicted total is closest to the last game's actual
+    combined score (the Monday-night tie-breaker)."""
+    league_id, period_id = str(league_id), str(period_id)
+    league = db.session.get(League, league_id)
+    if not league or not _membership(league_id, me):
+        return {"error": "league not found"}, 404
+    period = db.session.get(LeaguePeriod, period_id)
+    if not period or period.league_id != league_id:
+        return {"error": "period not found"}, 404
+
+    picks = Pick.query.filter_by(period_id=period_id).all()
+    members = LeagueMember.query.filter_by(league_id=league_id, status=ACTIVE).all()
+    member_ids = {m.user_id for m in members}
+    users = resolve_users_full(list(member_ids))
+
+    # Resolve the period's events to find the last game + its final total.
+    event_ids = list({p.event_id for p in picks})
+    events = {}
+    for eid in event_ids:
+        try:
+            events[eid] = get_event(eid)
+        except Exception:  # noqa: BLE001
+            events[eid] = None
+
+    def _start(eid):
+        return (events.get(eid) or {}).get("start_time") or ""
+
+    last_event_id = max(event_ids, key=_start) if event_ids else None
+    last_ev = events.get(last_event_id) if last_event_id else None
+    actual_total = None
+    if last_ev and last_ev.get("status") == "final":
+        hs, as_ = last_ev.get("home_score"), last_ev.get("away_score")
+        if hs is not None and as_ is not None:
+            actual_total = int(hs) + int(as_)
+
+    per = {uid: {"correct": 0, "graded": 0, "total": 0, "tb": None} for uid in member_ids}
+    for p in picks:
+        agg = per.get(p.user_id)
+        if agg is None:
+            continue
+        agg["total"] += 1
+        if p.correct is True:
+            agg["correct"] += 1
+            agg["graded"] += 1
+        elif p.correct is False:
+            agg["graded"] += 1
+        if last_event_id and p.event_id == last_event_id and p.tiebreaker_total is not None:
+            agg["tb"] = p.tiebreaker_total
+
+    rows = []
+    for uid, agg in per.items():
+        if agg["total"] == 0:
+            continue
+        u = users.get(uid) or {}
+        tb = agg["tb"]
+        diff = abs(tb - actual_total) if (tb is not None and actual_total is not None) else None
+        rows.append({
+            "user_id": uid,
+            "display_name": u.get("display_name") or f"User {uid[:8]}",
+            "avatar_key": u.get("avatar_key"),
+            "correct": agg["correct"],
+            "graded": agg["graded"],
+            "total": agg["total"],
+            "tiebreaker_total": tb,
+            "tiebreaker_diff": diff,
+        })
+    rows.sort(key=lambda r: (
+        -r["correct"],
+        r["tiebreaker_diff"] if r["tiebreaker_diff"] is not None else float("inf"),
+        r["display_name"].lower(),
+    ))
+
+    last_game = None
+    if last_event_id:
+        last_game = {
+            "event_id": last_event_id,
+            "name": (last_ev or {}).get("name"),
+            "home_team": (last_ev or {}).get("home_team"),
+            "away_team": (last_ev or {}).get("away_team"),
+            "final": bool(last_ev and last_ev.get("status") == "final"),
+            "actual_total": actual_total,
+        }
+    return {"period": period.to_dict(), "last_game": last_game, "rows": rows}, 200
 
 
 def get_feed(league_id, me):
