@@ -180,7 +180,9 @@ def _scoreboard(sport, league, params=None):
 
 def _ingest_native(sport, league):
     """Native-week sports: walk the scoreboard calendar's seasontypes -> weeks,
-    fetching each week's board and tagging events with the week label."""
+    fetching each week's board and tagging events with the week label. Each week
+    commits on its own and rolls back on error, so one bad week neither loses the
+    others nor poisons the session for the leagues that follow."""
     sb = _scoreboard(sport, league)
     leagues0 = (sb.get("leagues") or [{}])[0]
     calendar = leagues0.get("calendar") or []
@@ -202,18 +204,19 @@ def _ingest_native(sport, league):
                     sport, league,
                     {"dates": year, "seasontype": seasontype, "week": week},
                 )
+                total += _ingest_events(board.get("events"), sport, league, week_label=label)
+                db.session.commit()
             except Exception as exc:  # one bad week shouldn't sink the rest
+                db.session.rollback()
                 current_app.logger.warning(
                     "schedule native %s/%s week %s: %s", sport, league, week, exc
                 )
-                continue
-            total += _ingest_events(board.get("events"), sport, league, week_label=label)
-    db.session.commit()
     return total
 
 
 def _ingest_date_range(sport, league):
-    """Date-based sports: page a forward window in 14-day chunks."""
+    """Date-based sports: page a forward window in 14-day chunks, each chunk
+    committing independently and rolling back on error."""
     weeks_ahead = current_app.config["SCHEDULE_WEEKS_AHEAD"]
     total_days = weeks_ahead * 7
     start = datetime.utcnow().date()
@@ -227,12 +230,13 @@ def _ingest_date_range(sport, league):
         try:
             board = _scoreboard(sport, league, {"dates": dates})
             total += _ingest_events(board.get("events"), sport, league)
+            db.session.commit()
         except Exception as exc:
+            db.session.rollback()
             current_app.logger.warning(
                 "schedule range %s/%s %s: %s", sport, league, dates, exc
             )
         day += step
-    db.session.commit()
     return total
 
 
@@ -281,63 +285,63 @@ def refresh_scores(sport, league, force=False):
     """Re-fetch today's board to update live/final scores (gated ~5 min)."""
     if not force and not _stale(_k_scores(sport, league), current_app.config["SCHEDULE_SCORE_TTL"]):
         return 0
-    board = _scoreboard(sport, league, {"dates": datetime.utcnow().strftime("%Y%m%d")})
-    n = _ingest_events(board.get("events"), sport, league)
-    db.session.commit()
+    try:
+        board = _scoreboard(sport, league, {"dates": datetime.utcnow().strftime("%Y%m%d")})
+        n = _ingest_events(board.get("events"), sport, league)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()  # keep the session clean for the next league
+        raise
     _mark(_k_scores(sport, league))
     return n
 
 
-_fixtures_lock = threading.Lock()
-_fixtures_running = False
+# One league's fixture pass per tick, guarded by a Redis lease. Doing all
+# leagues in one thread let a slow first-run league (college football caches
+# hundreds of team logos to S3) starve the in-season leagues behind it, and a
+# dead worker never released an in-process flag. A Redis lease with a TTL is
+# single-flight across workers AND self-heals: if the worker dies mid-ingest the
+# lease simply expires and the next tick resumes.
+_FX_LEASE_KEY = "sched:fx_lease"
+_FX_LEASE_TTL = 900  # 15 min — comfortably longer than any single league's pass
 
 
-def _run_fixtures_bg(app):
-    """Full fixture refresh across every league — runs in a background thread so
-    the tick request returns immediately. A whole-registry fixture pass (NFL's
-    native weeks alone are ~27 ESPN calls) far exceeds the ALB/gunicorn request
-    window, so it can't run inline. Per-league commits mean partial progress
-    survives a mid-run worker recycle; gates only mark on completion, so an
-    unfinished league is retried on the next tick."""
-    global _fixtures_running
-    try:
-        with app.app_context():
-            for entry in LEAGUE_REGISTRY:
-                sport, league = entry["sport"], entry["league"]
-                try:
-                    n = refresh_fixtures(sport, league)
-                    if n:
-                        app.logger.info("schedule fixtures %s/%s: %s events", sport, league, n)
-                except Exception as exc:  # noqa: BLE001
-                    app.logger.warning("schedule fixtures %s/%s: %s", sport, league, exc)
-    finally:
-        with _fixtures_lock:
-            _fixtures_running = False
+def _run_one_fixture_bg(app, sport, league):
+    with app.app_context():
+        try:
+            n = refresh_fixtures(sport, league)
+            if n:
+                app.logger.info("schedule fixtures %s/%s: %s events", sport, league, n)
+        except Exception as exc:  # noqa: BLE001
+            db.session.rollback()
+            app.logger.warning("schedule fixtures %s/%s: %s", sport, league, exc)
+        finally:
+            get_redis().delete(_FX_LEASE_KEY)
 
 
 def _maybe_start_fixtures():
-    """Launch the background fixture pass if one isn't already running and at
-    least one league is due (avoids spawning a thread that no-ops)."""
-    global _fixtures_running
+    """Kick off the next due league's fixture pass in the background (one per
+    tick) if the single-flight lease is free. Returns a status string."""
     app = current_app._get_current_object()
     ttl = app.config["SCHEDULE_FIXTURE_TTL"]
-    with _fixtures_lock:
-        if _fixtures_running:
-            return "running"
-        due = any(
-            _stale(_k_fixtures(e["sport"], e["league"]), ttl) for e in LEAGUE_REGISTRY
-        )
-        if not due:
-            return "idle"
-        _fixtures_running = True
-    threading.Thread(target=_run_fixtures_bg, args=(app,), daemon=True).start()
+    due = [e for e in LEAGUE_REGISTRY if _stale(_k_fixtures(e["sport"], e["league"]), ttl)]
+    if not due:
+        return "idle"
+    # NX claim; the TTL means a crashed run's lease frees itself.
+    if not get_redis().set(_FX_LEASE_KEY, "1", nx=True, ex=_FX_LEASE_TTL):
+        return "running"
+    entry = due[0]
+    threading.Thread(
+        target=_run_one_fixture_bg, args=(app, entry["sport"], entry["league"]), daemon=True
+    ).start()
     return "started"
 
 
 def tick():
-    """Scheduler entry point. Fixtures (weekly) run in the background so the
-    request returns fast; scores (5 min, one board fetch per league) run inline
-    and cheaply, each league isolated so one failure never blocks the rest."""
+    """Scheduler entry point. One due league's fixture pass (weekly) runs in the
+    background so the request returns fast; scores (5 min, one board fetch per
+    league) run inline and cheaply, each league isolated so one failure never
+    blocks the rest."""
     fixtures_state = _maybe_start_fixtures()
     scores = 0
     for entry in LEAGUE_REGISTRY:
@@ -364,31 +368,38 @@ def weeks(sport, league, season=None):
     events = q.all()
 
     if entry and entry["strategy"] == "native_week":
+        # ESPN's week.number resets per season type (preseason wk1, regular wk1
+        # and postseason wk1 all == 1), so the label ("Preseason Week 1",
+        # "Week 1", "Hall of Fame Weekend") is the unique week identity — bucket
+        # on that, ordered by when the week actually starts.
         buckets = {}
         for e in events:
-            if e.week_number is None:
+            key = e.week_label or (f"Week {e.week_number}" if e.week_number is not None else None)
+            if key is None:
                 continue
             b = buckets.setdefault(
-                e.week_number,
-                {"week": e.week_number, "label": e.week_label, "start": None, "end": None, "count": 0},
+                key,
+                {"label": key, "week": e.week_number, "start": None, "end": None, "count": 0},
             )
             b["count"] += 1
-            if b["label"] is None:
-                b["label"] = e.week_label
             if e.start_time:
                 if b["start"] is None or e.start_time < b["start"]:
                     b["start"] = e.start_time
                 if b["end"] is None or e.start_time > b["end"]:
                     b["end"] = e.start_time
+        ordered = sorted(
+            buckets.values(),
+            key=lambda x: (x["start"] is None, x["start"] or datetime.max),
+        )
         out = [
             {
                 "week": b["week"],
-                "label": b["label"] or f"Week {b['week']}",
+                "label": b["label"],
                 "start": b["start"].isoformat() + "Z" if b["start"] else None,
                 "end": b["end"].isoformat() + "Z" if b["end"] else None,
                 "count": b["count"],
             }
-            for b in sorted(buckets.values(), key=lambda x: x["week"])
+            for b in ordered
         ]
         return {"weeks": out}, 200
 
