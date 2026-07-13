@@ -26,6 +26,8 @@ interface AuthState {
   completeProfile: (ticket: string, displayName: string) => Promise<void>;
   /** Set (or clear) the current user's avatar to an uploaded S3 key. */
   setAvatar: (avatarKey: string | null) => Promise<void>;
+  /** Update editable profile fields (currently display name). */
+  updateProfile: (patch: { display_name?: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -86,6 +88,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }
 
+  async function updateProfile(patch: { display_name?: string }) {
+    const { user: u } = await authApi.updateProfile(patch);
+    setUser(u);
+  }
+
   async function logout() {
     try {
       await authApi.logout();
@@ -97,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, startOtp, verifyOtp, completeProfile, setAvatar, logout }}
+      value={{ user, loading, startOtp, verifyOtp, completeProfile, setAvatar, updateProfile, logout }}
     >
       {children}
     </AuthContext.Provider>

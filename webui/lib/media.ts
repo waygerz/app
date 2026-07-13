@@ -47,6 +47,13 @@ export const mediaApi = {
   get: (assetId: string) =>
     apiJson<{ asset: MediaAsset }>(`${BASE}${API.media}/uploads/${assetId}`),
 
+  /** The caller's own recent uploads of a purpose (newest first) — e.g. the
+   *  last N avatars, so they can re-select a previous one. */
+  myUploads: (purpose: MediaPurpose, limit = 10) =>
+    apiJson<{ assets: MediaAsset[] }>(
+      `${BASE}${API.media}/uploads/mine?purpose=${purpose}&limit=${limit}`,
+    ).then((d) => d.assets ?? []),
+
   /** Resolve a member-visible display key (league logo / avatar) to a short-lived
    *  presigned GET URL. Any signed-in user may resolve these. */
   resolve: (key: string) =>

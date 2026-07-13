@@ -49,6 +49,12 @@ export const authApi = {
       body: JSON.stringify({ avatar_key }),
     }),
 
+  updateProfile: (patch: { display_name?: string }) =>
+    apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/me`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
   refresh: () =>
     apiJson<{ message: string }>(`${AUTH_URL}${API.auth}/refresh`, {
       method: 'POST',

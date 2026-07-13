@@ -148,6 +148,19 @@ def resolve_key(key: str) -> tuple[dict, int]:
     return {"url": url}, 200
 
 
+def list_my_uploads(owner_id: str, purpose: str, limit: int = 10) -> tuple[dict, int]:
+    """The caller's ready uploads (newest first). Powers the avatar re-picker."""
+    try:
+        limit = max(1, min(int(limit or 10), 50))
+    except (TypeError, ValueError):
+        limit = 10
+    q = Asset.query.filter_by(owner_id=str(owner_id), status=STATUS_READY)
+    if purpose:
+        q = q.filter_by(purpose=purpose)
+    rows = q.order_by(Asset.created_at.desc()).limit(limit).all()
+    return {"assets": [a.to_dict() for a in rows]}, 200
+
+
 def delete_upload(owner_id: str, asset_id: str) -> tuple[dict, int]:
     asset = db.session.get(Asset, asset_id)
     if not asset or asset.status == STATUS_DELETED:

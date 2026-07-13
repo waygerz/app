@@ -234,3 +234,19 @@ def set_avatar(user_id: str, data: dict) -> tuple[dict, int]:
     user.avatar_key = key
     db.session.commit()
     return {"user": user.to_dict()}, 200
+
+
+def update_profile(user_id: str, data: dict) -> tuple[dict, int]:
+    """Update editable profile fields (currently display_name)."""
+    user = db.session.get(User, user_id)
+    if not user:
+        return {"error": "user not found"}, 404
+    if "display_name" in data:
+        name = (data.get("display_name") or "").strip()
+        if not name:
+            return {"error": "display_name is required"}, 400
+        if len(name) > 64:
+            return {"error": "display_name must be 64 characters or fewer"}, 400
+        user.display_name = name
+    db.session.commit()
+    return {"user": user.to_dict()}, 200

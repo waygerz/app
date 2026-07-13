@@ -23,6 +23,14 @@ def resolve():
 
 
 @jwt_required(locations=["cookies", "headers"])
+def my_uploads():
+    body, status = svc.list_my_uploads(
+        get_jwt_identity(), request.args.get("purpose", ""), request.args.get("limit", 10)
+    )
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def get_asset(asset_id):
     body, status = svc.get_upload(get_jwt_identity(), asset_id)
     return jsonify(body), status

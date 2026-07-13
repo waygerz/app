@@ -20,6 +20,11 @@ def resolve():
     return ctrl.resolve()
 
 
+@uploads_bp.get("/uploads/mine")
+def my_uploads():
+    return ctrl.my_uploads()
+
+
 @uploads_bp.get("/uploads/<asset_id>")
 def get_asset(asset_id):
     return ctrl.get_asset(asset_id)

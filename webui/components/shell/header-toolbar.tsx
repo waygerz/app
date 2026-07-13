@@ -1,10 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { LogOut, Sun, Moon, Users, ImagePlus, Trash2 } from 'lucide-react';
+import { LogOut, Sun, Moon, Users, UserRound } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 import { UserAvatar } from '@/components/user-avatar';
 import {
   DropdownMenu,
@@ -18,46 +16,13 @@ import { MessagesSheet } from '@/components/messages-sheet';
 import { NotificationsSheet } from '@/components/notifications-sheet';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/auth/AuthContext';
-import { imageToWebp } from '@/lib/imageToWebp';
-import { mediaApi } from '@/lib/media';
 
 export function HeaderToolbar() {
   const { theme, setTheme } = useTheme();
-  const { user, logout, setAvatar } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-  const [avatarBusy, setAvatarBusy] = useState(false);
 
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
-
-  async function onPickAvatar(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-picking the same file
-    if (!file) return;
-    setAvatarBusy(true);
-    try {
-      const webp = await imageToWebp(file, { size: 256, square: true });
-      const asset = await mediaApi.upload('avatar', webp);
-      await setAvatar(asset.s3_key);
-      toast.success('Avatar updated');
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setAvatarBusy(false);
-    }
-  }
-
-  async function onRemoveAvatar() {
-    setAvatarBusy(true);
-    try {
-      await setAvatar(null);
-      toast.success('Avatar removed');
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setAvatarBusy(false);
-    }
-  }
 
   return (
     <nav className="flex min-w-0 items-center justify-end gap-1 shrink-0 sm:gap-2.5 lg:w-[200px]">
@@ -88,13 +53,6 @@ export function HeaderToolbar() {
           </Button>
           <MessagesSheet />
           <NotificationsSheet />
-          <input
-            ref={avatarInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={onPickAvatar}
-          />
           <DropdownMenu>
             <DropdownMenuTrigger className="cursor-pointer">
               <UserAvatar userId={user.id} name={user.display_name} imageUrl={user.avatar_key} className="size-8" />
@@ -112,21 +70,12 @@ export function HeaderToolbar() {
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem
-                disabled={avatarBusy}
-                onSelect={(e) => { e.preventDefault(); avatarInputRef.current?.click(); }}
-              >
-                <ImagePlus className="size-4" />
-                <span>{avatarBusy ? 'Uploading…' : user.avatar_key ? 'Change avatar' : 'Add avatar'}</span>
+              <DropdownMenuItem asChild>
+                <Link href="/account">
+                  <UserRound className="size-4" />
+                  <span>Account</span>
+                </Link>
               </DropdownMenuItem>
-              {user.avatar_key && (
-                <DropdownMenuItem disabled={avatarBusy} onSelect={(e) => { e.preventDefault(); void onRemoveAvatar(); }}>
-                  <Trash2 className="size-4" />
-                  <span>Remove avatar</span>
-                </DropdownMenuItem>
-              )}
-
-              <DropdownMenuSeparator />
 
               <DropdownMenuItem onClick={toggleTheme}>
                 {theme === 'light' ? <Moon className="size-4" /> : <Sun className="size-4" />}
