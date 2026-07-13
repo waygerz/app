@@ -97,62 +97,104 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
     return <CenterCard><p className="text-sm text-muted-foreground">Picks are locked — no open period.</p></CenterCard>;
   }
   const evs = events.data ?? [];
+
+  // Picks lock 1 hour before the first game of the week kicks off.
+  const startTimes = evs
+    .map((e) => e.start_time)
+    .filter((s): s is string => !!s)
+    .map((s) => new Date(s).getTime())
+    .filter((t) => !isNaN(t));
+  const firstStart = startTimes.length ? Math.min(...startTimes) : null;
+  const lockAt = firstStart !== null ? firstStart - 60 * 60 * 1000 : null;
+  const picksLocked = lockAt !== null && Date.now() >= lockAt;
+  const unsaved = Object.keys(sel).length;
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4 pb-24">
+      <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold text-foreground sm:text-lg">Make your Picks · {period.label}</h2>
-        <Button size="sm" className="w-full shrink-0 sm:w-auto" disabled={save.isPending || Object.keys(sel).length === 0} onClick={() => save.mutate()}>
-          {save.isPending ? 'Saving…' : 'Save picks'}
-        </Button>
+        {lockAt !== null && (
+          <p className="text-xs text-muted-foreground">
+            {picksLocked
+              ? 'Picks are locked — the first game is about to start.'
+              : `Picks lock ${formatStart(new Date(lockAt).toISOString())}, an hour before the first game.`}
+          </p>
+        )}
       </div>
+
       {events.isLoading && <Skeleton className="h-24 rounded-xl" />}
-      {!events.isLoading && evs.length === 0 && <p className="text-sm text-muted-foreground">No games scheduled right now.</p>}
-      {evs.map((ev) => {
-        const g = graded.get(ev.external_id);
-        const locked = g && g.correct !== null;
-        const cur = pick(ev.external_id);
-        return (
-          <Card key={ev.external_id} className="gap-3 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
-              {locked && (
-                <Badge size="sm" appearance="light" variant={g!.correct ? 'success' : 'destructive'}>
-                  {g!.correct ? '✓ correct' : '✗ wrong'}
-                </Badge>
-              )}
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              {(['away', 'home'] as const).map((side) => {
-                const isHome = side === 'home';
-                const teamName = isHome ? ev.home_team : ev.away_team;
-                const teamAbbr = isHome ? ev.home_abbr : ev.away_abbr;
-                const teamLogo = isHome ? ev.home_logo : ev.away_logo;
-                const active = cur === side;
-                const isMyPick = !!locked && g!.pick_side === side;
-                return (
-                  <button
-                    key={side}
-                    type="button"
-                    disabled={!!locked}
-                    onClick={() => setSel((s) => ({ ...s, [ev.external_id]: side }))}
-                    className={cn(
-                      'flex flex-1 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
-                      active || isMyPick
-                        ? 'border-primary bg-primary/10 text-foreground'
-                        : 'border-input text-muted-foreground hover:border-foreground/30',
-                      locked && !isMyPick && 'opacity-60',
-                    )}
-                  >
-                    <TeamLogo src={teamLogo} name={teamAbbr || teamName} className="size-8 sm:size-9" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{teamName}</span>
-                    {isMyPick && <Check className="size-4 shrink-0 text-primary" />}
-                  </button>
-                );
-              })}
-            </div>
-          </Card>
-        );
-      })}
+      {!events.isLoading && evs.length === 0 && (
+        <p className="text-sm text-muted-foreground">No games scheduled right now.</p>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {evs.map((ev) => {
+          const g = graded.get(ev.external_id);
+          const gradedLock = !!(g && g.correct !== null);
+          const disabled = gradedLock || picksLocked;
+          const cur = pick(ev.external_id);
+          return (
+            <Card key={ev.external_id} className="gap-3 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
+                {gradedLock && (
+                  <Badge size="sm" appearance="light" variant={g!.correct ? 'success' : 'destructive'}>
+                    {g!.correct ? '✓ correct' : '✗ wrong'}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {(['away', 'home'] as const).map((side) => {
+                  const isHome = side === 'home';
+                  const teamName = isHome ? ev.home_team : ev.away_team;
+                  const teamAbbr = isHome ? ev.home_abbr : ev.away_abbr;
+                  const teamLogo = isHome ? ev.home_logo : ev.away_logo;
+                  const active = cur === side;
+                  const isMyPick = gradedLock && g!.pick_side === side;
+                  return (
+                    <button
+                      key={side}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => setSel((s) => ({ ...s, [ev.external_id]: side }))}
+                      className={cn(
+                        'flex flex-1 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                        active || isMyPick
+                          ? 'border-primary bg-primary/10 text-foreground'
+                          : 'border-input text-muted-foreground hover:border-foreground/30',
+                        disabled && 'cursor-not-allowed',
+                        disabled && !active && !isMyPick && 'opacity-60',
+                      )}
+                    >
+                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} className="size-12 sm:size-14" />
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{teamName}</span>
+                      {isMyPick && <Check className="size-4 shrink-0 text-primary" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Save bar pinned to the bottom of the page */}
+      {evs.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-sm">
+          <div className="container flex items-center justify-between gap-3 py-3">
+            <span className="text-xs text-muted-foreground">
+              {picksLocked
+                ? 'Picks are locked for this week.'
+                : unsaved > 0
+                  ? `${unsaved} unsaved pick${unsaved === 1 ? '' : 's'}`
+                  : 'Tap a team to make a pick.'}
+            </span>
+            <Button className="shrink-0" disabled={save.isPending || picksLocked || unsaved === 0} onClick={() => save.mutate()}>
+              {save.isPending ? 'Saving…' : 'Save picks'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
