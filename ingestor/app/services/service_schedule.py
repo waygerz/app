@@ -315,6 +315,11 @@ def refresh_scores(sport, league, force=False):
 _FX_LEASE_KEY = "sched:fx_lease"
 _FX_LEASE_TTL = 900  # 15 min — comfortably longer than any single league's pass
 
+# A week's end is the last game's start plus enough slack for it to finish, so a
+# period stays open until its games are gradable (rollover flips it FINAL at end,
+# and grading only runs on open periods) and week scoping still catches that game.
+_GAME_BUFFER = timedelta(hours=6)
+
 
 def _run_one_fixture_bg(app, sport, league):
     with app.app_context():
@@ -406,30 +411,35 @@ def weeks(sport, league, season=None):
                 "week": b["week"],
                 "label": b["label"],
                 "start": b["start"].isoformat() + "Z" if b["start"] else None,
-                "end": b["end"].isoformat() + "Z" if b["end"] else None,
+                "end": (b["end"] + _GAME_BUFFER).isoformat() + "Z" if b["end"] else None,
                 "count": b["count"],
             }
             for b in ordered
         ]
         return {"weeks": out}, 200
 
-    # date-based -> Monday-anchored calendar weeks
+    # date-based -> Monday-anchored calendar weeks. End = the week's last game
+    # start + buffer (not Sunday-midnight, which would cut off Sunday's games).
     buckets = {}
     for e in events:
         if not e.start_time:
             continue
         monday = e.start_time.date() - timedelta(days=e.start_time.weekday())
-        b = buckets.setdefault(monday, 0)
-        buckets[monday] = b + 1
+        b = buckets.setdefault(monday, {"count": 0, "last": None})
+        b["count"] += 1
+        if b["last"] is None or e.start_time > b["last"]:
+            b["last"] = e.start_time
     out = []
     for i, monday in enumerate(sorted(buckets), start=1):
-        end = monday + timedelta(days=6)
+        b = buckets[monday]
+        start_dt = datetime(monday.year, monday.month, monday.day)
+        end_dt = (b["last"] or start_dt) + _GAME_BUFFER
         out.append({
             "week": i,
             "label": f"Week of {monday.strftime('%b %d')}",
-            "start": monday.isoformat(),
-            "end": end.isoformat(),
-            "count": buckets[monday],
+            "start": start_dt.isoformat() + "Z",
+            "end": end_dt.isoformat() + "Z",
+            "count": b["count"],
         })
     return {"weeks": out}, 200
 
