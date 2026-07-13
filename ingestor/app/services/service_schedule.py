@@ -64,6 +64,15 @@ def _to_int(value):
         return None
 
 
+def _clip(value, n):
+    """Fit a value to its column width. ESPN sometimes stuffs a full name into a
+    short field (e.g. an All-Star game's abbreviation = 'Liga MX All-Stars'),
+    which would overflow varchar(12) and roll back the whole batch."""
+    if isinstance(value, str) and len(value) > n:
+        return value[:n]
+    return value
+
+
 def _espn_status(status):
     """ESPN status.type -> our Event status. Mirrors service_espn.map_status but
     maps to the Event constants (LIVE, not IN_PROGRESS)."""
@@ -108,15 +117,15 @@ def _parse_espn_event(ev, sport, league, week_label=None):
     season = ev.get("season") or {}
     wk = ev.get("week") or {}
     fields = {
-        "external_id": str(ev.get("id")) if ev.get("id") is not None else None,
+        "external_id": _clip(str(ev.get("id")) if ev.get("id") is not None else None, 64),
         "sport": sport,
         "league": league,
-        "name": ev.get("name"),
-        "short_name": ev.get("shortName"),
-        "home_team": ht.get("displayName") or ht.get("name"),
-        "home_abbr": ht.get("abbreviation"),
-        "away_team": at.get("displayName") or at.get("name"),
-        "away_abbr": at.get("abbreviation"),
+        "name": _clip(ev.get("name"), 200),
+        "short_name": _clip(ev.get("shortName"), 80),
+        "home_team": _clip(ht.get("displayName") or ht.get("name"), 120),
+        "home_abbr": _clip(ht.get("abbreviation"), 12),
+        "away_team": _clip(at.get("displayName") or at.get("name"), 120),
+        "away_abbr": _clip(at.get("abbreviation"), 12),
         "start_time": _parse_dt(ev.get("date")),
         "status": status,
         "home_score": _to_int(home.get("score")),
@@ -128,7 +137,7 @@ def _parse_espn_event(ev, sport, league, week_label=None):
     # Only set week_label when known so a later score-refresh (no calendar
     # context) doesn't wipe the label written by the fixture ingest.
     if week_label is not None:
-        fields["week_label"] = week_label
+        fields["week_label"] = _clip(week_label, 80)
     return fields
 
 
@@ -143,15 +152,15 @@ def _cache_event_teams(ev, sport, league):
         if not ext or not name:
             continue
         sports.upsert_team({
-            "external_id": ext,
+            "external_id": _clip(ext, 64),
             "sport": sport,
             "league": league,
-            "name": name,
-            "abbreviation": t.get("abbreviation"),
-            "slug": t.get("slug"),
-            "location": t.get("location"),
-            "color": t.get("color"),
-            "alternate_color": t.get("alternateColor"),
+            "name": _clip(name, 120),
+            "abbreviation": _clip(t.get("abbreviation"), 12),
+            "slug": _clip(t.get("slug"), 120),
+            "location": _clip(t.get("location"), 80),
+            "color": _clip(t.get("color"), 8),
+            "alternate_color": _clip(t.get("alternateColor"), 8),
             "logo": cache_logo(t.get("logo") or ""),
         })
 
