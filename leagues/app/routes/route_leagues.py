@@ -50,6 +50,11 @@ def standings(league_id):
     return ctrl.standings(league_id)
 
 
+@leagues_bp.get("/<uuid:league_id>/periods")
+def list_periods(league_id):
+    return ctrl.list_periods(league_id)
+
+
 @leagues_bp.get("/<uuid:league_id>/feed")
 def get_feed(league_id):
     return ctrl.get_feed(league_id)

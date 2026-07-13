@@ -139,6 +139,8 @@ export const leaguesApi = {
     req(`${LEAGUES_API}/${id}/feed`, { method: 'POST', body: JSON.stringify(payload) }),
   standings: (id: string) =>
     req<{ standings: StandingRow[]; period_id: string | null }>(`${LEAGUES_API}/${id}/standings`),
+  periods: (id: string) =>
+    req<{ periods: LeaguePeriod[] }>(`${LEAGUES_API}/${id}/periods`).then((d) => d.periods ?? []),
   getPicks: (id: string, periodId: string) =>
     req<{ picks: PickRow[] }>(`${LEAGUES_API}/${id}/periods/${periodId}/picks`).then((d) => d.picks ?? []),
   submitPicks: (id: string, periodId: string, picks: { event_id: string; side: 'home' | 'away' }[]) =>

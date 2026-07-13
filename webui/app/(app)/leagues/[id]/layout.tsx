@@ -58,10 +58,10 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
 
   const tabs = [
     { to: `/leagues/${id}`, label: 'Overview', end: true },
-    { to: `/leagues/${id}/members`, label: 'Members', end: false },
-    { to: `/leagues/${id}/schedule`, label: 'Schedule', end: false },
-    { to: `/leagues/${id}/standings`, label: 'Standings', end: false },
     { to: `/leagues/${id}/play`, label: PLAY_TAB[lg.league_type], end: false },
+    { to: `/leagues/${id}/results`, label: 'Results', end: false },
+    { to: `/leagues/${id}/standings`, label: 'Standings', end: false },
+    { to: `/leagues/${id}/members`, label: 'Members', end: false },
     ...(isMoney ? [{ to: `/leagues/${id}/activity`, label: 'Activity', end: false }] : []),
     ...(isCommish ? [{ to: `/leagues/${id}/manage`, label: 'Manage', end: false }] : []),
   ];

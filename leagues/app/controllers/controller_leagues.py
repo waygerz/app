@@ -64,6 +64,12 @@ def standings(league_id):
 
 
 @jwt_required(locations=["cookies", "headers"])
+def list_periods(league_id):
+    body, status = service.list_periods(league_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def get_feed(league_id):
     body, status = service.get_feed(league_id, get_jwt_identity())
     return jsonify(body), status

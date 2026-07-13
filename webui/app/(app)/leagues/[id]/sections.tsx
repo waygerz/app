@@ -3,11 +3,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLeague } from './league-context';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   leaguesApi,
   type LeagueDetail,
+  type LeaguePeriod,
   type PickRow,
 } from '@/lib/leagues';
 import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
@@ -312,6 +313,12 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const me = user?.id;
   const bets = useQuery({ queryKey: ['wagers', lg.id], queryFn: () => wagersApi.mine(lg.id) });
 
+  // Schedule (bettable games) is combined into this page — tap a game to bet.
+  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
+  const evs = events.data ?? [];
+  const [selected, setSelected] = useState<SportEvent | null>(null);
+  const canBet = lg.status === 'active';
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['wagers', lg.id] });
     qc.invalidateQueries({ queryKey: ['wagers-all'] });
@@ -327,10 +334,11 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   });
 
   const all = bets.data ?? [];
+  // Live bets live here; settled ones live on the Results tab (grouped by week).
   const pending = all.filter((w) => w.status === 'open');
   const active = all.filter((w) => w.status === 'accepted');
   const awaiting = all.filter((w) => w.status === 'completed');
-  const history = all.filter((w) => ['settled', 'declined', 'cancelled', 'refunded'].includes(w.status));
+  const liveCount = pending.length + active.length + awaiting.length;
 
   const confirmActions = (w: Wager) =>
     w.proposer_id === me || w.acceptor_id === me ? (
@@ -360,50 +368,83 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const eventMap = eventsQ.data ?? {};
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-8">
+      {/* Schedule */}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-base font-semibold text-foreground sm:text-lg">Schedule</h2>
+          <button type="button" onClick={() => router.push(`/leagues/${lg.id}/results`)} className="text-xs text-primary hover:underline">
+            View results
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Bettable games for this league’s sports.{canBet ? ' Tap a game to challenge a friend.' : ''}
+        </p>
+        {events.isLoading && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
+          </div>
+        )}
+        {!events.isLoading && evs.length === 0 && (
+          <CenterCard>
+            <CalendarDays className="size-6 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              No upcoming games for this league’s sport{lg.sports.length === 1 ? '' : 's'}
+              {lg.sports.length ? ` (${lg.sports.map((s) => s.name || s.sport_league_id).join(', ')})` : ''}.
+            </p>
+            {lg.my_role === 'commissioner' && (
+              <Button size="sm" variant="outline" onClick={() => router.push(`/leagues/${lg.id}/manage`)}>
+                Add more leagues
+              </Button>
+            )}
+          </CenterCard>
+        )}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {evs.map((ev: SportEvent) => (
+            <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
+          ))}
+        </div>
+      </section>
+
+      {/* My live bets */}
+      <section className="flex flex-col gap-6">
         <h2 className="text-base font-semibold text-foreground sm:text-lg">My Bets</h2>
-        <Button size="sm" className="w-full shrink-0 sm:w-auto" onClick={() => router.push(`/leagues/${lg.id}/schedule`)}>
-          Place a bet
-        </Button>
-      </div>
+        <BetSection
+          title="Pending"
+          tone="pending"
+          wagers={pending}
+          me={me}
+          eventMap={eventMap}
+          actions={(w) =>
+            w.acceptor_id === me ? (
+              <>
+                <Button size="sm" onClick={() => acceptM.mutate(w.id)}>Accept</Button>
+                <Button size="sm" variant="outline" onClick={() => declineM.mutate(w.id)}>Decline</Button>
+              </>
+            ) : w.proposer_id === me ? (
+              <Button size="sm" variant="outline" onClick={() => cancelM.mutate(w.id)}>Cancel</Button>
+            ) : null
+          }
+        />
+        <BetSection title="Active" tone="active" wagers={active} me={me} eventMap={eventMap} />
+        <BetSection title="Awaiting result" tone="awaiting" wagers={awaiting} me={me} eventMap={eventMap} actions={confirmActions} />
 
-      <BetSection
-        title="Pending"
-        tone="pending"
-        wagers={pending}
-        me={me}
-        eventMap={eventMap}
-        actions={(w) =>
-          w.acceptor_id === me ? (
-            <>
-              <Button size="sm" onClick={() => acceptM.mutate(w.id)}>Accept</Button>
-              <Button size="sm" variant="outline" onClick={() => declineM.mutate(w.id)}>Decline</Button>
-            </>
-          ) : w.proposer_id === me ? (
-            <Button size="sm" variant="outline" onClick={() => cancelM.mutate(w.id)}>Cancel</Button>
-          ) : null
-        }
-      />
-      <BetSection title="Active" tone="active" wagers={active} me={me} eventMap={eventMap} />
-      <BetSection
-        title="Awaiting result"
-        tone="awaiting"
-        wagers={awaiting}
-        me={me}
-        eventMap={eventMap}
-        actions={confirmActions}
-      />
-      <BetSection title="History" tone="history" wagers={history} me={me} eventMap={eventMap} />
-
-      {bets.isLoading && <Skeleton className="h-32 rounded-xl" />}
-      {!bets.isLoading && all.length === 0 && (
-        <CenterCard>
-          <CalendarDays className="size-6 text-muted-foreground" />
+        {bets.isLoading && <Skeleton className="h-24 rounded-xl" />}
+        {!bets.isLoading && liveCount === 0 && (
           <p className="text-sm text-muted-foreground">
-            No bets yet — open the Schedule and tap a game to challenge a friend.
+            No active bets — tap a game above to challenge a friend. Settled bets are on the Results tab.
           </p>
-        </CenterCard>
+        )}
+      </section>
+
+      {canBet && (
+        <ScheduleBetDialog
+          lg={lg}
+          event={selected}
+          me={user?.id}
+          open={!!selected}
+          onOpenChange={(o) => { if (!o) setSelected(null); }}
+        />
       )}
     </div>
   );
@@ -507,56 +548,130 @@ export function LeagueStandings() {
   );
 }
 
-// ===================== SCHEDULE =====================
-export function LeagueSchedule() {
+// ===================== RESULTS (by week) =====================
+export function LeagueResults() {
   const lg = useLeague();
-  const router = useRouter();
-  const { user } = useAuth();
-  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
-  const evs = events.data ?? [];
-  const [selected, setSelected] = useState<SportEvent | null>(null);
+  if (lg.league_type === 'pickem') return <PickemResults lg={lg} />;
+  return <HeadToHeadResults lg={lg} />;
+}
 
-  // Betting against friends only applies to an active head-to-head league.
-  const canBet = lg.league_type === 'head_to_head' && lg.status === 'active';
+function NoResults({ text }: { text: string }) {
+  return (
+    <CenterCard>
+      <Trophy className="size-6 text-muted-foreground" />
+      <p className="text-sm text-muted-foreground">{text}</p>
+    </CenterCard>
+  );
+}
+
+// Settled head-to-head bets, grouped by the week (period) they belong to.
+function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
+  const { user } = useAuth();
+  const me = user?.id;
+  const periodsQ = useQuery({ queryKey: ['periods', lg.id], queryFn: () => leaguesApi.periods(lg.id) });
+  const betsQ = useQuery({ queryKey: ['wagers', lg.id], queryFn: () => wagersApi.mine(lg.id) });
+
+  const settled = (betsQ.data ?? []).filter((w) => w.status === 'settled' || w.status === 'refunded');
+  const eventIds = Array.from(new Set(settled.map((w) => w.event_id)));
+  const eventsQ = useQuery({
+    queryKey: ['result-events', lg.id, [...eventIds].sort().join(',')],
+    queryFn: async () => {
+      const map: Record<string, SportEvent> = {};
+      await Promise.all(eventIds.map(async (id) => { const ev = await fetchEvent(id); if (ev) map[id] = ev; }));
+      return map;
+    },
+    enabled: eventIds.length > 0,
+    staleTime: 5 * 60_000,
+  });
+  const eventMap = eventsQ.data ?? {};
+
+  if (betsQ.isLoading || periodsQ.isLoading) return <Skeleton className="h-40 rounded-xl" />;
+
+  const byPeriod = new Map<string, Wager[]>();
+  for (const w of settled) {
+    const key = w.period_id ?? '_none';
+    const arr = byPeriod.get(key);
+    if (arr) arr.push(w);
+    else byPeriod.set(key, [w]);
+  }
+  const ordered = [...(periodsQ.data ?? [])].sort((a, b) => b.index - a.index);
+  const sections = ordered
+    .map((p) => ({ label: p.label, wagers: byPeriod.get(p.id) ?? [] }))
+    .filter((s) => s.wagers.length > 0);
+  const orphan = byPeriod.get('_none') ?? [];
+  if (orphan.length) sections.push({ label: 'Other', wagers: orphan });
+
+  if (sections.length === 0) return <NoResults text="No results yet — settled bets show up here by week." />;
 
   return (
-    <div>
-      <p className="mb-3 text-sm text-muted-foreground">
-        Bettable games for this league’s sports.{canBet ? ' Tap a game to challenge a friend.' : ''}
-      </p>
-      {events.isLoading && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
-        </div>
-      )}
-      {!events.isLoading && evs.length === 0 && (
-        <CenterCard>
-          <CalendarDays className="size-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No upcoming games for this league’s sport{lg.sports.length === 1 ? '' : 's'}
-            {lg.sports.length ? ` (${lg.sports.map((s) => s.name || s.sport_league_id).join(', ')})` : ''}.
-          </p>
-          {lg.my_role === 'commissioner' && (
-            <Button size="sm" variant="outline" onClick={() => router.push(`/leagues/${lg.id}/manage`)}>
-              Add more leagues
-            </Button>
-          )}
-        </CenterCard>
-      )}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {evs.map((ev: SportEvent) => (
-          <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
-        ))}
-      </div>
-      {canBet && (
-        <ScheduleBetDialog
-          lg={lg}
-          event={selected}
-          me={user?.id}
-          open={!!selected}
-          onOpenChange={(o) => { if (!o) setSelected(null); }}
-        />
-      )}
+    <div className="flex flex-col gap-8">
+      {sections.map((s) => (
+        <section key={s.label} className="flex flex-col gap-3">
+          <h2 className="text-base font-semibold text-foreground sm:text-lg">{s.label}</h2>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {s.wagers.map((w) => (
+              <WagerBetCard key={w.id} w={w} me={me} ev={eventMap[w.event_id]} accentClass={BET_SECTION_TONE.history.accent} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+// Graded pick'em picks, one section per week.
+function PickemResults({ lg }: { lg: LeagueDetail }) {
+  const periodsQ = useQuery({ queryKey: ['periods', lg.id], queryFn: () => leaguesApi.periods(lg.id) });
+  const periods: LeaguePeriod[] = [...(periodsQ.data ?? [])].sort((a, b) => b.index - a.index);
+  const pickQueries = useQueries({
+    queries: periods.map((p) => ({
+      queryKey: ['picks', lg.id, p.id],
+      queryFn: () => leaguesApi.getPicks(lg.id, p.id),
+    })),
+  });
+
+  if (periodsQ.isLoading) return <Skeleton className="h-40 rounded-xl" />;
+
+  const sections = periods
+    .map((p, i) => ({ period: p, picks: (pickQueries[i]?.data ?? []) as PickRow[] }))
+    .filter((s) => s.picks.length > 0);
+
+  if (sections.length === 0) return <NoResults text="No results yet — your graded picks show up here by week." />;
+
+  return (
+    <div className="flex flex-col gap-8">
+      {sections.map((s) => {
+        const correct = s.picks.filter((p) => p.correct === true).length;
+        const graded = s.picks.filter((p) => p.correct !== null).length;
+        return (
+          <section key={s.period.id} className="flex flex-col gap-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="text-base font-semibold text-foreground sm:text-lg">{s.period.label}</h2>
+              {graded > 0 && <span className="text-xs text-muted-foreground">{correct}/{graded} correct</span>}
+            </div>
+            <div className="flex flex-col gap-2">
+              {s.picks.map((p) => {
+                const ev = p.event;
+                const picked = p.pick_side === 'home' ? ev?.home_team : ev?.away_team;
+                return (
+                  <Card key={p.id ?? p.event_id} className="flex-row items-center justify-between gap-2 p-3">
+                    <span className="min-w-0 truncate text-sm text-foreground">
+                      {ev ? `${ev.away_team} @ ${ev.home_team}` : p.event_id} · you: {picked ?? p.pick_side}
+                    </span>
+                    {p.correct === null ? (
+                      <Badge size="sm" appearance="light" variant="secondary">Pending</Badge>
+                    ) : (
+                      <Badge size="sm" appearance="light" variant={p.correct ? 'success' : 'destructive'}>
+                        {p.correct ? '✓ correct' : '✗ wrong'}
+                      </Badge>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

@@ -713,6 +713,18 @@ def standings(league_id, me):
     return {"standings": rows, "period_id": period.id if period else None}, 200
 
 
+def list_periods(league_id, me):
+    league_id = str(league_id)
+    if not _membership(league_id, me):
+        return {"error": "league not found"}, 404
+    periods = (
+        LeaguePeriod.query.filter_by(league_id=league_id)
+        .order_by(LeaguePeriod.index.asc())
+        .all()
+    )
+    return {"periods": [p.to_dict() for p in periods]}, 200
+
+
 def get_feed(league_id, me):
     league_id = str(league_id)
     if not _membership(league_id, me):

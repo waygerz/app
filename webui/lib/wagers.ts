@@ -20,6 +20,7 @@ export type WagerResult = 'won' | 'lost' | 'draw';
 export interface Wager {
   id: string;
   league_id: string;
+  period_id: string | null;
   event_id: string;
   event_name: string;
   league: string;
