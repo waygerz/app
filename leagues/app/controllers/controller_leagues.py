@@ -76,6 +76,20 @@ def period_results(league_id, period_id):
 
 
 @jwt_required(locations=["cookies", "headers"])
+def member_picks(league_id, period_id, user_id):
+    body, status = service.member_picks(league_id, period_id, user_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def confirm_member(league_id, period_id, user_id):
+    body, status = service.confirm_member(
+        league_id, period_id, user_id, get_jwt_identity(), request.get_json(silent=True) or {}
+    )
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def get_feed(league_id):
     body, status = service.get_feed(league_id, get_jwt_identity())
     return jsonify(body), status

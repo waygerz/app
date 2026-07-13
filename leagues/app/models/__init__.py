@@ -6,3 +6,4 @@ from app.models.invite import LeagueInvite  # noqa: F401
 from app.models.feed import LeagueFeed  # noqa: F401
 from app.models.feed_read import LeagueFeedRead  # noqa: F401
 from app.models.pick import Pick  # noqa: F401
+from app.models.pick_confirmation import PickConfirmation  # noqa: F401

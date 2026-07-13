@@ -60,6 +60,16 @@ def period_results(league_id, period_id):
     return ctrl.period_results(league_id, period_id)
 
 
+@leagues_bp.get("/<uuid:league_id>/periods/<uuid:period_id>/members/<uuid:user_id>/picks")
+def member_picks(league_id, period_id, user_id):
+    return ctrl.member_picks(league_id, period_id, user_id)
+
+
+@leagues_bp.put("/<uuid:league_id>/periods/<uuid:period_id>/members/<uuid:user_id>/confirm")
+def confirm_member(league_id, period_id, user_id):
+    return ctrl.confirm_member(league_id, period_id, user_id)
+
+
 @leagues_bp.get("/<uuid:league_id>/feed")
 def get_feed(league_id):
     return ctrl.get_feed(league_id)

@@ -22,6 +22,7 @@ from app.models.member import (
 from app.models.period import FINAL, OPEN, LeaguePeriod
 from app.models import period as period_model
 from app.models.pick import HOME, AWAY, PICK_SIDES, Pick
+from app.models.pick_confirmation import PickConfirmation
 from app.models.sport import LeagueSport
 from app.models import feed as feed_model
 from app.models.feed import ACTIVITY, LeagueFeed
@@ -786,6 +787,11 @@ def period_results(league_id, period_id, me):
         if last_event_id and p.event_id == last_event_id and p.tiebreaker_total is not None:
             agg["tb"] = p.tiebreaker_total
 
+    confirmed_by_user = {
+        c.user_id: c.confirmed
+        for c in PickConfirmation.query.filter_by(period_id=period_id).all()
+    }
+
     rows = []
     for uid, agg in per.items():
         if agg["total"] == 0:
@@ -802,6 +808,7 @@ def period_results(league_id, period_id, me):
             "total": agg["total"],
             "tiebreaker_total": tb,
             "tiebreaker_diff": diff,
+            "confirmed": confirmed_by_user.get(uid, False),
         })
     rows.sort(key=lambda r: (
         -r["correct"],
@@ -832,6 +839,73 @@ def period_results(league_id, period_id, me):
             "actual_total": actual_total,
         }
     return {"period": period.to_dict(), "last_game": last_game, "rows": rows}, 200
+
+
+def confirm_member(league_id, period_id, user_id, me, data):
+    """Commissioner sets a member's confirmed flag for a week."""
+    league_id, period_id, user_id = str(league_id), str(period_id), str(user_id)
+    league = db.session.get(League, league_id)
+    if not league or not _membership(league_id, me):
+        return {"error": "league not found"}, 404
+    if league.commissioner_id != me:
+        return {"error": "only the commissioner can confirm members"}, 403
+    period = db.session.get(LeaguePeriod, period_id)
+    if not period or period.league_id != league_id:
+        return {"error": "period not found"}, 404
+
+    confirmed = bool((data or {}).get("confirmed"))
+    row = PickConfirmation.query.filter_by(period_id=period_id, user_id=user_id).first()
+    if row:
+        row.confirmed = confirmed
+    else:
+        db.session.add(PickConfirmation(
+            league_id=league_id, period_id=period_id, user_id=user_id, confirmed=confirmed,
+        ))
+    db.session.commit()
+    return {"user_id": user_id, "period_id": period_id, "confirmed": confirmed}, 200
+
+
+def member_picks(league_id, period_id, user_id, me):
+    """A member's picks for a week — visible to any member once the week locks
+    (1 hour before the first game). The owner and commissioner see them anytime."""
+    league_id, period_id, user_id = str(league_id), str(period_id), str(user_id)
+    league = db.session.get(League, league_id)
+    if not league or not _membership(league_id, me):
+        return {"error": "league not found"}, 404
+    period = db.session.get(LeaguePeriod, period_id)
+    if not period or period.league_id != league_id:
+        return {"error": "period not found"}, 404
+
+    picks = (
+        Pick.query.filter_by(period_id=period_id, user_id=user_id)
+        .order_by(Pick.created_at.asc())
+        .all()
+    )
+    events = {}
+    for p in picks:
+        if p.event_id in events:
+            continue
+        try:
+            events[p.event_id] = get_event(p.event_id)
+        except Exception:  # noqa: BLE001
+            events[p.event_id] = None
+
+    if user_id != me and league.commissioner_id != me:
+        starts = [
+            _parse_dt((ev or {}).get("start_time"))
+            for ev in events.values()
+            if (ev or {}).get("start_time")
+        ]
+        starts = [s for s in starts if s]
+        if starts and datetime.utcnow() < min(starts) - timedelta(hours=1):
+            return {"error": "picks are hidden until an hour before the first game"}, 403
+
+    out = []
+    for p in picks:
+        d = p.to_dict()
+        d["event"] = events.get(p.event_id)
+        out.append(d)
+    return {"picks": out}, 200
 
 
 def get_feed(league_id, me):

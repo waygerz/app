@@ -151,6 +151,13 @@ export const leaguesApi = {
     req(`${LEAGUES_API}/${id}/periods/${periodId}/picks`, { method: 'PUT', body: JSON.stringify({ picks }) }),
   periodResults: (id: string, periodId: string) =>
     req<PeriodResults>(`${LEAGUES_API}/${id}/periods/${periodId}/results`),
+  memberPicks: (id: string, periodId: string, userId: string) =>
+    req<{ picks: PickRow[] }>(`${LEAGUES_API}/${id}/periods/${periodId}/members/${userId}/picks`).then((d) => d.picks ?? []),
+  confirmMember: (id: string, periodId: string, userId: string, confirmed: boolean) =>
+    req(`${LEAGUES_API}/${id}/periods/${periodId}/members/${userId}/confirm`, {
+      method: 'PUT',
+      body: JSON.stringify({ confirmed }),
+    }),
 };
 
 export interface WeeklyResultRow {
@@ -164,6 +171,8 @@ export interface WeeklyResultRow {
   tiebreaker_diff: number | null;
   // Competition rank; tied members (same correct + tie-breaker) share a rank.
   rank: number;
+  // Commissioner's per-week confirmation flag.
+  confirmed: boolean;
 }
 
 export interface PeriodResults {

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLeague } from './league-context';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   leaguesApi,
@@ -11,6 +11,7 @@ import {
   type LeaguePeriod,
   type PeriodResults,
   type PickRow,
+  type WeeklyResultRow,
 } from '@/lib/leagues';
 import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
 import {
@@ -30,7 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle, Check } from 'lucide-react';
+import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle, Check, CircleCheckBig } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import { dispatchOpenChat } from '@/lib/open-chat';
@@ -189,7 +190,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                         disabled && !active && !isMyPick && 'opacity-60',
                       )}
                     >
-                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} className="size-12 sm:size-14" />
+                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} className="size-[72px] sm:size-[84px]" />
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">{teamName}</span>
                       {isMyPick && <Check className="size-4 shrink-0 text-primary" />}
                     </button>
@@ -198,7 +199,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
               </div>
               {ev.external_id === lastGameId && (
                 <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
-                  <span className="text-xs font-medium text-muted-foreground">Tie-breaker · total points</span>
+                  <span className="text-sm font-bold text-foreground">Tie-breaker · total points</span>
                   <Input
                     type="number"
                     min={0}
@@ -207,7 +208,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                     onChange={(e) => setTiebreaker(e.target.value)}
                     disabled={disabled}
                     placeholder="e.g. 48"
-                    className="h-8 w-24"
+                    className="h-9 w-24"
                   />
                 </div>
               )}
@@ -712,81 +713,182 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
 
 // Graded pick'em picks, one section per week.
 function PickemResults({ lg }: { lg: LeagueDetail }) {
+  const qc = useQueryClient();
   const { user } = useAuth();
   const me = String(user?.id ?? '');
+  const isCommish = lg.my_role === 'commissioner';
   const periodsQ = useQuery({ queryKey: ['periods', lg.id], queryFn: () => leaguesApi.periods(lg.id) });
   const periods: LeaguePeriod[] = [...(periodsQ.data ?? [])].sort((a, b) => b.index - a.index);
-  const resultQueries = useQueries({
-    queries: periods.map((p) => ({
-      queryKey: ['period-results', lg.id, p.id],
-      queryFn: () => leaguesApi.periodResults(lg.id, p.id),
-    })),
+
+  const [periodId, setPeriodId] = useState('');
+  const selectedId = periodId || periods[0]?.id || '';
+  const [openMember, setOpenMember] = useState<WeeklyResultRow | null>(null);
+
+  const resultsQ = useQuery({
+    queryKey: ['period-results', lg.id, selectedId],
+    queryFn: () => leaguesApi.periodResults(lg.id, selectedId),
+    enabled: !!selectedId,
+  });
+  const confirmM = useMutation({
+    mutationFn: ({ userId, confirmed }: { userId: string; confirmed: boolean }) =>
+      leaguesApi.confirmMember(lg.id, selectedId, userId, confirmed),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['period-results', lg.id, selectedId] }),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   if (periodsQ.isLoading) return <Skeleton className="h-40 rounded-xl" />;
+  if (periods.length === 0) return <NoResults text="No weeks yet." />;
 
-  const sections = periods
-    .map((p, i) => ({ period: p, res: resultQueries[i]?.data as PeriodResults | undefined }))
-    .filter((s) => s.res && s.res.rows.length > 0);
-
-  if (sections.length === 0) return <NoResults text="No results yet — weekly standings show up here as picks are graded." />;
+  const res = resultsQ.data as PeriodResults | undefined;
+  const rows = res?.rows ?? [];
+  const rankCounts = rows.reduce<Record<number, number>>((acc, r) => {
+    acc[r.rank] = (acc[r.rank] ?? 0) + 1;
+    return acc;
+  }, {});
+  const last = res?.last_game;
 
   return (
-    <div className="flex flex-col gap-8">
-      {sections.map(({ period, res }) => {
-        const last = res!.last_game;
-        // A rank shared by >1 member is a tie (shown as "T3").
-        const rankCounts = res!.rows.reduce<Record<number, number>>((acc, r) => {
-          acc[r.rank] = (acc[r.rank] ?? 0) + 1;
-          return acc;
-        }, {});
-        return (
-          <section key={period.id} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-base font-semibold text-foreground sm:text-lg">{period.label}</h2>
-              {last?.final && last.actual_total !== null && (
-                <span className="text-xs text-muted-foreground">
-                  Tie-breaker: {last.away_team} @ {last.home_team} · {last.actual_total} pts
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col gap-2">
-              {res!.rows.map((r) => {
-                const isMe = r.user_id === me;
-                const tied = rankCounts[r.rank] > 1;
-                return (
-                  <Card key={r.user_id} className="flex-row items-center gap-3 p-3">
-                    <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold', standingRankClass(r.rank))}>
-                      {tied ? `T${r.rank}` : r.rank}
-                    </div>
-                    <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-9 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {r.display_name}
-                        {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
-                      </p>
-                      {r.tiebreaker_total !== null && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          tie-breaker {r.tiebreaker_total}
-                          {r.tiebreaker_diff !== null ? ` · off by ${r.tiebreaker_diff}` : ''}
-                        </p>
-                      )}
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-lg font-bold tabular-nums text-foreground">
-                        {r.correct}
-                        <span className="text-xs font-normal text-muted-foreground">/{r.graded || r.total}</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground">correct</p>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <select
+          value={selectedId}
+          onChange={(e) => setPeriodId(e.target.value)}
+          className={cn(selectCls, 'max-w-[220px]')}
+          aria-label="Select week"
+        >
+          {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
+        {last?.final && last.actual_total !== null && (
+          <span className="text-xs text-muted-foreground">
+            Tie-breaker: {last.away_team} @ {last.home_team} · {last.actual_total} pts
+          </span>
+        )}
+      </div>
+
+      {resultsQ.isLoading && <Skeleton className="h-40 rounded-xl" />}
+      {!resultsQ.isLoading && rows.length === 0 && <NoResults text="No picks for this week yet." />}
+
+      <div className="flex flex-col gap-2">
+        {rows.map((r) => {
+          const isMe = r.user_id === me;
+          const tied = rankCounts[r.rank] > 1;
+          return (
+            <Card key={r.user_id} className="flex-row items-center gap-2 p-3">
+              <button
+                type="button"
+                onClick={() => setOpenMember(r)}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+              >
+                <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold', standingRankClass(r.rank))}>
+                  {tied ? `T${r.rank}` : r.rank}
+                </div>
+                <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-9 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {r.display_name}
+                    {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
+                  </p>
+                  {r.tiebreaker_total !== null && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      tie-breaker {r.tiebreaker_total}
+                      {r.tiebreaker_diff !== null ? ` · off by ${r.tiebreaker_diff}` : ''}
+                    </p>
+                  )}
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-lg font-bold tabular-nums text-foreground">
+                    {r.correct}
+                    <span className="text-xs font-normal text-muted-foreground">/{r.graded || r.total}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">correct</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                disabled={!isCommish || confirmM.isPending}
+                onClick={() => confirmM.mutate({ userId: r.user_id, confirmed: !r.confirmed })}
+                aria-label={r.confirmed ? 'Confirmed' : 'Not confirmed'}
+                title={
+                  isCommish
+                    ? r.confirmed ? 'Confirmed — click to unconfirm' : 'Not confirmed — click to confirm'
+                    : r.confirmed ? 'Confirmed' : 'Not confirmed'
+                }
+                className={cn('shrink-0 rounded-full p-1', isCommish ? 'cursor-pointer hover:bg-muted' : 'cursor-default')}
+              >
+                <CircleCheckBig className={cn('size-6', r.confirmed ? 'text-green-500' : 'text-muted-foreground/40')} />
+              </button>
+            </Card>
+          );
+        })}
+      </div>
+
+      <MemberPicksDialog
+        lg={lg}
+        periodId={selectedId}
+        member={openMember}
+        open={!!openMember}
+        onOpenChange={(o) => { if (!o) setOpenMember(null); }}
+      />
     </div>
+  );
+}
+
+// Opened by tapping a member on the weekly leaderboard — their picks for the
+// week (hidden by the backend until an hour before the first game).
+function MemberPicksDialog({
+  lg, periodId, member, open, onOpenChange,
+}: {
+  lg: LeagueDetail;
+  periodId: string;
+  member: WeeklyResultRow | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const q = useQuery({
+    queryKey: ['member-picks', lg.id, periodId, member?.user_id],
+    queryFn: () => leaguesApi.memberPicks(lg.id, periodId, member!.user_id),
+    enabled: open && !!member && !!periodId,
+    retry: false,
+  });
+  const picks = q.data ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{member?.display_name}&rsquo;s picks</DialogTitle>
+          <DialogDescription className="sr-only">Member picks for the selected week.</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="flex flex-col gap-2 py-2">
+          {q.isLoading && <Skeleton className="h-24 rounded-xl" />}
+          {q.isError && (
+            <p className="text-sm text-muted-foreground">Picks are hidden until an hour before the first game.</p>
+          )}
+          {!q.isLoading && !q.isError && picks.length === 0 && (
+            <p className="text-sm text-muted-foreground">No picks for this week.</p>
+          )}
+          {picks.map((p) => {
+            const ev = p.event;
+            const picked = p.pick_side === 'home' ? ev?.home_team : ev?.away_team;
+            return (
+              <div key={p.id ?? p.event_id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <TeamLogo src={ev?.away_logo} name={ev?.away_abbr || ev?.away_team || '?'} className="size-6" />
+                  <span className="text-xs text-muted-foreground">@</span>
+                  <TeamLogo src={ev?.home_logo} name={ev?.home_abbr || ev?.home_team || '?'} className="size-6" />
+                  <span className="ml-1 min-w-0 truncate text-sm text-foreground">picked {picked ?? p.pick_side}</span>
+                </div>
+                {p.correct === null ? (
+                  <Badge size="sm" appearance="light" variant="secondary">—</Badge>
+                ) : (
+                  <Badge size="sm" appearance="light" variant={p.correct ? 'success' : 'destructive'}>{p.correct ? '✓' : '✗'}</Badge>
+                )}
+              </div>
+            );
+          })}
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }
 
