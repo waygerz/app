@@ -133,13 +133,13 @@ export default function AccountPage() {
                       onClick={() => selectAvatar(a.s3_key)}
                       aria-label={active ? 'Current avatar' : 'Use this avatar'}
                       className={cn(
-                        'relative rounded-xl ring-2 ring-offset-2 ring-offset-background transition-colors disabled:opacity-60',
-                        active ? 'ring-primary' : 'ring-transparent hover:ring-input',
+                        'relative rounded-full ring-2 ring-offset-2 ring-offset-background transition-colors disabled:opacity-60',
+                        active ? 'ring-green-400' : 'ring-transparent hover:ring-input',
                       )}
                     >
                       <UserAvatar userId={user.id} name={user.display_name} imageUrl={a.s3_key} className="size-14" />
                       {active && (
-                        <span className="absolute -right-1 -top-1 rounded-full bg-primary p-0.5 text-primary-foreground">
+                        <span className="absolute -right-1 -top-1 rounded-full bg-green-500 p-0.5 text-white">
                           <Check className="size-3" />
                         </span>
                       )}
