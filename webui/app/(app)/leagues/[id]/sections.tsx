@@ -779,10 +779,12 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
   const me = String(user?.id ?? '');
   const isCommish = lg.my_role === 'commissioner';
   const periodsQ = useQuery({ queryKey: ['periods', lg.id], queryFn: () => leaguesApi.periods(lg.id) });
-  const periods: LeaguePeriod[] = [...(periodsQ.data ?? [])].sort((a, b) => b.index - a.index);
+  // Chronological order + default to the current (open) week, matching PickemPlay.
+  const periods: LeaguePeriod[] = [...(periodsQ.data ?? [])].sort((a, b) => a.index - b.index);
+  const openPeriod = periods.find((p) => p.status === 'open') ?? null;
 
   const [periodId, setPeriodId] = useState('');
-  const selectedId = periodId || periods[0]?.id || '';
+  const selectedId = periodId || openPeriod?.id || periods[periods.length - 1]?.id || '';
   const [openMember, setOpenMember] = useState<WeeklyResultRow | null>(null);
 
   const resultsQ = useQuery({
