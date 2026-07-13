@@ -40,6 +40,13 @@ class Event(db.Model):
     away_score = db.Column(db.Integer)
     winner_side = db.Column(db.String(8))  # home | away | draw | None
 
+    # Native-week metadata (ESPN team-sport schedule). season_year + week_number
+    # come straight from ESPN; week_label is the calendar entry ("Regular Season
+    # Week 1"). Null for date-based sports (bucketed into calendar weeks instead).
+    season_year = db.Column(db.Integer)
+    week_number = db.Column(db.Integer)
+    week_label = db.Column(db.String(80))
+
     # Last-known betting odds ({moneyline, spread, overUnder}), persisted so we
     # serve a durable line from SQL instead of re-hitting the metered API on
     # every view (and so odds survive a quota-exhausted window).
@@ -66,6 +73,9 @@ class Event(db.Model):
             "home_score": self.home_score,
             "away_score": self.away_score,
             "winner_side": self.winner_side,
+            "season_year": self.season_year,
+            "week_number": self.week_number,
+            "week_label": self.week_label,
             "odds": self.odds,
             "odds_updated_at": (
                 self.odds_updated_at.isoformat() + "Z" if self.odds_updated_at else None

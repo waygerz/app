@@ -1,10 +1,16 @@
-from flask import jsonify
+from flask import jsonify, request
 
 from app.services import service_events as service
+from app.services import service_schedule
 
 
 def list_events():
     body, status = service.list_events()
+    return jsonify(body), status
+
+
+def schedule_weeks(sport, league):
+    body, status = service_schedule.weeks(sport, league, request.args.get("season"))
     return jsonify(body), status
 
 

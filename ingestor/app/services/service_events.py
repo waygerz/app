@@ -159,6 +159,14 @@ def attach_logos(events):
 
 
 def sync_league(sport, league, force=False):
+    # ESPN owns the schedule for registered team leagues (RTS is a live
+    # scoreboard, not a schedule source). Route those to the ESPN ingester and
+    # leave any pre-existing RTS rows in place. Mock mode keeps the fixtures path.
+    if not current_app.config["SPORTS_API_MOCK"]:
+        from app.services import service_schedule
+        if (sport, league) in service_schedule.REGISTRY_KEYS:
+            return service_schedule.refresh_fixtures(sport, league, force=force)
+
     if current_app.config["SPORTS_API_MOCK"]:
         raw_events = mock_league_events(sport, league)
     else:
@@ -218,10 +226,14 @@ def league_events(sport, league):
         sync_league(sport, league)
     except Exception as exc:
         sync_error = str(exc)
-    try:
-        sports.sync_teams(sport, league)
-    except Exception:
-        pass
+    # Registered ESPN leagues get their teams (+logos) from the schedule ingest,
+    # so skip the metered RTS team sync for them.
+    from app.services import service_schedule
+    if current_app.config["SPORTS_API_MOCK"] or (sport, league) not in service_schedule.REGISTRY_KEYS:
+        try:
+            sports.sync_teams(sport, league)
+        except Exception:
+            pass
     events = (
         Event.query.filter_by(sport=sport, league=league)
         .order_by(nullslast(Event.start_time.asc()))

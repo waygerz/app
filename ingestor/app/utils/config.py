@@ -57,6 +57,12 @@ class Config:
     ESPN_BASE = os.environ.get("ESPN_BASE", "https://site.api.espn.com/apis/site/v2/sports")
     ESPN_CACHE_TTL = int(os.environ.get("ESPN_CACHE_TTL", 600))  # 10 minutes
     ESPN_TIMEOUT = int(os.environ.get("ESPN_TIMEOUT", 8))  # seconds; serve stale/empty on timeout
+    # Team-sport schedule ingest (service_schedule): how far ahead date-based
+    # sports pull fixtures, and how often the scheduler tick actually re-hits ESPN
+    # for fixtures (weekly) vs live scores (5 min).
+    SCHEDULE_WEEKS_AHEAD = int(os.environ.get("SCHEDULE_WEEKS_AHEAD", 6))
+    SCHEDULE_FIXTURE_TTL = int(os.environ.get("SCHEDULE_FIXTURE_TTL", 604800))  # 7 days
+    SCHEDULE_SCORE_TTL = int(os.environ.get("SCHEDULE_SCORE_TTL", 300))  # 5 minutes
     # Leagues/tours per ESPN sport (slug lists).
     GOLF_TOURS = [t.strip() for t in os.environ.get("GOLF_TOURS", "pga").split(",") if t.strip()]
     RACING_TOURS = [

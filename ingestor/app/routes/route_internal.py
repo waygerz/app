@@ -12,6 +12,12 @@ def refresh_event(key):
     return ctrl.refresh_event(key)
 
 
+@ingestor_internal_bp.post("/tick")
+@internal_only
+def schedule_tick():
+    return ctrl.schedule_tick()
+
+
 @ingestor_internal_bp.post("/catalog/sync")
 @internal_only
 def catalog_sync():

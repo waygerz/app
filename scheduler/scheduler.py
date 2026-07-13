@@ -14,6 +14,7 @@ HEADERS = {"X-Internal-Token": TOKEN, "Content-Type": "application/json"}
 JOBS = (
     ("contests", f"{os.environ.get('CONTESTS_URL', 'http://contests:8000')}/internal/tick"),
     ("leagues", f"{os.environ.get('LEAGUES_URL', 'http://leagues:8000')}/internal/tick"),
+    ("ingestor", f"{os.environ.get('INGESTOR_URL', 'http://ingestor:8000')}/internal/tick"),
 )
 
 

@@ -10,6 +10,11 @@ def list_events():
     return ctrl.list_events()
 
 
+@ingestor_events_bp.get("/schedule/<sport>/<league>/weeks")
+def schedule_weeks(sport, league):
+    return ctrl.schedule_weeks(sport, league)
+
+
 @ingestor_events_bp.get("/sports/<sport>/leagues/<league>/events")
 def league_events(sport, league):
     return ctrl.league_events(sport, league)
