@@ -25,6 +25,7 @@ from flask import current_app
 
 from app.extensions import db, get_redis
 from app.models.event import CANCELLED, FINAL, LIVE, SCHEDULED, Event
+from app.models.sport_league import SportLeague
 from app.services import service_sports as sports
 from app.services.service_espn import espn_get
 from app.services.service_events import _parse_dt, upsert_event
@@ -431,3 +432,12 @@ def weeks(sport, league, season=None):
             "count": buckets[monday],
         })
     return {"weeks": out}, 200
+
+
+def weeks_for_catalog(sport_league_id, season=None):
+    """weeks() addressed by the catalog UUID a league stores (it doesn't know the
+    sport/league slugs)."""
+    row = db.session.get(SportLeague, str(sport_league_id))
+    if row is None:
+        return {"weeks": []}, 200
+    return weeks(row.sport, row.league, season)

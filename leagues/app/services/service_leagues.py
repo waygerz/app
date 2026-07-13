@@ -100,14 +100,26 @@ def ingestor_warm_cache(sport_league_ids) -> dict:
 
 
 def get_event(external_id):
+    # INGESTOR_URL already includes the /v1/<group>/ingestor prefix.
     r = requests.get(
-        f"{current_app.config['INGESTOR_URL']}/v1/platform/ingestor/events/{external_id}",
+        f"{current_app.config['INGESTOR_URL']}/events/{external_id}",
         timeout=10,
     )
     if r.status_code == 404:
         return None
     r.raise_for_status()
     return r.json().get("event")
+
+
+def ingestor_weeks(sport_league_id):
+    """The prebuilt week list for a catalog sport-league (label + start/end +
+    game count), used to seed pick'em periods."""
+    r = requests.get(
+        f"{current_app.config['INGESTOR_URL']}/schedule/by-catalog/{sport_league_id}/weeks",
+        timeout=15,
+    )
+    r.raise_for_status()
+    return r.json().get("weeks", [])
 
 
 def wallet_grant(account, user_id, amount_cents, ref) -> dict:
@@ -158,6 +170,80 @@ def current_period(league_id):
         .order_by(LeaguePeriod.index.desc())
         .first()
     )
+
+
+def _parse_iso(value):
+    """Parse an ingestor week start/end — native weeks send full timestamps with
+    a trailing Z, date-based weeks send a bare date."""
+    if not value:
+        return None
+    s = str(value).strip().replace("Z", "")
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _prebuild_periods(league):
+    """Seed one LeaguePeriod per upcoming ingestor week for a pick'em league,
+    from its primary (first) sport. Idempotent + keyed on the week label: creates
+    missing weeks, refreshes the window of not-yet-started ones, and never touches
+    a period that's already open/closed/final (so picks are preserved). Fully-past
+    weeks are skipped. Returns the number of current/future weeks."""
+    primary = (
+        LeagueSport.query.filter_by(league_id=league.id)
+        .order_by(LeagueSport.id).first()
+    )
+    if not primary:
+        return 0
+    try:
+        weeks = ingestor_weeks(primary.sport_league_id)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[leagues] week fetch failed for {league.id}: {exc}", flush=True)
+        return 0
+
+    now = datetime.utcnow()
+    existing = {p.label: p for p in LeaguePeriod.query.filter_by(league_id=league.id).all()}
+    max_idx = max((p.index for p in existing.values()), default=0)
+
+    kept = []
+    for w in weeks:
+        end = _parse_iso(w.get("end"))
+        if end and end < now:
+            continue  # fully in the past
+        kept.append((_parse_iso(w.get("start")), end, (w.get("label") or "Week")[:40]))
+    kept.sort(key=lambda r: (r[0] is None, r[0] or datetime.max))
+
+    for start, end, label in kept:
+        p = existing.get(label)
+        if p is None:
+            max_idx += 1
+            db.session.add(LeaguePeriod(
+                league_id=league.id, index=max_idx, label=label,
+                starts_at=start, ends_at=end, status=period_model.UPCOMING,
+            ))
+            existing[label] = p
+        elif p.status == period_model.UPCOMING:
+            p.starts_at, p.ends_at = start, end
+    return len(kept)
+
+
+def _ensure_open_period(league):
+    """Open the earliest upcoming period if none is currently open."""
+    if LeaguePeriod.query.filter_by(league_id=league.id, status=OPEN).first():
+        return None
+    nxt = (
+        LeaguePeriod.query.filter_by(league_id=league.id, status=period_model.UPCOMING)
+        .order_by(LeaguePeriod.index.asc()).first()
+    )
+    if nxt:
+        nxt.status = OPEN
+    return nxt
 
 
 def add_feed(league_id, kind, *, event_type=None, author_id=None, title=None,
@@ -251,17 +337,48 @@ def rollover_periods() -> int:
         _rollover_feed(league.id, "period_final", f"{p.label} is final",
                        "Standings are locked for this period.", dedup_key=f"period_final:{p.id}")
         if league.period_type == WEEKLY and league.status == L_ACTIVE:
-            start = p.ends_at
-            nxt = LeaguePeriod(
-                league_id=league.id, index=p.index + 1, label=f"Week {p.index + 1}",
-                starts_at=start, ends_at=start + timedelta(days=7), status=OPEN,
+            # Prefer the next prebuilt period; only synthesize one if none exists
+            # (non-prebuilt leagues, e.g. head-to-head weekly).
+            nxt = (
+                LeaguePeriod.query.filter(
+                    LeaguePeriod.league_id == league.id, LeaguePeriod.index > p.index
+                )
+                .order_by(LeaguePeriod.index.asc()).first()
             )
-            db.session.add(nxt)
+            if nxt is not None:
+                nxt.status = OPEN
+            else:
+                start = p.ends_at
+                nxt = LeaguePeriod(
+                    league_id=league.id, index=p.index + 1, label=f"Week {p.index + 1}",
+                    starts_at=start, ends_at=start + timedelta(days=7), status=OPEN,
+                )
+                db.session.add(nxt)
             _rollover_feed(league.id, "period_opened", f"{nxt.label} is open",
                            "Betting is now open.", dedup_key=f"period_opened:{league.id}:{nxt.index}")
         db.session.commit()
         rolled += 1
     return rolled
+
+
+def regenerate_periods(league_id, me):
+    """Commissioner action: sync new/upcoming weeks from the master schedule into
+    this pick'em league's periods (idempotent; never disturbs periods with picks)."""
+    league_id = str(league_id)
+    league = db.session.get(League, league_id)
+    if not league or not _membership(league_id, me):
+        return {"error": "league not found"}, 404
+    if league.commissioner_id != me:
+        return {"error": "only the commissioner can regenerate the schedule"}, 403
+    if league.league_type != PICKEM or league.period_type != WEEKLY:
+        return {"error": "schedule regeneration is only for weekly pick'em leagues"}, 400
+    _prebuild_periods(league)
+    db.session.flush()
+    _ensure_open_period(league)
+    db.session.commit()
+    return {"periods": [p.to_dict() for p in
+                        LeaguePeriod.query.filter_by(league_id=league.id)
+                        .order_by(LeaguePeriod.index.asc()).all()]}, 200
 
 
 # ---- League handlers ------------------------------------------------------
@@ -546,28 +663,38 @@ def activate_league(league_id, me):
 
     now = datetime.utcnow()
     rules = league.rules or {}
-    if league.period_type == "weekly":
-        wd = _WEEKDAYS.get(str(rules.get("week_starts_on", "monday")).lower(), 0)
-        anchor = league.starts_at or now
-        back = (anchor.weekday() - wd) % 7
-        start = (anchor - timedelta(days=back)).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
-        period = LeaguePeriod(
-            league_id=league.id, index=1, label="Week 1",
-            starts_at=start, ends_at=start + timedelta(days=7),
-            status=period_model.OPEN,
-        )
-    else:
-        year = rules.get("season_year")
-        period = LeaguePeriod(
-            league_id=league.id, index=1,
-            label=f"Season {year}" if year else "Season",
-            starts_at=league.starts_at or now, ends_at=league.ends_at,
-            status=period_model.OPEN,
-        )
     league.status = L_ACTIVE
-    db.session.add(period)
+
+    # Pick'em weekly leagues prebuild one period per ESPN week from the master
+    # schedule; everything else keeps the single-period default.
+    period = None
+    if league.period_type == "weekly" and league.league_type == PICKEM and _prebuild_periods(league):
+        db.session.flush()
+        period = _ensure_open_period(league)
+
+    if period is None:
+        if league.period_type == "weekly":
+            wd = _WEEKDAYS.get(str(rules.get("week_starts_on", "monday")).lower(), 0)
+            anchor = league.starts_at or now
+            back = (anchor.weekday() - wd) % 7
+            start = (anchor - timedelta(days=back)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            period = LeaguePeriod(
+                league_id=league.id, index=1, label="Week 1",
+                starts_at=start, ends_at=start + timedelta(days=7),
+                status=period_model.OPEN,
+            )
+        else:
+            year = rules.get("season_year")
+            period = LeaguePeriod(
+                league_id=league.id, index=1,
+                label=f"Season {year}" if year else "Season",
+                starts_at=league.starts_at or now, ends_at=league.ends_at,
+                status=period_model.OPEN,
+            )
+        db.session.add(period)
+
     add_feed(league.id, feed_model.ACTIVITY, event_type="period_opened",
              title=f"{period.label} is open", body="Betting is now open.")
     db.session.commit()

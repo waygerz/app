@@ -14,6 +14,11 @@ def schedule_weeks(sport, league):
     return jsonify(body), status
 
 
+def schedule_weeks_by_catalog(sport_league_id):
+    body, status = service_schedule.weeks_for_catalog(sport_league_id, request.args.get("season"))
+    return jsonify(body), status
+
+
 def league_events(sport, league):
     body, status = service.league_events(sport, league)
     return jsonify(body), status

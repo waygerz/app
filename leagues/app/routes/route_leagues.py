@@ -55,6 +55,11 @@ def list_periods(league_id):
     return ctrl.list_periods(league_id)
 
 
+@leagues_bp.post("/<uuid:league_id>/periods/regenerate")
+def regenerate_periods(league_id):
+    return ctrl.regenerate_periods(league_id)
+
+
 @leagues_bp.get("/<uuid:league_id>/periods/<uuid:period_id>/results")
 def period_results(league_id, period_id):
     return ctrl.period_results(league_id, period_id)

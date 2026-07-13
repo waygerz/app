@@ -70,6 +70,12 @@ def list_periods(league_id):
 
 
 @jwt_required(locations=["cookies", "headers"])
+def regenerate_periods(league_id):
+    body, status = service.regenerate_periods(league_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def period_results(league_id, period_id):
     body, status = service.period_results(league_id, period_id, get_jwt_identity())
     return jsonify(body), status

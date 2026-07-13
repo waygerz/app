@@ -15,6 +15,11 @@ def schedule_weeks(sport, league):
     return ctrl.schedule_weeks(sport, league)
 
 
+@ingestor_events_bp.get("/schedule/by-catalog/<sport_league_id>/weeks")
+def schedule_weeks_by_catalog(sport_league_id):
+    return ctrl.schedule_weeks_by_catalog(sport_league_id)
+
+
 @ingestor_events_bp.get("/sports/<sport>/leagues/<league>/events")
 def league_events(sport, league):
     return ctrl.league_events(sport, league)
