@@ -140,3 +140,20 @@ export async function fetchUpcomingEvents(
   const data = await res.json();
   return (data.events ?? []) as SportEvent[];
 }
+
+// Events for one league period's window (any status, so a finished week still
+// shows its results). Scopes to the league's own sport-leagues.
+export async function fetchPeriodEvents(
+  sportLeagueIds: string[],
+  startISO?: string | null,
+  endISO?: string | null,
+): Promise<SportEvent[]> {
+  const params = new URLSearchParams({ limit: '250' });
+  if (sportLeagueIds.length) params.set('sport_league_id', sportLeagueIds.join(','));
+  if (startISO) params.set('starts_after', startISO);
+  if (endISO) params.set('starts_before', endISO);
+  const res = await fetch(`${INGESTOR_API}/events?${params}`);
+  if (!res.ok) throw new Error(`Failed to load events (${res.status})`);
+  const data = await res.json();
+  return (data.events ?? []) as SportEvent[];
+}

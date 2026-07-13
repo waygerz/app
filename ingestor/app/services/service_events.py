@@ -199,6 +199,13 @@ def list_events():
         q = q.filter_by(league=league)
     if status:
         q = q.filter_by(status=status)
+    # Optional start_time window (used to scope events to a league period).
+    after = _parse_dt(request.args.get("starts_after"))
+    if after:
+        q = q.filter(Event.start_time >= after)
+    before = _parse_dt(request.args.get("starts_before"))
+    if before:
+        q = q.filter(Event.start_time <= before)
     sport_league_id = request.args.get("sport_league_id")
     if sport_league_id:
         ids = []

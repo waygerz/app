@@ -11,6 +11,8 @@ export interface LeaguePeriod {
   id: string;
   index: number;
   label: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
   status: 'upcoming' | 'open' | 'closed' | 'final';
 }
 
@@ -141,6 +143,8 @@ export const leaguesApi = {
     req<{ standings: StandingRow[]; period_id: string | null }>(`${LEAGUES_API}/${id}/standings`),
   periods: (id: string) =>
     req<{ periods: LeaguePeriod[] }>(`${LEAGUES_API}/${id}/periods`).then((d) => d.periods ?? []),
+  regeneratePeriods: (id: string) =>
+    req<{ periods: LeaguePeriod[] }>(`${LEAGUES_API}/${id}/periods/regenerate`, { method: 'POST' }).then((d) => d.periods ?? []),
   getPicks: (id: string, periodId: string) =>
     req<{ picks: PickRow[] }>(`${LEAGUES_API}/${id}/periods/${periodId}/picks`).then((d) => d.picks ?? []),
   submitPicks: (

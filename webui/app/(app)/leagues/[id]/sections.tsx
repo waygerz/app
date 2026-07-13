@@ -15,7 +15,7 @@ import {
 } from '@/lib/leagues';
 import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
 import {
-  fetchUpcomingEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
+  fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
 import { fetchTransactions, formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
@@ -69,15 +69,40 @@ export function LeaguePlay() {
 // ---- Pick'em ----
 function PickemPlay({ lg }: { lg: LeagueDetail }) {
   const qc = useQueryClient();
-  const period = lg.current_period;
-  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
-  const existing = useQuery({
-    queryKey: ['picks', lg.id, period?.id],
-    queryFn: () => leaguesApi.getPicks(lg.id, period!.id),
-    enabled: !!period,
+  const isCommish = lg.my_role === 'commissioner';
+  const sportLeagueIds = lg.sports.map((s) => s.sport_league_id);
+
+  const periodsQ = useQuery({ queryKey: ['periods', lg.id], queryFn: () => leaguesApi.periods(lg.id) });
+  const periods: LeaguePeriod[] = [...(periodsQ.data ?? [])].sort((a, b) => a.index - b.index);
+
+  // Default to the open week (this week's picks), else the latest.
+  const openPeriod = periods.find((p) => p.status === 'open') ?? null;
+  const [periodId, setPeriodId] = useState('');
+  const selectedId = periodId || openPeriod?.id || periods[periods.length - 1]?.id || '';
+  const period = periods.find((p) => p.id === selectedId) ?? null;
+
+  // Only the selected week's games (not the whole upcoming list).
+  const events = useQuery({
+    queryKey: ['period-events', lg.id, selectedId],
+    queryFn: () => fetchPeriodEvents(sportLeagueIds, period?.starts_at, period?.ends_at),
+    enabled: !!period && sportLeagueIds.length > 0,
   });
+  const existing = useQuery({
+    queryKey: ['picks', lg.id, selectedId],
+    queryFn: () => leaguesApi.getPicks(lg.id, selectedId),
+    enabled: !!selectedId,
+  });
+
   const [sel, setSel] = useState<Record<string, 'home' | 'away'>>({});
   const [tiebreaker, setTiebreaker] = useState('');
+  // Drop local edits when switching weeks.
+  useEffect(() => { setSel({}); setTiebreaker(''); }, [selectedId]);
+
+  const regen = useMutation({
+    mutationFn: () => leaguesApi.regeneratePeriods(lg.id),
+    onSuccess: () => { toast.success('Schedule synced'); qc.invalidateQueries({ queryKey: ['periods', lg.id] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const graded = new Map((existing.data ?? []).map((p: PickRow) => [p.event_id, p]));
   const pick = (eid: string) => sel[eid] ?? graded.get(eid)?.pick_side;
@@ -107,19 +132,32 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
         if (found) found.tiebreaker_total = tb;
         else if (side) picks.push({ event_id: lastGameId, side, tiebreaker_total: tb });
       }
-      return leaguesApi.submitPicks(lg.id, period!.id, picks);
+      return leaguesApi.submitPicks(lg.id, selectedId, picks);
     },
     onSuccess: () => {
       toast.success('Picks saved');
       setSel({});
-      qc.invalidateQueries({ queryKey: ['picks', lg.id, period?.id] });
+      qc.invalidateQueries({ queryKey: ['picks', lg.id, selectedId] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!period || period.status !== 'open') {
-    return <CenterCard><p className="text-sm text-muted-foreground">Picks are locked — no open period.</p></CenterCard>;
+  if (periodsQ.isLoading) return <Skeleton className="h-40 rounded-xl" />;
+  if (periods.length === 0) {
+    return (
+      <CenterCard>
+        <p className="text-sm text-muted-foreground">No weeks scheduled yet.</p>
+        {isCommish && (
+          <Button size="sm" variant="outline" disabled={regen.isPending} onClick={() => regen.mutate()}>
+            {regen.isPending ? 'Syncing…' : 'Sync schedule'}
+          </Button>
+        )}
+      </CenterCard>
+    );
   }
+
+  // Only the open week is editable; other weeks are read-only (preview / results).
+  const editable = period?.status === 'open';
   // Picks lock 1 hour before the first game of the week kicks off.
   const startTimes = evs
     .map((e) => e.start_time)
@@ -129,33 +167,56 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
   const firstStart = startTimes.length ? Math.min(...startTimes) : null;
   const lockAt = firstStart !== null ? firstStart - 60 * 60 * 1000 : null;
   const picksLocked = lockAt !== null && Date.now() >= lockAt;
+  const canEdit = !!editable && !picksLocked;
   const unsaved = Object.keys(sel).length;
   const tbDirty = tiebreaker !== '' && (existingTb === null || Number(tiebreaker) !== existingTb);
   const hasChanges = unsaved > 0 || tbDirty;
 
   return (
     <div className="flex flex-col gap-4 pb-24">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <select value={selectedId} onChange={(e) => setPeriodId(e.target.value)}
+          className={cn(selectCls, 'max-w-[220px]')} aria-label="Select week">
+          {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
+        {isCommish && (
+          <Button size="sm" variant="outline" disabled={regen.isPending} onClick={() => regen.mutate()}>
+            {regen.isPending ? 'Syncing…' : 'Sync schedule'}
+          </Button>
+        )}
+      </div>
+
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold text-foreground sm:text-lg">Make your Picks · {period.label}</h2>
-        {lockAt !== null && (
+        <h2 className="text-base font-semibold text-foreground sm:text-lg">
+          {editable ? 'Make your Picks' : 'Picks'} · {period?.label}
+        </h2>
+        {editable ? (
+          lockAt !== null && (
+            <p className="text-xs text-muted-foreground">
+              {picksLocked
+                ? 'Picks are locked — the first game is about to start.'
+                : `Picks lock ${formatStart(new Date(lockAt).toISOString())}, an hour before the first game.`}
+            </p>
+          )
+        ) : (
           <p className="text-xs text-muted-foreground">
-            {picksLocked
-              ? 'Picks are locked — the first game is about to start.'
-              : `Picks lock ${formatStart(new Date(lockAt).toISOString())}, an hour before the first game.`}
+            {period?.status === 'upcoming'
+              ? 'This week hasn’t opened yet — preview only.'
+              : 'This week is closed.'}
           </p>
         )}
       </div>
 
       {events.isLoading && <Skeleton className="h-24 rounded-xl" />}
       {!events.isLoading && evs.length === 0 && (
-        <p className="text-sm text-muted-foreground">No games scheduled right now.</p>
+        <p className="text-sm text-muted-foreground">No games scheduled for this week.</p>
       )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {evs.map((ev) => {
           const g = graded.get(ev.external_id);
           const gradedLock = !!(g && g.correct !== null);
-          const disabled = gradedLock || picksLocked;
+          const disabled = gradedLock || !canEdit;
           const cur = pick(ev.external_id);
           return (
             <Card key={ev.external_id} className="gap-3 p-3">
@@ -217,8 +278,8 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
         })}
       </div>
 
-      {/* Save bar pinned to the bottom of the page */}
-      {evs.length > 0 && (
+      {/* Save bar pinned to the bottom of the page (open week only) */}
+      {evs.length > 0 && editable && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-sm">
           <div className="container flex items-center justify-between gap-3 py-3">
             <span className="text-xs text-muted-foreground">
