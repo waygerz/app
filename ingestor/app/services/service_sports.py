@@ -165,7 +165,9 @@ def parse_team(raw, sport, league):
         "location": raw.get("location"),
         "color": raw.get("color"),
         "alternate_color": raw.get("alternateColor"),
-        "logo": _pick_logo(raw),
+        # Mirror into our bucket; memoized, so re-syncs don't re-download and the
+        # persisted value stays our URL rather than reverting to the source.
+        "logo": cache_logo(_pick_logo(raw)),
     }
 
 
