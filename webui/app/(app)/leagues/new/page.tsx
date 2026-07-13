@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { leaguesApi, leagueTypeLabel, type LeagueType } from '@/lib/leagues';
+import { mediaApi } from '@/lib/media';
+import { imageToWebp } from '@/lib/imageToWebp';
 import { fetchSports, fetchLeagues } from '@/lib/ingestor';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,31 +21,6 @@ const TYPES: { value: LeagueType; blurb: string }[] = [
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-// Read an image file, center-crop to a square, downscale, return a data: URL.
-function fileToSquareDataUrl(file: File, size = 200): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return reject(new Error('canvas unsupported'));
-        const scale = Math.max(size / img.width, size / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
-        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
-      };
-      img.onerror = () => reject(new Error('invalid image'));
-      img.src = reader.result as string;
-    };
-    reader.onerror = () => reject(new Error('could not read file'));
-    reader.readAsDataURL(file);
-  });
-}
-
 export default function NewLeaguePage() {
   const router = useRouter();
   const qc = useQueryClient();
@@ -51,7 +28,9 @@ export default function NewLeaguePage() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [logoData, setLogoData] = useState<string | null>(null);
+  // The WebP-normalized logo, uploaded to S3 on submit (not stored inline).
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [type, setType] = useState<LeagueType>('head_to_head');
   const [periodType, setPeriodType] = useState<'weekly' | 'season'>('season');
   const [year, setYear] = useState('2026');
@@ -74,10 +53,23 @@ export default function NewLeaguePage() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      setLogoData(await fileToSquareDataUrl(file));
+      const webp = await imageToWebp(file, { size: 400, square: true });
+      setLogoFile(webp);
+      setLogoPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(webp);
+      });
     } catch (err) {
       toast.error((err as Error).message);
     }
+  }
+
+  function clearLogo() {
+    setLogoFile(null);
+    setLogoPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
   }
 
   function toggleLeague(id: string, label: string) {
@@ -87,13 +79,19 @@ export default function NewLeaguePage() {
   }
 
   const create = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const rules: Record<string, unknown> =
         periodType === 'season' ? { season_year: Number(year) } : { week_starts_on: weekStartsOn };
+      // Upload the logo to S3 first; store its object key (not the bytes).
+      let logoKey: string | null = null;
+      if (logoFile) {
+        const asset = await mediaApi.upload('league_logo', logoFile);
+        logoKey = asset.s3_key;
+      }
       return leaguesApi.create({
         name: name.trim(),
         description: description.trim() || null,
-        logo_url: logoData,
+        logo_url: logoKey,
         league_type: type,
         period_type: periodType,
         starting_balance_cents: isMoney ? Math.round(Number(startingCredits) * 100) : null,
@@ -165,15 +163,15 @@ export default function NewLeaguePage() {
         <div className="flex flex-col gap-2">
           <Label>League logo (optional)</Label>
           <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-            <LeagueAvatar name={name || 'New League'} logoUrl={logoData} id={name || 'preview'} size={96} />
+            <LeagueAvatar name={name || 'New League'} logoUrl={logoPreview} id={name || 'preview'} size={96} />
             <div className="flex w-full flex-col gap-2 sm:w-auto">
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickLogo} />
               <div className="flex gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-                  {logoData ? 'Change image' : 'Upload image'}
+                  {logoFile ? 'Change image' : 'Upload image'}
                 </Button>
-                {logoData && (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setLogoData(null)}>
+                {logoFile && (
+                  <Button type="button" variant="ghost" size="sm" onClick={clearLogo}>
                     Remove
                   </Button>
                 )}

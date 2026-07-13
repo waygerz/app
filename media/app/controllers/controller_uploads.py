@@ -17,6 +17,12 @@ def complete(asset_id):
 
 
 @jwt_required(locations=["cookies", "headers"])
+def resolve():
+    body, status = svc.resolve_key(request.args.get("key", ""))
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def get_asset(asset_id):
     body, status = svc.get_upload(get_jwt_identity(), asset_id)
     return jsonify(body), status

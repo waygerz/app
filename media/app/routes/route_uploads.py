@@ -15,6 +15,11 @@ def complete(asset_id):
     return ctrl.complete(asset_id)
 
 
+@uploads_bp.get("/uploads/resolve")
+def resolve():
+    return ctrl.resolve()
+
+
 @uploads_bp.get("/uploads/<asset_id>")
 def get_asset(asset_id):
     return ctrl.get_asset(asset_id)

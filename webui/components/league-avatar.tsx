@@ -1,8 +1,30 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
 import { leagueColor, leagueInitials } from '@/lib/leagues';
+import { mediaApi } from '@/lib/media';
 
 function unreadBadgeLabel(count: number): string {
   if (count > 99) return '99+';
   return String(count);
+}
+
+// A stored league logo is an S3 object key (e.g. "members/leagues/ab/uuid.webp");
+// resolve it to a short-lived presigned URL. Direct URLs (data:, blob:, http)
+// — used for previews and legacy inline logos — pass through untouched.
+function useLogoSrc(logoUrl: string | null): string | null {
+  const isKey = !!logoUrl && logoUrl.startsWith('members/');
+  const q = useQuery({
+    queryKey: ['media-resolve', logoUrl],
+    queryFn: () => mediaApi.resolve(logoUrl as string),
+    enabled: isKey,
+    staleTime: 50 * 60_000, // presigned GET lives 60m — refresh before it expires
+    gcTime: 55 * 60_000,
+    retry: 1,
+  });
+  if (!logoUrl) return null;
+  if (!isKey) return logoUrl;
+  return q.data ?? null;
 }
 
 export function LeagueAvatar({
@@ -19,9 +41,10 @@ export function LeagueAvatar({
   unreadCount?: number;
 }) {
   const style = { width: size, height: size } as const;
-  const avatar = logoUrl ? (
+  const src = useLogoSrc(logoUrl);
+  const avatar = src ? (
     <img
-      src={logoUrl}
+      src={src}
       alt={name}
       style={style}
       className="shrink-0 rounded-xl object-cover"

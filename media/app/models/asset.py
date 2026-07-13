@@ -10,7 +10,16 @@ STATUS_DELETED = "deleted"
 
 PURPOSE_COMMENT = "comment"
 PURPOSE_MESSAGE = "message"
+PURPOSE_LEAGUE_LOGO = "league_logo"
+PURPOSE_AVATAR = "avatar"
+
+# Attachments verified back to the posting service (owner-checked).
 ALLOWED_PURPOSES = {PURPOSE_COMMENT, PURPOSE_MESSAGE}
+# Member-visible display assets — resolved to a presigned URL for any signed-in
+# viewer, not just the owner (league logos, avatars).
+DISPLAY_PURPOSES = {PURPOSE_LEAGUE_LOGO, PURPOSE_AVATAR}
+# Everything a client may request a presigned upload for.
+UPLOAD_PURPOSES = ALLOWED_PURPOSES | DISPLAY_PURPOSES
 
 
 class Asset(db.Model):
@@ -36,6 +45,7 @@ class Asset(db.Model):
             "id": self.id,
             "owner_id": self.owner_id,
             "purpose": self.purpose,
+            "s3_key": self.s3_key,
             "content_type": self.content_type,
             "byte_size": self.byte_size,
             "status": self.status,

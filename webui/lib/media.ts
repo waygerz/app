@@ -4,12 +4,13 @@ import { apiJson } from './http';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
-export type MediaPurpose = 'comment' | 'message';
+export type MediaPurpose = 'comment' | 'message' | 'league_logo' | 'avatar';
 
 export interface MediaAsset {
   id: string;
   owner_id: string;
   purpose: MediaPurpose;
+  s3_key: string;
   content_type: string;
   byte_size: number;
   status: 'pending' | 'ready' | 'deleted';
@@ -45,6 +46,11 @@ export const mediaApi = {
 
   get: (assetId: string) =>
     apiJson<{ asset: MediaAsset }>(`${BASE}${API.media}/uploads/${assetId}`),
+
+  /** Resolve a member-visible display key (league logo / avatar) to a short-lived
+   *  presigned GET URL. Any signed-in user may resolve these. */
+  resolve: (key: string) =>
+    apiJson<{ url: string }>(`${BASE}${API.media}/uploads/resolve?key=${encodeURIComponent(key)}`).then((d) => d.url),
 
   /** Upload file end-to-end: presign → PUT to S3 (or mock skip) → complete. */
   async upload(purpose: MediaPurpose, file: File): Promise<MediaAsset> {

@@ -51,3 +51,30 @@ def test_rejects_oversize_gif(client, auth_headers):
         headers=auth_headers,
     )
     assert res.status_code == 400
+
+
+def test_league_logo_uses_members_prefix(client, auth_headers):
+    res = client.post(
+        f"{API}/uploads/presign",
+        json={"purpose": "league_logo", "content_type": "image/webp", "byte_size": 4096},
+        headers=auth_headers,
+    )
+    assert res.status_code == 201
+    key = res.get_json()["asset"]["s3_key"]
+    assert key.startswith("members/leagues/") and key.endswith(".webp")
+
+
+def test_resolve_display_key(client, auth_headers):
+    presign = client.post(
+        f"{API}/uploads/presign",
+        json={"purpose": "league_logo", "content_type": "image/webp", "byte_size": 4096},
+        headers=auth_headers,
+    )
+    key = presign.get_json()["asset"]["s3_key"]
+
+    ok = client.get(f"{API}/uploads/resolve?key={key}", headers=auth_headers)
+    assert ok.status_code == 200 and ok.get_json()["url"]
+
+    # a non-display key can't be resolved through this endpoint
+    bad = client.get(f"{API}/uploads/resolve?key=members/media/ab/x.webp", headers=auth_headers)
+    assert bad.status_code == 400
