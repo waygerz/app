@@ -809,6 +809,18 @@ def period_results(league_id, period_id, me):
         r["display_name"].lower(),
     ))
 
+    # Competition rank: members with the same correct count AND the same
+    # tie-breaker distance are genuinely tied and share a rank (e.g. 1, 1, 3).
+    # Two members can have identical picks and tie-breaker — they co-lead.
+    rank = 0
+    prev_key = None
+    for i, r in enumerate(rows):
+        key = (r["correct"], r["tiebreaker_diff"])
+        if i == 0 or key != prev_key:
+            rank = i + 1
+        r["rank"] = rank
+        prev_key = key
+
     last_game = None
     if last_event_id:
         last_game = {

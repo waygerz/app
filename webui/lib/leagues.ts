@@ -162,6 +162,8 @@ export interface WeeklyResultRow {
   total: number;
   tiebreaker_total: number | null;
   tiebreaker_diff: number | null;
+  // Competition rank; tied members (same correct + tie-breaker) share a rank.
+  rank: number;
 }
 
 export interface PeriodResults {

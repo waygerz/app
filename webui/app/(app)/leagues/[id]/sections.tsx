@@ -735,6 +735,11 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
     <div className="flex flex-col gap-8">
       {sections.map(({ period, res }) => {
         const last = res!.last_game;
+        // A rank shared by >1 member is a tie (shown as "T3").
+        const rankCounts = res!.rows.reduce<Record<number, number>>((acc, r) => {
+          acc[r.rank] = (acc[r.rank] ?? 0) + 1;
+          return acc;
+        }, {});
         return (
           <section key={period.id} className="flex flex-col gap-3">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -746,13 +751,13 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
               )}
             </div>
             <div className="flex flex-col gap-2">
-              {res!.rows.map((r, i) => {
-                const rank = i + 1;
+              {res!.rows.map((r) => {
                 const isMe = r.user_id === me;
+                const tied = rankCounts[r.rank] > 1;
                 return (
                   <Card key={r.user_id} className="flex-row items-center gap-3 p-3">
-                    <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold', standingRankClass(rank))}>
-                      {rank}
+                    <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold', standingRankClass(r.rank))}>
+                      {tied ? `T${r.rank}` : r.rank}
                     </div>
                     <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-9 shrink-0" />
                     <div className="min-w-0 flex-1">
