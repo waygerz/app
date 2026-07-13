@@ -17,6 +17,7 @@ Adding a league is one LEAGUE_REGISTRY line. Slugs match the catalog because RTS
 (which the catalog is built from) is itself an ESPN proxy, so ESPN's
 `(sport, league)` and `catalog_id(sport, league)` line up automatically.
 """
+import threading
 import time
 from datetime import datetime, timedelta
 
@@ -287,23 +288,65 @@ def refresh_scores(sport, league, force=False):
     return n
 
 
+_fixtures_lock = threading.Lock()
+_fixtures_running = False
+
+
+def _run_fixtures_bg(app):
+    """Full fixture refresh across every league — runs in a background thread so
+    the tick request returns immediately. A whole-registry fixture pass (NFL's
+    native weeks alone are ~27 ESPN calls) far exceeds the ALB/gunicorn request
+    window, so it can't run inline. Per-league commits mean partial progress
+    survives a mid-run worker recycle; gates only mark on completion, so an
+    unfinished league is retried on the next tick."""
+    global _fixtures_running
+    try:
+        with app.app_context():
+            for entry in LEAGUE_REGISTRY:
+                sport, league = entry["sport"], entry["league"]
+                try:
+                    n = refresh_fixtures(sport, league)
+                    if n:
+                        app.logger.info("schedule fixtures %s/%s: %s events", sport, league, n)
+                except Exception as exc:  # noqa: BLE001
+                    app.logger.warning("schedule fixtures %s/%s: %s", sport, league, exc)
+    finally:
+        with _fixtures_lock:
+            _fixtures_running = False
+
+
+def _maybe_start_fixtures():
+    """Launch the background fixture pass if one isn't already running and at
+    least one league is due (avoids spawning a thread that no-ops)."""
+    global _fixtures_running
+    app = current_app._get_current_object()
+    ttl = app.config["SCHEDULE_FIXTURE_TTL"]
+    with _fixtures_lock:
+        if _fixtures_running:
+            return "running"
+        due = any(
+            _stale(_k_fixtures(e["sport"], e["league"]), ttl) for e in LEAGUE_REGISTRY
+        )
+        if not due:
+            return "idle"
+        _fixtures_running = True
+    threading.Thread(target=_run_fixtures_bg, args=(app,), daemon=True).start()
+    return "started"
+
+
 def tick():
-    """Scheduler entry point: fixtures (weekly) + scores (5 min) for every
-    registered league, each isolated so one league's failure never blocks the
-    rest."""
-    fixtures = 0
+    """Scheduler entry point. Fixtures (weekly) run in the background so the
+    request returns fast; scores (5 min, one board fetch per league) run inline
+    and cheaply, each league isolated so one failure never blocks the rest."""
+    fixtures_state = _maybe_start_fixtures()
     scores = 0
     for entry in LEAGUE_REGISTRY:
         sport, league = entry["sport"], entry["league"]
         try:
-            fixtures += refresh_fixtures(sport, league)
-        except Exception as exc:  # noqa: BLE001
-            current_app.logger.warning("schedule fixtures %s/%s: %s", sport, league, exc)
-        try:
             scores += refresh_scores(sport, league)
         except Exception as exc:  # noqa: BLE001
             current_app.logger.warning("schedule scores %s/%s: %s", sport, league, exc)
-    return {"fixtures": fixtures, "scores": scores}
+    return {"fixtures": fixtures_state, "scores": scores}
 
 
 # ---------------------------------------------------------------- weeks endpoint
