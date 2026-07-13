@@ -27,3 +27,9 @@ def otp_complete():
 def me():
     body, status = svc.me(get_jwt_identity())
     return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def set_avatar():
+    body, status = svc.set_avatar(get_jwt_identity(), request.get_json(silent=True) or {})
+    return jsonify(body), status

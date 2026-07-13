@@ -221,3 +221,16 @@ def me(user_id: str) -> tuple[dict, int]:
     if not user:
         return {"error": "user not found"}, 404
     return {"user": user.to_dict()}, 200
+
+
+def set_avatar(user_id: str, data: dict) -> tuple[dict, int]:
+    """Set (or clear) the caller's avatar to an uploaded S3 key."""
+    key = (data.get("avatar_key") or "").strip() or None
+    if key is not None and not key.startswith("members/avatars/"):
+        return {"error": "invalid avatar key"}, 400
+    user = db.session.get(User, user_id)
+    if not user:
+        return {"error": "user not found"}, 404
+    user.avatar_key = key
+    db.session.commit()
+    return {"user": user.to_dict()}, 200

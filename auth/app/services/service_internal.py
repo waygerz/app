@@ -20,4 +20,7 @@ def users(data: dict) -> tuple[dict, int]:
     except (ValueError, TypeError):
         return {"error": "ids must be integers"}, 400
     rows = User.query.filter(User.id.in_(ids)).all() if ids else []
-    return {"users": [{"id": u.id, "display_name": u.display_name} for u in rows]}, 200
+    return {"users": [
+        {"id": u.id, "display_name": u.display_name, "avatar_key": u.avatar_key}
+        for u in rows
+    ]}, 200

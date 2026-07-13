@@ -72,6 +72,21 @@ class Config:
         if t.strip()
     ]
 
+    # ---- Sport logo caching (S3 public/sports/) --------------------------
+    # Mirror external team/league logos into our own bucket so we stop hotlinking
+    # ESPN and can serve them from a CDN. Off in dev by default (no AWS); on in
+    # prod. See _docs/S3_LAYOUT.md.
+    AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+    ASSET_S3_BUCKET = os.environ.get("AWS_S3_BUCKET", "waygerz")
+    # Public base for cached assets — swap to https://cdn.waygerz.com once CloudFront lands.
+    ASSET_PUBLIC_BASE = os.environ.get(
+        "ASSET_PUBLIC_BASE", "https://waygerz.s3.us-east-1.amazonaws.com"
+    )
+    LOGO_CACHE_ENABLED = _bool(
+        os.environ.get("LOGO_CACHE_ENABLED"),
+        default=(os.environ.get("APP_ENV", "development") == "production"),
+    )
+
     # Shared secret for service-to-service (internal) calls, e.g. event refresh.
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 

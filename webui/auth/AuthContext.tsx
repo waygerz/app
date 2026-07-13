@@ -24,6 +24,8 @@ interface AuthState {
   verifyOtp: (phone: string, otp: string) => Promise<VerifyResult>;
   /** Finish a new signup with the ticket + display name. */
   completeProfile: (ticket: string, displayName: string) => Promise<void>;
+  /** Set (or clear) the current user's avatar to an uploaded S3 key. */
+  setAvatar: (avatarKey: string | null) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -79,6 +81,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }
 
+  async function setAvatar(avatarKey: string | null) {
+    const { user: u } = await authApi.setAvatar(avatarKey);
+    setUser(u);
+  }
+
   async function logout() {
     try {
       await authApi.logout();
@@ -90,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, startOtp, verifyOtp, completeProfile, logout }}
+      value={{ user, loading, startOtp, verifyOtp, completeProfile, setAvatar, logout }}
     >
       {children}
     </AuthContext.Provider>

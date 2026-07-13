@@ -9,6 +9,7 @@ from flask import current_app
 from app.extensions import db, get_redis
 from app.models.sport_league import SportLeague
 from app.models.team import Team
+from app.services.service_logos import cache_logo
 
 CACHE_PREFIX = "sports:cache:"
 REMAINING_KEY = "sports:quota:remaining"
@@ -217,7 +218,9 @@ def list_leagues(sport):
         lg["sport_league_id"] = sid
         row = db.session.get(SportLeague, sid)
         if row is not None and row.logo is None:
-            row.logo = league_logo_url(slug) or ""
+            # Cache the ESPN logo into our bucket on first sight; stored in the
+            # row, so later reads just emit our URL (no re-download).
+            row.logo = cache_logo(league_logo_url(slug) or "") or ""
         lg["logo"] = (row.logo or None) if row is not None else None
     db.session.commit()
     return {"leagues": data, "quota": quota_status()}, 200

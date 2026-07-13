@@ -23,3 +23,8 @@ def otp_complete():
 @auth_bp.get("/me")
 def me():
     return ctrl.me()
+
+
+@auth_bp.patch("/me/avatar")
+def set_avatar():
+    return ctrl.set_avatar()

@@ -9,6 +9,7 @@ export interface AuthUser {
   id: string;
   phone: string;
   display_name: string;
+  avatar_key: string | null;
   created_at: string;
 }
 
@@ -41,6 +42,12 @@ export const authApi = {
     }),
 
   me: () => apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/me`),
+
+  setAvatar: (avatar_key: string | null) =>
+    apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/me/avatar`, {
+      method: 'PATCH',
+      body: JSON.stringify({ avatar_key }),
+    }),
 
   refresh: () =>
     apiJson<{ message: string }>(`${AUTH_URL}${API.auth}/refresh`, {

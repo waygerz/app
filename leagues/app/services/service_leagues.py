@@ -66,6 +66,11 @@ def contests_league_record(league_id) -> dict:
 
 
 def resolve_users(ids) -> dict:
+    return {uid: u.get("display_name") for uid, u in resolve_users_full(ids).items()}
+
+
+def resolve_users_full(ids) -> dict:
+    """id -> full user dict ({display_name, avatar_key, ...}) from auth."""
     ids = list({str(i) for i in ids if i})
     if not ids:
         return {}
@@ -76,7 +81,7 @@ def resolve_users(ids) -> dict:
         timeout=10,
     )
     r.raise_for_status()
-    return {u["id"]: u["display_name"] for u in r.json().get("users", [])}
+    return {u["id"]: u for u in r.json().get("users", [])}
 
 
 def ingestor_warm_cache(sport_league_ids) -> dict:
@@ -299,7 +304,7 @@ def _parse_dt(value):
 
 def _detail(league, me):
     members = LeagueMember.query.filter_by(league_id=league.id, status=ACTIVE).all()
-    names = resolve_users([m.user_id for m in members])
+    users = resolve_users_full([m.user_id for m in members])
     sports = LeagueSport.query.filter_by(league_id=league.id).all()
     period = current_period(league.id)
 
@@ -310,7 +315,11 @@ def _detail(league, me):
 
     d = league.to_dict()
     d["members"] = [
-        {**m.to_dict(), "display_name": names.get(m.user_id, f"User {m.user_id[:8]}")}
+        {
+            **m.to_dict(),
+            "display_name": (users.get(m.user_id) or {}).get("display_name") or f"User {m.user_id[:8]}",
+            "avatar_key": (users.get(m.user_id) or {}).get("avatar_key"),
+        }
         for m in members
     ]
     d["sports"] = [{"sport_league_id": s.sport_league_id, "name": s.name} for s in sports]
@@ -657,15 +666,17 @@ def standings(league_id, me):
     if league.league_type != PICKEM:
         balances = wallet_account_balances(league.account)
         records = contests_league_record(league_id)
-        names = resolve_users([m.user_id for m in members])
+        users = resolve_users_full([m.user_id for m in members])
         start = league.starting_balance_cents or 0
         rows = []
         for m in members:
             bal = balances.get(m.user_id, 0)
             rec = records.get(m.user_id, {})
+            u = users.get(m.user_id) or {}
             rows.append({
                 "user_id": m.user_id,
-                "display_name": names.get(m.user_id, f"User {m.user_id[:8]}"),
+                "display_name": u.get("display_name") or f"User {m.user_id[:8]}",
+                "avatar_key": u.get("avatar_key"),
                 "balance_cents": bal,
                 "net_cents": bal - start,
                 "wins": rec.get("wins", 0),
@@ -686,11 +697,12 @@ def standings(league_id, me):
         elif p.correct is False:
             losses[p.user_id] += 1
 
-    names = resolve_users([m.user_id for m in members])
+    users = resolve_users_full([m.user_id for m in members])
     rows = [
         {
             "user_id": m.user_id,
-            "display_name": names.get(m.user_id, f"User {m.user_id[:8]}"),
+            "display_name": (users.get(m.user_id) or {}).get("display_name") or f"User {m.user_id[:8]}",
+            "avatar_key": (users.get(m.user_id) or {}).get("avatar_key"),
             "wins": wins[m.user_id],
             "losses": losses[m.user_id],
             "pushes": 0,

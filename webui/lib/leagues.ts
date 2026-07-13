@@ -30,6 +30,7 @@ export interface LeagueMember {
   user_id: string;
   role: 'commissioner' | 'member';
   display_name: string;
+  avatar_key?: string | null;
 }
 
 export interface LeagueDetail extends LeagueCard {
@@ -147,6 +148,7 @@ export const leaguesApi = {
 export interface StandingRow {
   user_id: string;
   display_name: string;
+  avatar_key?: string | null;
   balance_cents?: number;
   net_cents?: number;
   wins: number;

@@ -461,6 +461,7 @@ export function LeagueStandings() {
               <UserAvatar
                 userId={r.user_id}
                 name={r.display_name}
+                imageUrl={r.avatar_key}
                 className="size-14 shrink-0"
                 fallbackClassName="text-base"
               />
@@ -836,6 +837,7 @@ export function LeagueMembers() {
               <UserAvatar
                 userId={m.user_id}
                 name={m.display_name}
+                imageUrl={m.avatar_key}
                 className="size-14 shrink-0"
                 fallbackClassName="text-base"
               />

@@ -16,6 +16,9 @@ class User(db.Model):
     # Kept nullable so existing rows retain their hash; new users have none.
     pin_hash = db.Column(db.String(255), nullable=True)
     display_name = db.Column(db.String(64), nullable=False)
+    # S3 object key for the user's avatar (members/avatars/...), or null for the
+    # generated initials avatar. Resolved to a presigned URL by the webui.
+    avatar_key = db.Column(db.String(512), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     def to_dict(self):
@@ -23,5 +26,6 @@ class User(db.Model):
             "id": self.id,
             "phone": self.phone,
             "display_name": self.display_name,
+            "avatar_key": self.avatar_key,
             "created_at": self.created_at.isoformat() + "Z",
         }
