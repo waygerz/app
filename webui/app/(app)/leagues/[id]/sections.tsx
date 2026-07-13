@@ -15,10 +15,9 @@ import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
 import {
   fetchUpcomingEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
-import { TeamLogo } from '@/components/event-card';
 import { fetchTransactions, formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
-import { EventCard } from '@/components/event-card';
+import { EventCard, TeamLogo, formatStart } from '@/components/event-card';
 import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
@@ -30,7 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle } from 'lucide-react';
+import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle, Check } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import { dispatchOpenChat } from '@/lib/open-chat';
@@ -113,32 +112,44 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
         const locked = g && g.correct !== null;
         const cur = pick(ev.external_id);
         return (
-          <Card key={ev.external_id} className="gap-2 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="min-w-0 text-sm font-medium text-foreground">{ev.away_team} @ {ev.home_team}</span>
+          <Card key={ev.external_id} className="gap-3 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
               {locked && (
                 <Badge size="sm" appearance="light" variant={g!.correct ? 'success' : 'destructive'}>
                   {g!.correct ? '✓ correct' : '✗ wrong'}
                 </Badge>
               )}
             </div>
-            {!locked && (
-              <div className="flex flex-col gap-2 sm:flex-row">
-                {(['away', 'home'] as const).map((side) => (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {(['away', 'home'] as const).map((side) => {
+                const isHome = side === 'home';
+                const teamName = isHome ? ev.home_team : ev.away_team;
+                const teamAbbr = isHome ? ev.home_abbr : ev.away_abbr;
+                const teamLogo = isHome ? ev.home_logo : ev.away_logo;
+                const active = cur === side;
+                const isMyPick = !!locked && g!.pick_side === side;
+                return (
                   <button
                     key={side}
                     type="button"
+                    disabled={!!locked}
                     onClick={() => setSel((s) => ({ ...s, [ev.external_id]: side }))}
-                    className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm transition-colors sm:text-center ${
-                      cur === side ? 'border-primary bg-primary/10 text-foreground' : 'border-input text-muted-foreground'
-                    }`}
+                    className={cn(
+                      'flex flex-1 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                      active || isMyPick
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-input text-muted-foreground hover:border-foreground/30',
+                      locked && !isMyPick && 'opacity-60',
+                    )}
                   >
-                    {side === 'away' ? ev.away_team : ev.home_team}
+                    <TeamLogo src={teamLogo} name={teamAbbr || teamName} className="size-8 sm:size-9" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{teamName}</span>
+                    {isMyPick && <Check className="size-4 shrink-0 text-primary" />}
                   </button>
-                ))}
-              </div>
-            )}
-            {locked && <span className="text-xs text-muted-foreground">You picked {g!.pick_side === 'home' ? ev.home_team : ev.away_team}</span>}
+                );
+              })}
+            </div>
           </Card>
         );
       })}
@@ -654,17 +665,25 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
                 const ev = p.event;
                 const picked = p.pick_side === 'home' ? ev?.home_team : ev?.away_team;
                 return (
-                  <Card key={p.id ?? p.event_id} className="flex-row items-center justify-between gap-2 p-3">
-                    <span className="min-w-0 truncate text-sm text-foreground">
-                      {ev ? `${ev.away_team} @ ${ev.home_team}` : p.event_id} · you: {picked ?? p.pick_side}
-                    </span>
-                    {p.correct === null ? (
-                      <Badge size="sm" appearance="light" variant="secondary">Pending</Badge>
-                    ) : (
-                      <Badge size="sm" appearance="light" variant={p.correct ? 'success' : 'destructive'}>
-                        {p.correct ? '✓ correct' : '✗ wrong'}
-                      </Badge>
-                    )}
+                  <Card key={p.id ?? p.event_id} className="gap-2 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <TeamLogo src={ev?.away_logo} name={ev?.away_abbr || ev?.away_team || '?'} className="size-6 sm:size-7" />
+                        <span className="text-xs text-muted-foreground">@</span>
+                        <TeamLogo src={ev?.home_logo} name={ev?.home_abbr || ev?.home_team || '?'} className="size-6 sm:size-7" />
+                        <span className="ml-1 min-w-0 truncate text-sm text-foreground">
+                          {ev ? `${ev.away_team} @ ${ev.home_team}` : p.event_id}
+                        </span>
+                      </div>
+                      {p.correct === null ? (
+                        <Badge size="sm" appearance="light" variant="secondary">Pending</Badge>
+                      ) : (
+                        <Badge size="sm" appearance="light" variant={p.correct ? 'success' : 'destructive'}>
+                          {p.correct ? '✓' : '✗'}
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground">You picked {picked ?? p.pick_side}</span>
                   </Card>
                 );
               })}

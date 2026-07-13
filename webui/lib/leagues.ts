@@ -162,6 +162,10 @@ export interface PickEventInfo {
   name?: string;
   home_team?: string;
   away_team?: string;
+  home_abbr?: string;
+  away_abbr?: string;
+  home_logo?: string | null;
+  away_logo?: string | null;
   status?: string;
   winner_side?: 'home' | 'away' | 'draw' | null;
   home_score?: number | null;
