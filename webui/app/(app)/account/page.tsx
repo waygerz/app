@@ -120,9 +120,9 @@ export default function AccountPage() {
           </div>
 
           {(recent.data?.length ?? 0) > 0 && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3 pt-2">
               <Label className="text-xs text-muted-foreground">Recent — tap to reuse</Label>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-5 px-1 py-2">
                 {recent.data!.map((a) => {
                   const active = a.s3_key === user.avatar_key;
                   return (
@@ -152,11 +152,10 @@ export default function AccountPage() {
         </Card>
 
         {/* Display name */}
-        <Card className="gap-3 p-5">
-          <h2 className="text-base font-semibold text-foreground">Display name</h2>
+        <Card className="gap-2 p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <Label htmlFor="display-name">Name</Label>
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Label htmlFor="display-name">Display name</Label>
               <Input
                 id="display-name"
                 value={name}
@@ -176,8 +175,10 @@ export default function AccountPage() {
 
         {/* Phone (read-only — it's the sign-in identity) */}
         <Card className="gap-2 p-5">
-          <h2 className="text-base font-semibold text-foreground">Phone</h2>
-          <Input value={user.phone} readOnly disabled />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="phone">Phone</Label>
+            <Input id="phone" value={user.phone} readOnly disabled />
+          </div>
           <p className="text-xs text-muted-foreground">
             Your phone number is how you sign in and can’t be changed here yet.
           </p>
