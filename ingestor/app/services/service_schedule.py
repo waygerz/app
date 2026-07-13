@@ -365,7 +365,15 @@ def tick():
             scores += refresh_scores(sport, league)
         except Exception as exc:  # noqa: BLE001
             current_app.logger.warning("schedule scores %s/%s: %s", sport, league, exc)
-    return {"fixtures": fixtures_state, "scores": scores}
+    # Odds ride on the same events; refresh is quota-gated internally. Local
+    # import avoids a circular dependency (service_odds imports this module).
+    odds = 0
+    try:
+        from app.services import service_odds
+        odds = service_odds.refresh_all_odds()
+    except Exception as exc:  # noqa: BLE001
+        current_app.logger.warning("odds refresh: %s", exc)
+    return {"fixtures": fixtures_state, "scores": scores, "odds": odds}
 
 
 # ---------------------------------------------------------------- weeks endpoint

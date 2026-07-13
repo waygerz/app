@@ -63,6 +63,20 @@ class Config:
     SCHEDULE_WEEKS_AHEAD = int(os.environ.get("SCHEDULE_WEEKS_AHEAD", 6))
     SCHEDULE_FIXTURE_TTL = int(os.environ.get("SCHEDULE_FIXTURE_TTL", 604800))  # 7 days
     SCHEDULE_SCORE_TTL = int(os.environ.get("SCHEDULE_SCORE_TTL", 300))  # 5 minutes
+
+    # ---- The Odds API — prices the ESPN team events for H2H betting, matched by
+    # team-set + date (odds ride on Event.odds). Free tier is 500 credits/mo and a
+    # /odds call costs 1 credit PER market, so refresh is bounded hard: only a
+    # league with a game inside the lookahead window, at most once per TTL, and
+    # never below the quota floor.
+    ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
+    ODDS_API_BASE = os.environ.get("ODDS_API_BASE", "https://api.the-odds-api.com/v4")
+    ODDS_API_MARKETS = os.environ.get("ODDS_API_MARKETS", "h2h,spreads,totals")
+    ODDS_API_REGIONS = os.environ.get("ODDS_API_REGIONS", "us")
+    ODDS_REFRESH_TTL = int(os.environ.get("ODDS_REFRESH_TTL", 43200))  # 12h per league
+    ODDS_LOOKAHEAD_HOURS = int(os.environ.get("ODDS_LOOKAHEAD_HOURS", 36))
+    ODDS_QUOTA_FLOOR = int(os.environ.get("ODDS_QUOTA_FLOOR", 25))
+    ODDS_TIMEOUT = int(os.environ.get("ODDS_TIMEOUT", 10))
     # Leagues/tours per ESPN sport (slug lists).
     GOLF_TOURS = [t.strip() for t in os.environ.get("GOLF_TOURS", "pga").split(",") if t.strip()]
     RACING_TOURS = [
