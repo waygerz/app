@@ -12,7 +12,16 @@ import { formatCredits } from '@/lib/wallet';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +44,7 @@ export function LeagueOverview() {
   const router = useRouter();
   const qc = useQueryClient();
   const [announcement, setAnnouncement] = useState('');
+  const [composerOpen, setComposerOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
 
   const feed = useQuery({ queryKey: ['league-feed', lg.id], queryFn: () => leaguesApi.feed(lg.id) });
@@ -60,7 +70,7 @@ export function LeagueOverview() {
 
   const post = useMutation({
     mutationFn: () => leaguesApi.postFeed(lg.id, { body: announcement.trim() }),
-    onSuccess: () => { setAnnouncement(''); refresh(); },
+    onSuccess: () => { setAnnouncement(''); setComposerOpen(false); refresh(); },
     onError: onErr,
   });
   const leave = useMutation({
@@ -84,18 +94,52 @@ export function LeagueOverview() {
       <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
         <section>
           {isCommish && (
-            <Card className="mb-3 min-w-0 flex-col gap-2 p-3 sm:flex-row sm:items-center">
-              <Input
-                value={announcement}
-                onChange={(e) => setAnnouncement(e.target.value)}
-                placeholder="Post an update to your league…"
-                className="min-w-0 w-full flex-1"
-              />
-              <Button size="sm" className="w-full shrink-0 sm:w-auto" disabled={post.isPending || !announcement.trim()} onClick={() => post.mutate()}>
-                Post
-              </Button>
+            <Card className="mb-3 min-w-0 flex-row items-center gap-3 p-3">
+              {user && (
+                <UserAvatar
+                  userId={String(user.id)}
+                  name={user.display_name}
+                  imageUrl={user.avatar_key}
+                  className="size-9 shrink-0"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => setComposerOpen(true)}
+                className="min-w-0 flex-1 truncate rounded-full border border-input bg-muted/50 px-4 py-2 text-left text-sm text-muted-foreground hover:bg-muted"
+              >
+                Post an update to your league…
+              </button>
             </Card>
           )}
+
+          <Dialog open={composerOpen} onOpenChange={setComposerOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Post to {lg.name}</DialogTitle>
+                <DialogDescription className="sr-only">Share an update with your league.</DialogDescription>
+              </DialogHeader>
+              <DialogBody className="py-2">
+                <Textarea
+                  autoFocus
+                  value={announcement}
+                  onChange={(e) => setAnnouncement(e.target.value)}
+                  placeholder="What's on your mind?"
+                  rows={5}
+                  className="min-h-32 resize-none"
+                />
+              </DialogBody>
+              <DialogFooter>
+                <Button
+                  className="w-full sm:w-auto"
+                  disabled={post.isPending || !announcement.trim()}
+                  onClick={() => post.mutate()}
+                >
+                  {post.isPending ? 'Posting…' : 'Post'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <div className="flex flex-col gap-2">
             {(feed.data ?? []).map((item) => (
               <FeedPostCard
