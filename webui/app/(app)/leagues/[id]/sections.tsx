@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useLeague } from './league-context';
@@ -25,6 +25,9 @@ import { EventCard, TeamLogo, formatStart } from '@/components/event-card';
 import { Combobox } from '@/components/ui/combobox';
 import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
+import { LeagueAvatar } from '@/components/league-avatar';
+import { mediaApi } from '@/lib/media';
+import { imageToWebp } from '@/lib/imageToWebp';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,7 +41,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle, Check, CircleCheckBig } from 'lucide-react';
+import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2 } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import { dispatchOpenChat } from '@/lib/open-chat';
@@ -61,6 +64,38 @@ function useScheduled(sportLeagueIds: string[]) {
     queryFn: () => fetchUpcomingEvents(50, sportLeagueIds),
     enabled: sportLeagueIds.length > 0,
   });
+}
+
+// Resolve league (competition) logos for a league's sports. LeagueSportRef has
+// no logo, so we derive each sport's slug from its events, then pull logos from
+// fetchLeagues(sport). Returns a lookup: sport_league_id -> logo url.
+function useSportLogos(evs: SportEvent[]) {
+  const sportOf = new Map<string, string>();
+  for (const e of evs) {
+    if (e.sport_league_id && e.sport && !sportOf.has(e.sport_league_id)) {
+      sportOf.set(e.sport_league_id, e.sport);
+    }
+  }
+  const sports = Array.from(new Set(sportOf.values())).sort();
+  const q = useQuery({
+    queryKey: ['sport-league-logos', sports.join(',')],
+    queryFn: async () => {
+      const map: Record<string, string> = {};
+      await Promise.all(
+        sports.map(async (sp) => {
+          const leagues = await fetchLeagues(sp);
+          for (const l of leagues) {
+            const id = String(l.sport_league_id || l.id);
+            if (l.logo) map[id] = l.logo;
+          }
+        }),
+      );
+      return map;
+    },
+    enabled: sports.length > 0,
+    staleTime: 30 * 60_000,
+  });
+  return (id: string): string | undefined => q.data?.[id];
 }
 
 // ===================== PLAY (type-aware) =====================
@@ -575,10 +610,32 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
 
 // ===================== SPORTS (Head-to-Head) =====================
 // Hub: the league's configured competitions, each linking to its schedule.
+// Competition logo with an initials fallback (also falls back on image error).
+function SportLogo({ src, label, className }: { src?: string; label: string; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  if (src && !broken) {
+    return (
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        onError={() => setBroken(true)}
+        className={cn('shrink-0 rounded-xl bg-muted object-contain p-1.5', className)}
+      />
+    );
+  }
+  return (
+    <span className={cn('flex shrink-0 items-center justify-center rounded-xl bg-primary/15 font-bold text-primary', className)}>
+      {label.slice(0, 3).toUpperCase()}
+    </span>
+  );
+}
+
 export function LeagueSports() {
   const lg = useLeague();
   const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
   const evs = events.data ?? [];
+  const logoFor = useSportLogos(evs);
   const countFor = (id: string) => evs.filter((e) => e.sport_league_id === id).length;
 
   return (
@@ -606,9 +663,7 @@ export function LeagueSports() {
             return (
               <Link key={s.sport_league_id} href={`/leagues/${lg.id}/sports/${s.sport_league_id}`} className="min-w-0">
                 <Card className="flex-row items-center gap-3 p-4 transition-colors hover:border-primary/50">
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-sm font-bold text-primary">
-                    {label.slice(0, 3).toUpperCase()}
-                  </span>
+                  <SportLogo src={logoFor(s.sport_league_id)} label={label} className="size-11 text-sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-foreground">{label}</p>
                     <p className="text-xs text-muted-foreground">
@@ -638,6 +693,7 @@ export function LeagueSportSchedule() {
   const sport = lg.sports.find((s) => s.sport_league_id === sportLeagueId);
   const events = useScheduled(sportLeagueId ? [sportLeagueId] : []);
   const evs = events.data ?? [];
+  const logoFor = useSportLogos(evs);
   const [selected, setSelected] = useState<SportEvent | null>(null);
   const canBet = lg.status === 'active';
   const label = sport?.name || sportLeagueId;
@@ -648,7 +704,10 @@ export function LeagueSportSchedule() {
         <Link href={`/leagues/${lg.id}/sports`} className="text-xs text-muted-foreground hover:text-foreground">
           ← Sports
         </Link>
-        <h2 className="text-lg font-semibold text-foreground">{label}</h2>
+        <div className="flex items-center gap-2.5">
+          <SportLogo src={logoFor(sportLeagueId)} label={label} className="size-9 text-xs" />
+          <h2 className="text-lg font-semibold text-foreground">{label}</h2>
+        </div>
         <p className="text-xs text-muted-foreground">
           Upcoming games{canBet ? ' · tap a game to challenge a friend' : ''}
         </p>
@@ -1602,9 +1661,65 @@ function EditLeagueDetails({ lg }: { lg: LeagueDetail }) {
 
   const canSave = name.trim().length > 0 && chosen.length > 0;
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+
+  const saveLogo = async (logo_url: string | null) => {
+    await leaguesApi.update(lg.id, { logo_url });
+    qc.invalidateQueries({ queryKey: ['league', lg.id] });
+    qc.invalidateQueries({ queryKey: ['leagues'] });
+  };
+  const onPickLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setLogoBusy(true);
+    try {
+      const webp = await imageToWebp(file, { size: 400, square: true });
+      const asset = await mediaApi.upload('league_logo', webp);
+      await saveLogo(asset.s3_key);
+      toast.success('Logo updated');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+  const removeLogo = async () => {
+    setLogoBusy(true);
+    try {
+      await saveLogo(null);
+      toast.success('Logo removed');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+
   return (
     <Card className="gap-3 p-5">
       <h2 className="text-base font-semibold text-foreground">League details</h2>
+
+      <div className="flex flex-col gap-2">
+        <Label>Logo</Label>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickLogo} />
+        <div className="flex items-center gap-4">
+          <LeagueAvatar name={name} logoUrl={lg.logo_url} id={lg.id} size={64} />
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={logoBusy} onClick={() => fileRef.current?.click()}>
+              <ImagePlus className="size-4" />
+              {logoBusy ? 'Uploading…' : lg.logo_url ? 'Change logo' : 'Upload logo'}
+            </Button>
+            {lg.logo_url && (
+              <Button size="sm" variant="outline" disabled={logoBusy} onClick={removeLogo}>
+                <Trash2 className="size-4" />
+                Remove
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="flex flex-col gap-1.5">
         <Label>Name</Label>
