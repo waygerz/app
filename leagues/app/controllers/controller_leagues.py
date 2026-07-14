@@ -144,6 +144,20 @@ def remove_member(league_id, uid):
 
 
 @jwt_required(locations=["cookies", "headers"])
+def set_member_role(league_id, uid):
+    body, status = service.set_member_role(
+        league_id, uid, get_jwt_identity(), request.get_json(silent=True) or {}
+    )
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def transfer_commissioner(league_id, uid):
+    body, status = service.transfer_commissioner(league_id, uid, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def archive_league(league_id):
     body, status = service.archive_league(league_id, get_jwt_identity())
     return jsonify(body), status

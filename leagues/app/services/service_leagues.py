@@ -17,7 +17,7 @@ from app.models.league import (
     League,
 )
 from app.models.member import (
-    ACTIVE, COMMISSIONER, LEFT, MEMBER, REMOVED, LeagueMember,
+    ACTIVE, COMMISSIONER, LEFT, MEMBER, MODERATOR, REMOVED, LeagueMember,
 )
 from app.models.period import FINAL, OPEN, LeaguePeriod
 from app.models import period as period_model
@@ -386,6 +386,21 @@ def _membership(league_id, user_id):
     return LeagueMember.query.filter_by(
         league_id=league_id, user_id=user_id, status=ACTIVE
     ).first()
+
+
+def _is_commissioner(league, me):
+    """League ownership is the commissioner_id on the league, not the role field."""
+    return league is not None and str(league.commissioner_id) == str(me)
+
+
+def _can_moderate(league, me, membership=None):
+    """Commissioner or an active moderator may perform moderation actions
+    (post to feed, confirm results, remove members, send invites). Pass the
+    caller's already-fetched membership to avoid a second lookup."""
+    if _is_commissioner(league, me):
+        return True
+    m = membership if membership is not None else _membership(str(league.id), me)
+    return m is not None and m.role == MODERATOR
 
 
 def _feed_since(league_id, user_id, joined_at):
@@ -972,10 +987,11 @@ def confirm_member(league_id, period_id, user_id, me, data):
     """Commissioner sets a member's confirmed flag for a week."""
     league_id, period_id, user_id = str(league_id), str(period_id), str(user_id)
     league = db.session.get(League, league_id)
-    if not league or not _membership(league_id, me):
+    me_m = _membership(league_id, me)
+    if not league or not me_m:
         return {"error": "league not found"}, 404
-    if league.commissioner_id != me:
-        return {"error": "only the commissioner can confirm members"}, 403
+    if not _can_moderate(league, me, me_m):
+        return {"error": "only commissioners or moderators can confirm members"}, 403
     period = db.session.get(LeaguePeriod, period_id)
     if not period or period.league_id != league_id:
         return {"error": "period not found"}, 404
@@ -1060,10 +1076,11 @@ def get_feed(league_id, me):
 def post_feed(league_id, me, data):
     league_id = str(league_id)
     league = db.session.get(League, league_id)
-    if not league or not _membership(league_id, me):
+    me_m = _membership(league_id, me)
+    if not league or not me_m:
         return {"error": "league not found"}, 404
-    if league.commissioner_id != me:
-        return {"error": "only the commissioner can post updates"}, 403
+    if not _can_moderate(league, me, me_m):
+        return {"error": "only commissioners or moderators can post updates"}, 403
     body = (data.get("body") or "").strip()
     title = (data.get("title") or "").strip() or None
     if not body and not title:
@@ -1107,10 +1124,11 @@ def accept_invite(league_id, me):
 def invite_friends(league_id, me, data):
     league_id = str(league_id)
     league = db.session.get(League, league_id)
-    if not league or not _membership(league_id, me):
+    me_m = _membership(league_id, me)
+    if not league or not me_m:
         return {"error": "league not found"}, 404
-    if league.commissioner_id != me:
-        return {"error": "only the commissioner can invite"}, 403
+    if not _can_moderate(league, me, me_m):
+        return {"error": "only commissioners or moderators can invite"}, 403
     invited = []
     for uid in data.get("invitee_ids") or []:
         uid = str(uid)
@@ -1169,16 +1187,69 @@ def leave_league(league_id, me):
 def remove_member(league_id, uid, me):
     league_id, uid = str(league_id), str(uid)
     league = db.session.get(League, league_id)
-    if not league or not _membership(league_id, me):
+    me_m = _membership(league_id, me)
+    if not league or not me_m:
         return {"error": "league not found"}, 404
-    if league.commissioner_id != me:
-        return {"error": "only the commissioner can remove members"}, 403
+    if not _can_moderate(league, me, me_m):
+        return {"error": "only commissioners or moderators can remove members"}, 403
     if uid == me:
-        return {"error": "the commissioner can't remove themselves"}, 400
+        return {"error": "you can't remove yourself"}, 400
     m = _membership(league_id, uid)
     if not m:
         return {"error": "member not found"}, 404
+    if _is_commissioner(league, uid):
+        return {"error": "the commissioner can't be removed"}, 400
+    if not _is_commissioner(league, me) and m.role == MODERATOR:
+        return {"error": "moderators can't remove other moderators"}, 403
     m.status = REMOVED
+    db.session.commit()
+    return {"ok": True}, 200
+
+
+def set_member_role(league_id, uid, me, data):
+    """Commissioner promotes a member to moderator or demotes a moderator."""
+    league_id, uid = str(league_id), str(uid)
+    league = db.session.get(League, league_id)
+    if not league or not _membership(league_id, me):
+        return {"error": "league not found"}, 404
+    if not _is_commissioner(league, me):
+        return {"error": "only the commissioner can change roles"}, 403
+    if league.status == ARCHIVED:
+        return {"error": "the league is archived"}, 400
+    role = (data or {}).get("role")
+    if role not in (MODERATOR, MEMBER):
+        return {"error": "role must be 'moderator' or 'member'"}, 400
+    if _is_commissioner(league, uid):
+        return {"error": "the commissioner's role can't be changed here"}, 400
+    m = _membership(league_id, uid)
+    if not m:
+        return {"error": "member not found"}, 404
+    m.role = role
+    db.session.commit()
+    return {"ok": True, "role": role}, 200
+
+
+def transfer_commissioner(league_id, uid, me):
+    """Hand league ownership to another member. The outgoing commissioner
+    becomes a moderator; the incoming member becomes commissioner."""
+    league_id, uid = str(league_id), str(uid)
+    league = db.session.get(League, league_id)
+    if not league or not _membership(league_id, me):
+        return {"error": "league not found"}, 404
+    if not _is_commissioner(league, me):
+        return {"error": "only the commissioner can transfer ownership"}, 403
+    if league.status == ARCHIVED:
+        return {"error": "the league is archived"}, 400
+    if uid == me:
+        return {"error": "you're already the commissioner"}, 400
+    target = _membership(league_id, uid)
+    if not target:
+        return {"error": "member not found"}, 404
+    old = _membership(league_id, me)
+    league.commissioner_id = uid
+    target.role = COMMISSIONER
+    if old:
+        old.role = MODERATOR
     db.session.commit()
     return {"ok": True}, 200
 

@@ -115,6 +115,16 @@ def remove_member(league_id, uid):
     return ctrl.remove_member(league_id, uid)
 
 
+@leagues_bp.patch("/<uuid:league_id>/members/<uuid:uid>/role")
+def set_member_role(league_id, uid):
+    return ctrl.set_member_role(league_id, uid)
+
+
+@leagues_bp.post("/<uuid:league_id>/members/<uuid:uid>/transfer")
+def transfer_commissioner(league_id, uid):
+    return ctrl.transfer_commissioner(league_id, uid)
+
+
 @leagues_bp.post("/<uuid:league_id>/archive")
 def archive_league(league_id):
     return ctrl.archive_league(league_id)

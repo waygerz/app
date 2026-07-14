@@ -6,6 +6,7 @@ from app.extensions import db
 
 # role
 COMMISSIONER = "commissioner"
+MODERATOR = "moderator"
 MEMBER = "member"
 
 # status
