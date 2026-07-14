@@ -44,7 +44,7 @@ export function TeamLogo({
     return (
       <span
         className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-muted-foreground sm:size-14 sm:text-base',
+          'flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-foreground sm:size-14 sm:text-base',
           className,
         )}
       >
@@ -87,7 +87,7 @@ function TeamRow({
         {name}
       </span>
       {score !== null && (
-        <span className={`text-base tabular-nums sm:text-xl ${isWinner ? 'font-bold text-foreground' : 'text-muted-foreground'}`}>
+        <span className={`text-base tabular-nums sm:text-xl ${isWinner ? 'font-bold text-foreground' : 'font-medium text-foreground'}`}>
           {score}
         </span>
       )}

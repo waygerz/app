@@ -28,9 +28,11 @@ export interface LeagueCard {
   unread_feed_count?: number;
 }
 
+export type LeagueRole = 'commissioner' | 'moderator' | 'member';
+
 export interface LeagueMember {
   user_id: string;
-  role: 'commissioner' | 'member';
+  role: LeagueRole;
   display_name: string;
   avatar_key?: string | null;
 }
@@ -47,7 +49,7 @@ export interface LeagueDetail extends LeagueCard {
   rules: Record<string, unknown>;
   members: LeagueMember[];
   sports: LeagueSportRef[];
-  my_role: 'commissioner' | 'member';
+  my_role: LeagueRole;
 }
 
 export interface LeagueSportRef {
@@ -132,6 +134,10 @@ export const leaguesApi = {
   archive: (id: string) => req(`${LEAGUES_API}/${id}/archive`, { method: 'POST' }),
   removeMember: (id: string, uid: string) =>
     req(`${LEAGUES_API}/${id}/members/${uid}`, { method: 'DELETE' }),
+  setMemberRole: (id: string, uid: string, role: 'moderator' | 'member') =>
+    req(`${LEAGUES_API}/${id}/members/${uid}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  transferCommissioner: (id: string, uid: string) =>
+    req(`${LEAGUES_API}/${id}/members/${uid}/transfer`, { method: 'POST' }),
   invites: () => req<{ invites: Invite[] }>(`${LEAGUES_API}/invites`).then((d) => d.invites ?? []),
   acceptInvite: (id: string) => req(`${LEAGUES_API}/${id}/join`, { method: 'POST' }),
   sendInvites: (id: string, invitee_ids: string[]) =>

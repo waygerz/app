@@ -85,6 +85,7 @@ export function LeagueOverview() {
   });
 
   const isCommish = lg.my_role === 'commissioner';
+  const canModerate = isCommish || lg.my_role === 'moderator';
   const isMoney = lg.league_type !== 'pickem';
   const commish = lg.members.find((m) => m.role === 'commissioner');
   const membersById = new Map(lg.members.map((m) => [String(m.user_id), m]));
@@ -94,7 +95,7 @@ export function LeagueOverview() {
       {/* Left: feed */}
       <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
         <section>
-          {isCommish && (
+          {canModerate && (
             <Card className="mb-3 min-w-0 flex-row items-center gap-3 p-3">
               {user && (
                 <UserAvatar

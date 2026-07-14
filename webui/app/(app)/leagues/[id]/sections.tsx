@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import {
   leaguesApi,
   type LeagueDetail,
+  type LeagueMember,
   type LeaguePeriod,
   type PeriodResults,
   type PickRow,
@@ -32,6 +33,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle, Check, CircleCheckBig } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
@@ -175,10 +180,10 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
 
   return (
     <div className="flex flex-col gap-4 pb-24">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Combobox
           ariaLabel="Select week"
-          className="w-full max-w-[220px]"
+          className="max-w-[220px] flex-1 sm:flex-none sm:w-[220px]"
           value={selectedId}
           onChange={setPeriodId}
           options={periods.map((p) => ({ value: p.id, label: p.label }))}
@@ -248,16 +253,16 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                       disabled={disabled}
                       onClick={() => setSel((s) => ({ ...s, [ev.external_id]: side }))}
                       className={cn(
-                        'flex flex-1 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors',
+                        'flex flex-1 items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-foreground transition-colors',
                         active || isMyPick
-                          ? 'border-primary bg-primary/10 text-foreground'
-                          : 'border-input text-muted-foreground hover:border-foreground/30',
+                          ? 'border-primary bg-primary/10'
+                          : 'border-input hover:border-foreground/30',
                         disabled && 'cursor-not-allowed',
                         disabled && !active && !isMyPick && 'opacity-60',
                       )}
                     >
-                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} className="size-[72px] sm:size-[84px]" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{teamName}</span>
+                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} className="size-12 sm:size-14" />
+                      <span className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{teamName}</span>
                       {isMyPick && <Check className="size-4 shrink-0 text-primary" />}
                     </button>
                   );
@@ -780,7 +785,7 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
   const qc = useQueryClient();
   const { user } = useAuth();
   const me = String(user?.id ?? '');
-  const isCommish = lg.my_role === 'commissioner';
+  const canModerate = lg.my_role === 'commissioner' || lg.my_role === 'moderator';
   const periodsQ = useQuery({ queryKey: ['periods', lg.id], queryFn: () => leaguesApi.periods(lg.id) });
   // Chronological order + default to the current (open) week, matching PickemPlay.
   const periods: LeaguePeriod[] = [...(periodsQ.data ?? [])].sort((a, b) => a.index - b.index);
@@ -869,20 +874,12 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
                   <p className="text-xs text-muted-foreground">correct</p>
                 </div>
               </button>
-              <button
-                type="button"
-                disabled={!isCommish || confirmM.isPending}
-                onClick={() => confirmM.mutate({ userId: r.user_id, confirmed: !r.confirmed })}
-                aria-label={r.confirmed ? 'Confirmed' : 'Not confirmed'}
-                title={
-                  isCommish
-                    ? r.confirmed ? 'Confirmed — click to unconfirm' : 'Not confirmed — click to confirm'
-                    : r.confirmed ? 'Confirmed' : 'Not confirmed'
-                }
-                className={cn('shrink-0 rounded-full p-1', isCommish ? 'cursor-pointer hover:bg-muted' : 'cursor-default')}
-              >
-                <CircleCheckBig className={cn('size-6', r.confirmed ? 'text-green-500' : 'text-muted-foreground/40')} />
-              </button>
+              <ConfirmMemberButton
+                row={r}
+                canModerate={canModerate}
+                pending={confirmM.isPending}
+                onConfirm={(confirmed) => confirmM.mutate({ userId: r.user_id, confirmed })}
+              />
             </Card>
           );
         })}
@@ -897,6 +894,67 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
         onOpenChange={(o) => { if (!o) setOpenMember(null); }}
       />
     </div>
+  );
+}
+
+// The weekly confirmation toggle. Members without moderation rights see a
+// static indicator; commissioners and moderators get a confirmation dialog
+// before (un)confirming a member.
+function ConfirmMemberButton({
+  row, canModerate, pending, onConfirm,
+}: {
+  row: WeeklyResultRow;
+  canModerate: boolean;
+  pending: boolean;
+  onConfirm: (confirmed: boolean) => void;
+}) {
+  const icon = (
+    <CircleCheckBig className={cn('size-6', row.confirmed ? 'text-green-500' : 'text-muted-foreground/40')} />
+  );
+
+  if (!canModerate) {
+    return (
+      <span
+        className="shrink-0 rounded-full p-1"
+        aria-label={row.confirmed ? 'Confirmed' : 'Not confirmed'}
+        title={row.confirmed ? 'Confirmed' : 'Not confirmed'}
+      >
+        {icon}
+      </span>
+    );
+  }
+
+  const next = !row.confirmed;
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <button
+          type="button"
+          disabled={pending}
+          aria-label={row.confirmed ? 'Confirmed — tap to unconfirm' : 'Not confirmed — tap to confirm'}
+          title={row.confirmed ? 'Confirmed — click to unconfirm' : 'Not confirmed — click to confirm'}
+          className="shrink-0 rounded-full p-1 hover:bg-muted"
+        >
+          {icon}
+        </button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{next ? 'Confirm results?' : 'Unconfirm results?'}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {next
+              ? `Mark ${row.display_name}'s picks for this week as confirmed.`
+              : `Remove the confirmation on ${row.display_name}'s picks for this week.`}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction disabled={pending} onClick={() => onConfirm(next)}>
+            {next ? 'Confirm' : 'Unconfirm'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -1218,12 +1276,95 @@ function memberRoleLabel(role: string) {
 }
 
 // ===================== MEMBERS =====================
+// Per-member actions menu: commissioners manage roles + transfer + remove;
+// moderators can only remove regular members. Consequential actions confirm.
+function MemberActionsMenu({
+  member, isCommish, canModerate, busy, onSetRole, onTransfer, onRemove,
+}: {
+  member: LeagueMember;
+  isCommish: boolean;
+  canModerate: boolean;
+  busy: boolean;
+  onSetRole: (role: 'moderator' | 'member') => void;
+  onTransfer: () => void;
+  onRemove: () => void;
+}) {
+  const [confirming, setConfirming] = useState<'transfer' | 'remove' | null>(null);
+
+  const isCommishRow = member.role === 'commissioner';
+  const canRemove = isCommish ? !isCommishRow : canModerate && member.role === 'member';
+  const showMenu = isCommish ? !isCommishRow : canRemove;
+  if (!showMenu) return null;
+
+  return (
+    <>
+      {/* modal={false}: without it, the dropdown leaves pointer-events:none on
+          <body> when it closes to open the AlertDialog, freezing the page. */}
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" variant="outline" className="size-8 shrink-0" aria-label="Member actions">
+            <EllipsisVertical className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          {isCommish && !isCommishRow && (
+            <DropdownMenuItem
+              disabled={busy}
+              onClick={() => onSetRole(member.role === 'moderator' ? 'member' : 'moderator')}
+            >
+              {member.role === 'moderator' ? 'Remove moderator' : 'Make moderator'}
+            </DropdownMenuItem>
+          )}
+          {isCommish && !isCommishRow && (
+            <DropdownMenuItem disabled={busy} onClick={() => setConfirming('transfer')}>
+              Transfer commissioner
+            </DropdownMenuItem>
+          )}
+          {canRemove && (
+            <DropdownMenuItem variant="destructive" disabled={busy} onClick={() => setConfirming('remove')}>
+              Remove from league
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={confirming !== null} onOpenChange={(o) => { if (!o) setConfirming(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirming === 'transfer' ? 'Transfer commissioner?' : 'Remove member?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirming === 'transfer'
+                ? `${member.display_name} will become the league commissioner and you'll become a moderator. You can only get it back if they transfer it to you.`
+                : `Remove ${member.display_name} from this league? They'll lose access to it.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirming === 'transfer') onTransfer();
+                else onRemove();
+                setConfirming(null);
+              }}
+            >
+              {confirming === 'transfer' ? 'Transfer' : 'Remove'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 export function LeagueMembers() {
   const lg = useLeague();
   const qc = useQueryClient();
   const { user } = useAuth();
   const me = String(user?.id ?? '');
   const isCommish = lg.my_role === 'commissioner';
+  const canModerate = isCommish || lg.my_role === 'moderator';
 
   const friendsQ = useQuery({ queryKey: ['friends'], queryFn: friendsApi.list });
   const reqsQ = useQuery({ queryKey: ['friend-requests'], queryFn: friendsApi.requests });
@@ -1237,6 +1378,20 @@ export function LeagueMembers() {
   const remove = useMutation({
     mutationFn: (uid: string) => leaguesApi.removeMember(lg.id, uid),
     onSuccess: () => { toast.success('Member removed'); qc.invalidateQueries({ queryKey: ['league', lg.id] }); },
+    onError: onErr,
+  });
+  const setRole = useMutation({
+    mutationFn: ({ uid, role }: { uid: string; role: 'moderator' | 'member' }) =>
+      leaguesApi.setMemberRole(lg.id, uid, role),
+    onSuccess: (_d, v) => {
+      toast.success(v.role === 'moderator' ? 'Moderator added' : 'Moderator removed');
+      qc.invalidateQueries({ queryKey: ['league', lg.id] });
+    },
+    onError: onErr,
+  });
+  const transfer = useMutation({
+    mutationFn: (uid: string) => leaguesApi.transferCommissioner(lg.id, uid),
+    onSuccess: () => { toast.success('Commissioner transferred'); qc.invalidateQueries({ queryKey: ['league', lg.id] }); },
     onError: onErr,
   });
   const addFriend = useMutation({
@@ -1277,7 +1432,11 @@ export function LeagueMembers() {
                   {m.display_name}
                   {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
                 </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">{memberRoleLabel(m.role)}</p>
+                {m.role === 'member' ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">Member</p>
+                ) : (
+                  <Badge size="sm" appearance="light" className="mt-1">{memberRoleLabel(m.role)}</Badge>
+                )}
               </div>
               {!isMe && (
                 <div className="flex shrink-0 items-center gap-1">
@@ -1309,26 +1468,15 @@ export function LeagueMembers() {
                       <span className="hidden sm:inline">Add friend</span>
                     </Button>
                   )}
-                  {isCommish && m.role !== 'commissioner' && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="icon" variant="outline" className="size-8 shrink-0" aria-label="Member actions">
-                          <EllipsisVertical className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem
-                          variant="destructive"
-                          disabled={remove.isPending}
-                          onClick={() => {
-                            if (confirm(`Remove ${m.display_name} from this league?`)) remove.mutate(m.user_id);
-                          }}
-                        >
-                          Remove from league
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                  <MemberActionsMenu
+                    member={m}
+                    isCommish={isCommish}
+                    canModerate={canModerate}
+                    busy={remove.isPending || setRole.isPending || transfer.isPending}
+                    onSetRole={(role) => setRole.mutate({ uid, role })}
+                    onTransfer={() => transfer.mutate(uid)}
+                    onRemove={() => remove.mutate(uid)}
+                  />
                 </div>
               )}
             </Card>
