@@ -87,6 +87,7 @@ export function LeagueOverview() {
   const isCommish = lg.my_role === 'commissioner';
   const isMoney = lg.league_type !== 'pickem';
   const commish = lg.members.find((m) => m.role === 'commissioner');
+  const membersById = new Map(lg.members.map((m) => [String(m.user_id), m]));
 
   return (
     <div className="grid min-w-0 gap-6 lg:grid-cols-3">
@@ -145,6 +146,7 @@ export function LeagueOverview() {
               <FeedPostCard
                 key={item.id}
                 item={item}
+                authorAvatarKey={item.author_id ? membersById.get(String(item.author_id))?.avatar_key ?? null : null}
                 engagement={engagement.data?.[item.id] ?? EMPTY_ENGAGEMENT}
                 currentUserId={user ? String(user.id) : ''}
                 engagementKey={lg.id}

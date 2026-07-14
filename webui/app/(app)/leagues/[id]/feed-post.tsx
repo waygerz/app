@@ -9,6 +9,7 @@ import type { FeedItem } from '@/lib/leagues';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 
 type FeedPostCardProps = {
@@ -16,9 +17,11 @@ type FeedPostCardProps = {
   engagement: PostEngagement;
   currentUserId: string;
   engagementKey: string;
+  /** Author's avatar key, looked up from league members; null for system posts. */
+  authorAvatarKey?: string | null;
 };
 
-export function FeedPostCard({ item, engagement, currentUserId, engagementKey }: FeedPostCardProps) {
+export function FeedPostCard({ item, engagement, currentUserId, engagementKey, authorAvatarKey }: FeedPostCardProps) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState('');
@@ -65,9 +68,21 @@ export function FeedPostCard({ item, engagement, currentUserId, engagementKey }:
   return (
     <Card className="min-w-0 flex-col items-stretch gap-0 overflow-hidden p-0">
       <div className="flex flex-row items-start gap-3 p-3">
-        <div className="mt-0.5 text-muted-foreground">
-          {item.kind === 'announcement' ? <Megaphone className="size-4" /> : <Activity className="size-4" />}
-        </div>
+        {item.author_id ? (
+          <UserAvatar
+            userId={item.author_id}
+            name={item.author_name ?? 'Member'}
+            imageUrl={authorAvatarKey}
+            className="size-8 shrink-0"
+          />
+        ) : (
+          <div
+            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+            aria-hidden
+          >
+            {item.kind === 'announcement' ? <Megaphone className="size-4" /> : <Activity className="size-4" />}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           {item.title && <div className="text-sm font-medium text-foreground">{item.title}</div>}
           {item.body && <div className="break-words text-sm text-muted-foreground">{item.body}</div>}
