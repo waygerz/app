@@ -66,6 +66,46 @@
   --ring: var(--color-violet-500);
 }
 
+/**
+ * User-selectable ROYGBIV colors. `data-primary` / `data-accent` on <html>
+ * (set by colorThemeScript before paint) remap the primary + accent (--brand)
+ * vars, so every button / link / ring picks up the choice in light and dark.
+ * Light uses the -600 shade, dark the brighter -500. Foreground stays white
+ * except yellow, which needs dark text for contrast. The .dark rules come
+ * after the :root rules so they win (equal specificity) in dark mode.
+ */
+:root[data-primary='red'] { --primary: var(--color-red-600); --ring: var(--color-red-500); }
+:root[data-primary='orange'] { --primary: var(--color-orange-600); --ring: var(--color-orange-500); }
+:root[data-primary='yellow'] { --primary: var(--color-yellow-500); --primary-foreground: var(--color-zinc-950); --ring: var(--color-yellow-500); }
+:root[data-primary='green'] { --primary: var(--color-green-600); --ring: var(--color-green-500); }
+:root[data-primary='blue'] { --primary: var(--color-blue-600); --ring: var(--color-blue-500); }
+:root[data-primary='indigo'] { --primary: var(--color-indigo-600); --ring: var(--color-indigo-500); }
+:root[data-primary='violet'] { --primary: var(--color-violet-600); --ring: var(--color-violet-500); }
+
+.dark[data-primary='red'] { --primary: var(--color-red-500); }
+.dark[data-primary='orange'] { --primary: var(--color-orange-500); }
+.dark[data-primary='yellow'] { --primary: var(--color-yellow-400); --primary-foreground: var(--color-zinc-950); }
+.dark[data-primary='green'] { --primary: var(--color-green-500); }
+.dark[data-primary='blue'] { --primary: var(--color-blue-500); }
+.dark[data-primary='indigo'] { --primary: var(--color-indigo-500); }
+.dark[data-primary='violet'] { --primary: var(--color-violet-500); }
+
+:root[data-accent='red'] { --brand: var(--color-red-600); }
+:root[data-accent='orange'] { --brand: var(--color-orange-600); }
+:root[data-accent='yellow'] { --brand: var(--color-yellow-500); --brand-foreground: var(--color-zinc-950); }
+:root[data-accent='green'] { --brand: var(--color-green-600); }
+:root[data-accent='blue'] { --brand: var(--color-blue-600); }
+:root[data-accent='indigo'] { --brand: var(--color-indigo-600); }
+:root[data-accent='violet'] { --brand: var(--color-violet-600); }
+
+.dark[data-accent='red'] { --brand: var(--color-red-500); }
+.dark[data-accent='orange'] { --brand: var(--color-orange-500); }
+.dark[data-accent='yellow'] { --brand: var(--color-yellow-400); --brand-foreground: var(--color-zinc-950); }
+.dark[data-accent='green'] { --brand: var(--color-green-500); }
+.dark[data-accent='blue'] { --brand: var(--color-blue-500); }
+.dark[data-accent='indigo'] { --brand: var(--color-indigo-500); }
+.dark[data-accent='violet'] { --brand: var(--color-violet-500); }
+
 /** Theme Setup **/
 @theme inline {
   /** Base Colors **/
@@ -127,6 +167,21 @@
 
   *:focus-visible {
     @apply outline-ring rounded-xs shadow-none outline-2 outline-offset-3 transition-none!;
+  }
+
+  /*
+   * Tailwind v4 no longer defaults interactive elements to a pointer cursor.
+   * Restore it for everything clickable so buttons, links, role="button",
+   * labels, and summaries always show the hand — including plain <button>s and
+   * onClick wrappers around images.
+   */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  a[href],
+  label[for],
+  summary,
+  select:not(:disabled) {
+    cursor: pointer;
   }
 }
 

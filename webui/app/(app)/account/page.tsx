@@ -8,6 +8,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { imageToWebp } from '@/lib/imageToWebp';
 import { mediaApi } from '@/lib/media';
 import { UserAvatar } from '@/components/user-avatar';
+import { ColorPicker } from '@/components/theme/color-picker';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -171,6 +172,17 @@ export default function AccountPage() {
               {savingName ? 'Saving…' : 'Save'}
             </Button>
           </div>
+        </Card>
+
+        {/* Appearance — ROYGBIV primary + accent colors */}
+        <Card className="gap-4 p-5">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-semibold text-foreground">Appearance</h2>
+            <p className="text-xs text-muted-foreground">
+              Pick your primary and accent colors. Applies across the app on this device.
+            </p>
+          </div>
+          <ColorPicker />
         </Card>
 
         {/* Phone (read-only — it's the sign-in identity) */}

@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { Metadata } from 'next';
 import { ThemeProvider } from 'next-themes';
 import { Providers } from '@/providers';
+import { ColorThemeProvider, colorThemeScript } from '@/components/theme/color-theme';
 
 import '@/styles/globals.css';
 const inter = Inter({ subsets: ['latin'] });
@@ -32,6 +33,9 @@ export default async function RootLayout({
 }) {
   return (
     <html className="h-full" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: colorThemeScript }} />
+      </head>
       <body
         className={cn(
           'antialiased flex h-full text-base text-foreground bg-background',
@@ -46,13 +50,15 @@ export default async function RootLayout({
           disableTransitionOnChange
           enableColorScheme
         >
-          <TooltipProvider delayDuration={0}>
-            <Providers>
-              <Suspense>{children}</Suspense>
-            </Providers>
-            <Toaster />
-          </TooltipProvider>
-        </ThemeProvider>       
+          <ColorThemeProvider>
+            <TooltipProvider delayDuration={0}>
+              <Providers>
+                <Suspense>{children}</Suspense>
+              </Providers>
+              <Toaster />
+            </TooltipProvider>
+          </ColorThemeProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
