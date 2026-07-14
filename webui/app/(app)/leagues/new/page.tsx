@@ -11,6 +11,7 @@ import { fetchSports, fetchLeagues } from '@/lib/ingestor';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { X } from 'lucide-react';
 
@@ -213,15 +214,16 @@ export default function NewLeaguePage() {
           ) : (
             <div className="mt-1 flex flex-col gap-1.5">
               <Label>Week resets on</Label>
-              <select
+              <Combobox
+                ariaLabel="Week resets on"
+                className="w-full max-w-[200px] capitalize"
                 value={weekStartsOn}
-                onChange={(e) => setWeekStartsOn(e.target.value)}
-                className="h-9 max-w-[200px] rounded-lg border border-input bg-background px-3 text-sm capitalize text-foreground"
-              >
-                {DAYS.map((d) => (
-                  <option key={d} value={d} className="capitalize">{d}</option>
-                ))}
-              </select>
+                onChange={setWeekStartsOn}
+                options={DAYS.map((d) => ({
+                  value: d,
+                  label: d.charAt(0).toUpperCase() + d.slice(1),
+                }))}
+              />
               <span className="text-xs text-muted-foreground">
                 e.g. NFL weeks run Tuesday → Monday, so pick Tuesday.
               </span>

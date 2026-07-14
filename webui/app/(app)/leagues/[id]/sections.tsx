@@ -20,6 +20,7 @@ import {
 import { fetchTransactions, formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
 import { EventCard, TeamLogo, formatStart } from '@/components/event-card';
+import { Combobox } from '@/components/ui/combobox';
 import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
@@ -175,10 +176,14 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
   return (
     <div className="flex flex-col gap-4 pb-24">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <select value={selectedId} onChange={(e) => setPeriodId(e.target.value)}
-          className={cn(selectCls, 'max-w-[220px]')} aria-label="Select week">
-          {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </select>
+        <Combobox
+          ariaLabel="Select week"
+          className="w-full max-w-[220px]"
+          value={selectedId}
+          onChange={setPeriodId}
+          options={periods.map((p) => ({ value: p.id, label: p.label }))}
+          searchPlaceholder="Search week…"
+        />
         {isCommish && (
           <Button size="sm" variant="outline" disabled={regen.isPending} onClick={() => regen.mutate()}>
             {regen.isPending ? 'Syncing…' : 'Sync schedule'}
@@ -603,8 +608,6 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   );
 }
 
-const selectCls = 'h-9 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground';
-
 // ===================== STANDINGS =====================
 function standingRankClass(rank: number) {
   if (rank === 1) return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
@@ -813,14 +816,14 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <select
+        <Combobox
+          ariaLabel="Select week"
+          className="w-full max-w-[220px]"
           value={selectedId}
-          onChange={(e) => setPeriodId(e.target.value)}
-          className={cn(selectCls, 'max-w-[220px]')}
-          aria-label="Select week"
-        >
-          {periods.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </select>
+          onChange={setPeriodId}
+          options={periods.map((p) => ({ value: p.id, label: p.label }))}
+          searchPlaceholder="Search week…"
+        />
         {last?.final && last.actual_total !== null && (
           <span className="text-xs text-muted-foreground">
             Tie-breaker: {last.away_team} @ {last.home_team} · {last.actual_total} pts
@@ -842,10 +845,10 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
                 onClick={() => setOpenMember(r)}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold', standingRankClass(r.rank))}>
+                <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
                   {tied ? `T${r.rank}` : r.rank}
                 </div>
-                <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-9 shrink-0" />
+                <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-14 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-foreground">
                     {r.display_name}
@@ -888,6 +891,7 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
       <MemberPicksDialog
         lg={lg}
         periodId={selectedId}
+        periodLabel={periods.find((p) => p.id === selectedId)?.label ?? ''}
         member={openMember}
         open={!!openMember}
         onOpenChange={(o) => { if (!o) setOpenMember(null); }}
@@ -899,10 +903,11 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
 // Opened by tapping a member on the weekly leaderboard — their picks for the
 // week (hidden by the backend until an hour before the first game).
 function MemberPicksDialog({
-  lg, periodId, member, open, onOpenChange,
+  lg, periodId, periodLabel, member, open, onOpenChange,
 }: {
   lg: LeagueDetail;
   periodId: string;
+  periodLabel: string;
   member: WeeklyResultRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -917,12 +922,12 @@ function MemberPicksDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[85dvh]">
         <DialogHeader>
           <DialogTitle>{member?.display_name}&rsquo;s picks</DialogTitle>
-          <DialogDescription className="sr-only">Member picks for the selected week.</DialogDescription>
+          <DialogDescription>{periodLabel || 'Selected week'}</DialogDescription>
         </DialogHeader>
-        <DialogBody className="flex flex-col gap-2 py-2">
+        <DialogBody className="flex min-h-0 flex-col gap-2 overflow-y-auto py-2">
           {q.isLoading && <Skeleton className="h-24 rounded-xl" />}
           {q.isError && (
             <p className="text-sm text-muted-foreground">Picks are hidden until an hour before the first game.</p>
@@ -932,19 +937,25 @@ function MemberPicksDialog({
           )}
           {picks.map((p) => {
             const ev = p.event;
-            const picked = p.pick_side === 'home' ? ev?.home_team : ev?.away_team;
             return (
-              <div key={p.id ?? p.event_id} className="flex items-center justify-between gap-2 rounded-lg border border-border p-2">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <TeamLogo src={ev?.away_logo} name={ev?.away_abbr || ev?.away_team || '?'} className="size-6" />
-                  <span className="text-xs text-muted-foreground">@</span>
-                  <TeamLogo src={ev?.home_logo} name={ev?.home_abbr || ev?.home_team || '?'} className="size-6" />
-                  <span className="ml-1 min-w-0 truncate text-sm text-foreground">picked {picked ?? p.pick_side}</span>
-                </div>
+              <div key={p.id ?? p.event_id} className="flex items-center gap-1.5 rounded-lg border border-border p-2">
+                <PickTeam
+                  logo={ev?.away_logo}
+                  label={ev?.away_abbr || ev?.away_team || '?'}
+                  score={ev?.away_score}
+                  picked={p.pick_side === 'away'}
+                />
+                <span className="shrink-0 px-0.5 text-xs font-medium text-muted-foreground">@</span>
+                <PickTeam
+                  logo={ev?.home_logo}
+                  label={ev?.home_abbr || ev?.home_team || '?'}
+                  score={ev?.home_score}
+                  picked={p.pick_side === 'home'}
+                />
                 {p.correct === null ? (
-                  <Badge size="sm" appearance="light" variant="secondary">—</Badge>
+                  <Badge size="sm" appearance="light" variant="secondary" className="shrink-0">—</Badge>
                 ) : (
-                  <Badge size="sm" appearance="light" variant={p.correct ? 'success' : 'destructive'}>{p.correct ? '✓' : '✗'}</Badge>
+                  <Badge size="sm" appearance="light" variant={p.correct ? 'success' : 'destructive'} className="shrink-0">{p.correct ? '✓' : '✗'}</Badge>
                 )}
               </div>
             );
@@ -952,6 +963,32 @@ function MemberPicksDialog({
         </DialogBody>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// One team side inside a member's pick row: logo + abbreviation + score, with
+// the member's picked side wrapped in a highlighted (primary) box.
+function PickTeam({
+  logo, label, score, picked,
+}: {
+  logo?: string | null;
+  label: string;
+  score?: number | null;
+  picked: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'flex flex-1 items-center gap-2 rounded-md px-2 py-1.5',
+        picked ? 'bg-primary/10 ring-1 ring-inset ring-primary/60' : 'opacity-60',
+      )}
+    >
+      <TeamLogo src={logo} name={label} className="size-6 shrink-0" />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{label}</span>
+      {score !== null && score !== undefined && (
+        <span className="text-sm font-bold tabular-nums text-foreground">{score}</span>
+      )}
+    </div>
   );
 }
 
@@ -1468,10 +1505,15 @@ export function LeagueManage() {
             {isH2H && (
               <div className="flex flex-col gap-1.5">
                 <Label>Who can propose bets</Label>
-                <select className={selectCls} value={whoCanPropose} onChange={(e) => setWhoCanPropose(e.target.value)}>
-                  <option value="any">Any member</option>
-                  <option value="commissioner">Commissioner only</option>
-                </select>
+                <Combobox
+                  className="w-full"
+                  value={whoCanPropose}
+                  onChange={setWhoCanPropose}
+                  options={[
+                    { value: 'any', label: 'Any member' },
+                    { value: 'commissioner', label: 'Commissioner only' },
+                  ]}
+                />
               </div>
             )}
             <Button className="self-start" disabled={save.isPending} onClick={() => save.mutate()}>
