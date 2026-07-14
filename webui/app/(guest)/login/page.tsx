@@ -76,33 +76,27 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm gap-5 p-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <img src="/logo.png" alt="Waygerz" className="h-20 w-auto" />
-          <div>
-            <h1 className="text-2xl font-bold text-primary">Waygerz</h1>
-            <p className="text-sm text-muted-foreground">Play-money bets with friends.</p>
-          </div>
+          <h1 className="text-2xl font-bold text-primary">Waygerz</h1>
         </div>
         <PendingLinkBanner returnPath={next} />
 
         {step === 'phone' && (
           <form onSubmit={onSendCode} className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Phone number</Label>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(formatUsPhone(e.target.value))}
-                placeholder="(904) 555-1234"
-                autoComplete="tel"
-                inputMode="tel"
-                maxLength={14}
-              />
-              <span className="text-xs text-muted-foreground">
-                We’ll text you a one-time code to sign in or create your account.
-              </span>
-            </div>
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(formatUsPhone(e.target.value))}
+              placeholder="(904) 555-1234"
+              autoComplete="tel"
+              inputMode="tel"
+              maxLength={14}
+            />
             {error && <div className="text-sm text-destructive">{error}</div>}
-            <Button type="submit" disabled={busy || !phone.trim()}>
+            <Button type="submit" variant="primary" disabled={busy || !phone.trim()}>
               {busy ? 'Sending…' : 'Send code'}
             </Button>
+            <span className="text-center text-xs text-muted-foreground">
+              We’ll text you a one-time code to sign in or create your account.
+            </span>
           </form>
         )}
 
