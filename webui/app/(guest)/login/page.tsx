@@ -74,9 +74,12 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-dvh w-full items-center justify-center p-4">
       <Card className="w-full max-w-sm gap-5 p-6">
-        <div>
-          <h1 className="text-2xl font-bold text-primary">Waygerz</h1>
-          <p className="text-sm text-muted-foreground">Play-money bets with friends.</p>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <img src="/logo.png" alt="Waygerz" className="h-20 w-auto" />
+          <div>
+            <h1 className="text-2xl font-bold text-primary">Waygerz</h1>
+            <p className="text-sm text-muted-foreground">Play-money bets with friends.</p>
+          </div>
         </div>
         <PendingLinkBanner returnPath={next} />
 

@@ -117,7 +117,7 @@ export function LeagueOverview() {
           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Commissioner</span>
           <div className="flex items-center gap-3">
             {commish && (
-              <UserAvatar userId={commish.user_id} name={commish.display_name} className="size-9 shrink-0" />
+              <UserAvatar userId={commish.user_id} name={commish.display_name} imageUrl={commish.avatar_key} className="size-9 shrink-0" />
             )}
             <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2">
               <span className="min-w-0 truncate text-sm font-medium text-foreground">{commish?.display_name ?? '—'}</span>

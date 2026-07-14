@@ -16,6 +16,13 @@ export const metadata: Metadata = {
     default: 'Waygerz',
   },
   description: 'Social sports wagering with friends.',
+  icons: {
+    icon: [
+      { url: '/favicon.png', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    apple: '/favicon.png',
+  },
 };
 
 export default async function RootLayout({
