@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 import { useLeague } from './league-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -476,10 +477,6 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const me = user?.id;
   const bets = useQuery({ queryKey: ['wagers', lg.id], queryFn: () => wagersApi.mine(lg.id) });
 
-  // Schedule (bettable games) is combined into this page — tap a game to bet.
-  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
-  const evs = events.data ?? [];
-  const [selected, setSelected] = useState<SportEvent | null>(null);
   const canBet = lg.status === 'active';
 
   const refresh = () => {
@@ -531,80 +528,161 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const eventMap = eventsQ.data ?? {};
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Schedule */}
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold text-foreground sm:text-lg">Schedule</h2>
-          <button type="button" onClick={() => router.push(`/leagues/${lg.id}/results`)} className="text-xs text-primary hover:underline">
-            View results
-          </button>
+    <div className="flex flex-col gap-6">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold text-foreground sm:text-lg">My Bets</h2>
+        <Link href={`/leagues/${lg.id}/sports`} className="text-xs text-primary hover:underline">
+          Browse games →
+        </Link>
+      </div>
+      <BetSection
+        title="Pending"
+        tone="pending"
+        wagers={pending}
+        me={me}
+        eventMap={eventMap}
+        actions={(w) =>
+          w.acceptor_id === me ? (
+            <>
+              <Button size="sm" onClick={() => acceptM.mutate(w.id)}>Accept</Button>
+              <Button size="sm" variant="outline" onClick={() => declineM.mutate(w.id)}>Decline</Button>
+            </>
+          ) : w.proposer_id === me ? (
+            <Button size="sm" variant="outline" onClick={() => cancelM.mutate(w.id)}>Cancel</Button>
+          ) : null
+        }
+      />
+      <BetSection title="Active" tone="active" wagers={active} me={me} eventMap={eventMap} />
+      <BetSection title="Awaiting result" tone="awaiting" wagers={awaiting} me={me} eventMap={eventMap} actions={confirmActions} />
+
+      {bets.isLoading && <Skeleton className="h-24 rounded-xl" />}
+      {!bets.isLoading && liveCount === 0 && (
+        <CenterCard>
+          <CalendarDays className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            No active bets yet. Settled bets are on the Results tab.
+          </p>
+          {canBet && (
+            <Button size="sm" variant="outline" onClick={() => router.push(`/leagues/${lg.id}/sports`)}>
+              Browse games
+            </Button>
+          )}
+        </CenterCard>
+      )}
+    </div>
+  );
+}
+
+// ===================== SPORTS (Head-to-Head) =====================
+// Hub: the league's configured competitions, each linking to its schedule.
+export function LeagueSports() {
+  const lg = useLeague();
+  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
+  const evs = events.data ?? [];
+  const countFor = (id: string) => evs.filter((e) => e.sport_league_id === id).length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Sports</h2>
+        <p className="text-sm text-muted-foreground">The competitions this league bets on.</p>
+      </div>
+
+      {lg.sports.length === 0 ? (
+        <CenterCard>
+          <Trophy className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">No sports set for this league yet.</p>
+          {lg.my_role === 'commissioner' && (
+            <Button size="sm" variant="outline" asChild>
+              <Link href={`/leagues/${lg.id}/manage`}>Add sports</Link>
+            </Button>
+          )}
+        </CenterCard>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {lg.sports.map((s) => {
+            const label = s.name || s.sport_league_id;
+            const n = countFor(s.sport_league_id);
+            return (
+              <Link key={s.sport_league_id} href={`/leagues/${lg.id}/sports/${s.sport_league_id}`} className="min-w-0">
+                <Card className="flex-row items-center gap-3 p-4 transition-colors hover:border-primary/50">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-sm font-bold text-primary">
+                    {label.slice(0, 3).toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-foreground">{label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {events.isLoading ? 'Upcoming games' : n === 0 ? 'No upcoming games' : `${n} upcoming game${n === 1 ? '' : 's'}`}
+                    </p>
+                  </div>
+                  {!events.isLoading && n > 0 && (
+                    <Badge size="sm" appearance="light">{n}</Badge>
+                  )}
+                </Card>
+              </Link>
+            );
+          })}
         </div>
-        <p className="text-sm text-muted-foreground">
-          Bettable games for this league’s sports.{canBet ? ' Tap a game to challenge a friend.' : ''}
+      )}
+    </div>
+  );
+}
+
+// One sport's upcoming schedule; tap a game to propose a wager.
+export function LeagueSportSchedule() {
+  const lg = useLeague();
+  const { user } = useAuth();
+  const me = user?.id;
+  const params = useParams();
+  const sportLeagueId = String(params.sportLeagueId ?? '');
+  const sport = lg.sports.find((s) => s.sport_league_id === sportLeagueId);
+  const events = useScheduled(sportLeagueId ? [sportLeagueId] : []);
+  const evs = events.data ?? [];
+  const [selected, setSelected] = useState<SportEvent | null>(null);
+  const canBet = lg.status === 'active';
+  const label = sport?.name || sportLeagueId;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-0.5">
+        <Link href={`/leagues/${lg.id}/sports`} className="text-xs text-muted-foreground hover:text-foreground">
+          ← Sports
+        </Link>
+        <h2 className="text-lg font-semibold text-foreground">{label}</h2>
+        <p className="text-xs text-muted-foreground">
+          Upcoming games{canBet ? ' · tap a game to challenge a friend' : ''}
         </p>
-        {events.isLoading && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
-          </div>
-        )}
-        {!events.isLoading && evs.length === 0 && (
-          <CenterCard>
-            <CalendarDays className="size-6 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              No upcoming games for this league’s sport{lg.sports.length === 1 ? '' : 's'}
-              {lg.sports.length ? ` (${lg.sports.map((s) => s.name || s.sport_league_id).join(', ')})` : ''}.
-            </p>
-            {lg.my_role === 'commissioner' && (
-              <Button size="sm" variant="outline" onClick={() => router.push(`/leagues/${lg.id}/manage`)}>
-                Add more leagues
-              </Button>
-            )}
-          </CenterCard>
-        )}
+      </div>
+
+      {!sport && (
+        <CenterCard>
+          <p className="text-sm text-muted-foreground">That sport isn’t part of this league.</p>
+        </CenterCard>
+      )}
+      {sport && events.isLoading && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
+        </div>
+      )}
+      {sport && !events.isLoading && evs.length === 0 && (
+        <CenterCard>
+          <CalendarDays className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">No upcoming {label} games right now.</p>
+        </CenterCard>
+      )}
+      {sport && evs.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {evs.map((ev: SportEvent) => (
             <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
           ))}
         </div>
-      </section>
-
-      {/* My live bets */}
-      <section className="flex flex-col gap-6">
-        <h2 className="text-base font-semibold text-foreground sm:text-lg">My Bets</h2>
-        <BetSection
-          title="Pending"
-          tone="pending"
-          wagers={pending}
-          me={me}
-          eventMap={eventMap}
-          actions={(w) =>
-            w.acceptor_id === me ? (
-              <>
-                <Button size="sm" onClick={() => acceptM.mutate(w.id)}>Accept</Button>
-                <Button size="sm" variant="outline" onClick={() => declineM.mutate(w.id)}>Decline</Button>
-              </>
-            ) : w.proposer_id === me ? (
-              <Button size="sm" variant="outline" onClick={() => cancelM.mutate(w.id)}>Cancel</Button>
-            ) : null
-          }
-        />
-        <BetSection title="Active" tone="active" wagers={active} me={me} eventMap={eventMap} />
-        <BetSection title="Awaiting result" tone="awaiting" wagers={awaiting} me={me} eventMap={eventMap} actions={confirmActions} />
-
-        {bets.isLoading && <Skeleton className="h-24 rounded-xl" />}
-        {!bets.isLoading && liveCount === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No active bets — tap a game above to challenge a friend. Settled bets are on the Results tab.
-          </p>
-        )}
-      </section>
+      )}
 
       {canBet && (
         <ScheduleBetDialog
           lg={lg}
           event={selected}
-          me={user?.id}
+          me={me}
           open={!!selected}
           onOpenChange={(o) => { if (!o) setSelected(null); }}
         />

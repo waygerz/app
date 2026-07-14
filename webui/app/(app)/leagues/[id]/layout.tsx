@@ -69,6 +69,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
     { to: `/leagues/${id}/results`, label: 'Results', end: false },
     { to: `/leagues/${id}/standings`, label: 'Standings', end: false },
     { to: `/leagues/${id}/members`, label: 'Members', end: false },
+    ...(isMoney ? [{ to: `/leagues/${id}/sports`, label: 'Sports', end: false }] : []),
     ...(isMoney ? [{ to: `/leagues/${id}/activity`, label: 'Activity', end: false }] : []),
     ...(isCommish ? [{ to: `/leagues/${id}/manage`, label: 'Manage', end: false }] : []),
   ];
