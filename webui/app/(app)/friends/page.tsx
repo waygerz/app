@@ -1,23 +1,13 @@
 'use client';
 
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Copy, Share2 } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { friendsApi, type Friend, type FriendRequest } from '@/lib/friends';
 import { shareLink } from '@/lib/share';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { UserAvatar } from '@/components/user-avatar';
 
 function PersonRow({
@@ -40,21 +30,13 @@ function PersonRow({
   );
 }
 
-function ShareFriendLinkDialog({
+function AddFriendsButton({
   inviteLink,
   displayName,
 }: {
   inviteLink: string;
   displayName: string;
 }) {
-  const [open, setOpen] = useState(false);
-
-  const copyLink = () => {
-    if (!inviteLink) return;
-    navigator.clipboard?.writeText(inviteLink);
-    toast.success('Friend link copied');
-  };
-
   const shareInvite = async () => {
     if (!inviteLink) return;
     try {
@@ -71,37 +53,10 @@ function ShareFriendLinkDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" disabled={!inviteLink}>
-          <Share2 className="size-4" />
-          Share
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Your friend link</DialogTitle>
-          <DialogDescription>
-            Share this link so people can add you. You can also add league members from their member card.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="flex flex-col gap-3 py-2">
-          <span className="block min-w-0 truncate rounded-lg bg-muted px-3 py-1.5 text-xs text-foreground">
-            {inviteLink || '…'}
-          </span>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => void shareInvite()} disabled={!inviteLink}>
-              <Share2 className="size-4" />
-              Share
-            </Button>
-            <Button size="sm" variant="outline" onClick={copyLink} disabled={!inviteLink}>
-              <Copy className="size-4" />
-              Copy
-            </Button>
-          </div>
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
+    <Button variant="outline" size="sm" disabled={!inviteLink} onClick={() => void shareInvite()}>
+      <Share2 className="size-4" />
+      Add Friends
+    </Button>
   );
 }
 
@@ -140,7 +95,7 @@ export default function FriendsPage() {
     <div className="container py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-foreground">Friends</h1>
-        {user && <ShareFriendLinkDialog inviteLink={inviteLink} displayName={user.display_name} />}
+        {user && <AddFriendsButton inviteLink={inviteLink} displayName={user.display_name} />}
       </div>
 
       {incoming.length > 0 && (

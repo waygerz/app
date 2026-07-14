@@ -16,7 +16,8 @@ import {
   Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { LeagueInviteDialog } from './invite-dialog';
+import { UserPlus } from 'lucide-react';
+import { shareLink } from '@/lib/share';
 import { LeagueProvider } from './league-context';
 
 const PLAY_TAB: Record<LeagueType, string> = {
@@ -71,6 +72,21 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
     ...(isMoney ? [{ to: `/leagues/${id}/activity`, label: 'Activity', end: false }] : []),
     ...(isCommish ? [{ to: `/leagues/${id}/manage`, label: 'Manage', end: false }] : []),
   ];
+
+  const shareInvite = async () => {
+    const inviteLink = `${window.location.origin}/invite?code=${lg.join_code}`;
+    try {
+      const result = await shareLink({
+        url: inviteLink,
+        title: `Join ${lg.name} on Waygerz`,
+        text: `You're invited to join ${lg.name} on Waygerz`,
+      });
+      toast.success(result === 'shared' ? 'Link shared' : 'Link copied — paste into a message');
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
+      toast.error(e instanceof Error ? e.message : 'Could not share link');
+    }
+  };
 
   return (
     <div className="container min-w-0 w-full py-8">
@@ -131,6 +147,11 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
               <p className="w-full break-words text-center text-sm text-foreground">{lg.description}</p>
             )}
 
+            <Button className="w-full" onClick={() => void shareInvite()}>
+              <UserPlus className="size-4" />
+              Invite
+            </Button>
+
             <div className="w-full rounded-lg border border-border p-3">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Commissioner</span>
               <div className="mt-2 flex items-center gap-3">
@@ -142,17 +163,6 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
                 </span>
                 <Badge size="sm" appearance="light">Commish</Badge>
               </div>
-            </div>
-
-            <div className="w-full">
-              <LeagueInviteDialog
-                leagueName={lg.name}
-                joinCode={lg.join_code}
-                isCommish={isCommish}
-                leagueId={lg.id}
-                memberIds={lg.members.map((m) => m.user_id)}
-                onInvitesSent={() => qc.invalidateQueries({ queryKey: ['league', id] })}
-              />
             </div>
           </DialogBody>
         </DialogContent>
