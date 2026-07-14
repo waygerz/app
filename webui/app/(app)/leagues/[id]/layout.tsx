@@ -1,16 +1,20 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { leaguesApi, leagueTypeLabel, type LeagueType } from '@/lib/leagues';
 import { LeagueAvatar } from '@/components/league-avatar';
+import { UserAvatar } from '@/components/user-avatar';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { LeagueInviteDialog } from './invite-dialog';
 import { LeagueProvider } from './league-context';
@@ -36,6 +40,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  const [infoOpen, setInfoOpen] = useState(false);
 
   if (league.isLoading) {
     return <div className="container min-w-0 w-full py-8"><Skeleton className="h-40 rounded-xl" /></div>;
@@ -55,6 +60,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   const isCommish = lg.my_role === 'commissioner';
   const isDraft = lg.status === 'draft';
   const isMoney = lg.league_type !== 'pickem';
+  const commish = lg.members.find((m) => m.role === 'commissioner');
 
   const tabs = [
     { to: `/leagues/${id}`, label: 'Overview', end: true },
@@ -71,7 +77,14 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
       {/* Header — stacks on mobile (action under the title), row on desktop */}
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-          <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={56} />
+          <button
+            type="button"
+            onClick={() => setInfoOpen(true)}
+            className="shrink-0 rounded-full transition-opacity hover:opacity-80"
+            aria-label="League details"
+          >
+            <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={56} />
+          </button>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-bold text-foreground sm:text-2xl">{lg.name}</h1>
@@ -84,22 +97,66 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
             </p>
           </div>
         </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-          <LeagueInviteDialog
-            leagueName={lg.name}
-            joinCode={lg.join_code}
-            isCommish={isCommish}
-            leagueId={lg.id}
-            memberIds={lg.members.map((m) => m.user_id)}
-            onInvitesSent={() => qc.invalidateQueries({ queryKey: ['league', id] })}
-          />
-          {isDraft && isCommish && (
+        {isDraft && isCommish && (
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
             <Button className="w-full sm:w-auto" onClick={() => activate.mutate()} disabled={activate.isPending}>
               {activate.isPending ? 'Activating…' : 'Activate league'}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* League details dialog — opened by tapping the logo. Holds the big logo,
+          details, commissioner, and the Invite action. */}
+      <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+        <DialogContent>
+          <DialogHeader className="sr-only">
+            <DialogTitle>{lg.name} details</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="flex flex-col items-center gap-4 py-2">
+            <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={112} />
+            <div className="flex flex-col items-center gap-1.5 text-center">
+              <h2 className="text-lg font-bold text-foreground">{lg.name}</h2>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Badge size="sm" appearance="light">{leagueTypeLabel(lg.league_type)}</Badge>
+                {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {lg.members.length} member{lg.members.length === 1 ? '' : 's'}
+                {lg.current_period ? ` · ${lg.current_period.label} (${lg.current_period.status})` : ''}
+              </p>
+            </div>
+
+            {lg.description && (
+              <p className="w-full break-words text-center text-sm text-foreground">{lg.description}</p>
+            )}
+
+            <div className="w-full rounded-lg border border-border p-3">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Commissioner</span>
+              <div className="mt-2 flex items-center gap-3">
+                {commish && (
+                  <UserAvatar userId={commish.user_id} name={commish.display_name} className="size-9 shrink-0" />
+                )}
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                  {commish?.display_name ?? '—'}
+                </span>
+                <Badge size="sm" appearance="light">Commish</Badge>
+              </div>
+            </div>
+
+            <div className="w-full">
+              <LeagueInviteDialog
+                leagueName={lg.name}
+                joinCode={lg.join_code}
+                isCommish={isCommish}
+                leagueId={lg.id}
+                memberIds={lg.members.map((m) => m.user_id)}
+                onInvitesSent={() => qc.invalidateQueries({ queryKey: ['league', id] })}
+              />
+            </div>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
 
       {/* Tab bar scrolls independently — scroll wrapper is NOT the flex row */}
       <div className="mb-6 w-full min-w-0 border-b border-border">

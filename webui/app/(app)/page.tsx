@@ -50,16 +50,10 @@ export default function HomePage() {
 
   return (
     <div className="container py-8">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-          <h1 className="text-xl font-bold text-foreground sm:text-2xl">
-            {user ? `Welcome back, ${user.display_name}` : 'Your leagues'}
-          </h1>
-          <Badge variant="success" size="sm" appearance="light">PLAY MONEY</Badge>
-        </div>
-        <Button className="w-full sm:w-auto" onClick={() => router.push('/leagues/new')}>
-          <Plus className="size-4" /> Create league
-        </Button>
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">
+          {user ? `Welcome back, ${user.display_name}` : 'Your leagues'}
+        </h1>
       </div>
 
       {/* Pending invites */}
@@ -132,6 +126,18 @@ export default function HomePage() {
               </Card>
             </Link>
           ))}
+        </div>
+      )}
+
+      {/* Create link below the grid (replaces the header button) */}
+      {data.length > 0 && (
+        <div className="mt-8 text-center">
+          <Link
+            href="/leagues/new"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+          >
+            <Plus className="size-4" /> Create a league
+          </Link>
         </div>
       )}
     </div>
