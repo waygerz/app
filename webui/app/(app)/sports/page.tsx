@@ -5,29 +5,7 @@ import Link from 'next/link';
 import { fetchSports, type Sport } from '@/lib/ingestor';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-
-const SPORT_EMOJI: Record<string, string> = {
-  basketball: '🏀',
-  baseball: '⚾',
-  football: '🏈',
-  hockey: '🏒',
-  'ice-hockey': '🏒',
-  soccer: '⚽',
-  tennis: '🎾',
-  golf: '⛳',
-  rugby: '🏉',
-  'australian-football': '🏉',
-  cricket: '🏏',
-  volleyball: '🏐',
-  lacrosse: '🥍',
-  'field-hockey': '🏑',
-  mma: '🥊',
-  boxing: '🥊',
-};
-
-function emojiFor(slug: string) {
-  return SPORT_EMOJI[slug] ?? '🏅';
-}
+import { emojiFor } from '@/lib/sport-emoji';
 
 export default function SportsPage() {
   const {

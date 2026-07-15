@@ -87,7 +87,7 @@ function TeamRow({
         {name}
       </span>
       {score !== null && (
-        <span className={`text-base tabular-nums sm:text-xl ${isWinner ? 'font-bold text-foreground' : 'font-medium text-foreground'}`}>
+        <span className={`text-base tabular-nums sm:text-xl ${isWinner ? 'font-bold text-brand' : 'font-medium text-foreground'}`}>
           {score}
         </span>
       )}

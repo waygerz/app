@@ -28,6 +28,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { mediaApi } from '@/lib/media';
 import { imageToWebp } from '@/lib/imageToWebp';
+import { emojiFor } from '@/lib/sport-emoji';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -66,10 +67,10 @@ function useScheduled(sportLeagueIds: string[]) {
   });
 }
 
-// Resolve league (competition) logos for a league's sports. LeagueSportRef has
-// no logo, so we derive each sport's slug from its events, then pull logos from
-// fetchLeagues(sport). Returns a lookup: sport_league_id -> logo url.
-function useSportLogos(evs: SportEvent[]) {
+// Resolve an icon for a league's sports. LeagueSportRef has no sport slug or
+// logo, so we derive the slug from each sport's events (for an emoji fallback),
+// then pull competition logos from fetchLeagues(sport). id -> {logo?, emoji}.
+function useSportMeta(evs: SportEvent[]) {
   const sportOf = new Map<string, string>();
   for (const e of evs) {
     if (e.sport_league_id && e.sport && !sportOf.has(e.sport_league_id)) {
@@ -95,7 +96,10 @@ function useSportLogos(evs: SportEvent[]) {
     enabled: sports.length > 0,
     staleTime: 30 * 60_000,
   });
-  return (id: string): string | undefined => q.data?.[id];
+  return (id: string): { logo?: string; emoji: string } => ({
+    logo: q.data?.[id],
+    emoji: emojiFor(sportOf.get(id) ?? ''),
+  });
 }
 
 // ===================== PLAY (type-aware) =====================
@@ -366,12 +370,17 @@ const BET_SECTION_TONE: Record<BetSectionTone, { accent: string; header: string 
   },
 };
 
+// ---- Standard state colors for betting / results cards ----
+// selection (your pick) = primary · win = brand green · loss/push = muted · idle = unselected
+const STATE = {
+  selected: 'border-primary bg-primary/10 text-foreground',
+  win: 'border-brand bg-brand/10 text-foreground',
+  loss: 'border-border bg-muted/40 text-muted-foreground',
+  idle: 'border-input text-muted-foreground hover:border-foreground/30',
+} as const;
+
 const pickBtn = (selected: boolean) =>
-  `rounded-lg border text-sm transition-colors ${
-    selected
-      ? 'border-green-700 bg-green-100 text-green-900 dark:border-green-600 dark:bg-green-950 dark:text-green-200'
-      : 'border-input text-muted-foreground hover:border-foreground/30'
-  }`;
+  `rounded-lg border text-sm transition-colors ${selected ? STATE.selected : STATE.idle}`;
 
 function wagerStatusBadge(w: Wager, me?: string) {
   if (w.status === 'open' && w.acceptor_id === me) {
@@ -431,6 +440,14 @@ function WagerBetCard({
   const acceptorAbbr = acceptorIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName);
   const pickLogo = 'size-10 text-xs sm:size-10';
 
+  // Once decided, the winner's side is green and the loser's muted; before that,
+  // each committed side shows the selection (primary) style.
+  const done = w.status === 'settled' || w.status === 'refunded';
+  const boxFor = (userWon: boolean, committed: boolean) =>
+    done ? (userWon ? STATE.win : STATE.loss) : committed ? STATE.selected : STATE.idle;
+  const proposerBox = boxFor(w.winner_user_id === w.proposer_id, true);
+  const acceptorBox = boxFor(w.winner_user_id === w.acceptor_id, w.status !== 'open');
+
   return (
     <Card className={cn('min-w-0 gap-3 border-l-4 p-4', accentClass)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -441,7 +458,7 @@ function WagerBetCard({
       </div>
 
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-        <div className={cn('flex flex-col items-center gap-1.5 rounded-lg px-2 py-2', pickBtn(true))}>
+        <div className={cn('flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2 transition-colors', proposerBox)}>
           <UserAvatar userId={w.proposer_id} name={w.proposer_name} className="size-10" />
           <span className="max-w-full truncate text-center text-xs font-medium">{w.proposer_name}</span>
           <div className="flex max-w-full items-center gap-2">
@@ -450,7 +467,7 @@ function WagerBetCard({
           </div>
         </div>
         <span className="text-xs font-semibold text-muted-foreground">vs</span>
-        <div className={cn('flex flex-col items-center gap-1.5 rounded-lg px-2 py-2', pickBtn(w.status !== 'open'))}>
+        <div className={cn('flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2 transition-colors', acceptorBox)}>
           <UserAvatar userId={w.acceptor_id} name={w.acceptor_name} className="size-10" />
           <span className="max-w-full truncate text-center text-xs font-medium">{w.acceptor_name}</span>
           <div className="flex max-w-full items-center gap-2">
@@ -610,22 +627,34 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
 
 // ===================== SPORTS (Head-to-Head) =====================
 // Hub: the league's configured competitions, each linking to its schedule.
-// Competition logo with an initials fallback (also falls back on image error).
-function SportLogo({ src, label, className }: { src?: string; label: string; className?: string }) {
+// Sport icon: competition logo, falling back to the sport emoji, then initials.
+function SportIcon({ logo, emoji, label, px }: { logo?: string; emoji?: string; label: string; px: number }) {
   const [broken, setBroken] = useState(false);
-  if (src && !broken) {
+  if (logo && !broken) {
     return (
       <img
-        src={src}
+        src={logo}
         alt=""
         loading="lazy"
+        width={px}
+        height={px}
         onError={() => setBroken(true)}
-        className={cn('shrink-0 rounded-xl bg-muted object-contain p-1.5', className)}
+        className="shrink-0 object-contain"
       />
     );
   }
+  if (emoji) {
+    return (
+      <span className="shrink-0 leading-none" style={{ fontSize: Math.round(px * 0.82) }}>
+        {emoji}
+      </span>
+    );
+  }
   return (
-    <span className={cn('flex shrink-0 items-center justify-center rounded-xl bg-primary/15 font-bold text-primary', className)}>
+    <span
+      className="flex shrink-0 items-center justify-center rounded-xl bg-primary/15 font-bold text-primary"
+      style={{ width: px, height: px, fontSize: Math.round(px * 0.3) }}
+    >
       {label.slice(0, 3).toUpperCase()}
     </span>
   );
@@ -635,7 +664,7 @@ export function LeagueSports() {
   const lg = useLeague();
   const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
   const evs = events.data ?? [];
-  const logoFor = useSportLogos(evs);
+  const metaFor = useSportMeta(evs);
   const countFor = (id: string) => evs.filter((e) => e.sport_league_id === id).length;
 
   return (
@@ -656,23 +685,19 @@ export function LeagueSports() {
           )}
         </CenterCard>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
           {lg.sports.map((s) => {
             const label = s.name || s.sport_league_id;
+            const meta = metaFor(s.sport_league_id);
             const n = countFor(s.sport_league_id);
             return (
-              <Link key={s.sport_league_id} href={`/leagues/${lg.id}/sports/${s.sport_league_id}`} className="min-w-0">
-                <Card className="flex-row items-center gap-3 p-4 transition-colors hover:border-primary/50">
-                  <SportLogo src={logoFor(s.sport_league_id)} label={label} className="size-11 text-sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-foreground">{label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {events.isLoading ? 'Upcoming games' : n === 0 ? 'No upcoming games' : `${n} upcoming game${n === 1 ? '' : 's'}`}
-                    </p>
-                  </div>
-                  {!events.isLoading && n > 0 && (
-                    <Badge size="sm" appearance="light">{n}</Badge>
-                  )}
+              <Link key={s.sport_league_id} href={`/leagues/${lg.id}/sports/${s.sport_league_id}`} className="group">
+                <Card className="h-32 cursor-pointer items-center justify-center gap-2 p-3 text-center transition-all group-hover:border-primary group-hover:shadow-md sm:p-4">
+                  <SportIcon logo={meta.logo} emoji={meta.emoji} label={label} px={52} />
+                  <span className="line-clamp-1 text-sm font-semibold text-foreground">{label}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {events.isLoading ? '…' : n === 0 ? 'No games' : `${n} game${n === 1 ? '' : 's'}`}
+                  </span>
                 </Card>
               </Link>
             );
@@ -693,7 +718,7 @@ export function LeagueSportSchedule() {
   const sport = lg.sports.find((s) => s.sport_league_id === sportLeagueId);
   const events = useScheduled(sportLeagueId ? [sportLeagueId] : []);
   const evs = events.data ?? [];
-  const logoFor = useSportLogos(evs);
+  const metaFor = useSportMeta(evs);
   const [selected, setSelected] = useState<SportEvent | null>(null);
   const canBet = lg.status === 'active';
   const label = sport?.name || sportLeagueId;
@@ -705,7 +730,7 @@ export function LeagueSportSchedule() {
           ← Sports
         </Link>
         <div className="flex items-center gap-2.5">
-          <SportLogo src={logoFor(sportLeagueId)} label={label} className="size-9 text-xs" />
+          <SportIcon logo={metaFor(sportLeagueId).logo} emoji={metaFor(sportLeagueId).emoji} label={label} px={36} />
           <h2 className="text-lg font-semibold text-foreground">{label}</h2>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -821,9 +846,7 @@ export function LeagueStandings() {
                   <p
                     className={cn(
                       'text-xs font-medium',
-                      (r.net_cents ?? 0) >= 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-destructive',
+                      (r.net_cents ?? 0) >= 0 ? 'text-brand' : 'text-destructive',
                     )}
                   >
                     {(r.net_cents ?? 0) >= 0 ? '+' : ''}
@@ -1046,7 +1069,7 @@ function ConfirmMemberButton({
   onConfirm: (confirmed: boolean) => void;
 }) {
   const icon = (
-    <CircleCheckBig className={cn('size-6', row.confirmed ? 'text-green-500' : 'text-muted-foreground/40')} />
+    <CircleCheckBig className={cn('size-6', row.confirmed ? 'text-brand' : 'text-muted-foreground/40')} />
   );
 
   if (!canModerate) {
@@ -1389,7 +1412,7 @@ export function LeagueActivity() {
           {txns.map((t) => (
             <tr key={t.id} className="border-b border-border last:border-0">
               <td className="px-4 py-2 text-foreground">{TXN_LABEL[t.type] ?? t.type}</td>
-              <td className={`px-4 py-2 text-right ${t.amount_cents >= 0 ? 'text-green-500' : 'text-destructive'}`}>
+              <td className={`px-4 py-2 text-right ${t.amount_cents >= 0 ? 'text-brand' : 'text-destructive'}`}>
                 {t.amount_cents >= 0 ? '+' : ''}{formatCredits(t.amount_cents)}
               </td>
               <td className="px-4 py-2 text-right text-muted-foreground">{formatCredits(t.balance_after_cents)}</td>
