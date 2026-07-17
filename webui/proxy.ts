@@ -8,7 +8,7 @@ const AUTH_COOKIE = 'waygerz_access';
 // No auth required (shareable deep links).
 const PUBLIC_PREFIXES = ['/invite', '/add-friend'];
 // Only for signed-OUT users; signed-in users get bounced home.
-const GUEST_PREFIXES = ['/login', '/signup'];
+const GUEST_PREFIXES = ['/login', '/signup', '/welcome'];
 
 function matches(pathname: string, prefixes: string[]) {
   return prefixes.some((p) => pathname === p || pathname.startsWith(p + '/'));
@@ -23,6 +23,13 @@ export function proxy(req: NextRequest) {
   if (matches(pathname, GUEST_PREFIXES)) {
     if (hasSession) return NextResponse.redirect(new URL('/', req.url));
     return NextResponse.next();
+  }
+
+  // Root: signed-in users get the app home (their leagues); signed-out visitors
+  // see the marketing landing page. Rewrite (not redirect) so the URL stays "/".
+  if (pathname === '/') {
+    if (hasSession) return NextResponse.next();
+    return NextResponse.rewrite(new URL('/welcome', req.url));
   }
 
   // Everything else requires a session; preserve where they were headed.
