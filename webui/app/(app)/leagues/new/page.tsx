@@ -211,6 +211,12 @@ export default function NewLeaguePage() {
                 className="max-w-[140px]"
               />
             </div>
+          ) : type === 'pickem' ? (
+            // Pick'em weeks are seeded from the sport's real schedule, so the
+            // reset day would be ignored — don't ask for it.
+            <p className="mt-1 text-xs text-muted-foreground">
+              Weeks follow the sport’s real schedule (Week 1, Week 2, …).
+            </p>
           ) : (
             <div className="mt-1 flex flex-col gap-1.5">
               <Label>Week resets on</Label>

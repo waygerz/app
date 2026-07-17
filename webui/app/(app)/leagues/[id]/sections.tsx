@@ -954,6 +954,8 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
   const [periodId, setPeriodId] = useState('');
   const selectedId = periodId || openPeriod?.id || periods[periods.length - 1]?.id || '';
   const [openMember, setOpenMember] = useState<WeeklyResultRow | null>(null);
+  // Only crown a winner once the week is final — never mid-week.
+  const weekFinal = periods.find((p) => p.id === selectedId)?.status === 'final';
 
   const resultsQ = useQuery({
     queryKey: ['period-results', lg.id, selectedId],
@@ -1003,15 +1005,24 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
         {rows.map((r) => {
           const isMe = r.user_id === me;
           const tied = rankCounts[r.rank] > 1;
+          const isWinner = weekFinal && r.rank === 1;
           return (
-            <Card key={r.user_id} className="flex-row items-center gap-2 p-3">
+            <Card
+              key={r.user_id}
+              className={cn('flex-row items-center gap-2 p-3', isWinner && STATE.win)}
+            >
               <button
                 type="button"
                 onClick={() => setOpenMember(r)}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
-                  {tied ? `T${r.rank}` : r.rank}
+                <div
+                  className={cn(
+                    'flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
+                    isWinner ? 'bg-brand/20 text-brand' : 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {isWinner ? <Trophy className="size-3" /> : tied ? `T${r.rank}` : r.rank}
                 </div>
                 <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-14 shrink-0" />
                 <div className="min-w-0 flex-1">
