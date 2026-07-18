@@ -37,7 +37,14 @@ def league_context():
         "status": league.status,
         "account": league.account,
         "period_id": period.id if period else None,
-        "period_status": period.status if period else None,
+        # Weekly leagues gate betting on the currently open week; season/H2H
+        # leagues bet all season while active, so a finalized period must NOT
+        # close their betting — that was the "advance period" brick (a season
+        # period going FINAL left period_status="final" → propose rejected).
+        "period_status": (
+            period.status if league.period_type == "weekly"
+            else ("open" if league.status == "active" else "closed")
+        ),
         "min_wager_cents": league.min_wager_cents,
         "max_wager_cents": league.max_wager_cents,
         "starting_balance_cents": league.starting_balance_cents,
