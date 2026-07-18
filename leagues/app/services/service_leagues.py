@@ -419,17 +419,16 @@ def _can_moderate(league, me, membership=None):
     return m is not None and m.role == MODERATOR
 
 
-def _feed_since(league_id, user_id, joined_at):
-    row = LeagueFeedRead.query.filter_by(league_id=league_id, user_id=user_id).first()
-    return row.last_read_at if row else joined_at
-
-
 def _unread_feed_count(league_id, user_id, joined_at) -> int:
-    since = _feed_since(league_id, user_id, joined_at)
-    return LeagueFeed.query.filter(
-        LeagueFeed.league_id == league_id,
-        LeagueFeed.created_at > since,
-    ).count()
+    row = LeagueFeedRead.query.filter_by(league_id=league_id, user_id=user_id).first()
+    q = LeagueFeed.query.filter(LeagueFeed.league_id == league_id)
+    if row:
+        # Everything created after they last opened the feed.
+        return q.filter(LeagueFeed.created_at > row.last_read_at).count()
+    # Never opened: everything from the moment they joined onward. Inclusive so
+    # the league_created / member_joined event written in the same instant as
+    # joined_at still counts (a strict '>' dropped it, leaving the count at 0).
+    return q.filter(LeagueFeed.created_at >= joined_at).count()
 
 
 def _mark_feed_read(league_id, user_id):
@@ -485,7 +484,10 @@ def _join(league, user_id):
         existing.status = ACTIVE
         member = existing
     else:
-        member = LeagueMember(league_id=league.id, user_id=user_id, role=MEMBER, status=ACTIVE)
+        # joined_at captured now (before commit) so it lands <= the member_joined
+        # feed row written in the same transaction — see create_league.
+        member = LeagueMember(league_id=league.id, user_id=user_id, role=MEMBER,
+                              status=ACTIVE, joined_at=datetime.utcnow())
         db.session.add(member)
         created = True
     if created:
@@ -540,8 +542,13 @@ def create_league(me, data):
     db.session.add(league)
     db.session.flush()
 
+    # Pin joined_at to a moment captured before the commit so it is reliably
+    # <= the league_created feed row's created_at (the ORM flushes LeagueFeed
+    # before LeagueMember, so their independent utcnow() defaults would race and
+    # the creation event could fall just before joined_at, showing 0 unread).
     db.session.add(LeagueMember(
-        league_id=league.id, user_id=me, role=COMMISSIONER, status=ACTIVE
+        league_id=league.id, user_id=me, role=COMMISSIONER, status=ACTIVE,
+        joined_at=datetime.utcnow(),
     ))
     seen = set()
     for item in sports:
