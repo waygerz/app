@@ -122,9 +122,9 @@ export default function WelcomePage() {
             <ShieldCheck className="size-3.5" /> Play money · all bragging rights
           </Badge>
           <h1 className="mx-auto max-w-3xl text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl">
-            Sports betting with your friends.{' '}
+            Sports betting with{' '}
             <span className="bg-gradient-to-r from-primary via-fuchsia-500 to-brand bg-clip-text text-transparent">
-              No real money.
+              your friends.
             </span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">
