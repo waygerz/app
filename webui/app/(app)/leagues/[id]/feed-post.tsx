@@ -19,7 +19,7 @@ import { commentsApi, type Comment, type PostEngagement } from '@/lib/comments';
 import type { FeedItem } from '@/lib/leagues';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -325,19 +325,24 @@ function PostContent({
             </button>
           </p>
         )}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Input
+        <div className="flex items-end gap-2">
+          <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={replyTo ? 'Write a reply…' : 'Write a comment…'}
-            className="h-8 min-w-0 flex-1 text-sm"
+            rows={2}
+            className="min-h-[4.5rem] min-w-0 flex-1 resize-none text-sm"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && draft.trim()) addComment.mutate();
+              // Enter sends; Shift+Enter inserts a newline.
+              if (e.key === 'Enter' && !e.shiftKey && draft.trim()) {
+                e.preventDefault();
+                addComment.mutate();
+              }
             }}
           />
           <Button
             size="sm"
-            className="w-full shrink-0 sm:w-auto"
+            className="shrink-0"
             disabled={addComment.isPending || !draft.trim()}
             onClick={() => addComment.mutate()}
           >

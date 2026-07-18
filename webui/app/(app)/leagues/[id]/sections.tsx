@@ -1609,7 +1609,7 @@ export function LeagueMembers() {
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold text-foreground">Members ({lg.members.length})</h2>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
         {lg.members.map((m) => {
           const uid = String(m.user_id);
           const isMe = uid === me;
