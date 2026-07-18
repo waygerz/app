@@ -1743,7 +1743,7 @@ function EditLeagueDetails({ lg }: { lg: LeagueDetail }) {
   };
 
   return (
-    <Card className="gap-3 p-5">
+    <Card className="gap-5 p-6">
       <h2 className="text-base font-semibold text-foreground">League details</h2>
 
       <div className="flex flex-col gap-2">
@@ -1900,14 +1900,14 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
   });
 
   return (
-    <Card className="gap-3 p-5">
+    <Card className="gap-5 p-6">
       <div className="flex items-center gap-2">
         <Settings className="size-5 text-muted-foreground" />
         <h2 className="text-base font-semibold text-foreground">Rules</h2>
       </div>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="flex flex-col gap-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="flex flex-col gap-6">
+          <div className="grid gap-5 sm:grid-cols-2">
             <FormField
               control={form.control}
               name="min"
@@ -1989,13 +1989,13 @@ function LeagueManageInner() {
   });
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <EditLeagueDetails lg={lg} />
 
       {isMoney ? (
         <RulesForm lg={lg} />
       ) : (
-        <Card className="gap-3 p-5">
+        <Card className="gap-5 p-6">
           <div className="flex items-center gap-2"><Settings className="size-5 text-muted-foreground" /><h2 className="text-base font-semibold text-foreground">Rules</h2></div>
           <p className="text-sm text-muted-foreground">Pick’em leagues have no wager rules.</p>
         </Card>
@@ -2003,13 +2003,13 @@ function LeagueManageInner() {
 
       {/* Period control */}
       {lg.status === 'active' && (
-        <Card className="gap-2 p-5">
+        <Card className="gap-3 p-6">
           <h2 className="text-base font-semibold text-foreground">Period</h2>
           <p className="text-sm text-muted-foreground">
             Current: {lg.current_period ? `${lg.current_period.label} (${lg.current_period.status})` : '—'}
           </p>
           <Button
-            variant="outline" className="self-start" disabled={advance.isPending}
+            variant="outline" className="mt-1 self-start" disabled={advance.isPending}
             onClick={() => { if (confirm('Close the current period now and open the next?')) advance.mutate(); }}
           >
             {advance.isPending ? 'Advancing…' : 'Advance period'}
@@ -2018,11 +2018,11 @@ function LeagueManageInner() {
       )}
 
       {/* Danger zone */}
-      <Card className="gap-2 p-5">
+      <Card className="gap-3 p-6">
         <h2 className="text-base font-semibold text-foreground">Danger zone</h2>
         <p className="text-sm text-muted-foreground">Archiving removes the league from everyone’s dashboard. Balances and history are preserved.</p>
         <Button
-          variant="outline" className="self-start text-destructive" disabled={archive.isPending}
+          variant="outline" className="mt-1 self-start text-destructive" disabled={archive.isPending}
           onClick={() => { if (confirm(`Archive "${lg.name}"? It will disappear from dashboards.`)) archive.mutate(); }}
         >
           {archive.isPending ? 'Archiving…' : 'Archive league'}
