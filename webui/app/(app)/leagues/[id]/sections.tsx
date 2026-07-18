@@ -36,13 +36,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2 } from 'lucide-react';
+import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import { dispatchOpenChat } from '@/lib/open-chat';
@@ -1819,7 +1831,144 @@ function EditLeagueDetails({ lg }: { lg: LeagueDetail }) {
   );
 }
 
+// The tab is only shown to the commissioner, but the route isn't guarded — a
+// non-commissioner who deep-links here would otherwise see a control panel where
+// every action 403s. Bounce them with a clear message. (Enforcement is still on
+// the backend; this is UX.)
 export function LeagueManage() {
+  const lg = useLeague();
+  const router = useRouter();
+  if (lg.my_role !== 'commissioner') {
+    return (
+      <CenterCard>
+        <Lock className="size-6 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Only the commissioner can manage this league.</p>
+        <Button variant="outline" size="sm" onClick={() => router.push(`/leagues/${lg.id}`)}>
+          Back to overview
+        </Button>
+      </CenterCard>
+    );
+  }
+  return <LeagueManageInner />;
+}
+
+// Canonical form pattern: react-hook-form + zod validation + the shared Form
+// primitives, wired to the existing TanStack mutation. Blank min/max = "no
+// limit"; zod enforces non-negative numbers and max >= min before submit.
+const rulesSchema = z
+  .object({
+    min: z.string().trim(),
+    max: z.string().trim(),
+    whoCanPropose: z.enum(['any', 'commissioner']),
+  })
+  .refine((v) => v.min === '' || Number(v.min) >= 0, { path: ['min'], message: 'Enter a number ≥ 0, or leave blank.' })
+  .refine((v) => v.max === '' || Number(v.max) >= 0, { path: ['max'], message: 'Enter a number ≥ 0, or leave blank.' })
+  .refine((v) => v.min === '' || v.max === '' || Number(v.max) >= Number(v.min), {
+    path: ['max'],
+    message: 'Max must be at least the minimum.',
+  });
+
+type RulesValues = z.infer<typeof rulesSchema>;
+
+function RulesForm({ lg }: { lg: LeagueDetail }) {
+  const qc = useQueryClient();
+  const isH2H = lg.league_type === 'head_to_head';
+
+  const form = useForm<RulesValues>({
+    resolver: zodResolver(rulesSchema),
+    defaultValues: {
+      min: lg.min_wager_cents ? String(lg.min_wager_cents / 100) : '',
+      max: lg.max_wager_cents ? String(lg.max_wager_cents / 100) : '',
+      whoCanPropose:
+        ((lg.rules || {}) as Record<string, unknown>).who_can_propose === 'commissioner' ? 'commissioner' : 'any',
+    },
+  });
+
+  const save = useMutation({
+    mutationFn: (v: RulesValues) =>
+      leaguesApi.update(lg.id, {
+        min_wager_cents: v.min ? Math.round(Number(v.min) * 100) : null,
+        max_wager_cents: v.max ? Math.round(Number(v.max) * 100) : null,
+        rules: { ...(lg.rules || {}), who_can_propose: v.whoCanPropose },
+      }),
+    onSuccess: (_d, v) => {
+      toast.success('Rules saved');
+      qc.invalidateQueries({ queryKey: ['league', lg.id] });
+      form.reset(v);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <Card className="gap-3 p-5">
+      <div className="flex items-center gap-2">
+        <Settings className="size-5 text-muted-foreground" />
+        <h2 className="text-base font-semibold text-foreground">Rules</h2>
+      </div>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="flex flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="min"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Min wager (credits)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} placeholder="none" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="max"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Max wager (credits)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min={0} placeholder="none" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          {isH2H && (
+            <FormField
+              control={form.control}
+              name="whoCanPropose"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Who can propose bets</FormLabel>
+                  <FormControl>
+                    <Combobox
+                      className="w-full"
+                      value={field.value}
+                      onChange={field.onChange}
+                      options={[
+                        { value: 'any', label: 'Any member' },
+                        { value: 'commissioner', label: 'Commissioner only' },
+                      ]}
+                    />
+                  </FormControl>
+                  <FormDescription>Limit who can start head-to-head bets.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+          <Button type="submit" className="self-start" disabled={save.isPending}>
+            {save.isPending ? 'Saving…' : 'Save rules'}
+          </Button>
+        </form>
+      </Form>
+    </Card>
+  );
+}
+
+function LeagueManageInner() {
   const lg = useLeague();
   const router = useRouter();
   const qc = useQueryClient();
@@ -1827,22 +1976,7 @@ export function LeagueManage() {
   const onErr = (e: Error) => toast.error(e.message);
 
   const isMoney = lg.league_type !== 'pickem';
-  const isH2H = lg.league_type === 'head_to_head';
-  const [minC, setMinC] = useState(lg.min_wager_cents ? String(lg.min_wager_cents / 100) : '');
-  const [maxC, setMaxC] = useState(lg.max_wager_cents ? String(lg.max_wager_cents / 100) : '');
-  const [whoCanPropose, setWhoCanPropose] = useState(
-    ((lg.rules || {}) as Record<string, unknown>).who_can_propose === 'commissioner' ? 'commissioner' : 'any',
-  );
 
-  const save = useMutation({
-    mutationFn: () => leaguesApi.update(lg.id, {
-      min_wager_cents: minC ? Math.round(Number(minC) * 100) : null,
-      max_wager_cents: maxC ? Math.round(Number(maxC) * 100) : null,
-      rules: { ...(lg.rules || {}), who_can_propose: whoCanPropose },
-    }),
-    onSuccess: () => { toast.success('Rules saved'); refresh(); },
-    onError: onErr,
-  });
   const advance = useMutation({
     mutationFn: () => leaguesApi.advancePeriod(lg.id),
     onSuccess: () => { toast.success('Period advanced'); refresh(); },
@@ -1854,50 +1988,18 @@ export function LeagueManage() {
     onError: onErr,
   });
 
-  if (lg.my_role !== 'commissioner') {
-    return <CenterCard><Settings className="size-6 text-muted-foreground" /><p className="text-sm text-muted-foreground">Only the commissioner can manage this league.</p></CenterCard>;
-  }
   return (
     <div className="flex flex-col gap-4">
       <EditLeagueDetails lg={lg} />
 
-      {/* Rules */}
-      <Card className="gap-3 p-5">
-        <div className="flex items-center gap-2"><Settings className="size-5 text-muted-foreground" /><h2 className="text-base font-semibold text-foreground">Rules</h2></div>
-        {isMoney ? (
-          <>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label>Min wager (credits)</Label>
-                <Input type="number" min={0} value={minC} onChange={(e) => setMinC(e.target.value)} placeholder="none" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Max wager (credits)</Label>
-                <Input type="number" min={0} value={maxC} onChange={(e) => setMaxC(e.target.value)} placeholder="none" />
-              </div>
-            </div>
-            {isH2H && (
-              <div className="flex flex-col gap-1.5">
-                <Label>Who can propose bets</Label>
-                <Combobox
-                  className="w-full"
-                  value={whoCanPropose}
-                  onChange={setWhoCanPropose}
-                  options={[
-                    { value: 'any', label: 'Any member' },
-                    { value: 'commissioner', label: 'Commissioner only' },
-                  ]}
-                />
-              </div>
-            )}
-            <Button className="self-start" disabled={save.isPending} onClick={() => save.mutate()}>
-              {save.isPending ? 'Saving…' : 'Save rules'}
-            </Button>
-          </>
-        ) : (
+      {isMoney ? (
+        <RulesForm lg={lg} />
+      ) : (
+        <Card className="gap-3 p-5">
+          <div className="flex items-center gap-2"><Settings className="size-5 text-muted-foreground" /><h2 className="text-base font-semibold text-foreground">Rules</h2></div>
           <p className="text-sm text-muted-foreground">Pick’em leagues have no wager rules.</p>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* Period control */}
       {lg.status === 'active' && (
