@@ -25,6 +25,7 @@ export const authApi = {
     apiJson<{ message: string; phone: string; dev_otp?: string }>(`${AUTH_URL}${API.auth}/otp/start`, {
       method: 'POST',
       body: JSON.stringify({ phone }),
+      skipAuthRetry: true,
     }),
 
   otpVerify: (phone: string, otp: string) =>
@@ -32,6 +33,7 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ phone, otp, device_uuid: getDeviceUuid() }),
       device: true,
+      skipAuthRetry: true,
     }),
 
   otpComplete: (ticket: string, display_name: string) =>
@@ -39,6 +41,7 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ ticket, display_name, device_uuid: getDeviceUuid() }),
       device: true,
+      skipAuthRetry: true,
     }),
 
   me: () => apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/me`),
@@ -60,6 +63,7 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ device_uuid: getDeviceUuid() }),
       device: true,
+      skipAuthRetry: true,
     }),
 
   logout: () =>
@@ -67,6 +71,7 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ device_uuid: getDeviceUuid() }),
       device: true,
+      skipAuthRetry: true,
     }),
 };
 
