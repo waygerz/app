@@ -1385,7 +1385,7 @@ function ScheduleBetDialog({
                         onClick={() => toggle(m.user_id)}
                         className={`flex flex-col items-center gap-2 px-3 py-3 text-center ${pickBtn(on)}`}
                       >
-                        <UserAvatar userId={m.user_id} name={m.display_name} className="size-9" />
+                        <UserAvatar userId={m.user_id} name={m.display_name} className="size-10" />
                         <span className="line-clamp-2 text-sm font-medium">{m.display_name}</span>
                       </button>
                     );

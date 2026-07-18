@@ -235,7 +235,7 @@ export function MessagesSheet() {
         <UserAvatar
           userId={conv.other_user?.id ?? conv.id}
           name={title}
-          className="size-9 shrink-0"
+          className="size-10 shrink-0"
         />
       );
     return (

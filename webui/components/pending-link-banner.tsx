@@ -78,7 +78,7 @@ export function PendingLinkBanner({ returnPath }: { returnPath?: string }) {
       <UserAvatar
         userId={friend.data.user.id}
         name={friend.data.user.display_name}
-        className="size-11 shrink-0"
+        className="size-10 shrink-0"
       />
       <div className="min-w-0 text-left">
         <p className="text-xs text-muted-foreground">Log in to connect</p>

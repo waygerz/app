@@ -22,7 +22,7 @@ function PersonRow({
   return (
     <div className="flex flex-col gap-3 border-b border-border py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
-        <UserAvatar userId={userId} name={name} className="size-9 shrink-0" />
+        <UserAvatar userId={userId} name={name} className="size-10 shrink-0" />
         <span className="truncate text-sm font-medium text-foreground">{name}</span>
       </div>
       {children && <div className="flex flex-wrap gap-2 sm:shrink-0">{children}</div>}

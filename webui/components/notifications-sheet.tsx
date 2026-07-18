@@ -196,7 +196,7 @@ export function NotificationsSheet() {
           <div key={n.id}>
             {i > 0 && <div className="border-b border-border" />}
             <div className="flex gap-3 px-4 py-3">
-              <UserAvatar userId={n.userId} name={n.userName} className="size-9 shrink-0" />
+              <UserAvatar userId={n.userId} name={n.userName} className="size-10 shrink-0" />
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="text-sm text-foreground">{n.title}</div>
                 {n.sub && <div className="truncate text-xs text-muted-foreground">{n.sub}</div>}

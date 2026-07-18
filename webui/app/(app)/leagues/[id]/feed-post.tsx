@@ -60,6 +60,8 @@ type FeedPostCardProps = {
   engagementKey: string;
   /** Author's avatar key, looked up from league members; null for system posts. */
   authorAvatarKey?: string | null;
+  /** Resolve a member's avatar key by user id — used for comment authors. */
+  avatarFor?: (userId: string) => string | null | undefined;
 };
 
 /** Avatar/icon + title/body/link/meta. Shared by the feed card and the dialog. */
@@ -85,11 +87,11 @@ function PostHeader({
           userId={item.author_id}
           name={item.author_name ?? 'Member'}
           imageUrl={authorAvatarKey}
-          className="size-8 shrink-0"
+          className="size-10 shrink-0"
         />
       ) : (
-        <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-full', ev.chip)} aria-hidden>
-          <ev.icon className="size-4" />
+        <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full', ev.chip)} aria-hidden>
+          <ev.icon className="size-5" />
         </div>
       )}
       <div className="min-w-0 flex-1">
@@ -130,7 +132,7 @@ function PostHeader({
   );
 }
 
-export function FeedPostCard({ item, engagement, currentUserId, engagementKey, authorAvatarKey }: FeedPostCardProps) {
+export function FeedPostCard({ item, engagement, currentUserId, engagementKey, authorAvatarKey, avatarFor }: FeedPostCardProps) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
 
@@ -207,6 +209,7 @@ export function FeedPostCard({ item, engagement, currentUserId, engagementKey, a
           <PostContent
             item={item}
             authorAvatarKey={authorAvatarKey}
+            avatarFor={avatarFor}
             currentUserId={currentUserId}
             engagementKey={engagementKey}
             likeButton={likeButton}
@@ -222,6 +225,7 @@ export function FeedPostCard({ item, engagement, currentUserId, engagementKey, a
 function PostContent({
   item,
   authorAvatarKey,
+  avatarFor,
   currentUserId,
   engagementKey,
   likeButton,
@@ -229,6 +233,7 @@ function PostContent({
 }: {
   item: FeedItem;
   authorAvatarKey?: string | null;
+  avatarFor?: (userId: string) => string | null | undefined;
   currentUserId: string;
   engagementKey: string;
   likeButton: ReactNode;
@@ -283,6 +288,7 @@ function PostContent({
             <CommentThread
               key={c.id}
               comment={c}
+              avatarFor={avatarFor}
               currentUserId={currentUserId}
               onReply={(comment) => {
                 setReplyTo(comment);
@@ -333,6 +339,7 @@ function PostContent({
 
 function CommentThread({
   comment,
+  avatarFor,
   currentUserId,
   onReply,
   onDelete,
@@ -340,6 +347,7 @@ function CommentThread({
   depth = 0,
 }: {
   comment: Comment;
+  avatarFor?: (userId: string) => string | null | undefined;
   currentUserId: string;
   onReply: (c: Comment) => void;
   onDelete: (id: string) => void;
@@ -350,7 +358,13 @@ function CommentThread({
 
   return (
     <div className={cn('mb-2', depth > 0 && 'ml-4 border-l border-border pl-3')}>
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start gap-2">
+        <UserAvatar
+          userId={comment.author_id}
+          name={comment.author_name ?? 'Member'}
+          imageUrl={avatarFor?.(comment.author_id)}
+          className="size-8 shrink-0"
+        />
         <div className="min-w-0 flex-1">
           <div className="text-xs font-medium text-foreground">{comment.author_name ?? 'Member'}</div>
           <div className="text-sm text-foreground">{comment.body}</div>
@@ -379,6 +393,7 @@ function CommentThread({
         <CommentThread
           key={r.id}
           comment={r}
+          avatarFor={avatarFor}
           currentUserId={currentUserId}
           onReply={onReply}
           onDelete={onDelete}
