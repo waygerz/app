@@ -1750,7 +1750,7 @@ function EditLeagueDetails({ lg }: { lg: LeagueDetail }) {
         <Label>Logo</Label>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickLogo} />
         <div className="flex items-center gap-4">
-          <LeagueAvatar name={name} logoUrl={lg.logo_url} id={lg.id} size={64} />
+          <LeagueAvatar name={name} logoUrl={lg.logo_url} id={lg.id} size={128} />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={logoBusy} onClick={() => fileRef.current?.click()}>
               <ImagePlus className="size-4" />
@@ -2001,8 +2001,10 @@ function LeagueManageInner() {
         </Card>
       )}
 
-      {/* Period control */}
-      {lg.status === 'active' && (
+      {/* Period control — only weekly leagues advance periods (opens the next
+          week). Season/H2H leagues bet all season, so advancing just closed
+          betting with nothing to reopen; hide it for them. */}
+      {lg.status === 'active' && lg.period_type === 'weekly' && (
         <Card className="gap-3 p-6">
           <h2 className="text-base font-semibold text-foreground">Period</h2>
           <p className="text-sm text-muted-foreground">
