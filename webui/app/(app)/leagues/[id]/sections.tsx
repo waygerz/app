@@ -25,6 +25,7 @@ import { EventCard, TeamLogo, formatStart } from '@/components/event-card';
 import { Combobox } from '@/components/ui/combobox';
 import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
+import { UserMiniCard } from '@/components/user-mini-card';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { mediaApi } from '@/lib/media';
 import { imageToWebp } from '@/lib/imageToWebp';
@@ -794,6 +795,15 @@ function standingRankClass(rank: number) {
   return 'bg-muted text-muted-foreground';
 }
 
+// Left-accent border for standings cards — matches the /results card style
+// (border-l-4 + tinted bg). Top 3 get medal tints; the rest a neutral accent.
+function standingAccentClass(rank: number) {
+  if (rank === 1) return 'border-l-amber-500 bg-amber-500/5';
+  if (rank === 2) return 'border-l-slate-400 bg-slate-500/5';
+  if (rank === 3) return 'border-l-orange-500 bg-orange-500/5';
+  return 'border-l-border bg-muted/30';
+}
+
 function formatRecord(wins: number, losses: number, pushes?: number) {
   if (pushes) return `${wins}–${losses}–${pushes}`;
   return `${wins}–${losses}`;
@@ -818,13 +828,19 @@ export function LeagueStandings() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold text-foreground">Standings ({rows.length})</h2>
+      <h2 className="text-base font-semibold text-foreground sm:text-lg">Standings ({rows.length})</h2>
       <div className="flex flex-col gap-3">
         {rows.map((r, i) => {
           const rank = i + 1;
           const isMe = String(r.user_id) === me;
           return (
-            <Card key={r.user_id} className="flex w-full min-w-0 flex-row items-center gap-3 p-4">
+            <Card
+              key={r.user_id}
+              className={cn(
+                'flex w-full min-w-0 flex-row items-center gap-3 border-l-4 p-4',
+                standingAccentClass(rank),
+              )}
+            >
               <div
                 className={cn(
                   'flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold',
@@ -1593,75 +1609,62 @@ export function LeagueMembers() {
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold text-foreground">Members ({lg.members.length})</h2>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {lg.members.map((m) => {
           const uid = String(m.user_id);
           const isMe = uid === me;
           return (
-            <Card
+            <UserMiniCard
               key={m.user_id}
-              className="flex min-w-0 flex-row items-center gap-3 p-4"
-            >
-              <UserAvatar
-                userId={m.user_id}
-                name={m.display_name}
-                imageUrl={m.avatar_key}
-                className="size-14 shrink-0"
-                fallbackClassName="text-base"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-foreground">
-                  {m.display_name}
-                  {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
-                </p>
-                {m.role === 'member' ? (
-                  <p className="mt-0.5 text-xs text-muted-foreground">Member</p>
-                ) : (
-                  <Badge size="sm" appearance="light" className="mt-1">{memberRoleLabel(m.role)}</Badge>
-                )}
-              </div>
-              {!isMe && (
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={openMessage.isPending}
-                    onClick={() => openMessage.mutate(uid)}
-                  >
-                    <MessageCircle className="size-4" />
-                    <span className="hidden sm:inline">Message</span>
-                  </Button>
-                  {friendIds.has(uid) ? (
-                    <Button size="sm" variant="outline" disabled>
-                      Friends
-                    </Button>
-                  ) : pendingIds.has(uid) ? (
-                    <Button size="sm" variant="outline" disabled>
-                      Pending
-                    </Button>
-                  ) : (
+              userId={m.user_id}
+              name={m.display_name}
+              imageUrl={m.avatar_key}
+              badge={isMe ? <Badge size="sm" appearance="light">You</Badge> : null}
+              subtitle={memberRoleLabel(m.role)}
+              actions={
+                !isMe && (
+                  <>
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={addFriend.isPending}
-                      onClick={() => addFriend.mutate(uid)}
+                      disabled={openMessage.isPending}
+                      onClick={() => openMessage.mutate(uid)}
                     >
-                      <UserPlus className="size-4" />
-                      <span className="hidden sm:inline">Add friend</span>
+                      <MessageCircle className="size-4" />
+                      <span className="hidden sm:inline">Message</span>
                     </Button>
-                  )}
-                  <MemberActionsMenu
-                    member={m}
-                    isCommish={isCommish}
-                    canModerate={canModerate}
-                    busy={remove.isPending || setRole.isPending || transfer.isPending}
-                    onSetRole={(role) => setRole.mutate({ uid, role })}
-                    onTransfer={() => transfer.mutate(uid)}
-                    onRemove={() => remove.mutate(uid)}
-                  />
-                </div>
-              )}
-            </Card>
+                    {friendIds.has(uid) ? (
+                      <Button size="sm" variant="outline" disabled>
+                        Friends
+                      </Button>
+                    ) : pendingIds.has(uid) ? (
+                      <Button size="sm" variant="outline" disabled>
+                        Pending
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={addFriend.isPending}
+                        onClick={() => addFriend.mutate(uid)}
+                      >
+                        <UserPlus className="size-4" />
+                        <span className="hidden sm:inline">Add friend</span>
+                      </Button>
+                    )}
+                    <MemberActionsMenu
+                      member={m}
+                      isCommish={isCommish}
+                      canModerate={canModerate}
+                      busy={remove.isPending || setRole.isPending || transfer.isPending}
+                      onSetRole={(role) => setRole.mutate({ uid, role })}
+                      onTransfer={() => transfer.mutate(uid)}
+                      onRemove={() => remove.mutate(uid)}
+                    />
+                  </>
+                )
+              }
+            />
           );
         })}
       </div>
@@ -1988,49 +1991,122 @@ function LeagueManageInner() {
     onError: onErr,
   });
 
+  const sections = [
+    { id: 'manage-details', label: 'League details' },
+    { id: 'manage-rules', label: 'Rules' },
+    ...(lg.status === 'active' && lg.period_type === 'weekly'
+      ? [{ id: 'manage-period', label: 'Period' }]
+      : []),
+    { id: 'manage-danger', label: 'Danger zone' },
+  ];
+
   return (
-    <div className="flex flex-col gap-6">
-      <EditLeagueDetails lg={lg} />
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+      <ManageSidebar sections={sections} />
 
-      {isMoney ? (
-        <RulesForm lg={lg} />
-      ) : (
-        <Card className="gap-5 p-6">
-          <div className="flex items-center gap-2"><Settings className="size-5 text-muted-foreground" /><h2 className="text-base font-semibold text-foreground">Rules</h2></div>
-          <p className="text-sm text-muted-foreground">Pick’em leagues have no wager rules.</p>
-        </Card>
-      )}
+      <div className="flex min-w-0 flex-1 flex-col gap-6">
+        <div id="manage-details" className="scroll-mt-6">
+          <EditLeagueDetails lg={lg} />
+        </div>
 
-      {/* Period control — only weekly leagues advance periods (opens the next
-          week). Season/H2H leagues bet all season, so advancing just closed
-          betting with nothing to reopen; hide it for them. */}
-      {lg.status === 'active' && lg.period_type === 'weekly' && (
-        <Card className="gap-3 p-6">
-          <h2 className="text-base font-semibold text-foreground">Period</h2>
-          <p className="text-sm text-muted-foreground">
-            Current: {lg.current_period ? `${lg.current_period.label} (${lg.current_period.status})` : '—'}
-          </p>
-          <Button
-            variant="outline" className="mt-1 self-start" disabled={advance.isPending}
-            onClick={() => { if (confirm('Close the current period now and open the next?')) advance.mutate(); }}
-          >
-            {advance.isPending ? 'Advancing…' : 'Advance period'}
-          </Button>
-        </Card>
-      )}
+        <div id="manage-rules" className="scroll-mt-6">
+          {isMoney ? (
+            <RulesForm lg={lg} />
+          ) : (
+            <Card className="gap-5 p-6">
+              <div className="flex items-center gap-2"><Settings className="size-5 text-muted-foreground" /><h2 className="text-base font-semibold text-foreground">Rules</h2></div>
+              <p className="text-sm text-muted-foreground">Pick’em leagues have no wager rules.</p>
+            </Card>
+          )}
+        </div>
 
-      {/* Danger zone */}
-      <Card className="gap-3 p-6">
-        <h2 className="text-base font-semibold text-foreground">Danger zone</h2>
-        <p className="text-sm text-muted-foreground">Archiving removes the league from everyone’s dashboard. Balances and history are preserved.</p>
-        <Button
-          variant="outline" className="mt-1 self-start text-destructive" disabled={archive.isPending}
-          onClick={() => { if (confirm(`Archive "${lg.name}"? It will disappear from dashboards.`)) archive.mutate(); }}
-        >
-          {archive.isPending ? 'Archiving…' : 'Archive league'}
-        </Button>
-      </Card>
+        {/* Period control — only weekly leagues advance periods (opens the next
+            week). Season/H2H leagues bet all season, so advancing just closed
+            betting with nothing to reopen; hide it for them. */}
+        {lg.status === 'active' && lg.period_type === 'weekly' && (
+          <div id="manage-period" className="scroll-mt-6">
+            <Card className="gap-3 p-6">
+              <h2 className="text-base font-semibold text-foreground">Period</h2>
+              <p className="text-sm text-muted-foreground">
+                Current: {lg.current_period ? `${lg.current_period.label} (${lg.current_period.status})` : '—'}
+              </p>
+              <Button
+                variant="outline" className="mt-1 self-start" disabled={advance.isPending}
+                onClick={() => { if (confirm('Close the current period now and open the next?')) advance.mutate(); }}
+              >
+                {advance.isPending ? 'Advancing…' : 'Advance period'}
+              </Button>
+            </Card>
+          </div>
+        )}
+
+        {/* Danger zone */}
+        <div id="manage-danger" className="scroll-mt-6">
+          <Card className="gap-3 p-6">
+            <h2 className="text-base font-semibold text-foreground">Danger zone</h2>
+            <p className="text-sm text-muted-foreground">Archiving removes the league from everyone’s dashboard. Balances and history are preserved.</p>
+            <Button
+              variant="outline" className="mt-1 self-start text-destructive" disabled={archive.isPending}
+              onClick={() => { if (confirm(`Archive "${lg.name}"? It will disappear from dashboards.`)) archive.mutate(); }}
+            >
+              {archive.isPending ? 'Archiving…' : 'Archive league'}
+            </Button>
+          </Card>
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** Sticky, scrollspy-highlighted section nav for the Manage page — the
+ *  Metronic settings-sidebar layout, built with an IntersectionObserver.
+ *  Hidden on mobile (the cards stack full-width). */
+function ManageSidebar({ sections }: { sections: { id: string; label: string }[] }) {
+  const idsKey = sections.map((s) => s.id).join(',');
+  const [active, setActive] = useState(sections[0]?.id ?? '');
+
+  useEffect(() => {
+    const ids = idsKey.split(',').filter(Boolean);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActive(visible[0].target.id);
+      },
+      { rootMargin: '-15% 0px -75% 0px' },
+    );
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [idsKey]);
+
+  return (
+    <nav className="hidden shrink-0 lg:block lg:w-56">
+      <div className="sticky top-6 flex flex-col gap-1">
+        {sections.map((s) => (
+          <a
+            key={s.id}
+            href={`#${s.id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              setActive(s.id);
+            }}
+            className={cn(
+              'rounded-lg px-3 py-2 text-sm transition-colors',
+              active === s.id
+                ? 'bg-primary/10 font-medium text-primary'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            {s.label}
+          </a>
+        ))}
+      </div>
+    </nav>
   );
 }
 

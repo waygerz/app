@@ -8,27 +8,12 @@ import { friendsApi, type Friend, type FriendRequest } from '@/lib/friends';
 import { shareLink } from '@/lib/share';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { UserAvatar } from '@/components/user-avatar';
+import { UserMiniCard } from '@/components/user-mini-card';
 
-function PersonRow({
-  userId,
-  name,
-  children,
-}: {
-  userId: string;
-  name: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-3 border-b border-border py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-center gap-3">
-        <UserAvatar userId={userId} name={name} className="size-10 shrink-0" />
-        <span className="truncate text-sm font-medium text-foreground">{name}</span>
-      </div>
-      {children && <div className="flex flex-wrap gap-2 sm:shrink-0">{children}</div>}
-    </div>
-  );
-}
+// Dense grid for display-only cards; roomier grid for cards with action buttons
+// (Accept/Decline) so they don't cramp at 2 columns on phones.
+const GRID = 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4';
+const ACTION_GRID = 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3';
 
 function AddFriendsButton({
   inviteLink,
@@ -100,51 +85,58 @@ export default function FriendsPage() {
 
       {incoming.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-2 text-sm font-semibold text-foreground">
-            Requests ({incoming.length})
-          </h2>
-          <Card className="px-5 py-1">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Requests ({incoming.length})</h2>
+          <div className={ACTION_GRID}>
             {incoming.map((r: FriendRequest) => (
-              <PersonRow key={r.id} userId={String(r.user_id)} name={r.display_name}>
-                <Button size="sm" onClick={() => accept.mutate(r.id)}>
-                  Accept
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => decline.mutate(r.id)}>
-                  Decline
-                </Button>
-              </PersonRow>
+              <UserMiniCard
+                key={r.id}
+                userId={String(r.user_id)}
+                name={r.display_name}
+                subtitle="Wants to be friends"
+                actions={
+                  <>
+                    <Button size="sm" onClick={() => accept.mutate(r.id)}>Accept</Button>
+                    <Button size="sm" variant="outline" onClick={() => decline.mutate(r.id)}>Decline</Button>
+                  </>
+                }
+              />
             ))}
-          </Card>
+          </div>
         </section>
       )}
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-semibold text-foreground">
+        <h2 className="mb-3 text-sm font-semibold text-foreground">
           Your friends ({friends.data?.length ?? 0})
         </h2>
-        <Card className="px-5 py-1">
-          {friends.isLoading && <p className="py-4 text-sm text-muted-foreground">Loading…</p>}
-          {!friends.isLoading && (friends.data?.length ?? 0) === 0 && (
-            <p className="py-4 text-sm text-muted-foreground">
-              No friends yet — share your link or add someone from a league members page.
-            </p>
-          )}
-          {friends.data?.map((f: Friend) => (
-            <PersonRow key={f.friendship_id} userId={String(f.user_id)} name={f.display_name} />
-          ))}
-        </Card>
+        {friends.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : (friends.data?.length ?? 0) === 0 ? (
+          <Card className="p-6 text-center text-sm text-muted-foreground">
+            No friends yet — share your link or add someone from a league members page.
+          </Card>
+        ) : (
+          <div className={GRID}>
+            {friends.data?.map((f: Friend) => (
+              <UserMiniCard key={f.friendship_id} userId={String(f.user_id)} name={f.display_name} />
+            ))}
+          </div>
+        )}
       </section>
 
       {outgoing.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold text-foreground">Pending sent</h2>
-          <Card className="px-5 py-1">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Pending sent</h2>
+          <div className={GRID}>
             {outgoing.map((r: FriendRequest) => (
-              <PersonRow key={r.id} userId={String(r.user_id)} name={r.display_name}>
-                <span className="text-xs text-muted-foreground">Pending…</span>
-              </PersonRow>
+              <UserMiniCard
+                key={r.id}
+                userId={String(r.user_id)}
+                name={r.display_name}
+                subtitle="Pending…"
+              />
             ))}
-          </Card>
+          </div>
         </section>
       )}
     </div>
