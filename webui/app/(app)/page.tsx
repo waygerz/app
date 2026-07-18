@@ -77,17 +77,6 @@ export default function HomePage() {
             Your leagues, invites, and where to jump back in.
           </p>
         </div>
-        {data.length > 0 && (
-          <Button
-            asChild
-            variant="primary"
-            className="w-full bg-gradient-to-r from-primary to-fuchsia-600 shadow-md shadow-primary/20 hover:opacity-90 sm:w-auto"
-          >
-            <Link href="/leagues/new">
-              <Plus className="size-4" /> Create league
-            </Link>
-          </Button>
-        )}
       </div>
 
       {/* Pending invites */}
@@ -197,6 +186,17 @@ export default function HomePage() {
               </Link>
             );
           })}
+        </div>
+      )}
+
+      {data.length > 0 && (
+        <div className="mt-6 flex justify-center">
+          <Link
+            href="/leagues/new"
+            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          >
+            <Plus className="size-4" /> Create league
+          </Link>
         </div>
       )}
     </div>
