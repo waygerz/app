@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Rss } from 'lucide-react';
 import { UserAvatar } from '@/components/user-avatar';
 import { FeedPostCard } from './feed-post';
 
@@ -153,7 +154,19 @@ export function LeagueOverview() {
                 engagementKey={lg.id}
               />
             ))}
-            {(feed.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">No activity yet.</p>}
+            {(feed.data ?? []).length === 0 && (
+              <Card className="items-center gap-3 p-8 text-center">
+                <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-brand/15 text-primary">
+                  <Rss className="size-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">No activity yet</p>
+                  <p className="text-xs text-muted-foreground">
+                    League updates, results, and announcements will show up here.
+                  </p>
+                </div>
+              </Card>
+            )}
           </div>
         </section>
       </div>
