@@ -29,12 +29,18 @@ function matches(pathname: string, prefixes: string[]) {
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // A refresh cookie means "maybe still logged in" — let those requests into the
+  // app so the client can refresh. But only a live access cookie counts as
+  // *confirmed* logged-in for bouncing away from guest pages: bouncing a
+  // refresh-only user off /login would ping-pong /login ↔ / forever if that
+  // refresh is actually dead (the loop that read as "stuck on loading").
   const hasSession = SESSION_COOKIES.some((c) => req.cookies.has(c));
+  const hasAccess = req.cookies.has('waygerz_access');
 
   if (matches(pathname, PUBLIC_PREFIXES)) return NextResponse.next();
 
   if (matches(pathname, GUEST_PREFIXES)) {
-    if (hasSession) return NextResponse.redirect(new URL('/', req.url));
+    if (hasAccess) return NextResponse.redirect(new URL('/', req.url));
     return NextResponse.next();
   }
 

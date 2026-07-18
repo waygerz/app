@@ -116,7 +116,10 @@ async function withCrossTabLock(fn: () => Promise<boolean>): Promise<boolean> {
 /** Single-flight session refresh, deduped within the tab and across tabs. */
 function refreshSession(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = withCrossTabLock(performRefresh).finally(() => {
+  // Cap the whole refresh so a stuck Web Lock or hung request can never wedge
+  // the caller (e.g. the auth bootstrap) on the loading screen.
+  const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 8000));
+  refreshInFlight = Promise.race([withCrossTabLock(performRefresh), timeout]).finally(() => {
     refreshInFlight = null;
   });
   return refreshInFlight;

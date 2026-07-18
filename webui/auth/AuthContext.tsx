@@ -61,7 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    bootstrap().finally(() => setLoading(false));
+    // Never let the loading screen hang: cap bootstrap so loading always clears
+    // even if a request or refresh stalls (belt-and-suspenders for mobile).
+    const cap = new Promise<void>((resolve) => setTimeout(resolve, 12000));
+    Promise.race([bootstrap(), cap]).finally(() => setLoading(false));
   }, []);
 
   async function startOtp(phone: string) {
