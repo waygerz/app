@@ -4,11 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  leaguesApi,
-  leagueTypeLabel,
-  type LeagueCard,
-} from '@/lib/leagues';
+import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
 import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
 import { LeagueAvatar } from '@/components/league-avatar';
@@ -16,12 +12,24 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Trophy } from 'lucide-react';
+import { Plus, Trophy, Swords, Coins, Inbox, type LucideIcon } from 'lucide-react';
 
-function statusLine(c: LeagueCard): string {
-  if (c.league_type === 'pickem') return "Pick'em · bragging rights";
-  return `${formatCredits(c.my_balance_cents ?? 0)} balance`;
-}
+// Per-type color accent, matching the landing page: Pick'em = amber, H2H = violet.
+const TYPE_ACCENT: Record<string, { bar: string; chip: string; border: string; icon: LucideIcon }> = {
+  pickem: {
+    bar: 'from-amber-500 to-orange-500',
+    chip: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    border: 'hover:border-amber-500/50',
+    icon: Trophy,
+  },
+  head_to_head: {
+    bar: 'from-violet-500 to-fuchsia-500',
+    chip: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+    border: 'hover:border-violet-500/50',
+    icon: Swords,
+  },
+};
+const accentFor = (t: string) => TYPE_ACCENT[t] ?? TYPE_ACCENT.head_to_head;
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -50,21 +58,54 @@ export default function HomePage() {
 
   return (
     <div className="container py-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">
-          {user ? `Welcome back, ${user.display_name}` : 'Your leagues'}
-        </h1>
+      {/* Header */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+            {user ? (
+              <>
+                Welcome back,{' '}
+                <span className="bg-gradient-to-r from-primary via-fuchsia-500 to-brand bg-clip-text text-transparent">
+                  {user.display_name}
+                </span>
+              </>
+            ) : (
+              'Your leagues'
+            )}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your leagues, invites, and where to jump back in.
+          </p>
+        </div>
+        {data.length > 0 && (
+          <Button
+            asChild
+            variant="primary"
+            className="w-full bg-gradient-to-r from-primary to-fuchsia-600 shadow-md shadow-primary/20 hover:opacity-90 sm:w-auto"
+          >
+            <Link href="/leagues/new">
+              <Plus className="size-4" /> Create league
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* Pending invites */}
       {pendingInvites.length > 0 && (
         <section className="mb-8">
-          <h2 className="mb-3 text-lg font-semibold text-foreground">
+          <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
+            <span className="flex size-6 items-center justify-center rounded-md bg-primary/15 text-primary">
+              <Inbox className="size-3.5" />
+            </span>
             Invites ({pendingInvites.length})
           </h2>
           <div className="flex flex-col gap-3">
             {pendingInvites.map((inv) => (
-              <Card key={inv.invite_id} className="flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <Card
+                key={inv.invite_id}
+                className="relative flex-col gap-3 overflow-hidden p-4 pl-5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-primary to-fuchsia-500" />
                 <div className="flex min-w-0 items-center gap-3">
                   <LeagueAvatar name={inv.league_name} logoUrl={inv.league_logo} id={inv.league_id} size={40} />
                   <div className="min-w-0">
@@ -88,56 +129,74 @@ export default function HomePage() {
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
       ) : data.length === 0 ? (
-        <Card className="items-center gap-3 p-6 text-center sm:p-10">
-          <Trophy className="size-8 text-muted-foreground" />
+        <Card className="items-center gap-4 p-6 text-center sm:p-12">
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-fuchsia-500 to-brand text-white shadow-lg">
+            <Trophy className="size-8" />
+          </div>
           <div>
             <p className="text-base font-semibold text-foreground">No leagues yet</p>
             <p className="text-sm text-muted-foreground">
               Create a league or join one with a code to start playing.
             </p>
           </div>
-          <Button onClick={() => router.push('/leagues/new')}>
+          <Button
+            onClick={() => router.push('/leagues/new')}
+            variant="primary"
+            className="bg-gradient-to-r from-primary to-fuchsia-600 shadow-md shadow-primary/20 hover:opacity-90"
+          >
             <Plus className="size-4" /> Create your first league
           </Button>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data.map((c) => (
-            <Link key={c.id} href={`/leagues/${c.id}`} className="group">
-              <Card className="h-full cursor-pointer flex-row items-center gap-4 p-4 transition-all group-hover:border-primary">
-                <LeagueAvatar
-                  name={c.name}
-                  logoUrl={c.logo_url}
-                  id={c.id}
-                  unreadCount={c.unread_feed_count ?? 0}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-semibold text-foreground">{c.name}</span>
-                    {c.status === 'draft' && (
-                      <Badge size="sm" variant="warning" appearance="light">Draft</Badge>
-                    )}
+          {data.map((c) => {
+            const a = accentFor(c.league_type);
+            const isMoney = c.league_type !== 'pickem';
+            return (
+              <Link key={c.id} href={`/leagues/${c.id}`} className="group">
+                <Card
+                  className={`relative h-full flex-col gap-0 overflow-hidden p-0 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg ${a.border}`}
+                >
+                  <div className={`h-1.5 w-full bg-gradient-to-r ${a.bar}`} />
+                  <div className="flex flex-1 items-center gap-4 p-4">
+                    <LeagueAvatar
+                      name={c.name}
+                      logoUrl={c.logo_url}
+                      id={c.id}
+                      unreadCount={c.unread_feed_count ?? 0}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-semibold text-foreground">{c.name}</span>
+                        {c.status === 'draft' && (
+                          <Badge size="sm" variant="warning" appearance="light">Draft</Badge>
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${a.chip}`}>
+                          <a.icon className="size-3" />
+                          {leagueTypeLabel(c.league_type)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {c.member_count} member{c.member_count === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      {isMoney ? (
+                        <div className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand">
+                          <Coins className="size-3.5" />
+                          {formatCredits(c.my_balance_cents ?? 0)}
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-sm font-medium text-muted-foreground">
+                          Bragging rights
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">
-                    {leagueTypeLabel(c.league_type)} · {c.member_count} member{c.member_count === 1 ? '' : 's'}
-                  </div>
-                  <div className="mt-1 text-sm font-medium text-foreground">{statusLine(c)}</div>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {/* Create link below the grid (replaces the header button) */}
-      {data.length > 0 && (
-        <div className="mt-8 text-center">
-          <Link
-            href="/leagues/new"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-          >
-            <Plus className="size-4" /> Create a league
-          </Link>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
