@@ -5,9 +5,9 @@ import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
 
 /**
- * Centered "mini card" for a person — avatar over name over a subtitle, with
- * optional inline badge and a row of actions. Adapted from Metronic's
- * CardUserMini; used on /friends and the league Members page.
+ * Card for a person. Horizontal on mobile (avatar beside the name, actions
+ * below) to stay compact; the centered vertical "mini card" (Metronic
+ * CardUserMini) from `sm` up. Used on /friends and the league Members page.
  */
 export function UserMiniCard({
   userId,
@@ -24,24 +24,30 @@ export function UserMiniCard({
   subtitle?: ReactNode;
   /** Small element shown inline next to the name (e.g. a "You" / role badge). */
   badge?: ReactNode;
-  /** Action buttons shown centered at the bottom of the card. */
+  /** Action buttons — beside/below on mobile, centered under the card on sm+. */
   actions?: ReactNode;
 }) {
   return (
-    <Card className="flex flex-col items-center gap-1.5 p-5 text-center lg:py-8">
-      <UserAvatar
-        userId={userId}
-        name={name}
-        imageUrl={imageUrl}
-        className="mb-2 size-20"
-        fallbackClassName="text-xl"
-      />
-      <div className="flex max-w-full items-center justify-center gap-1.5">
-        <span className="truncate text-base font-medium text-foreground">{name}</span>
-        {badge}
+    <Card className="flex flex-col gap-3 p-3 sm:items-center sm:gap-1.5 sm:p-5 sm:text-center lg:py-8">
+      <div className="flex min-w-0 items-center gap-3 sm:flex-col sm:gap-1.5">
+        <UserAvatar
+          userId={userId}
+          name={name}
+          imageUrl={imageUrl}
+          className="size-12 shrink-0 sm:mb-2 sm:size-20"
+          fallbackClassName="text-lg sm:text-xl"
+        />
+        <div className="flex min-w-0 flex-1 flex-col sm:max-w-full sm:flex-none sm:items-center">
+          <div className="flex min-w-0 max-w-full items-center gap-1.5">
+            <span className="truncate text-sm font-medium text-foreground sm:text-base">{name}</span>
+            {badge}
+          </div>
+          {subtitle && <div className="text-xs text-muted-foreground sm:text-sm">{subtitle}</div>}
+        </div>
       </div>
-      {subtitle && <div className="text-sm text-muted-foreground">{subtitle}</div>}
-      {actions && <div className="mt-3 flex flex-wrap items-center justify-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex flex-wrap items-center gap-2 sm:mt-2 sm:justify-center">{actions}</div>
+      )}
     </Card>
   );
 }
