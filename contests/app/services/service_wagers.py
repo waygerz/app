@@ -4,7 +4,7 @@ Every wager belongs to a league; money moves through the wallet on that league's
 account (``league:{league_id}``). Validation is delegated to the leagues service
 (``league_context`` + ``are_comembers``) — friendship is no longer required.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from flask import current_app, request
@@ -37,8 +37,10 @@ def _itoken():
 
 
 def get_event(external_id):
+    # INGESTOR_URL already includes the /v1/<group>/ingestor prefix (matches the
+    # leagues service); do not prepend it again or the path doubles and 404s.
     base = current_app.config["INGESTOR_URL"]
-    resp = requests.get(f"{base}/v1/platform/ingestor/events/{external_id}", timeout=10)
+    resp = requests.get(f"{base}/events/{external_id}", timeout=10)
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
@@ -312,6 +314,15 @@ def _parse_start(wager):
 
 
 def _has_started(wager) -> bool:
+    """True unless we KNOW the event is still in the future.
+
+    A known future start blocks settlement (no confirming before kickoff); a
+    known past start allows it. An *unknown* start time also allows it: we can't
+    prove it hasn't started, and blocking would strand a wager forever if the
+    data source never reports a start time or a `final` (both holds stuck). Under
+    the loser-concedes model an early concession only pays the opponent, so this
+    is safe.
+    """
     dt = _parse_start(wager)
     return dt is None or dt <= datetime.utcnow()
 
@@ -371,11 +382,16 @@ def _post_completed_activity(wager):
 def confirm(wager, user_id, result):
     """Peer-settle a completed head-to-head wager.
 
-    ``result`` is relative to the caller: 'won' (caller took the pot), 'lost'
-    (caller concedes to the other side), or 'draw' (no contest — refund both).
+    ``result`` is relative to the caller: 'lost' (caller concedes — pays the
+    other side) or 'draw' (no contest — refund both). A caller cannot claim
+    their own win: nothing verifies the result, so allowing 'won' would let
+    either party take the pot unilaterally. The winner is paid when the loser
+    concedes.
+
     Allowed once the event is over: from `completed`, or directly from
-    `accepted` if the event has already started (so it works before the
-    scheduled sweep flips it).
+    `accepted` once the event has started (so it works before the scheduled sweep
+    flips it). A known *future* start is blocked; an unknown start time is
+    allowed (see _has_started — blocking it would strand funds).
     """
     if not wager.involves(user_id):
         raise WagerError("this wager isn't yours to settle")
@@ -383,7 +399,7 @@ def confirm(wager, user_id, result):
         pass
     elif wager.status == ACCEPTED and _has_started(wager):
         pass
-    elif wager.status in (ACCEPTED,):
+    elif wager.status == ACCEPTED:
         raise WagerError("you can confirm the result once the event has started")
     else:
         raise WagerError("this wager has already been settled")
@@ -402,12 +418,13 @@ def confirm(wager, user_id, result):
         _post_settled_activity(wager, "A bet was called a draw")
         return wager
 
-    if result == "won":
-        winner = user_id
-    elif result == "lost":
+    if result == "lost":
+        # The losing side concedes; the pot goes to the other player.
         winner = wager.acceptor_id if user_id == wager.proposer_id else wager.proposer_id
+    elif result == "won":
+        raise WagerError("you can't claim your own win — the losing player concedes, or report a draw")
     else:
-        raise WagerError("result must be 'won', 'lost', or 'draw'")
+        raise WagerError("result must be 'lost' or 'draw'")
 
     payout(account, winner, wager.amount_cents * 2, _ref(wager.id))
     wager.winner_user_id = winner

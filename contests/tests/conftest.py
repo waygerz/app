@@ -68,6 +68,8 @@ def calls(monkeypatch):
         },
     )
     monkeypatch.setattr(svc, "post_league_activity", lambda lid, payload: None)
+    monkeypatch.setattr(svc, "resolve_users",
+                        lambda ids: {str(i): f"User {str(i)[:4]}" for i in ids})
     # account-scoped wallet ops: record (op, user, amount), ignoring account/ref
     monkeypatch.setattr(svc, "hold", lambda acct, u, a, r: recorded.append(("hold", u, a)))
     monkeypatch.setattr(svc, "payout", lambda acct, u, a, r: recorded.append(("payout", u, a)))

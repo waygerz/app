@@ -72,8 +72,7 @@ export default function BetsView() {
     if (w.status === 'completed' && (w.proposer_id === me || w.acceptor_id === me)) {
       return (
         <>
-          <Button size="sm" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'won' })}>I won</Button>
-          <Button size="sm" variant="outline" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
+          <Button size="sm" variant="outline" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
           <Button size="sm" variant="ghost" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'draw' })}>Draw</Button>
         </>
       );

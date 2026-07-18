@@ -118,8 +118,7 @@ export function NotificationsSheet() {
           badge: { label: 'Confirm', variant: 'warning' },
           actions: (
             <>
-              <Button size="sm" disabled={confirmBet.isPending} onClick={() => confirmBet.mutate({ id: w.id, result: 'won' })}>I won</Button>
-              <Button size="sm" variant="outline" disabled={confirmBet.isPending} onClick={() => confirmBet.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
+              <Button size="sm" variant="outline" disabled={confirmBet.isPending} title="Concede — pays your opponent" onClick={() => confirmBet.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
               <Button size="sm" variant="ghost" disabled={confirmBet.isPending} onClick={() => confirmBet.mutate({ id: w.id, result: 'draw' })}>Draw</Button>
             </>
           ),

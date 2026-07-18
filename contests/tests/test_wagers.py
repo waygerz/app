@@ -125,15 +125,17 @@ def test_settle_noop_when_event_not_final(app, calls):
     assert w.status == ACCEPTED
 
 
-def test_confirm_won_pays_claimer_double(app, calls, monkeypatch):
+def test_confirm_won_is_rejected(app, calls, monkeypatch):
+    # Nobody can claim their own win — only the losing side settles, so a 'won'
+    # confirmation is refused and no money moves.
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
     monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
     svc.settle_one(w)  # -> COMPLETED
-    svc.confirm(w, U1, "won")
-    assert w.status == SETTLED
-    assert w.winner_user_id == U1 and w.confirmed_by_id == U1
-    assert ("payout", U1, 10000) in calls
+    with pytest.raises(svc.WagerError):
+        svc.confirm(w, U1, "won")
+    assert w.status == COMPLETED
+    assert not any(op == "payout" for op, _u, _a in calls)
 
 
 def test_confirm_lost_pays_the_other_side(app, calls, monkeypatch):
@@ -163,7 +165,7 @@ def test_confirm_rejects_unrelated_user(app, calls, monkeypatch):
     monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
     svc.settle_one(w)
     with pytest.raises(svc.WagerError):
-        svc.confirm(w, U99, "won")
+        svc.confirm(w, U99, "lost")
 
 
 def test_confirm_rejects_after_settled(app, calls, monkeypatch):
@@ -171,9 +173,46 @@ def test_confirm_rejects_after_settled(app, calls, monkeypatch):
     svc.accept(w, U2)
     monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
     svc.settle_one(w)
-    svc.confirm(w, U1, "won")
+    svc.confirm(w, U1, "lost")  # settles: U2 takes the pot
     with pytest.raises(svc.WagerError):
-        svc.confirm(w, U2, "won")
+        svc.confirm(w, U2, "lost")
+
+
+def test_confirm_blocked_before_known_kickoff(app, calls):
+    # A known, still-future start time blocks settling straight from ACCEPTED.
+    from app.extensions import db
+
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    w.start_time = "2999-01-01T00:00:00Z"
+    db.session.commit()
+    with pytest.raises(svc.WagerError):
+        svc.confirm(w, U1, "lost")
+    assert w.status == ACCEPTED
+
+
+def test_confirm_from_accepted_after_kickoff(app, calls):
+    # Known past start time: peers can settle from ACCEPTED without waiting for
+    # the scheduled sweep.
+    from app.extensions import db
+
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    w.start_time = "2020-01-01T00:00:00Z"
+    db.session.commit()
+    svc.confirm(w, U1, "lost")
+    assert w.status == SETTLED and w.winner_user_id == U2
+    assert ("payout", U2, 10000) in calls
+
+
+def test_confirm_allowed_when_start_unknown(app, calls):
+    # Unknown start time (mocked event has start_time None): settlement is allowed
+    # rather than stranding the wager forever — loser-concedes keeps it safe.
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    svc.confirm(w, U1, "lost")
+    assert w.status == SETTLED and w.winner_user_id == U2
+    assert ("payout", U2, 10000) in calls
 
 
 def test_propose_many_creates_one_per_member(app, calls):
