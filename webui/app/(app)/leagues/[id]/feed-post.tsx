@@ -80,54 +80,61 @@ function PostHeader({
   const isWinner = item.event_type === 'period_final';
   const isAnnouncement = item.kind === 'announcement';
 
+  const heading = item.author_name ?? item.title ?? 'Update';
+
   return (
-    <div className={cn('flex flex-row items-start gap-3 p-3', className)}>
-      {item.author_id ? (
-        <UserAvatar
-          userId={item.author_id}
-          name={item.author_name ?? 'Member'}
-          imageUrl={authorAvatarKey}
-          className="size-10 shrink-0"
-        />
-      ) : (
-        <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full', ev.chip)} aria-hidden>
-          <ev.icon className="size-5" />
+    <div className={cn('flex flex-col gap-4 p-4 sm:p-5', className)}>
+      {/* Heading — avatar + author name over the date (post4 style). */}
+      <div className="flex items-center gap-3">
+        {item.author_id ? (
+          <UserAvatar
+            userId={item.author_id}
+            name={item.author_name ?? 'Member'}
+            imageUrl={authorAvatarKey}
+            className="size-10 shrink-0"
+          />
+        ) : (
+          <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full', ev.chip)} aria-hidden>
+            <ev.icon className="size-5" />
+          </div>
+        )}
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate text-sm font-semibold text-foreground">{heading}</span>
+          <time className="text-xs text-muted-foreground">{timeAgo(item.created_at)}</time>
         </div>
-      )}
-      <div className="min-w-0 flex-1">
         {isAnnouncement && (
-          <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
             <Megaphone className="size-3" /> Announcement
           </span>
         )}
-        {item.title && <div className="text-sm font-semibold text-foreground">{item.title}</div>}
-        {item.body && (
-          <div
-            className={cn(
-              'whitespace-pre-wrap break-words text-sm',
-              isWinner ? 'font-medium text-foreground' : 'text-muted-foreground',
-            )}
-          >
-            {item.body}
-          </div>
-        )}
-        {item.link_url && (
-          <a
-            href={item.link_url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="break-all text-xs text-primary hover:underline"
-          >
-            {item.link_label || item.link_url}
-          </a>
-        )}
-        <div className="mt-1 text-[11px] text-muted-foreground">
-          {item.author_name ? `${item.author_name} · ` : ''}
-          {timeAgo(item.created_at)}
-        </div>
-        {footer}
       </div>
+
+      {/* Body — a distinct title (system posts) then the text. */}
+      {item.title && item.title !== heading && (
+        <div className="text-sm font-semibold text-foreground">{item.title}</div>
+      )}
+      {item.body && (
+        <p
+          className={cn(
+            'whitespace-pre-wrap break-words text-sm leading-relaxed',
+            isWinner ? 'font-medium text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          {item.body}
+        </p>
+      )}
+      {item.link_url && (
+        <a
+          href={item.link_url}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="break-all text-xs text-primary hover:underline"
+        >
+          {item.link_label || item.link_url}
+        </a>
+      )}
+      {footer}
     </div>
   );
 }
@@ -148,15 +155,15 @@ export function FeedPostCard({ item, engagement, currentUserId, engagementKey, a
     <Button
       variant="ghost"
       size="sm"
-      className={cn('h-7 gap-1 px-2 text-xs', engagement.liked_by_me && 'text-rose-500')}
+      className={cn('h-8 gap-1.5 px-2.5 text-xs text-muted-foreground', engagement.liked_by_me && 'text-rose-500')}
       disabled={like.isPending}
       onClick={(e) => {
         e.stopPropagation();
         like.mutate();
       }}
     >
-      <Heart className={cn('size-3.5', engagement.liked_by_me && 'fill-current')} />
-      {engagement.like_count > 0 ? engagement.like_count : 'Like'}
+      <Heart className={cn('size-4', engagement.liked_by_me && 'fill-current')} />
+      {engagement.like_count > 0 ? `${engagement.like_count} Like${engagement.like_count === 1 ? '' : 's'}` : 'Like'}
     </Button>
   );
 
@@ -181,19 +188,19 @@ export function FeedPostCard({ item, engagement, currentUserId, engagementKey, a
           item={item}
           authorAvatarKey={authorAvatarKey}
           footer={
-            <div className="mt-2 flex items-center gap-1">
+            <div className="flex items-center gap-1 border-t border-dashed border-border pt-3">
               {likeButton}
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 gap-1 px-2 text-xs"
+                className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground"
                 onClick={(e) => {
                   e.stopPropagation();
                   setOpen(true);
                 }}
               >
-                <MessageCircle className="size-3.5" />
-                {engagement.comment_count > 0 ? engagement.comment_count : 'Comment'}
+                <MessageCircle className="size-4" />
+                {engagement.comment_count > 0 ? `${engagement.comment_count} Comment${engagement.comment_count === 1 ? '' : 's'}` : 'Comment'}
               </Button>
             </div>
           }
@@ -278,9 +285,14 @@ function PostContent({
     <>
       {/* Post + comments scroll together; the composer stays pinned below. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <PostHeader item={item} authorAvatarKey={authorAvatarKey} className="pe-10" footer={<div className="mt-2">{likeButton}</div>} />
-        <div className="border-t border-border px-3 py-3">
-          <div className="mb-2 text-xs font-semibold text-muted-foreground">
+        <PostHeader
+          item={item}
+          authorAvatarKey={authorAvatarKey}
+          className="pe-10"
+          footer={<div className="flex items-center gap-1 border-t border-dashed border-border pt-3">{likeButton}</div>}
+        />
+        <div className="border-t border-border px-5 py-4">
+          <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {list.length > 0 ? `${list.length} comment${list.length === 1 ? '' : 's'}` : 'Comments'}
           </div>
           {comments.isLoading && <p className="text-xs text-muted-foreground">Loading comments…</p>}
@@ -357,25 +369,31 @@ function CommentThread({
   const isOwn = comment.author_id === currentUserId;
 
   return (
-    <div className={cn('mb-2', depth > 0 && 'ml-4 border-l border-border pl-3')}>
-      <div className="flex items-start gap-2">
+    <div className={cn('mb-4', depth > 0 && 'ml-5 border-l border-border pl-4')}>
+      <div className="flex items-start gap-2.5">
         <UserAvatar
           userId={comment.author_id}
           name={comment.author_name ?? 'Member'}
           imageUrl={avatarFor?.(comment.author_id)}
           className="size-8 shrink-0"
         />
-        <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium text-foreground">{comment.author_name ?? 'Member'}</div>
-          <div className="text-sm text-foreground">{comment.body}</div>
-          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span>{timeAgo(comment.created_at)}</span>
+        <div className="grid min-w-0 flex-1 gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-sm font-medium text-foreground">{comment.author_name ?? 'Member'}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(comment.created_at)}</span>
+            </div>
             {depth === 0 && (
-              <button type="button" className="text-primary hover:underline" onClick={() => onReply(comment)}>
+              <button
+                type="button"
+                className="shrink-0 text-xs font-medium text-primary hover:underline"
+                onClick={() => onReply(comment)}
+              >
                 Reply
               </button>
             )}
           </div>
+          <p className="whitespace-pre-wrap break-words text-sm text-foreground">{comment.body}</p>
         </div>
         {isOwn && (
           <Button
