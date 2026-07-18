@@ -54,6 +54,11 @@ def mock_clients(monkeypatch):
 
     monkeypatch.setattr(svc, "resolve_users",
                         lambda ids: {str(i): f"User {str(i)[:4]}" for i in ids})
+    monkeypatch.setattr(svc, "resolve_users_full",
+                        lambda ids: {str(i): {"display_name": f"User {str(i)[:4]}", "avatar_key": None}
+                                     for i in ids})
+    monkeypatch.setattr(svc, "warm_event_cache", lambda *a, **k: None)
+    monkeypatch.setattr(svc, "ingestor_warm_cache", lambda *a, **k: {"ok": True})
     monkeypatch.setattr(svc, "wallet_balances",
                         lambda uid, accts: {a: 0 for a in accts})
     monkeypatch.setattr(svc, "wallet_grant", lambda *a, **k: {"ok": True})

@@ -303,9 +303,21 @@ def grade_period(period) -> int:
 
 
 def grade_open_periods() -> int:
-    periods = LeaguePeriod.query.filter(
-        LeaguePeriod.status.in_([period_model.OPEN, period_model.CLOSED])
-    ).all()
+    """Grade every period that still has ungraded picks — whatever its status.
+
+    Keying off pending picks (rather than OPEN/CLOSED) means a game that goes
+    final *after* its week rolled over still gets graded, instead of being
+    stranded forever on a FINAL period. It also scans less: fully-graded weeks
+    drop out of the query entirely.
+    """
+    pending_period_ids = [
+        row[0] for row in
+        db.session.query(Pick.period_id).filter(Pick.correct.is_(None)).distinct()
+    ]
+    periods = (
+        LeaguePeriod.query.filter(LeaguePeriod.id.in_(pending_period_ids)).all()
+        if pending_period_ids else []
+    )
     total = 0
     for period in periods:
         try:
@@ -334,8 +346,12 @@ def rollover_periods() -> int:
         if not league:
             continue
         p.status = FINAL
+        # Grading runs before rollover in the same tick, so the winner is
+        # normally known here; if anything is still ungraded we stay generic
+        # rather than announce a wrong winner.
+        body = _period_final_body(league.id, p) or "Standings are locked for this period."
         _rollover_feed(league.id, "period_final", f"{p.label} is final",
-                       "Standings are locked for this period.", dedup_key=f"period_final:{p.id}")
+                       body, dedup_key=f"period_final:{p.id}")
         if league.period_type == WEEKLY and league.status == L_ACTIVE:
             # Prefer the next prebuilt period; only synthesize one if none exists
             # (non-prebuilt leagues, e.g. head-to-head weekly).
@@ -878,18 +894,14 @@ def list_periods(league_id, me):
     return {"periods": [p.to_dict() for p in periods]}, 200
 
 
-def period_results(league_id, period_id, me):
-    """Weekly leaderboard for a pick'em period: members ranked by correct picks,
-    ties broken by whose predicted total is closest to the last game's actual
-    combined score (the Monday-night tie-breaker)."""
-    league_id, period_id = str(league_id), str(period_id)
-    league = db.session.get(League, league_id)
-    if not league or not _membership(league_id, me):
-        return {"error": "league not found"}, 404
-    period = db.session.get(LeaguePeriod, period_id)
-    if not period or period.league_id != league_id:
-        return {"error": "period not found"}, 404
+def _period_leaderboard(league_id, period_id):
+    """Ranked rows for a pick'em period, plus the last game's info.
 
+    Members are ranked by correct picks, ties broken by whose predicted total is
+    closest to the last game's actual combined score (the Monday-night
+    tie-breaker). Shared by the weekly results endpoint and the period_final
+    winner announcement so both rank identically.
+    """
     picks = Pick.query.filter_by(period_id=period_id).all()
     members = LeagueMember.query.filter_by(league_id=league_id, status=ACTIVE).all()
     member_ids = {m.user_id for m in members}
@@ -929,11 +941,6 @@ def period_results(league_id, period_id, me):
         if last_event_id and p.event_id == last_event_id and p.tiebreaker_total is not None:
             agg["tb"] = p.tiebreaker_total
 
-    confirmed_by_user = {
-        c.user_id: c.confirmed
-        for c in PickConfirmation.query.filter_by(period_id=period_id).all()
-    }
-
     rows = []
     for uid, agg in per.items():
         if agg["total"] == 0:
@@ -950,7 +957,6 @@ def period_results(league_id, period_id, me):
             "total": agg["total"],
             "tiebreaker_total": tb,
             "tiebreaker_diff": diff,
-            "confirmed": confirmed_by_user.get(uid, False),
         })
     rows.sort(key=lambda r: (
         -r["correct"],
@@ -980,7 +986,62 @@ def period_results(league_id, period_id, me):
             "final": bool(last_ev and last_ev.get("status") == "final"),
             "actual_total": actual_total,
         }
+    return rows, last_game
+
+
+def period_results(league_id, period_id, me):
+    """Weekly leaderboard for a pick'em period (ranked rows + tie-breaker info)."""
+    league_id, period_id = str(league_id), str(period_id)
+    league = db.session.get(League, league_id)
+    if not league or not _membership(league_id, me):
+        return {"error": "league not found"}, 404
+    period = db.session.get(LeaguePeriod, period_id)
+    if not period or period.league_id != league_id:
+        return {"error": "period not found"}, 404
+
+    rows, last_game = _period_leaderboard(league_id, period_id)
+    confirmed_by_user = {
+        c.user_id: c.confirmed
+        for c in PickConfirmation.query.filter_by(period_id=period_id).all()
+    }
+    for r in rows:
+        r["confirmed"] = confirmed_by_user.get(r["user_id"], False)
     return {"period": period.to_dict(), "last_game": last_game, "rows": rows}, 200
+
+
+def _period_final_body(league_id, period):
+    """Winner line for the period_final feed post, or None if no winner is known
+    yet — callers fall back to generic text, so the post never announces a wrong
+    winner.
+
+    The post is written once (dedup_key), so we only name a winner when *every*
+    pick is graded; a game finishing late could otherwise change the outcome.
+    """
+    if Pick.query.filter_by(period_id=str(period.id), correct=None).count():
+        return None
+    try:
+        rows, _ = _period_leaderboard(str(league_id), str(period.id))
+    except Exception as exc:  # noqa: BLE001 — a feed blurb must never break rollover
+        print(f"[winner] leaderboard failed for period {period.id}: {exc}", flush=True)
+        return None
+
+    winners = [r for r in rows if r.get("rank") == 1 and r["graded"] > 0]
+    if not winners:
+        return None
+
+    top = winners[0]
+    score = f"{top['correct']}/{top['graded']}"
+    names = [w["display_name"] for w in winners]
+    if len(names) == 1:
+        line = f"🏆 {names[0]} won with {score} correct"
+        # Only call out the tie-breaker when it actually broke a tie.
+        contenders = [r for r in rows if r["graded"] > 0 and r["correct"] == top["correct"]]
+        if len(contenders) > 1 and top.get("tiebreaker_diff") is not None:
+            line += f" (tie-breaker: off by {top['tiebreaker_diff']})"
+        return line
+    if len(names) == 2:
+        return f"🏆 {names[0]} and {names[1]} tied at {score} correct"
+    return f"🏆 {', '.join(names[:-1])} and {names[-1]} tied at {score} correct"
 
 
 def confirm_member(league_id, period_id, user_id, me, data):
