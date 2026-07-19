@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
-import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
@@ -13,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Trophy, Swords, Coins, Inbox, type LucideIcon } from 'lucide-react';
+import { Plus, Trophy, Swords, Inbox, type LucideIcon } from 'lucide-react';
 
 // Per-type color accent, matching the landing page: Pick'em = amber, H2H = violet.
 const TYPE_ACCENT: Record<string, { bar: string; chip: string; border: string; icon: LucideIcon }> = {
@@ -141,7 +140,6 @@ export default function HomePage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {data.map((c) => {
             const a = accentFor(c.league_type);
-            const isMoney = c.league_type !== 'pickem';
             return (
               <Link key={c.id} href={`/leagues/${c.id}`} className="group">
                 <Card className="h-full flex-col gap-0 overflow-hidden border-0 p-0 shadow-sm shadow-black/8 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg">
@@ -154,21 +152,22 @@ export default function HomePage() {
                         {c.name.slice(0, 2).toUpperCase()}
                       </span>
                     )}
-                    <span className={`absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium backdrop-blur-sm ${a.chip}`}>
-                      <a.icon className="size-3" />
-                      {leagueTypeLabel(c.league_type)}
-                    </span>
-                    {c.status === 'draft' ? (
+                    {(c.unread_feed_count ?? 0) > 0 && (
+                      <span
+                        className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground shadow-sm"
+                        title="Unread posts and notices"
+                      >
+                        <Inbox className="size-3" />
+                        {c.unread_feed_count}
+                      </span>
+                    )}
+                    {c.status === 'draft' && (
                       <Badge size="sm" variant="warning" appearance="light" className="absolute right-3 top-3">
                         Draft
                       </Badge>
-                    ) : (c.unread_feed_count ?? 0) > 0 ? (
-                      <span className="absolute right-3 top-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
-                        {c.unread_feed_count}
-                      </span>
-                    ) : null}
+                    )}
                   </div>
-                  {/* Body: title, then members (left) and stake/bragging (right). */}
+                  {/* Body: title, then members (left) and league type (right). */}
                   <div className="flex flex-col gap-3 px-5 py-4">
                     <span className="truncate text-lg font-semibold text-foreground transition-colors group-hover:text-primary">
                       {c.name}
@@ -197,17 +196,10 @@ export default function HomePage() {
                           {c.member_count} member{c.member_count === 1 ? '' : 's'}
                         </span>
                       </div>
-                      {isMoney ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-brand">
-                          <Coins className="size-4" />
-                          {formatCredits(c.my_balance_cents ?? 0)}
-                        </span>
-                      ) : (
-                        <span className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
-                          <Trophy className="size-4" />
-                          Bragging
-                        </span>
-                      )}
+                      <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${a.chip}`}>
+                        <a.icon className="size-3" />
+                        {leagueTypeLabel(c.league_type)}
+                      </span>
                     </div>
                   </div>
                 </Card>
