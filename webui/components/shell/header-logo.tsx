@@ -8,7 +8,6 @@ import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetBody } from '@/com
 import { Menu } from 'lucide-react';
 import { useLayout } from './context';
 import { Navbar } from './navbar';
-import { Logo } from './logo';
 
 export function HeaderLogo() {
   const pathname = usePathname();
@@ -45,9 +44,7 @@ export function HeaderLogo() {
         )}
         {/* Brand */}
         <Link href="/" className="flex items-center gap-2">
-          <div className="flex items-center p-1 rounded-md border border-[rgba(255,255,255,0.30)] bg-[#007421] bg-[radial-gradient(97.49%_97.49%_at_50%_2.51%,rgba(255,255,255,0.5)_0%,rgba(255,255,255,0)_100%)] shadow-[0_0_0_1px_#009229]">
-            <Logo className="min-w-[16px]" />
-          </div>
+          <img src="/logo-64.png" alt="Waygerz" className="size-9 shrink-0" />
           <span className="hidden text-lg font-extrabold tracking-tight text-white sm:inline">Waygerz</span>
         </Link>
       </div>
