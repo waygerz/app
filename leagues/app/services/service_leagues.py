@@ -584,17 +584,48 @@ def my_leagues(me):
     money_accounts = [lg.account for lg, _ in rows if lg.is_money]
     balances = wallet_balances(me, money_accounts) if money_accounts else {}
 
+    # Active members per league in one query (founders first) — used for both the
+    # member count and the avatar row on each card.
+    league_ids = [lg.id for lg, _ in rows]
+    members_by_league: dict[str, list] = {}
+    if league_ids:
+        for m in (
+            LeagueMember.query
+            .filter(LeagueMember.league_id.in_(league_ids), LeagueMember.status == ACTIVE)
+            .order_by(LeagueMember.joined_at.asc())
+            .all()
+        ):
+            members_by_league.setdefault(str(m.league_id), []).append(m)
+
+    # Resolve names + avatars only for the members we actually show (top 5 each).
+    # Degrade gracefully to no avatars if the auth service is unavailable — the
+    # dashboard must not break just because we couldn't decorate the cards.
+    shown_ids = {m.user_id for ms in members_by_league.values() for m in ms[:5]}
+    try:
+        users = resolve_users_full(list(shown_ids)) if shown_ids else {}
+    except Exception:  # noqa: BLE001
+        users = {}
+
     cards = []
     for lg, mem in rows:
+        ms = members_by_league.get(str(lg.id), [])
         period = current_period(lg.id)
-        member_count = LeagueMember.query.filter_by(league_id=lg.id, status=ACTIVE).count()
+        top_members = [
+            {
+                "user_id": m.user_id,
+                "display_name": (users.get(m.user_id) or {}).get("display_name") or f"User {str(m.user_id)[:8]}",
+                "avatar_key": (users.get(m.user_id) or {}).get("avatar_key"),
+            }
+            for m in ms[:5]
+        ]
         cards.append({
             "id": lg.id,
             "name": lg.name,
             "logo_url": lg.logo_url,
             "league_type": lg.league_type,
             "status": lg.status,
-            "member_count": member_count,
+            "member_count": len(ms),
+            "top_members": top_members,
             "my_balance_cents": balances.get(lg.account, 0) if lg.is_money else None,
             "current_period": period.to_dict() if period else None,
             "unread_feed_count": _unread_feed_count(lg.id, me, mem.joined_at),
