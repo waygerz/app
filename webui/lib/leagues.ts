@@ -23,6 +23,7 @@ export interface LeagueCard {
   league_type: LeagueType;
   status: 'draft' | 'active' | 'completed' | 'archived';
   member_count: number;
+  top_members?: { user_id: string; display_name: string; avatar_key?: string | null }[];
   my_balance_cents: number | null;
   current_period: LeaguePeriod | null;
   unread_feed_count?: number;

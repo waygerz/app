@@ -8,6 +8,7 @@ import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
 import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
 import { LeagueAvatar } from '@/components/league-avatar';
+import { UserAvatar } from '@/components/user-avatar';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -147,7 +148,7 @@ export default function HomePage() {
                   className={`relative h-full flex-col gap-0 overflow-hidden p-0 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg ${a.border}`}
                 >
                   <div className={`h-1.5 w-full bg-gradient-to-r ${a.bar}`} />
-                  <div className="flex flex-1 items-center gap-4 p-4">
+                  <div className="flex flex-1 items-center gap-4 p-5">
                     <LeagueAvatar
                       name={c.name}
                       logoUrl={c.logo_url}
@@ -182,6 +183,26 @@ export default function HomePage() {
                       )}
                     </div>
                   </div>
+                  {(c.top_members?.length ?? 0) > 0 && (
+                    <div className="flex items-center border-t border-border px-5 py-3">
+                      <div className="flex -space-x-2">
+                        {c.top_members!.map((m) => (
+                          <UserAvatar
+                            key={m.user_id}
+                            userId={m.user_id}
+                            name={m.display_name}
+                            imageUrl={m.avatar_key}
+                            className="size-7 border-2 border-background"
+                          />
+                        ))}
+                        {c.member_count > (c.top_members?.length ?? 0) && (
+                          <div className="flex size-7 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-semibold text-muted-foreground">
+                            +{c.member_count - (c.top_members?.length ?? 0)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </Card>
               </Link>
             );
