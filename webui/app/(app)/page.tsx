@@ -144,66 +144,72 @@ export default function HomePage() {
             const isMoney = c.league_type !== 'pickem';
             return (
               <Link key={c.id} href={`/leagues/${c.id}`} className="group">
-                <Card
-                  className={`relative h-full flex-col gap-0 overflow-hidden p-0 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg ${a.border}`}
-                >
-                  <div className={`h-1.5 w-full bg-gradient-to-r ${a.bar}`} />
-                  <div className="flex flex-1 items-center gap-4 p-5">
-                    <LeagueAvatar
-                      name={c.name}
-                      logoUrl={c.logo_url}
-                      id={c.id}
-                      unreadCount={c.unread_feed_count ?? 0}
-                      size={64}
-                    />
-                    <div className="min-w-0 flex-1">
+                <Card className="h-full flex-col gap-0 overflow-hidden border-0 p-0 shadow-sm shadow-black/8 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg">
+                  {/* Cover: league logo as a full-width banner; gradient + initials fallback. */}
+                  <div className={`relative flex h-36 w-full items-center justify-center overflow-hidden bg-gradient-to-br sm:h-40 ${a.bar}`}>
+                    {c.logo_url ? (
+                      <img src={c.logo_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-4xl font-bold tracking-tight text-white/95">
+                        {c.name.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <span className={`absolute left-3 top-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium backdrop-blur-sm ${a.chip}`}>
+                      <a.icon className="size-3" />
+                      {leagueTypeLabel(c.league_type)}
+                    </span>
+                    {c.status === 'draft' ? (
+                      <Badge size="sm" variant="warning" appearance="light" className="absolute right-3 top-3">
+                        Draft
+                      </Badge>
+                    ) : (c.unread_feed_count ?? 0) > 0 ? (
+                      <span className="absolute right-3 top-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                        {c.unread_feed_count}
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* Body: title, then members (left) and stake/bragging (right). */}
+                  <div className="flex flex-col gap-3 px-5 py-4">
+                    <span className="truncate text-lg font-semibold text-foreground transition-colors group-hover:text-primary">
+                      {c.name}
+                    </span>
+                    <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="truncate text-lg font-semibold text-foreground">{c.name}</span>
-                        {c.status === 'draft' && (
-                          <Badge size="sm" variant="warning" appearance="light">Draft</Badge>
+                        {(c.top_members?.length ?? 0) > 0 && (
+                          <div className="flex -space-x-2">
+                            {c.top_members!.map((m) => (
+                              <UserAvatar
+                                key={m.user_id}
+                                userId={m.user_id}
+                                name={m.display_name}
+                                imageUrl={m.avatar_key}
+                                className="size-7 border-2 border-background"
+                              />
+                            ))}
+                            {c.member_count > (c.top_members?.length ?? 0) && (
+                              <div className="flex size-7 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-semibold text-muted-foreground">
+                                +{c.member_count - (c.top_members?.length ?? 0)}
+                              </div>
+                            )}
+                          </div>
                         )}
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${a.chip}`}>
-                          <a.icon className="size-3" />
-                          {leagueTypeLabel(c.league_type)}
-                        </span>
                         <span className="text-xs text-muted-foreground">
                           {c.member_count} member{c.member_count === 1 ? '' : 's'}
                         </span>
                       </div>
                       {isMoney ? (
-                        <div className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand">
-                          <Coins className="size-3.5" />
+                        <span className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-brand">
+                          <Coins className="size-4" />
                           {formatCredits(c.my_balance_cents ?? 0)}
-                        </div>
+                        </span>
                       ) : (
-                        <div className="mt-2 text-sm font-medium text-muted-foreground">
-                          Bragging rights
-                        </div>
+                        <span className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
+                          <Trophy className="size-4" />
+                          Bragging
+                        </span>
                       )}
                     </div>
                   </div>
-                  {(c.top_members?.length ?? 0) > 0 && (
-                    <div className="flex items-center border-t border-border px-5 py-3">
-                      <div className="flex -space-x-2">
-                        {c.top_members!.map((m) => (
-                          <UserAvatar
-                            key={m.user_id}
-                            userId={m.user_id}
-                            name={m.display_name}
-                            imageUrl={m.avatar_key}
-                            className="size-7 border-2 border-background"
-                          />
-                        ))}
-                        {c.member_count > (c.top_members?.length ?? 0) && (
-                          <div className="flex size-7 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-semibold text-muted-foreground">
-                            +{c.member_count - (c.top_members?.length ?? 0)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </Card>
               </Link>
             );
