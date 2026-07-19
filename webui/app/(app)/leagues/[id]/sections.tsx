@@ -19,7 +19,7 @@ import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
-import { fetchEspnDetail, isFieldSport } from '@/lib/espn';
+import { fetchEspnDetail, fetchEspnList, isFieldSport } from '@/lib/espn';
 import { fetchTransactions, formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
 import { EventCard, TeamLogo, formatStart } from '@/components/event-card';
@@ -748,6 +748,24 @@ export function LeagueSportSchedule() {
   const canBet = lg.status === 'active';
   const label = sport?.name || sportLeagueId;
 
+  // Field sports (golf, racing): a tournament is only bettable once its field is
+  // published (tournament week) — the browse list reports field_size, populated
+  // only then. Split the scheduled tournaments into bettable now vs. still
+  // upcoming so the schedule shows what you can actually act on. Team sports are
+  // always bettable, so this is a no-op for them.
+  const fieldSport = evs.length > 0 && isFieldSport(evs[0].sport);
+  const sportSlug = evs[0]?.sport;
+  const espnListQ = useQuery({
+    queryKey: ['espn-list', sportSlug],
+    queryFn: () => fetchEspnList(sportSlug!),
+    enabled: fieldSport && !!sportSlug,
+    staleTime: 5 * 60_000,
+  });
+  const fieldReady = new Map((espnListQ.data ?? []).map((s) => [s.external_id, (s.field_size ?? 0) > 0]));
+  const ready = fieldSport ? evs.filter((e) => fieldReady.get(e.external_id) === true) : evs;
+  const upcoming = fieldSport ? evs.filter((e) => fieldReady.get(e.external_id) !== true) : [];
+  const fieldLoading = fieldSport && espnListQ.isLoading;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
@@ -769,7 +787,9 @@ export function LeagueSportSchedule() {
           <h2 className="text-lg font-semibold text-foreground">{label}</h2>
         </div>
         <p className="text-xs text-muted-foreground">
-          Upcoming games{canBet ? ' · tap a game to challenge a friend' : ''}
+          {fieldSport
+            ? (canBet ? 'Pick a matchup once a tournament’s field is posted' : 'Tournaments')
+            : `Upcoming games${canBet ? ' · tap a game to challenge a friend' : ''}`}
         </p>
       </div>
 
@@ -778,23 +798,52 @@ export function LeagueSportSchedule() {
           <p className="text-sm text-muted-foreground">That sport isn’t part of this league.</p>
         </CenterCard>
       )}
-      {sport && events.isLoading && (
+      {sport && (events.isLoading || fieldLoading) && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
         </div>
       )}
-      {sport && !events.isLoading && evs.length === 0 && (
+      {sport && !events.isLoading && !fieldLoading && evs.length === 0 && (
         <CenterCard>
           <CalendarDays className="size-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">No upcoming {label} games right now.</p>
+          <p className="text-sm text-muted-foreground">
+            No upcoming {label} {fieldSport ? 'tournaments' : 'games'} right now.
+          </p>
         </CenterCard>
       )}
-      {sport && evs.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {evs.map((ev: SportEvent) => (
-            <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
-          ))}
-        </div>
+      {sport && !events.isLoading && !fieldLoading && evs.length > 0 && (
+        <>
+          {ready.length > 0 && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {ready.map((ev: SportEvent) => (
+                <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
+              ))}
+            </div>
+          )}
+          {fieldSport && ready.length === 0 && (
+            <CenterCard>
+              <CalendarDays className="size-6 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                No tournaments are open for betting yet — the field is posted a few days before each event.
+              </p>
+            </CenterCard>
+          )}
+          {upcoming.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Upcoming · field opens tournament week
+              </h3>
+              <div className="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border">
+                {upcoming.map((ev: SportEvent) => (
+                  <div key={ev.external_id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <span className="min-w-0 truncate text-sm font-medium text-foreground">{ev.name}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {canBet && (
