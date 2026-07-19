@@ -119,7 +119,7 @@ export default function WelcomePage() {
             appearance="light"
             className="mb-5 border border-brand/30 bg-brand/10 text-brand"
           >
-            <ShieldCheck className="size-3.5" /> Play money · all bragging rights
+            <ShieldCheck className="size-3.5" /> Private, invite-only leagues
           </Badge>
           <h1 className="mx-auto max-w-3xl text-4xl font-extrabold tracking-tight sm:text-5xl md:text-6xl">
             Sports betting with{' '}
@@ -129,7 +129,7 @@ export default function WelcomePage() {
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">
             Start a private league, challenge your friends head-to-head, or run a weekly
-            pick’em pool. It’s all credits and bragging rights — never cash.
+            pick’em pool — and see who comes out on top.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button
