@@ -12,7 +12,7 @@ import { UserMiniCard } from '@/components/user-mini-card';
 
 // Dense grid for display-only cards; roomier grid for cards with action buttons
 // (Accept/Decline) so they don't cramp at 2 columns on phones.
-const GRID = 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4';
+const GRID = 'grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-4';
 const ACTION_GRID = 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3';
 
 function AddFriendsButton({
