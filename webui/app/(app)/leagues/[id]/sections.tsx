@@ -37,6 +37,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import {
   Form,
   FormControl,
   FormDescription,
@@ -737,10 +745,20 @@ export function LeagueSportSchedule() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-0.5">
-        <Link href={`/leagues/${lg.id}/sports`} className="text-xs text-muted-foreground hover:text-foreground">
-          ← Sports
-        </Link>
+      <div className="flex flex-col gap-1.5">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild>
+                <Link href={`/leagues/${lg.id}/sports`}>Sports</Link>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{label}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
         <div className="flex items-center gap-2.5">
           <SportIcon logo={metaFor(sportLeagueId).logo} emoji={metaFor(sportLeagueId).emoji} label={label} px={36} />
           <h2 className="text-lg font-semibold text-foreground">{label}</h2>
