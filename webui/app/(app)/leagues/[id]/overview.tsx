@@ -143,7 +143,7 @@ export function LeagueOverview() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-4">
             {(feed.data ?? []).map((item) => (
               <FeedPostCard
                 key={item.id}

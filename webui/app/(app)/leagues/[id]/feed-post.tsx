@@ -292,9 +292,11 @@ function PostContent({
           footer={<div className="flex items-center gap-1 border-t border-dashed border-border pt-3">{likeButton}</div>}
         />
         <div className="border-t border-border px-5 py-4">
-          <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {list.length > 0 ? `${list.length} comment${list.length === 1 ? '' : 's'}` : 'Comments'}
-          </div>
+          {list.length > 0 && (
+            <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {list.length} comment{list.length === 1 ? '' : 's'}
+            </div>
+          )}
           {comments.isLoading && <p className="text-xs text-muted-foreground">Loading comments…</p>}
           {list.map((c) => (
             <CommentThread
@@ -310,9 +312,6 @@ function PostContent({
               deleting={removeComment.isPending}
             />
           ))}
-          {list.length === 0 && !comments.isLoading && (
-            <p className="text-xs text-muted-foreground">No comments yet — start the conversation.</p>
-          )}
         </div>
       </div>
 
@@ -385,20 +384,20 @@ function CommentThread({
         <div className="grid min-w-0 flex-1 gap-1">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-sm font-medium text-foreground">{comment.author_name ?? 'Member'}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(comment.created_at)}</span>
+              <span className="truncate text-base font-medium text-foreground">{comment.author_name ?? 'Member'}</span>
+              <span className="shrink-0 text-sm text-muted-foreground">{timeAgo(comment.created_at)}</span>
             </div>
             {depth === 0 && (
               <button
                 type="button"
-                className="shrink-0 text-xs font-medium text-primary hover:underline"
+                className="shrink-0 text-sm font-medium text-primary hover:underline"
                 onClick={() => onReply(comment)}
               >
                 Reply
               </button>
             )}
           </div>
-          <p className="whitespace-pre-wrap break-words text-sm text-foreground">{comment.body}</p>
+          <p className="whitespace-pre-wrap break-words text-base text-foreground">{comment.body}</p>
         </div>
         {isOwn && (
           <Button
