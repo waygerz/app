@@ -19,6 +19,12 @@ export function isEspnSport(sport: string): boolean {
   return sport in ESPN_SPORTS;
 }
 
+/** Field sports (golf, racing): a tournament with a whole field, bet as a
+ *  player/driver head-to-head matchup rather than a fixed two-team game. */
+export function isFieldSport(sport: string): boolean {
+  return ESPN_SPORTS[sport] === 'field';
+}
+
 export type EspnStatus = 'scheduled' | 'in_progress' | 'final' | 'cancelled';
 
 export interface EspnCompetitor {

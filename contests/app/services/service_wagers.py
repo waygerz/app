@@ -171,7 +171,28 @@ def _validate_context(league_id, proposer_id, amount):
     return ctx
 
 
-def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id):
+# Field sports (golf, racing) are player/driver matchups: the "event" is a
+# tournament with a whole field, so there's no fixed home/away. The proposer
+# picks two competitors and always backs the first (home); the picks become the
+# wager's home/away teams. Every other sport uses the event's own two sides.
+_FIELD_SPORTS = {"golf", "racing"}
+
+
+def _resolve_sides(event, side, home_team, away_team):
+    """(home_team, away_team, proposer_side) for a new wager."""
+    if event.get("sport") in _FIELD_SPORTS:
+        home = (home_team or "").strip()
+        away = (away_team or "").strip()
+        if not home or not away:
+            raise WagerError("pick a competitor for each side")
+        if home.casefold() == away.casefold():
+            raise WagerError("pick two different competitors")
+        return home, away, "home"
+    return event.get("home_team"), event.get("away_team"), side
+
+
+def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
+            home_team=None, away_team=None):
     side = (side or "").lower()
     if side not in ("home", "away"):
         raise WagerError("side must be 'home' or 'away'")
@@ -195,6 +216,8 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id):
     if allowed and ev_slid and ev_slid not in allowed:
         raise WagerError("this game isn't in your league's sports")
 
+    ev_home, ev_away, proposer_side = _resolve_sides(event, side, home_team, away_team)
+
     account = ctx["account"]
     w = Wager(
         league_id=league_id,
@@ -202,12 +225,12 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id):
         event_id=event_id,
         event_name=event.get("name"),
         league=event.get("league"),
-        home_team=event.get("home_team"),
-        away_team=event.get("away_team"),
+        home_team=ev_home,
+        away_team=ev_away,
         start_time=event.get("start_time"),
         proposer_id=proposer_id,
         acceptor_id=acceptor_id,
-        proposer_side=side,
+        proposer_side=proposer_side,
         amount_cents=amount,
         status=OPEN,
     )
@@ -223,12 +246,14 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id):
     return w
 
 
-def propose_many(proposer_id, league_id, event_id, side, amount_cents, acceptor_ids):
+def propose_many(proposer_id, league_id, event_id, side, amount_cents, acceptor_ids,
+                 home_team=None, away_team=None):
     """Send the same bet to several members — one independent wager each."""
     results = []
     for aid in acceptor_ids:
         try:
-            wager = propose(proposer_id, league_id, event_id, side, amount_cents, aid)
+            wager = propose(proposer_id, league_id, event_id, side, amount_cents, aid,
+                            home_team=home_team, away_team=away_team)
             results.append({"acceptor_id": aid, "wager": wager})
         except WagerError as exc:
             results.append({"acceptor_id": aid, "error": str(exc)})
@@ -503,6 +528,10 @@ def propose_wagers(me, data):
         side=data.get("side"),
         amount_cents=data.get("amount_cents", 0),
         acceptor_ids=acceptor_ids,
+        # Player/driver picks for a field-sport (golf, racing) matchup; ignored
+        # for team/1v1 events, which carry their own two sides.
+        home_team=data.get("home_team"),
+        away_team=data.get("away_team"),
     )
     created = [r["wager"] for r in results if "wager" in r]
     errors = [

@@ -36,6 +36,22 @@ EXTRA_SPORTS = [
             {"slug": "pfl", "name": "PFL"},
         ],
     },
+    {
+        "slug": "golf",
+        "name": "Golf",
+        "leagues": [
+            {"slug": "pga", "name": "PGA Tour"},
+        ],
+    },
+    {
+        "slug": "racing",
+        "name": "Racing",
+        "leagues": [
+            {"slug": "f1", "name": "Formula 1"},
+            {"slug": "nascar-premier", "name": "NASCAR"},
+            {"slug": "irl", "name": "IndyCar"},
+        ],
+    },
 ]
 
 

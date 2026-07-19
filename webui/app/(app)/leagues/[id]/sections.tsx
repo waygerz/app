@@ -19,6 +19,7 @@ import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
+import { fetchEspnDetail, isFieldSport } from '@/lib/espn';
 import { fetchTransactions, formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
 import { EventCard, TeamLogo, formatStart } from '@/components/event-card';
@@ -449,16 +450,20 @@ function WagerBetCard({
   actions?: ReactNode;
   accentClass: string;
 }) {
-  const awayName = ev?.away_team ?? w.away_team;
-  const homeName = ev?.home_team ?? w.home_team;
+  // Field-sport matchups: the event's home/away hold a tournament placeholder,
+  // so use the wager's own stored picks (the two competitors) and show no team
+  // logos — TeamLogo falls back to the competitor's initials.
+  const field = !!ev && isFieldSport(ev.sport);
+  const awayName = field ? w.away_team : (ev?.away_team ?? w.away_team);
+  const homeName = field ? w.home_team : (ev?.home_team ?? w.home_team);
   const proposerIsHome = w.proposer_side === 'home';
   const acceptorIsHome = w.acceptor_side === 'home';
   const proposerTeam = proposerIsHome ? homeName : awayName;
   const acceptorTeam = acceptorIsHome ? homeName : awayName;
-  const proposerLogo = proposerIsHome ? ev?.home_logo : ev?.away_logo;
-  const acceptorLogo = acceptorIsHome ? ev?.home_logo : ev?.away_logo;
-  const proposerAbbr = proposerIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName);
-  const acceptorAbbr = acceptorIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName);
+  const proposerLogo = field ? null : (proposerIsHome ? ev?.home_logo : ev?.away_logo);
+  const acceptorLogo = field ? null : (acceptorIsHome ? ev?.home_logo : ev?.away_logo);
+  const proposerAbbr = field ? proposerTeam : (proposerIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName));
+  const acceptorAbbr = field ? acceptorTeam : (acceptorIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName));
   const pickLogo = 'size-10 text-xs sm:size-10';
 
   // Once decided, the winner's side is green and the loser's muted; before that,
@@ -793,13 +798,22 @@ export function LeagueSportSchedule() {
       )}
 
       {canBet && (
-        <ScheduleBetDialog
-          lg={lg}
-          event={selected}
-          me={me}
-          open={!!selected}
-          onOpenChange={(o) => { if (!o) setSelected(null); }}
-        />
+        <>
+          <ScheduleBetDialog
+            lg={lg}
+            me={me}
+            event={selected && !isFieldSport(selected.sport) ? selected : null}
+            open={!!selected && !isFieldSport(selected.sport)}
+            onOpenChange={(o) => { if (!o) setSelected(null); }}
+          />
+          <MatchupBetDialog
+            lg={lg}
+            me={me}
+            event={selected && isFieldSport(selected.sport) ? selected : null}
+            open={!!selected && isFieldSport(selected.sport)}
+            onOpenChange={(o) => { if (!o) setSelected(null); }}
+          />
+        </>
       )}
     </div>
   );
@@ -1401,6 +1415,160 @@ function ScheduleBetDialog({
               <div className="text-sm text-foreground">
                 Backing <span className="font-semibold">{teamName(side)}</span>
                 {' · '}{betType === 'ats' ? `ATS ${line || '—'}` : 'Straight up'}
+                {' · '}{formatCredits(Math.round(Number(credits) * 100))}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Challenge members</Label>
+                {opponents.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No other members to challenge yet.</p>
+                )}
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {opponents.map((m) => {
+                    const on = selected.includes(m.user_id);
+                    return (
+                      <button
+                        key={m.user_id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggle(m.user_id)}
+                        className={`flex flex-col items-center gap-2 px-3 py-3 text-center ${pickBtn(on)}`}
+                      >
+                        <UserAvatar userId={m.user_id} name={m.display_name} className="size-10" />
+                        <span className="line-clamp-2 text-sm font-medium">{m.display_name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => setStep('config')}>Back</Button>
+                <Button className="w-full sm:w-auto" disabled={!canSubmit || propose.isPending} onClick={() => propose.mutate()}>
+                  {propose.isPending
+                    ? 'Sending…'
+                    : `Send bet${selected.length > 1 ? `s (${selected.length})` : ''}`}
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// A field-sport (golf, racing) bet: the tournament has a whole field, so instead
+// of backing a fixed side the proposer picks two competitors (theirs + the
+// opponent's) and challenges members — the higher finish wins, peer-confirmed
+// like any other head-to-head bet.
+function MatchupBetDialog({
+  lg, event, me, open, onOpenChange,
+}: {
+  lg: LeagueDetail;
+  event: SportEvent | null;
+  me?: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [step, setStep] = useState<'config' | 'members'>('config');
+  const [myPick, setMyPick] = useState('');
+  const [theirPick, setTheirPick] = useState('');
+  const [credits, setCredits] = useState('10');
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const fieldQ = useQuery({
+    queryKey: ['espn-field', event?.sport, event?.external_id],
+    queryFn: () => fetchEspnDetail(event!.sport, event!.external_id),
+    enabled: open && !!event,
+    staleTime: 5 * 60_000,
+  });
+  const options = (fieldQ.data?.field ?? [])
+    .filter((c) => c.name)
+    .map((c) => ({ value: c.name, label: c.name }));
+
+  useEffect(() => {
+    if (open) { setStep('config'); setMyPick(''); setTheirPick(''); setCredits('10'); setSelected([]); }
+  }, [open, event?.external_id]);
+
+  const opponents = lg.members.filter((m) => m.user_id !== me);
+  const toggle = (uid: string) =>
+    setSelected((cur) => (cur.includes(uid) ? cur.filter((x) => x !== uid) : [...cur, uid]));
+
+  const propose = useMutation({
+    mutationFn: () => wagersApi.propose({
+      league_id: lg.id, event_id: event!.external_id, side: 'home',
+      home_team: myPick, away_team: theirPick,
+      amount_cents: Math.round(Number(credits) * 100), acceptor_ids: selected,
+    }),
+    onSuccess: (r) => {
+      if (r.created.length) toast.success(`Bet sent to ${r.created.length} member${r.created.length === 1 ? '' : 's'}`);
+      r.errors.forEach((e) => toast.error(e.error));
+      qc.invalidateQueries({ queryKey: ['wagers', lg.id] });
+      qc.invalidateQueries({ queryKey: ['wagers-all'] });
+      onOpenChange(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  if (!event) return null;
+  const noun = event.sport === 'racing' ? 'driver' : 'golfer';
+  const distinct =
+    myPick.trim() !== '' && theirPick.trim() !== '' &&
+    myPick.trim().toLowerCase() !== theirPick.trim().toLowerCase();
+  const configReady = distinct && Number(credits) > 0;
+  const canSubmit = selected.length > 0 && configReady;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{event.name}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Pick a matchup and challenge league members.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="flex flex-col gap-4 py-2">
+          {step === 'config' ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Pick your {noun} and your opponent’s — whoever finishes higher wins.
+              </p>
+              {fieldQ.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading the field…</p>
+              ) : options.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  The field for this event isn’t posted yet — check back closer to the start.
+                </p>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Your {noun}</Label>
+                    <Combobox
+                      options={options.filter((o) => o.value !== theirPick)}
+                      value={myPick} onChange={setMyPick}
+                      placeholder={`Pick your ${noun}`} ariaLabel={`Your ${noun}`}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Their {noun}</Label>
+                    <Combobox
+                      options={options.filter((o) => o.value !== myPick)}
+                      value={theirPick} onChange={setTheirPick}
+                      placeholder={`Pick their ${noun}`} ariaLabel={`Their ${noun}`}
+                    />
+                  </div>
+                </>
+              )}
+              <div className="flex items-center justify-between gap-3">
+                <Label>Amount (credits)</Label>
+                <Input type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} className="max-w-40" />
+              </div>
+              <Button className="w-full self-stretch sm:w-auto sm:self-end" disabled={!configReady} onClick={() => setStep('members')}>Next</Button>
+            </>
+          ) : (
+            <>
+              <div className="text-sm text-foreground">
+                <span className="font-semibold">{myPick}</span> vs <span className="font-semibold">{theirPick}</span>
                 {' · '}{formatCredits(Math.round(Number(credits) * 100))}
               </div>
               <div className="flex flex-col gap-2">

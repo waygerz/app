@@ -4,7 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { fetchEventOdds, type EventOdds, type SportEvent } from '@/lib/ingestor';
+import { isFieldSport } from '@/lib/espn';
 import { cn } from '@/lib/utils';
+import { Trophy } from 'lucide-react';
 
 function StatusBadge({ status }: { status: SportEvent['status'] }) {
   if (status === 'live') return <Badge variant="destructive" size="sm">LIVE</Badge>;
@@ -141,20 +143,59 @@ function OddsPanel({ odds }: { odds: EventOdds }) {
   );
 }
 
+// Field sports (golf, racing) are a tournament + a whole field, not a two-team
+// game — so the card shows the tournament and invites picking a matchup rather
+// than rendering home vs away (whose columns hold a placeholder here).
+function TournamentCard({ event: ev, onSelect }: { event: SportEvent; onSelect?: () => void }) {
+  const bettable = ev.status === 'scheduled' || ev.status === 'live';
+  return (
+    <Card
+      onClick={onSelect}
+      className={cn(
+        'min-w-0 gap-3 p-4',
+        onSelect ? 'cursor-pointer transition-colors hover:border-primary/60' : '',
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <StatusBadge status={ev.status} />
+        <span className="text-xs text-muted-foreground">
+          {ev.status === 'scheduled' ? formatStart(ev.start_time) : ev.league.toUpperCase()}
+        </span>
+      </div>
+      <div className="flex items-center gap-2.5">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary sm:size-14">
+          <Trophy className="size-5 sm:size-7" />
+        </span>
+        <span className="min-w-0 flex-1 text-base font-semibold text-foreground sm:text-xl">
+          {ev.name}
+        </span>
+      </div>
+      {bettable && onSelect && (
+        <div className="border-t border-border pt-2 text-center text-xs font-medium text-primary">
+          Tap to pick a matchup
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function EventCard({ event: ev, onSelect }: { event: SportEvent; onSelect?: () => void }) {
+  const field = isFieldSport(ev.sport);
   const bettable = ev.status === 'scheduled' || ev.status === 'live';
   const showScore = ev.status === 'live' || ev.status === 'final';
 
   // Prefer the odds already persisted on the event (served from SQL with the
   // list) — that renders instantly and costs no API quota. Only hit the network
-  // when the event has no stored odds yet.
+  // when the event has no stored odds yet. Field sports have no two-team odds.
   const oddsQ = useQuery({
     queryKey: ['odds', ev.external_id],
     queryFn: () => fetchEventOdds(ev.sport, ev.league, ev.external_id),
-    enabled: bettable && !ev.odds,
+    enabled: bettable && !field && !ev.odds,
     initialData: ev.odds ?? undefined,
     staleTime: 5 * 60_000,
   });
+
+  if (field) return <TournamentCard event={ev} onSelect={onSelect} />;
 
   return (
     <Card
