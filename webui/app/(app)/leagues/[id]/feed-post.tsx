@@ -111,12 +111,12 @@ function PostHeader({
 
       {/* Body — a distinct title (system posts) then the text. */}
       {item.title && item.title !== heading && (
-        <div className="text-sm font-semibold text-foreground">{item.title}</div>
+        <div className="text-base font-semibold text-foreground">{item.title}</div>
       )}
       {item.body && (
         <p
           className={cn(
-            'whitespace-pre-wrap break-words text-sm leading-relaxed',
+            'whitespace-pre-wrap break-words text-base leading-relaxed',
             isWinner ? 'font-medium text-foreground' : 'text-muted-foreground',
           )}
         >

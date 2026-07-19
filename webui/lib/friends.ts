@@ -47,4 +47,6 @@ export const friendsApi = {
     req(`${API.friends}/requests/${id}/accept`, { method: 'POST' }),
   decline: (id: string | number) =>
     req(`${API.friends}/requests/${id}/decline`, { method: 'POST' }),
+  remove: (userId: string) =>
+    req(`${API.friends}/users/${userId}`, { method: 'DELETE' }),
 };

@@ -2,12 +2,20 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Share2 } from 'lucide-react';
+import { Share2, MessageCircle, EllipsisVertical, UserMinus } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { friendsApi, type Friend, type FriendRequest } from '@/lib/friends';
+import { messagingApi } from '@/lib/messaging';
+import { dispatchOpenChat } from '@/lib/open-chat';
 import { shareLink } from '@/lib/share';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { UserMiniCard } from '@/components/user-mini-card';
 
 // Dense grid for display-only cards; roomier grid for cards with action buttons
@@ -72,6 +80,21 @@ export default function FriendsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const openMessage = useMutation({
+    mutationFn: (userId: string) => messagingApi.openDirect(userId),
+    onSuccess: (conv) => dispatchOpenChat(conv.id),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeFriend = useMutation({
+    mutationFn: (userId: string) => friendsApi.remove(userId),
+    onSuccess: () => {
+      toast.success('Friend removed');
+      refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const incoming = requests.data?.incoming ?? [];
   const outgoing = requests.data?.outgoing ?? [];
   const inviteLink = user ? friendsApi.inviteLink(String(user.id)) : '';
@@ -118,7 +141,43 @@ export default function FriendsPage() {
         ) : (
           <div className={GRID}>
             {friends.data?.map((f: Friend) => (
-              <UserMiniCard key={f.friendship_id} userId={String(f.user_id)} name={f.display_name} />
+              <UserMiniCard
+                key={f.friendship_id}
+                userId={String(f.user_id)}
+                name={f.display_name}
+                actions={
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={openMessage.isPending}
+                      onClick={() => openMessage.mutate(String(f.user_id))}
+                    >
+                      <MessageCircle className="size-4" />
+                      <span className="hidden sm:inline">Message</span>
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="outline" className="px-2">
+                          <EllipsisVertical className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => {
+                            if (confirm(`Remove ${f.display_name} from your friends?`)) {
+                              removeFriend.mutate(String(f.user_id));
+                            }
+                          }}
+                        >
+                          <UserMinus className="size-4" /> Remove friend
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                }
+              />
             ))}
           </div>
         )}

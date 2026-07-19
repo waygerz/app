@@ -154,10 +154,11 @@ export default function HomePage() {
                       logoUrl={c.logo_url}
                       id={c.id}
                       unreadCount={c.unread_feed_count ?? 0}
+                      size={64}
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="truncate font-semibold text-foreground">{c.name}</span>
+                        <span className="truncate text-lg font-semibold text-foreground">{c.name}</span>
                         {c.status === 'draft' && (
                           <Badge size="sm" variant="warning" appearance="light">Draft</Badge>
                         )}
