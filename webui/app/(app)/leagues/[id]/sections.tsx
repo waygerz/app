@@ -55,7 +55,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock } from 'lucide-react';
+import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import { dispatchOpenChat } from '@/lib/open-chat';
@@ -1477,21 +1477,24 @@ function memberRoleLabel(role: string) {
 // Per-member actions menu: commissioners manage roles + transfer + remove;
 // moderators can only remove regular members. Consequential actions confirm.
 function MemberActionsMenu({
-  member, isCommish, canModerate, busy, onSetRole, onTransfer, onRemove,
+  member, isCommish, canModerate, isFriend, busy, onSetRole, onTransfer, onRemove, onUnfriend,
 }: {
   member: LeagueMember;
   isCommish: boolean;
   canModerate: boolean;
+  isFriend: boolean;
   busy: boolean;
   onSetRole: (role: 'moderator' | 'member') => void;
   onTransfer: () => void;
   onRemove: () => void;
+  onUnfriend: () => void;
 }) {
-  const [confirming, setConfirming] = useState<'transfer' | 'remove' | null>(null);
+  const [confirming, setConfirming] = useState<'transfer' | 'remove' | 'unfriend' | null>(null);
 
   const isCommishRow = member.role === 'commissioner';
   const canRemove = isCommish ? !isCommishRow : canModerate && member.role === 'member';
-  const showMenu = isCommish ? !isCommishRow : canRemove;
+  const showRoleActions = isCommish ? !isCommishRow : canRemove;
+  const showMenu = showRoleActions || isFriend;
   if (!showMenu) return null;
 
   return (
@@ -1518,6 +1521,11 @@ function MemberActionsMenu({
               Transfer commissioner
             </DropdownMenuItem>
           )}
+          {isFriend && (
+            <DropdownMenuItem variant="destructive" disabled={busy} onClick={() => setConfirming('unfriend')}>
+              <UserMinus className="size-4" /> Unfriend
+            </DropdownMenuItem>
+          )}
           {canRemove && (
             <DropdownMenuItem variant="destructive" disabled={busy} onClick={() => setConfirming('remove')}>
               Remove from league
@@ -1530,12 +1538,14 @@ function MemberActionsMenu({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirming === 'transfer' ? 'Transfer commissioner?' : 'Remove member?'}
+              {confirming === 'transfer' ? 'Transfer commissioner?' : confirming === 'unfriend' ? 'Unfriend?' : 'Remove member?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirming === 'transfer'
                 ? `${member.display_name} will become the league commissioner and you'll become a moderator. You can only get it back if they transfer it to you.`
-                : `Remove ${member.display_name} from this league? They'll lose access to it.`}
+                : confirming === 'unfriend'
+                  ? `Remove ${member.display_name} from your friends?`
+                  : `Remove ${member.display_name} from this league? They'll lose access to it.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1543,11 +1553,12 @@ function MemberActionsMenu({
             <AlertDialogAction
               onClick={() => {
                 if (confirming === 'transfer') onTransfer();
+                else if (confirming === 'unfriend') onUnfriend();
                 else onRemove();
                 setConfirming(null);
               }}
             >
-              {confirming === 'transfer' ? 'Transfer' : 'Remove'}
+              {confirming === 'transfer' ? 'Transfer' : confirming === 'unfriend' ? 'Unfriend' : 'Remove'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1605,6 +1616,11 @@ export function LeagueMembers() {
     },
     onError: onErr,
   });
+  const removeFriend = useMutation({
+    mutationFn: (uid: string) => friendsApi.remove(uid),
+    onSuccess: () => { toast.success('Friend removed'); qc.invalidateQueries({ queryKey: ['friends'] }); },
+    onError: onErr,
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -1634,17 +1650,20 @@ export function LeagueMembers() {
                       <span className="hidden sm:inline">Message</span>
                     </Button>
                     {friendIds.has(uid) ? (
-                      <Button size="sm" variant="outline" disabled>
-                        Friends
+                      <Button size="sm" variant="outline" className="text-brand" disabled>
+                        <UserCheck className="size-4" />
+                        <span className="hidden sm:inline">Friends</span>
                       </Button>
                     ) : pendingIds.has(uid) ? (
-                      <Button size="sm" variant="outline" disabled>
-                        Pending
+                      <Button size="sm" variant="outline" className="text-muted-foreground" disabled>
+                        <Clock className="size-4" />
+                        <span className="hidden sm:inline">Pending</span>
                       </Button>
                     ) : (
                       <Button
                         size="sm"
                         variant="outline"
+                        className="text-primary"
                         disabled={addFriend.isPending}
                         onClick={() => addFriend.mutate(uid)}
                       >
@@ -1656,10 +1675,12 @@ export function LeagueMembers() {
                       member={m}
                       isCommish={isCommish}
                       canModerate={canModerate}
-                      busy={remove.isPending || setRole.isPending || transfer.isPending}
+                      isFriend={friendIds.has(uid)}
+                      busy={remove.isPending || setRole.isPending || transfer.isPending || removeFriend.isPending}
                       onSetRole={(role) => setRole.mutate({ uid, role })}
                       onTransfer={() => transfer.mutate(uid)}
                       onRemove={() => remove.mutate(uid)}
+                      onUnfriend={() => removeFriend.mutate(uid)}
                     />
                   </>
                 )
