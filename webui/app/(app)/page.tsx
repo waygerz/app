@@ -35,8 +35,9 @@ const accentFor = (t: string) => TYPE_ACCENT[t] ?? TYPE_ACCENT.head_to_head;
 
 // League card cover: the logo on a type-accent banner. The stored logo_url is an
 // S3 object key, so it must be resolved through useMediaSrc (a raw <img src> on
-// the key never loads). Shown contained so square logos aren't cropped; falls
-// back to the league initials when there's no logo. `children` are the overlays.
+// the key never loads). Stretched to fill the banner (object-fill) so it spans
+// full width; falls back to the league initials when there's no logo. `children`
+// are the overlays.
 function LeagueCover({
   logoUrl,
   name,
@@ -52,7 +53,7 @@ function LeagueCover({
   return (
     <div className={`relative flex h-36 w-full items-center justify-center overflow-hidden bg-gradient-to-br sm:h-40 ${gradient}`}>
       {src ? (
-        <img src={src} alt="" className="h-full w-full object-contain p-5 drop-shadow-sm" />
+        <img src={src} alt="" className="h-full w-full object-fill" />
       ) : (
         <span className="text-4xl font-bold tracking-tight text-white/95">
           {name.slice(0, 2).toUpperCase()}
