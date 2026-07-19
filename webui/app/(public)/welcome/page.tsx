@@ -204,7 +204,7 @@ export default function WelcomePage() {
         </p>
         <div className="mt-10 grid gap-4 sm:grid-cols-2">
           {/* Head-to-Head */}
-          <div className="relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-6">
+          <div className="relative mt-6 flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 sm:mt-0">
             <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-violet-500 to-fuchsia-500" />
             <div className="flex items-center gap-2">
               <span className="flex size-9 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400">
