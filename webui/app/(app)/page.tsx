@@ -1,5 +1,6 @@
 'use client';
 
+import { type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +8,7 @@ import { toast } from 'sonner';
 import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
 import { useAuth } from '@/auth/AuthContext';
 import { LeagueAvatar } from '@/components/league-avatar';
+import { useMediaSrc } from '@/lib/use-media-src';
 import { UserAvatar } from '@/components/user-avatar';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +32,36 @@ const TYPE_ACCENT: Record<string, { bar: string; chip: string; border: string; i
   },
 };
 const accentFor = (t: string) => TYPE_ACCENT[t] ?? TYPE_ACCENT.head_to_head;
+
+// League card cover: the logo on a type-accent banner. The stored logo_url is an
+// S3 object key, so it must be resolved through useMediaSrc (a raw <img src> on
+// the key never loads). Shown contained so square logos aren't cropped; falls
+// back to the league initials when there's no logo. `children` are the overlays.
+function LeagueCover({
+  logoUrl,
+  name,
+  gradient,
+  children,
+}: {
+  logoUrl: string | null;
+  name: string;
+  gradient: string;
+  children?: ReactNode;
+}) {
+  const src = useMediaSrc(logoUrl);
+  return (
+    <div className={`relative flex h-36 w-full items-center justify-center overflow-hidden bg-gradient-to-br sm:h-40 ${gradient}`}>
+      {src ? (
+        <img src={src} alt="" className="h-full w-full object-contain p-5 drop-shadow-sm" />
+      ) : (
+        <span className="text-4xl font-bold tracking-tight text-white/95">
+          {name.slice(0, 2).toUpperCase()}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -143,15 +175,8 @@ export default function HomePage() {
             return (
               <Link key={c.id} href={`/leagues/${c.id}`} className="group">
                 <Card className="h-full flex-col gap-0 overflow-hidden border-0 p-0 shadow-sm shadow-black/8 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg">
-                  {/* Cover: league logo as a full-width banner; gradient + initials fallback. */}
-                  <div className={`relative flex h-36 w-full items-center justify-center overflow-hidden bg-gradient-to-br sm:h-40 ${a.bar}`}>
-                    {c.logo_url ? (
-                      <img src={c.logo_url} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="text-4xl font-bold tracking-tight text-white/95">
-                        {c.name.slice(0, 2).toUpperCase()}
-                      </span>
-                    )}
+                  {/* Cover: league logo (resolved via media) on a type-accent banner. */}
+                  <LeagueCover logoUrl={c.logo_url} name={c.name} gradient={a.bar}>
                     {(c.unread_feed_count ?? 0) > 0 && (
                       <span
                         className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground shadow-sm"
@@ -166,7 +191,7 @@ export default function HomePage() {
                         Draft
                       </Badge>
                     )}
-                  </div>
+                  </LeagueCover>
                   {/* Body: title, then members (left) and league type (right). */}
                   <div className="flex flex-col gap-3 px-5 py-4">
                     <span className="truncate text-lg font-semibold text-foreground transition-colors group-hover:text-primary">
@@ -192,9 +217,6 @@ export default function HomePage() {
                             )}
                           </div>
                         )}
-                        <span className="text-xs text-muted-foreground">
-                          {c.member_count} member{c.member_count === 1 ? '' : 's'}
-                        </span>
                       </div>
                       <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${a.chip}`}>
                         <a.icon className="size-3" />
