@@ -373,7 +373,16 @@ def tick():
         odds = service_odds.refresh_all_odds()
     except Exception as exc:  # noqa: BLE001
         current_app.logger.warning("odds refresh: %s", exc)
-    return {"fixtures": fixtures_state, "scores": scores, "odds": odds}
+    # Combat sports (MMA) ingest each fight as a home/away Event; self-gated so
+    # most ticks read cache. Isolated so a failure never blocks the tick.
+    combat = 0
+    try:
+        from app.services import service_combat
+        combat = service_combat.tick()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.warning("combat sync: %s", exc)
+    return {"fixtures": fixtures_state, "scores": scores, "odds": odds, "combat": combat}
 
 
 # ---------------------------------------------------------------- weeks endpoint

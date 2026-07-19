@@ -21,6 +21,34 @@ _ESPN_LEAGUE_SLUG = {
     "nba-development": "nba_gleague",
 }
 
+# Bettable sports that come from the ESPN ingester rather than RTS, so they
+# aren't in RTS's `/sports` catalog. Surfaced in list_sports/list_leagues so the
+# league-create picker offers them; their events reach the Event table via
+# service_combat (MMA fights -> home/away). `slug` matches the (sport, league)
+# used at ingest time so catalog_id() lines up. Keep in sync with
+# service_combat.COMBAT_SPORTS and the *_TOURS config.
+EXTRA_SPORTS = [
+    {
+        "slug": "mma",
+        "name": "MMA",
+        "leagues": [
+            {"slug": "ufc", "name": "UFC"},
+            {"slug": "pfl", "name": "PFL"},
+        ],
+    },
+]
+
+
+def _extra_sport(sport):
+    return next((s for s in EXTRA_SPORTS if s["slug"] == sport), None)
+
+
+def _extra_sports_payload():
+    return [
+        {"id": s["slug"], "slug": s["slug"], "name": s["name"], "displayName": s["name"]}
+        for s in EXTRA_SPORTS
+    ]
+
 
 class SportsAPIError(Exception):
     pass
@@ -201,13 +229,38 @@ def sync_teams(sport, league, force=False):
 
 def list_sports():
     try:
-        data = fetch_sports()
+        data = list(fetch_sports())
     except Exception as exc:
         return {"error": str(exc)}, 502
+    data.extend(_extra_sports_payload())
     return {"sports": data, "quota": quota_status()}, 200
 
 
+def _list_extra_leagues(extra):
+    """Static league list for an ESPN-ingested sport (MMA), each stamped with its
+    catalog id so the picker stores the same sport_league_id its events carry."""
+    leagues = []
+    for lg in extra["leagues"]:
+        sid = catalog_id(extra["slug"], lg["slug"], lg["name"])
+        row = db.session.get(SportLeague, sid)
+        if row is not None and row.logo is None:
+            row.logo = cache_logo(league_logo_url(lg["slug"]) or "") or ""
+        leagues.append({
+            "id": f"{extra['slug']}:{lg['slug']}",
+            "slug": lg["slug"],
+            "name": lg["name"],
+            "abbreviation": lg.get("abbreviation") or lg["name"],
+            "sport_league_id": sid,
+            "logo": (row.logo or None) if row is not None else None,
+        })
+    db.session.commit()
+    return {"leagues": leagues, "quota": quota_status()}, 200
+
+
 def list_leagues(sport):
+    extra = _extra_sport(sport)
+    if extra is not None:
+        return _list_extra_leagues(extra)
     try:
         data = fetch_leagues(sport)
     except Exception as exc:
