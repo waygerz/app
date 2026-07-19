@@ -43,3 +43,9 @@ def accept(req_id):
 def decline(req_id):
     body, status = svc.decline(get_jwt_identity(), str(req_id))
     return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def remove_friend(user_id):
+    body, status = svc.remove_friend(get_jwt_identity(), str(user_id))
+    return jsonify(body), status

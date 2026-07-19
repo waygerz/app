@@ -33,3 +33,8 @@ def accept(req_id):
 @friends_bp.post("/requests/<uuid:req_id>/decline")
 def decline(req_id):
     return ctrl.decline(req_id)
+
+
+@friends_bp.delete("/users/<uuid:user_id>")
+def remove_friend(user_id):
+    return ctrl.remove_friend(user_id)

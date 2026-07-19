@@ -155,3 +155,20 @@ def decline(me: str, req_id: str) -> tuple[dict, int]:
     db.session.delete(fr)
     db.session.commit()
     return {"ok": True}, 200
+
+
+def remove_friend(me: str, user_id: str) -> tuple[dict, int]:
+    """Unfriend: delete the accepted friendship between me and user_id (either
+    direction)."""
+    fr = Friendship.query.filter(
+        Friendship.status == ACCEPTED,
+        or_(
+            and_(Friendship.requester_id == me, Friendship.addressee_id == user_id),
+            and_(Friendship.requester_id == user_id, Friendship.addressee_id == me),
+        ),
+    ).first()
+    if not fr:
+        return {"error": "friendship not found"}, 404
+    db.session.delete(fr)
+    db.session.commit()
+    return {"ok": True}, 200
