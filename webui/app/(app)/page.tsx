@@ -137,7 +137,7 @@ export default function HomePage() {
           </Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-4">
           {data.map((c) => {
             const a = accentFor(c.league_type);
             return (
