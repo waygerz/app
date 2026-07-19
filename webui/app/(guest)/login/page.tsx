@@ -72,7 +72,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-dvh w-full items-center justify-center p-4">
+    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-4 p-4">
       <Card className="w-full max-w-sm gap-5 p-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <img src="/logo.png" alt="Waygerz" className="h-20 w-auto" />
@@ -112,11 +112,6 @@ export default function LoginPage() {
                 maxLength={6}
                 placeholder="123456"
               />
-              {devOtp && (
-                <p className="mt-1 rounded-md border border-dashed border-primary/50 bg-primary/5 px-3 py-1.5 text-xs">
-                  Testing code (no SMS yet): <strong>{devOtp}</strong>
-                </p>
-              )}
             </div>
             {error && <div className="text-sm text-destructive">{error}</div>}
             <Button type="submit" disabled={busy || !otp.trim()}>
@@ -159,6 +154,17 @@ export default function LoginPage() {
           </form>
         )}
       </Card>
+
+      {devOtp && (
+        <div className="w-full max-w-sm rounded-lg border border-dashed border-primary/50 bg-primary/5 p-4 text-center">
+          <p className="text-sm text-foreground">
+            Testing code: <strong className="text-base tracking-widest">{devOtp}</strong>
+          </p>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Temporary — SMS delivery isn’t set up yet, so your one-time code shows here instead of a text message.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
