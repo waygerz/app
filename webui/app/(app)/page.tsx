@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,7 +14,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Trophy, Swords, Inbox, type LucideIcon } from 'lucide-react';
+import { Plus, Trophy, Swords, Inbox, AlertCircle, RefreshCw, type LucideIcon } from 'lucide-react';
 
 // Per-type color accent, matching the landing page: Pick'em = amber, H2H = violet.
 const TYPE_ACCENT: Record<string, { bar: string; chip: string; border: string; icon: LucideIcon }> = {
@@ -36,8 +36,10 @@ const accentFor = (t: string) => TYPE_ACCENT[t] ?? TYPE_ACCENT.head_to_head;
 // League card cover: the logo on a type-accent banner. The stored logo_url is an
 // S3 object key, so it must be resolved through useMediaSrc (a raw <img src> on
 // the key never loads). Stretched to fill the banner (object-fill) so it spans
-// full width; falls back to the league initials when there's no logo. `children`
-// are the overlays.
+// full width. The initials sit underneath as a stable placeholder and the logo
+// fades in over them once decoded — so the banner never pops, and a failed
+// resolve or a broken image just leaves the initials showing. `children` are the
+// overlays, which paint above both (positioned siblings paint in DOM order).
 function LeagueCover({
   logoUrl,
   name,
@@ -50,14 +52,24 @@ function LeagueCover({
   children?: ReactNode;
 }) {
   const src = useMediaSrc(logoUrl);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+
   return (
-    <div className={`relative flex h-36 w-full items-center justify-center overflow-hidden bg-gradient-to-br sm:h-40 ${gradient}`}>
-      {src ? (
-        <img src={src} alt="" className="h-full w-full object-fill" />
-      ) : (
-        <span className="text-4xl font-bold tracking-tight text-white/95">
-          {name.slice(0, 2).toUpperCase()}
-        </span>
+    <div className={`relative h-36 w-full overflow-hidden bg-gradient-to-br sm:h-40 ${gradient}`}>
+      <span className="absolute inset-0 flex items-center justify-center text-4xl font-bold tracking-tight text-white/95">
+        {name.slice(0, 2).toUpperCase()}
+      </span>
+      {src && !failed && (
+        <img
+          src={src}
+          alt=""
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+          className={`relative h-full w-full object-fill transition-opacity duration-300 ${
+            loaded ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
       )}
       {children}
     </div>
@@ -112,6 +124,19 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* A failed invites fetch would otherwise just hide the section silently. */}
+      {invites.isError && (
+        <div className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            <AlertCircle className="size-4 shrink-0 text-destructive" />
+            Couldn&apos;t load your invites.
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => invites.refetch()} disabled={invites.isFetching}>
+            {invites.isFetching ? 'Retrying…' : 'Retry'}
+          </Button>
+        </div>
+      )}
+
       {/* Pending invites */}
       {pendingInvites.length > 0 && (
         <section className="mb-8">
@@ -147,9 +172,42 @@ export default function HomePage() {
 
       {/* League grid */}
       {leagues.isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        // Skeleton mirrors the real card geometry (same breakpoints, same cover
+        // height, same body rows) so nothing shifts when the data lands.
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="h-full flex-col gap-0 overflow-hidden border-0 p-0 shadow-sm">
+              <Skeleton className="h-36 w-full rounded-none sm:h-40" />
+              <div className="flex flex-col gap-3 px-5 py-4">
+                <Skeleton className="h-6 w-3/4" />
+                <div className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-7 w-20 rounded-full" />
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
+      ) : leagues.isError ? (
+        // A failed fetch must never masquerade as "no leagues" — that's
+        // indistinguishable from an empty account and hides a real outage.
+        <Card className="items-center gap-4 p-6 text-center sm:p-12">
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+            <AlertCircle className="size-8" />
+          </div>
+          <div>
+            <p className="text-base font-semibold text-foreground">Couldn&apos;t load your leagues</p>
+            <p className="text-sm text-muted-foreground">
+              {leagues.error instanceof Error && leagues.error.message
+                ? leagues.error.message
+                : 'Something went wrong. Check your connection and try again.'}
+            </p>
+          </div>
+          <Button variant="outline" onClick={() => leagues.refetch()} disabled={leagues.isFetching}>
+            <RefreshCw className={`size-4 ${leagues.isFetching ? 'animate-spin' : ''}`} />
+            {leagues.isFetching ? 'Retrying…' : 'Try again'}
+          </Button>
+        </Card>
       ) : data.length === 0 ? (
         <Card className="items-center gap-4 p-6 text-center sm:p-12">
           <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-fuchsia-500 to-brand text-white shadow-lg">
