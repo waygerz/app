@@ -464,7 +464,6 @@ function WagerBetCard({
   const acceptorLogo = field ? null : (acceptorIsHome ? ev?.home_logo : ev?.away_logo);
   const proposerAbbr = field ? proposerTeam : (proposerIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName));
   const acceptorAbbr = field ? acceptorTeam : (acceptorIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName));
-  const pickLogo = 'size-10 text-xs sm:size-10';
 
   // Once decided, the winner's side is green and the loser's muted; before that,
   // each committed side shows the selection (primary) style.
@@ -475,36 +474,72 @@ function WagerBetCard({
   const acceptorBox = boxFor(w.winner_user_id === w.acceptor_id, w.status !== 'open');
 
   return (
-    <Card className={cn('min-w-0 gap-3 border-l-4 p-4', accentClass)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <Card className={cn('min-w-0 gap-2.5 border-l-4 p-3', accentClass)}>
+      <div className="flex items-center justify-between gap-2">
         {wagerStatusBadge(w, me)}
-        <Badge size="sm" appearance="outline" variant="primary">
+        <Badge size="sm" appearance="outline" variant="primary" className="shrink-0">
           {formatCredits(w.amount_cents)} each
         </Badge>
       </div>
 
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-        <div className={cn('flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2 transition-colors', proposerBox)}>
-          <UserAvatar userId={w.proposer_id} name={w.proposer_name} className="size-10" />
-          <span className="max-w-full truncate text-center text-xs font-medium">{w.proposer_name}</span>
-          <div className="flex max-w-full items-center gap-2">
-            <TeamLogo src={proposerLogo} name={proposerAbbr} className={pickLogo} />
-            <span className="truncate text-sm font-medium text-foreground">{proposerTeam}</span>
-          </div>
-        </div>
-        <span className="text-xs font-semibold text-muted-foreground">vs</span>
-        <div className={cn('flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2 transition-colors', acceptorBox)}>
-          <UserAvatar userId={w.acceptor_id} name={w.acceptor_name} className="size-10" />
-          <span className="max-w-full truncate text-center text-xs font-medium">{w.acceptor_name}</span>
-          <div className="flex max-w-full items-center gap-2">
-            <TeamLogo src={acceptorLogo} name={acceptorAbbr} className={pickLogo} />
-            <span className="truncate text-sm font-medium text-foreground">{acceptorTeam}</span>
-          </div>
-        </div>
+      {/* minmax(0,1fr), not 1fr: grid items default to min-width:auto, so a long
+          team name would push the columns past the card instead of truncating. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1.5">
+        <WagerSide
+          userId={w.proposer_id}
+          userName={w.proposer_name}
+          team={proposerTeam}
+          abbr={proposerAbbr}
+          logo={proposerLogo}
+          boxClass={proposerBox}
+        />
+        <span className="self-center text-[10px] font-semibold text-muted-foreground">vs</span>
+        <WagerSide
+          userId={w.acceptor_id}
+          userName={w.acceptor_name}
+          team={acceptorTeam}
+          abbr={acceptorAbbr}
+          logo={acceptorLogo}
+          boxClass={acceptorBox}
+        />
       </div>
 
-      {actions && <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">{actions}</div>}
+      {actions && <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-2.5">{actions}</div>}
     </Card>
+  );
+}
+
+// One side of a head-to-head card: who bet, and what they're backing. Every
+// level is min-w-0 + truncate so long team names shrink instead of overflowing
+// the card on a phone. The short abbreviation shows on narrow screens and the
+// full team name from sm: up.
+function WagerSide({
+  userId,
+  userName,
+  team,
+  abbr,
+  logo,
+  boxClass,
+}: {
+  userId: string;
+  userName: string;
+  team: string;
+  abbr: string;
+  logo?: string | null;
+  boxClass: string;
+}) {
+  return (
+    <div className={cn('flex min-w-0 flex-col items-center gap-1 rounded-lg border px-1.5 py-2 transition-colors', boxClass)}>
+      <UserAvatar userId={userId} name={userName} className="size-7" />
+      <span className="w-full truncate text-center text-[11px] font-medium leading-tight">{userName}</span>
+      <div className="flex w-full min-w-0 items-center justify-center gap-1">
+        <TeamLogo src={logo} name={abbr} className="size-6 shrink-0 text-[9px]" />
+        <span className="truncate text-xs font-medium text-foreground">
+          <span className="sm:hidden">{abbr}</span>
+          <span className="hidden sm:inline">{team}</span>
+        </span>
+      </div>
+    </div>
   );
 }
 
