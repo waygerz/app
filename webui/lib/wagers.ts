@@ -37,12 +37,30 @@ export interface Wager {
   status: WagerStatus;
   winner_user_id: string | null;
   confirmed_by_id: string | null;
+  /** Set while one side is waiting on the other to approve calling the bet off. */
+  cancel_requested_by: string | null;
+  cancel_requested_at: string | null;
   proposer_name: string;
   acceptor_name: string;
   winner_name: string | null;
   created_at: string;
   completed_at: string | null;
   settled_at: string | null;
+}
+
+/**
+ * Cancelling shuts this long before kickoff. Mirrors CANCEL_LOCK_SECONDS in the
+ * contests service, which is what actually enforces it — this only keeps the UI
+ * from offering a button the server would reject.
+ */
+export const CANCEL_LOCK_MS = 10 * 60_000;
+
+/** True once a wager is inside the pre-game window where nobody may cancel. */
+export function cancelLocked(w: Wager): boolean {
+  if (!w.start_time) return false; // unknown start doesn't lock, same as the backend
+  const t = new Date(w.start_time).getTime();
+  if (Number.isNaN(t)) return false;
+  return Date.now() >= t - CANCEL_LOCK_MS;
 }
 
 function req<T = any>(path: string, options: RequestInit = {}): Promise<T> {
@@ -89,6 +107,11 @@ export const wagersApi = {
   accept: (id: string) => req(`${WAGERS_API}/${id}/accept`, { method: 'POST' }),
   decline: (id: string) => req(`${WAGERS_API}/${id}/decline`, { method: 'POST' }),
   cancel: (id: string) => req(`${WAGERS_API}/${id}/cancel`, { method: 'POST' }),
+  // Accepted wagers hold both stakes, so calling one off takes both sides:
+  // one requests, the other approves (or rejects, leaving the bet standing).
+  requestCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/request`, { method: 'POST' }),
+  approveCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/approve`, { method: 'POST' }),
+  rejectCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/reject`, { method: 'POST' }),
   // Peer-confirm a completed wager: 'lost' concedes to the opponent (paying
   // them), 'draw' refunds both. The winner is paid when the loser concedes.
   confirm: (id: string, result: WagerResult) =>

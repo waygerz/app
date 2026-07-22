@@ -27,6 +27,10 @@ from app.models.wager import (
 # by the members themselves, not by feed data.
 COMPLETE_AFTER_HOURS = 6
 
+# How close to kickoff cancellation locks shut, for both the proposer's
+# withdrawal of an open wager and the mutual cancel of an accepted one.
+CANCEL_LOCK_SECONDS = 10 * 60
+
 
 class InsufficientFunds(Exception):
     pass
@@ -309,12 +313,66 @@ def decline(wager, user_id):
 
 
 def cancel(wager, user_id):
+    """Withdraw an unaccepted proposal. Only the proposer has money at stake."""
     if wager.status != OPEN:
         raise WagerError("only an open wager can be cancelled")
     if wager.proposer_id != user_id:
         raise WagerError("only the proposer can cancel")
+    _require_cancel_window(wager)
     refund(_account(wager.league_id), wager.proposer_id, wager.amount_cents, _ref(wager.id))
     wager.status = CANCELLED
+    db.session.commit()
+    return wager
+
+
+def request_cancel(wager, user_id):
+    """Ask the other side to call off an accepted wager.
+
+    Both sides have money held once a wager is accepted, so neither can back out
+    alone — this only records the request; `approve_cancel` moves the money.
+    """
+    if wager.status != ACCEPTED:
+        raise WagerError("only an accepted wager needs both sides to cancel")
+    _require_cancel_window(wager)
+    if wager.cancel_requested_by == user_id:
+        raise WagerError("you've already asked to cancel this wager")
+    if wager.cancel_requested_by:
+        raise WagerError("the other side already asked to cancel — approve or reject it")
+    wager.cancel_requested_by = user_id
+    wager.cancel_requested_at = datetime.utcnow()
+    db.session.commit()
+    return wager
+
+
+def approve_cancel(wager, user_id):
+    """Agree to the other side's cancel request: void the wager, refund both."""
+    if wager.status != ACCEPTED:
+        raise WagerError("only an accepted wager needs both sides to cancel")
+    if not wager.cancel_requested_by:
+        raise WagerError("nobody has asked to cancel this wager")
+    if wager.cancel_requested_by == user_id:
+        raise WagerError("the other side has to approve your request")
+    _require_cancel_window(wager)
+    account = _account(wager.league_id)
+    for uid in (wager.proposer_id, wager.acceptor_id):
+        refund(account, uid, wager.amount_cents, _ref(wager.id))
+    wager.status = CANCELLED
+    wager.cancel_requested_by = None
+    wager.cancel_requested_at = None
+    db.session.commit()
+    return wager
+
+
+def reject_cancel(wager, user_id):
+    """Turn down the other side's cancel request; the wager stands."""
+    if wager.status != ACCEPTED:
+        raise WagerError("only an accepted wager needs both sides to cancel")
+    if not wager.cancel_requested_by:
+        raise WagerError("nobody has asked to cancel this wager")
+    if wager.cancel_requested_by == user_id:
+        raise WagerError("you can't reject your own request")
+    wager.cancel_requested_by = None
+    wager.cancel_requested_at = None
     db.session.commit()
     return wager
 
@@ -336,6 +394,27 @@ def _parse_start(wager):
         return datetime.fromisoformat(wager.start_time.replace("Z", "+00:00")).replace(tzinfo=None)
     except (ValueError, AttributeError):
         return None
+
+
+def _cancel_locked(wager) -> bool:
+    """True once we're inside the pre-game window where nobody may cancel.
+
+    An *unknown* start time does not lock: we can't prove we're inside the
+    window, and locking would strand both holds until the wager settles. That's
+    safe because cancelling an accepted wager already needs both sides to agree,
+    and cancelling an open one only returns the proposer's own stake.
+    """
+    dt = _parse_start(wager)
+    if dt is None:
+        return False
+    return datetime.utcnow() >= dt - timedelta(seconds=CANCEL_LOCK_SECONDS)
+
+
+def _require_cancel_window(wager):
+    if _cancel_locked(wager):
+        raise WagerError(
+            f"too close to start time — bets lock {CANCEL_LOCK_SECONDS // 60} minutes before the game"
+        )
 
 
 def _has_started(wager) -> bool:
@@ -589,6 +668,18 @@ def decline_wager(wager_id, me):
 
 def cancel_wager(wager_id, me):
     return _act(wager_id, me, cancel)
+
+
+def request_cancel_wager(wager_id, me):
+    return _act(wager_id, me, request_cancel)
+
+
+def approve_cancel_wager(wager_id, me):
+    return _act(wager_id, me, approve_cancel)
+
+
+def reject_cancel_wager(wager_id, me):
+    return _act(wager_id, me, reject_cancel)
 
 
 def confirm_wager(wager_id, me, data):

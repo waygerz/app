@@ -15,7 +15,7 @@ import {
   type PickRow,
   type WeeklyResultRow,
 } from '@/lib/leagues';
-import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
+import { cancelLocked, wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -411,6 +411,15 @@ function wagerStatusBadge(w: Wager, me?: string) {
   if (w.status === 'open') {
     return <Badge size="sm" variant="info" appearance="light">Awaiting</Badge>;
   }
+  if (w.status === 'accepted' && w.cancel_requested_by) {
+    // Whoever still has to answer sees the ask; the requester sees they asked.
+    const mine = w.cancel_requested_by === me;
+    return (
+      <Badge size="sm" variant="warning" appearance="light">
+        {mine ? 'Cancel requested' : 'Cancel — needs you'}
+      </Badge>
+    );
+  }
   if (w.status === 'accepted') {
     return <Badge size="sm" variant="success" appearance="light">Live</Badge>;
   }
@@ -600,6 +609,21 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const acceptM = useMutation({ mutationFn: (id: string) => wagersApi.accept(id), onSuccess: refresh, onError: onErr });
   const declineM = useMutation({ mutationFn: (id: string) => wagersApi.decline(id), onSuccess: refresh, onError: onErr });
   const cancelM = useMutation({ mutationFn: (id: string) => wagersApi.cancel(id), onSuccess: refresh, onError: onErr });
+  const reqCancelM = useMutation({
+    mutationFn: (id: string) => wagersApi.requestCancel(id),
+    onSuccess: () => { toast.success('Cancel requested — waiting on your opponent'); refresh(); },
+    onError: onErr,
+  });
+  const approveCancelM = useMutation({
+    mutationFn: (id: string) => wagersApi.approveCancel(id),
+    onSuccess: () => { toast.success('Bet cancelled — both stakes refunded'); refresh(); },
+    onError: onErr,
+  });
+  const rejectCancelM = useMutation({
+    mutationFn: (id: string) => wagersApi.rejectCancel(id),
+    onSuccess: () => { toast.success('Cancel request declined — the bet stands'); refresh(); },
+    onError: onErr,
+  });
   const confirmM = useMutation({
     mutationFn: ({ id, result }: { id: string; result: WagerResult }) => wagersApi.confirm(id, result),
     onSuccess: (_d, v) => { toast.success(v.result === 'draw' ? 'Called a draw' : 'Result confirmed'); refresh(); },
@@ -612,6 +636,35 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const active = all.filter((w) => w.status === 'accepted');
   const awaiting = all.filter((w) => w.status === 'completed');
   const liveCount = pending.length + active.length + awaiting.length;
+
+  // Active wagers hold both stakes, so calling one off takes both sides: one
+  // requests, the other approves. Locks 10 minutes before kickoff.
+  const cancelActions = (w: Wager) => {
+    if (w.proposer_id !== me && w.acceptor_id !== me) return null;
+    if (cancelLocked(w)) {
+      return <span className="text-xs text-muted-foreground">Too close to start to cancel</span>;
+    }
+    if (!w.cancel_requested_by) {
+      return (
+        <Button size="sm" variant="outline" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(w.id)}>
+          Request cancel
+        </Button>
+      );
+    }
+    if (w.cancel_requested_by === me) {
+      return <span className="text-xs text-muted-foreground">Cancel requested — waiting on your opponent</span>;
+    }
+    return (
+      <>
+        <Button size="sm" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(w.id)}>
+          Approve cancel
+        </Button>
+        <Button size="sm" variant="ghost" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(w.id)}>
+          Reject
+        </Button>
+      </>
+    );
+  };
 
   const confirmActions = (w: Wager) =>
     w.proposer_id === me || w.acceptor_id === me ? (
@@ -660,11 +713,24 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
               <Button size="sm" variant="outline" onClick={() => declineM.mutate(w.id)}>Decline</Button>
             </>
           ) : w.proposer_id === me ? (
-            <Button size="sm" variant="outline" onClick={() => cancelM.mutate(w.id)}>Cancel</Button>
+            cancelLocked(w) ? (
+              <span className="text-xs text-muted-foreground">Too close to start to cancel</span>
+            ) : (
+              <Button size="sm" variant="outline" disabled={cancelM.isPending} onClick={() => cancelM.mutate(w.id)}>
+                Cancel
+              </Button>
+            )
           ) : null
         }
       />
-      <BetSection title="Active" tone="active" wagers={active} me={me} eventMap={eventMap} />
+      <BetSection
+        title="Active"
+        tone="active"
+        wagers={active}
+        me={me}
+        eventMap={eventMap}
+        actions={cancelActions}
+      />
       <BetSection title="Awaiting result" tone="awaiting" wagers={awaiting} me={me} eventMap={eventMap} actions={confirmActions} />
 
       {bets.isLoading && <Skeleton className="h-24 rounded-xl" />}

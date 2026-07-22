@@ -43,6 +43,24 @@ def cancel(wager_id):
     return ctrl.cancel(wager_id)
 
 
+@wagers_bp.post("/wagers/<uuid:wager_id>/cancel/request")
+@jwt_required(locations=["cookies", "headers"])
+def request_cancel(wager_id):
+    return ctrl.request_cancel(wager_id)
+
+
+@wagers_bp.post("/wagers/<uuid:wager_id>/cancel/approve")
+@jwt_required(locations=["cookies", "headers"])
+def approve_cancel(wager_id):
+    return ctrl.approve_cancel(wager_id)
+
+
+@wagers_bp.post("/wagers/<uuid:wager_id>/cancel/reject")
+@jwt_required(locations=["cookies", "headers"])
+def reject_cancel(wager_id):
+    return ctrl.reject_cancel(wager_id)
+
+
 @wagers_bp.post("/wagers/<uuid:wager_id>/confirm")
 @jwt_required(locations=["cookies", "headers"])
 def confirm(wager_id):

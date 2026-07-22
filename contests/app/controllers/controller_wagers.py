@@ -41,6 +41,24 @@ def cancel(wager_id):
 
 
 @jwt_required(locations=["cookies", "headers"])
+def request_cancel(wager_id):
+    body, status = service.request_cancel_wager(wager_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def approve_cancel(wager_id):
+    body, status = service.approve_cancel_wager(wager_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def reject_cancel(wager_id):
+    body, status = service.reject_cancel_wager(wager_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def confirm(wager_id):
     body, status = service.confirm_wager(
         wager_id, get_jwt_identity(), request.get_json(silent=True) or {}

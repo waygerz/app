@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Ticket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi } from '@/lib/leagues';
-import { wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
+import { cancelLocked, wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -67,6 +67,21 @@ export default function BetsView() {
     },
     onError: onErr,
   });
+  const reqCancelM = useMutation({
+    mutationFn: (id: string) => wagersApi.requestCancel(id),
+    onSuccess: () => { toast.success('Cancel requested — waiting on your opponent'); refresh(); },
+    onError: onErr,
+  });
+  const approveCancelM = useMutation({
+    mutationFn: (id: string) => wagersApi.approveCancel(id),
+    onSuccess: () => { toast.success('Bet cancelled — both stakes refunded'); refresh(); },
+    onError: onErr,
+  });
+  const rejectCancelM = useMutation({
+    mutationFn: (id: string) => wagersApi.rejectCancel(id),
+    onSuccess: () => { toast.success('Cancel request declined — the bet stands'); refresh(); },
+    onError: onErr,
+  });
 
   function actionsFor(w: Wager) {
     if (w.status === 'completed' && (w.proposer_id === me || w.acceptor_id === me)) {
@@ -74,6 +89,29 @@ export default function BetsView() {
         <>
           <Button size="sm" variant="outline" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
           <Button size="sm" variant="ghost" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'draw' })}>Draw</Button>
+        </>
+      );
+    }
+    // Accepted wagers hold both stakes, so calling one off takes both sides:
+    // one requests, the other approves. Locks 10 minutes before kickoff.
+    if (w.status === 'accepted' && (w.proposer_id === me || w.acceptor_id === me)) {
+      if (cancelLocked(w)) {
+        return <span className="text-xs text-muted-foreground">Too close to start to cancel</span>;
+      }
+      if (!w.cancel_requested_by) {
+        return (
+          <Button size="sm" variant="outline" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(w.id)}>
+            Request cancel
+          </Button>
+        );
+      }
+      if (w.cancel_requested_by === me) {
+        return <span className="text-xs text-muted-foreground">Cancel requested — waiting on your opponent</span>;
+      }
+      return (
+        <>
+          <Button size="sm" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(w.id)}>Approve cancel</Button>
+          <Button size="sm" variant="ghost" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(w.id)}>Reject</Button>
         </>
       );
     }
@@ -87,6 +125,9 @@ export default function BetsView() {
       );
     }
     if (w.proposer_id === me) {
+      if (cancelLocked(w)) {
+        return <span className="text-xs text-muted-foreground">Too close to start to cancel</span>;
+      }
       return (
         <Button size="sm" variant="outline" disabled={cancelM.isPending} onClick={() => cancelM.mutate(w.id)}>Cancel</Button>
       );

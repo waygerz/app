@@ -226,3 +226,119 @@ def test_cannot_accept_someone_elses_wager(app, calls):
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     with pytest.raises(svc.WagerError):
         svc.accept(w, U99)
+
+
+# ---- mutual cancellation of an accepted wager -------------------------------
+
+def _accepted(monkeypatch, start_time=None):
+    """An accepted wager, optionally with a start time on the model."""
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    if start_time is not None:
+        w.start_time = start_time
+    return w
+
+
+def test_request_cancel_records_requester_and_moves_no_money(app, calls, monkeypatch):
+    w = _accepted(monkeypatch)
+    before = list(calls)
+    svc.request_cancel(w, U1)
+    assert w.cancel_requested_by == U1 and w.cancel_requested_at is not None
+    assert w.status == ACCEPTED       # still live until the other side agrees
+    assert calls == before            # nothing refunded yet
+
+
+def test_requester_cannot_approve_their_own_request(app, calls, monkeypatch):
+    w = _accepted(monkeypatch)
+    svc.request_cancel(w, U1)
+    with pytest.raises(svc.WagerError):
+        svc.approve_cancel(w, U1)
+    assert w.status == ACCEPTED
+
+
+def test_approve_cancel_refunds_both_sides(app, calls, monkeypatch):
+    w = _accepted(monkeypatch)
+    svc.request_cancel(w, U1)
+    svc.approve_cancel(w, U2)
+    assert w.status == CANCELLED
+    assert w.cancel_requested_by is None
+    assert ("refund", U1, 5000) in calls and ("refund", U2, 5000) in calls
+
+
+def test_reject_cancel_leaves_the_wager_standing(app, calls, monkeypatch):
+    w = _accepted(monkeypatch)
+    svc.request_cancel(w, U1)
+    svc.reject_cancel(w, U2)
+    assert w.status == ACCEPTED
+    assert w.cancel_requested_by is None
+    assert not any(op == "refund" for op, *_ in calls)
+
+
+def test_double_request_is_rejected(app, calls, monkeypatch):
+    w = _accepted(monkeypatch)
+    svc.request_cancel(w, U1)
+    with pytest.raises(svc.WagerError):
+        svc.request_cancel(w, U1)
+    with pytest.raises(svc.WagerError):
+        svc.request_cancel(w, U2)   # other side must approve/reject instead
+
+
+def test_approve_without_a_request_is_rejected(app, calls, monkeypatch):
+    w = _accepted(monkeypatch)
+    with pytest.raises(svc.WagerError):
+        svc.approve_cancel(w, U2)
+
+
+def test_request_cancel_needs_an_accepted_wager(app, calls):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)   # still open
+    with pytest.raises(svc.WagerError):
+        svc.request_cancel(w, U1)
+
+
+# ---- the pre-game lock ------------------------------------------------------
+
+def _iso(dt):
+    return dt.replace(microsecond=0).isoformat() + "Z"
+
+
+def test_cancel_locks_inside_the_pre_game_window(app, calls, monkeypatch):
+    from datetime import datetime, timedelta
+    soon = datetime.utcnow() + timedelta(minutes=5)      # inside the 10-min lock
+    w = _accepted(monkeypatch, start_time=_iso(soon))
+    with pytest.raises(svc.WagerError):
+        svc.request_cancel(w, U1)
+
+
+def test_cancel_allowed_outside_the_pre_game_window(app, calls, monkeypatch):
+    from datetime import datetime, timedelta
+    later = datetime.utcnow() + timedelta(minutes=30)
+    w = _accepted(monkeypatch, start_time=_iso(later))
+    svc.request_cancel(w, U1)
+    assert w.cancel_requested_by == U1
+
+
+def test_approve_also_blocked_once_locked(app, calls, monkeypatch):
+    from datetime import datetime, timedelta
+    later = datetime.utcnow() + timedelta(minutes=30)
+    w = _accepted(monkeypatch, start_time=_iso(later))
+    svc.request_cancel(w, U1)
+    # kickoff creeps up before the other side responds
+    w.start_time = _iso(datetime.utcnow() + timedelta(minutes=2))
+    with pytest.raises(svc.WagerError):
+        svc.approve_cancel(w, U2)
+    assert w.status == ACCEPTED
+
+
+def test_open_wager_cancel_blocked_once_locked(app, calls):
+    from datetime import datetime, timedelta
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    w.start_time = _iso(datetime.utcnow() + timedelta(minutes=3))
+    with pytest.raises(svc.WagerError):
+        svc.cancel(w, U1)
+
+
+def test_unknown_start_time_does_not_lock(app, calls, monkeypatch):
+    w = _accepted(monkeypatch, start_time=None)
+    w.start_time = None
+    svc.request_cancel(w, U1)       # can't prove we're inside the window
+    assert w.cancel_requested_by == U1

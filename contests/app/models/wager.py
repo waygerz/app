@@ -46,6 +46,12 @@ class Wager(db.Model):
     # Who confirmed the result (the winner self-claiming, or the loser conceding).
     confirmed_by_id = db.Column(UUID(as_uuid=False), nullable=True)
 
+    # Mutual cancellation of an ACCEPTED wager: both sides have money held, so
+    # one side asks and the other approves. Null once approved, rejected, or on
+    # a wager nobody has asked about.
+    cancel_requested_by = db.Column(UUID(as_uuid=False), nullable=True)
+    cancel_requested_at = db.Column(db.DateTime, nullable=True)
+
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)  # when the event was marked over
     settled_at = db.Column(db.DateTime, nullable=True)
@@ -76,6 +82,10 @@ class Wager(db.Model):
             "status": self.status,
             "winner_user_id": self.winner_user_id,
             "confirmed_by_id": self.confirmed_by_id,
+            "cancel_requested_by": self.cancel_requested_by,
+            "cancel_requested_at": (
+                self.cancel_requested_at.isoformat() + "Z" if self.cancel_requested_at else None
+            ),
             "created_at": self.created_at.isoformat() + "Z",
             "completed_at": self.completed_at.isoformat() + "Z" if self.completed_at else None,
             "settled_at": self.settled_at.isoformat() + "Z" if self.settled_at else None,
