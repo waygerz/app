@@ -13,4 +13,9 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "wsgi:app", "--workers", "1", "--timeout", "120"]
+# gthread, not sync: these handlers spend most of their time waiting on the DB,
+# Redis, or another service, and a bare `--workers 1` sync worker serves exactly
+# one request at a time. Behind Service Connect (no ALB queue to absorb the
+# pile-up) that serialization turns concurrent callers into 10s read timeouts —
+# which on the refresh path looks like token reuse and hard-logs the user out.
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "wsgi:app", "--workers", "1", "--threads", "8", "--worker-class", "gthread", "--timeout", "120"]
