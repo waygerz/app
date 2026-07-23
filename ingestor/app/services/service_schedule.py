@@ -391,10 +391,38 @@ def tick():
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         current_app.logger.warning("field sync: %s", exc)
+    try:
+        reaped = reap_stale_events()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.warning("reap stale events: %s", exc)
+        reaped = 0
     return {
         "fixtures": fixtures_state, "scores": scores, "odds": odds,
-        "combat": combat, "field": field,
+        "combat": combat, "field": field, "reaped": reaped,
     }
+
+
+# Games clearly finished but never marked so. refresh_scores only re-fetches
+# TODAY's board, and ESPN drops old games from the scoreboard, so an event whose
+# score fetch is missed stays 'scheduled' forever and keeps showing in the
+# bettable list with a stale date. Sweep anything still scheduled/live well past
+# its start to 'final'. The grace comfortably exceeds any real game length, so a
+# genuinely-live game is never mis-reaped; a real score, if it ever arrives,
+# overwrites 'final' on a later tick anyway.
+_STALE_EVENT_GRACE = timedelta(hours=12)
+
+
+def reap_stale_events() -> int:
+    cutoff = datetime.utcnow() - _STALE_EVENT_GRACE
+    n = (
+        Event.query
+        .filter(Event.status.in_([SCHEDULED, LIVE]), Event.start_time < cutoff)
+        .update({Event.status: FINAL}, synchronize_session=False)
+    )
+    if n:
+        db.session.commit()
+    return n
 
 
 # ---------------------------------------------------------------- weeks endpoint

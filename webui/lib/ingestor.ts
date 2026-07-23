@@ -132,6 +132,10 @@ export async function fetchUpcomingEvents(
   sportLeagueIds?: string[],
 ): Promise<SportEvent[]> {
   const params = new URLSearchParams({ status: 'scheduled', limit: String(limit) });
+  // Only games that haven't started. Belt-and-suspenders with the backend
+  // reaper: an event whose score fetch was missed can sit in 'scheduled' past
+  // its start until reaped, and it must never appear as "upcoming".
+  params.set('starts_after', new Date().toISOString());
   if (sportLeagueIds && sportLeagueIds.length) {
     params.set('sport_league_id', sportLeagueIds.join(','));
   }
