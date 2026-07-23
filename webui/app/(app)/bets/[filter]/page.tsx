@@ -9,6 +9,7 @@ import { Ticket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi } from '@/lib/leagues';
 import { cancelLocked, wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
+import { fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,6 +38,32 @@ export default function BetsView() {
     () => filterWagers(wagersQ.data ?? [], activeFilter, me),
     [wagersQ.data, activeFilter, me],
   );
+
+  // Events behind the bets, for the live/final score line. Keyed on the full
+  // wager set (not the filtered rows) so switching tabs reuses the same cache.
+  const eventIds = useMemo(
+    () => Array.from(new Set((wagersQ.data ?? []).map((w) => w.event_id))),
+    [wagersQ.data],
+  );
+  const eventsQ = useQuery({
+    queryKey: ['bet-events', [...eventIds].sort().join(',')],
+    queryFn: async () => {
+      const map: Record<string, SportEvent> = {};
+      await Promise.all(
+        eventIds.map(async (id) => {
+          const ev = await fetchEvent(id);
+          if (ev) map[id] = ev;
+        }),
+      );
+      return map;
+    },
+    enabled: eventIds.length > 0,
+    staleTime: 5 * 60_000,
+    // Poll only while a game is live; the ingestor refreshes those every 60s.
+    refetchInterval: (query) =>
+      Object.values(query.state.data ?? {}).some((e) => e.status === 'live') ? 30_000 : false,
+  });
+  const eventMap = eventsQ.data ?? {};
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['wagers-all'] });
@@ -153,7 +180,9 @@ export default function BetsView() {
       {!wagersQ.isLoading && rows.length === 0 && (
         <Card className="items-center gap-2 p-8 text-center">
           <Ticket className="size-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">No {meta.label.toLowerCase()} bets.</p>
+          <p className="text-sm text-muted-foreground">
+            {activeFilter === 'all' ? 'No bets yet.' : `No ${meta.label.toLowerCase()} bets.`}
+          </p>
           {activeFilter === 'pending' && (
             <>
               <p className="text-xs text-muted-foreground">Incoming and outgoing proposals show up here.</p>
@@ -170,6 +199,7 @@ export default function BetsView() {
             w={w}
             me={me}
             leagueName={leagueNames.get(w.league_id)}
+            ev={eventMap[w.event_id]}
             actions={actionsFor(w)}
           />
         ))}
