@@ -308,15 +308,17 @@ def _post_accepted_activity(wager):
     team = wager.home_team if wager.proposer_side == "home" else wager.away_team
     opponents = [names.get(w.acceptor_id, "Member") for w in siblings]
     connector = "against" if len(opponents) == 1 else "over"
-    title = (
+    # Short heading = the matchup; the pick sentence goes in the body, which
+    # wraps — so a bet against many opponents doesn't blow out the title line.
+    sentence = (
         f"{proposer} took {team} for {_format_stake(wager.amount_cents)} "
         f"{connector} {_opponent_phrase(opponents)}"
     )
     post_league_activity(wager.league_id, {
         "event_type": "wager_accepted",
         "author_id": wager.proposer_id,
-        "title": title,
-        "body": f"{wager.event_name} · {_format_credits(wager.amount_cents)} credits each",
+        "title": wager.event_name or "Bet accepted",
+        "body": sentence,
         "dedup_key": (
             f"wager_accepted:{wager.proposer_id}:{wager.event_id}:"
             f"{wager.proposer_side}:{wager.amount_cents}"

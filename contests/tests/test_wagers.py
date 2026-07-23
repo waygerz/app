@@ -37,11 +37,12 @@ def test_accept_posts_league_feed(app, calls, monkeypatch):
     lid, payload = feed_posts[0]
     assert lid == LG
     assert payload["event_type"] == "wager_accepted"
-    # The proposer is the author (drives the avatar) and the title names the pick.
+    # The proposer is the author (drives the avatar). Title is the short
+    # matchup; the pick sentence is the wrapping body.
     assert payload["author_id"] == U1
-    assert payload["title"] == "Alice took Home for $50 against Bob"
+    assert payload["title"] == "Away at Home"  # event_name (the matchup)
+    assert payload["body"] == "Alice took Home for $50 against Bob"
     assert payload["upsert"] is True
-    assert payload["body"] == "Away at Home · 50.00 credits each"
 
 
 def test_accept_aggregates_multiple_opponents(app, calls, monkeypatch):
@@ -58,9 +59,9 @@ def test_accept_aggregates_multiple_opponents(app, calls, monkeypatch):
     # Same group dedup_key both times (one upserted post, not two).
     assert len({p["dedup_key"] for _, p in feed_posts}) == 1
     assert all(p["upsert"] for _, p in feed_posts)
-    # Final title lists both opponents with the "over" connector (order of the
+    # Final body lists both opponents with the "over" connector (order of the
     # two names isn't asserted — sibling wagers can share a created_at).
-    final = feed_posts[-1][1]["title"]
+    final = feed_posts[-1][1]["body"]
     assert final.startswith("Anky took Home for $10 over ")
     assert "Johnny" in final and "Richard" in final
 
