@@ -47,6 +47,13 @@ class League(db.Model):
     min_wager_cents = db.Column(db.BigInteger, nullable=True)
     max_wager_cents = db.Column(db.BigInteger, nullable=True)
     rules = db.Column(JSONB, nullable=False, default=dict, server_default="{}")
+    # IANA zone (e.g. "America/New_York"). Weekly period boundaries land at 4 AM
+    # in this zone so night games finish before a week rolls over. Commissioner-
+    # editable; existing leagues default to US Eastern.
+    timezone = db.Column(
+        db.String(64), nullable=False,
+        default="America/New_York", server_default="America/New_York",
+    )
     starts_at = db.Column(db.DateTime, nullable=True)
     ends_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -76,6 +83,7 @@ class League(db.Model):
             "min_wager_cents": self.min_wager_cents,
             "max_wager_cents": self.max_wager_cents,
             "rules": self.rules or {},
+            "timezone": self.timezone or "America/New_York",
             "starts_at": self.starts_at.isoformat() + "Z" if self.starts_at else None,
             "ends_at": self.ends_at.isoformat() + "Z" if self.ends_at else None,
             "created_at": self.created_at.isoformat() + "Z",

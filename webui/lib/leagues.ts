@@ -48,6 +48,7 @@ export interface LeagueDetail extends LeagueCard {
   min_wager_cents: number | null;
   max_wager_cents: number | null;
   rules: Record<string, unknown>;
+  timezone: string;
   members: LeagueMember[];
   sports: LeagueSportRef[];
   my_role: LeagueRole;

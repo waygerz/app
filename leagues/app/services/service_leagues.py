@@ -1,6 +1,7 @@
 """Leagues business logic: CRUD, membership, picks, standings, grading, rollover."""
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from flask import current_app, request
@@ -35,6 +36,49 @@ _WEEKDAYS = {
     "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
     "friday": 4, "saturday": 5, "sunday": 6,
 }
+
+_DEFAULT_TZ = "America/New_York"
+# Weeks roll over at 4 AM local, not midnight, so a late night game (which in
+# US Eastern can push past midnight) is finished and settled before the period
+# that contained it closes. All stored datetimes are naive UTC; these helpers
+# translate the boundary through the league's zone so "4 AM" tracks DST.
+_WEEK_BOUNDARY_HOUR = 4
+
+
+def valid_timezone(name) -> bool:
+    try:
+        ZoneInfo(str(name))
+        return True
+    except (ZoneInfoNotFoundError, ValueError):
+        return False
+
+
+def _league_zone(league) -> ZoneInfo:
+    try:
+        return ZoneInfo(getattr(league, "timezone", None) or _DEFAULT_TZ)
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo(_DEFAULT_TZ)
+
+
+def _week_start(anchor_utc, weekday, tz) -> datetime:
+    """The `weekday` at 4 AM local (tz) on or before `anchor_utc`, as naive UTC."""
+    local = anchor_utc.replace(tzinfo=timezone.utc).astimezone(tz)
+    back = (local.weekday() - weekday) % 7
+    start = (local - timedelta(days=back)).replace(
+        hour=_WEEK_BOUNDARY_HOUR, minute=0, second=0, microsecond=0
+    )
+    if start > local:  # the boundary hasn't happened yet this week — use last week's
+        start -= timedelta(days=7)
+    return start.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _add_week(start_utc, tz) -> datetime:
+    """+7 days keeping the 4 AM-local wall clock across a DST change; naive UTC."""
+    local = start_utc.replace(tzinfo=timezone.utc).astimezone(tz)
+    nxt = (local + timedelta(days=7)).replace(
+        hour=_WEEK_BOUNDARY_HOUR, minute=0, second=0, microsecond=0
+    )
+    return nxt.astimezone(timezone.utc).replace(tzinfo=None)
 
 # No ambiguous characters (no I/O/0/1).
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -367,7 +411,8 @@ def rollover_periods() -> int:
                 start = p.ends_at
                 nxt = LeaguePeriod(
                     league_id=league.id, index=p.index + 1, label=f"Week {p.index + 1}",
-                    starts_at=start, ends_at=start + timedelta(days=7), status=OPEN,
+                    starts_at=start, ends_at=_add_week(start, _league_zone(league)),
+                    status=OPEN,
                 )
                 db.session.add(nxt)
             _rollover_feed(league.id, "period_opened", f"{nxt.label} is open",
@@ -694,6 +739,12 @@ def edit_league(league_id, me, data):
     if league.commissioner_id != me:
         return {"error": "only the commissioner can edit the league"}, 403
 
+    if "timezone" in data:
+        tz = str(data.get("timezone") or "").strip()
+        if not valid_timezone(tz):
+            return {"error": "invalid timezone"}, 400
+        league.timezone = tz
+
     for field in ("name", "logo_url", "description", "min_wager_cents", "max_wager_cents", "rules"):
         if field in data:
             setattr(league, field, data[field])
@@ -744,14 +795,11 @@ def activate_league(league_id, me):
     if period is None:
         if league.period_type == "weekly":
             wd = _WEEKDAYS.get(str(rules.get("week_starts_on", "monday")).lower(), 0)
-            anchor = league.starts_at or now
-            back = (anchor.weekday() - wd) % 7
-            start = (anchor - timedelta(days=back)).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
+            tz = _league_zone(league)
+            start = _week_start(league.starts_at or now, wd, tz)
             period = LeaguePeriod(
                 league_id=league.id, index=1, label="Week 1",
-                starts_at=start, ends_at=start + timedelta(days=7),
+                starts_at=start, ends_at=_add_week(start, tz),
                 status=period_model.OPEN,
             )
         else:
@@ -1385,10 +1433,15 @@ def advance_period(league_id, me):
     add_feed(league_id, feed_model.ACTIVITY, event_type="period_final",
              title=f"{period.label} is final", body="Standings are locked for this period.")
     if league.period_type == "weekly":
-        start = period.ends_at or datetime.utcnow()
+        tz = _league_zone(league)
+        if period.ends_at:
+            start = period.ends_at
+        else:
+            wd = _WEEKDAYS.get(str((league.rules or {}).get("week_starts_on", "monday")).lower(), 0)
+            start = _week_start(datetime.utcnow(), wd, tz)
         nxt = LeaguePeriod(
             league_id=league_id, index=period.index + 1, label=f"Week {period.index + 1}",
-            starts_at=start, ends_at=start + timedelta(days=7), status=period_model.OPEN,
+            starts_at=start, ends_at=_add_week(start, tz), status=period_model.OPEN,
         )
         db.session.add(nxt)
         add_feed(league_id, feed_model.ACTIVITY, event_type="period_opened",

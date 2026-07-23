@@ -2243,11 +2243,26 @@ export function LeagueManage() {
 // Canonical form pattern: react-hook-form + zod validation + the shared Form
 // primitives, wired to the existing TanStack mutation. Blank min/max = "no
 // limit"; zod enforces non-negative numbers and max >= min before submit.
+// Curated zones for the picker; the backend accepts any valid IANA name.
+const TIMEZONE_OPTIONS = [
+  { value: 'America/New_York', label: 'Eastern (New York)' },
+  { value: 'America/Chicago', label: 'Central (Chicago)' },
+  { value: 'America/Denver', label: 'Mountain (Denver)' },
+  { value: 'America/Phoenix', label: 'Arizona (no DST)' },
+  { value: 'America/Los_Angeles', label: 'Pacific (Los Angeles)' },
+  { value: 'America/Anchorage', label: 'Alaska (Anchorage)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii (Honolulu)' },
+  { value: 'America/Toronto', label: 'Toronto' },
+  { value: 'America/Vancouver', label: 'Vancouver' },
+  { value: 'Europe/London', label: 'London' },
+];
+
 const rulesSchema = z
   .object({
     min: z.string().trim(),
     max: z.string().trim(),
     whoCanPropose: z.enum(['any', 'commissioner']),
+    timezone: z.string().min(1),
   })
   .refine((v) => v.min === '' || Number(v.min) >= 0, { path: ['min'], message: 'Enter a number ≥ 0, or leave blank.' })
   .refine((v) => v.max === '' || Number(v.max) >= 0, { path: ['max'], message: 'Enter a number ≥ 0, or leave blank.' })
@@ -2269,6 +2284,7 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
       max: lg.max_wager_cents ? String(lg.max_wager_cents / 100) : '',
       whoCanPropose:
         ((lg.rules || {}) as Record<string, unknown>).who_can_propose === 'commissioner' ? 'commissioner' : 'any',
+      timezone: lg.timezone || 'America/New_York',
     },
   });
 
@@ -2278,6 +2294,7 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
         min_wager_cents: v.min ? Math.round(Number(v.min) * 100) : null,
         max_wager_cents: v.max ? Math.round(Number(v.max) * 100) : null,
         rules: { ...(lg.rules || {}), who_can_propose: v.whoCanPropose },
+        timezone: v.timezone,
       }),
     onSuccess: (_d, v) => {
       toast.success('Rules saved');
@@ -2347,6 +2364,22 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
               )}
             />
           )}
+          <FormField
+            control={form.control}
+            name="timezone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>League timezone</FormLabel>
+                <FormControl>
+                  <Combobox className="w-full" value={field.value} onChange={field.onChange} options={TIMEZONE_OPTIONS} />
+                </FormControl>
+                <FormDescription>
+                  Weeks roll over at 4:00 AM in this timezone, so late night games finish before a period closes.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <Button type="submit" className="self-start" disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save rules'}
           </Button>
