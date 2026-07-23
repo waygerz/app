@@ -14,6 +14,7 @@ import {
   Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import { messagingApi, type ChatMessage, type Conversation } from '@/lib/messaging';
 import { leaguesApi } from '@/lib/leagues';
 import { OPEN_CHAT_EVENT } from '@/lib/open-chat';
@@ -235,14 +236,19 @@ export function MessagesSheet() {
         <UserAvatar
           userId={conv.other_user?.id ?? conv.id}
           name={title}
+          imageUrl={conv.other_user?.avatar_key}
           className="size-10 shrink-0"
         />
       );
+    const unread = (conv.unread_count ?? 0) > 0;
     return (
       <button
         key={conv.id}
         type="button"
-        className="flex w-full gap-3 px-4 py-3 text-left hover:bg-muted/50"
+        className={cn(
+          'flex w-full gap-3 border-s-2 px-4 py-3 text-left transition-colors hover:bg-muted/50',
+          unread ? 'border-primary bg-primary/5' : 'border-transparent',
+        )}
         onClick={() => setActiveId(conv.id)}
       >
         <div className="shrink-0">{avatar}</div>

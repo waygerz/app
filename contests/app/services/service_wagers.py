@@ -127,7 +127,8 @@ def refund(account, user_id, amount_cents, ref):
     return _wallet_op("refund", account, user_id, amount_cents, ref)
 
 
-def resolve_users(ids) -> dict:
+def resolve_users_full(ids) -> dict:
+    """id -> full user dict ({display_name, avatar_key, ...}) from auth."""
     base = current_app.config["AUTH_URL"]
     ids = list({str(i) for i in ids if i is not None})
     if not ids:
@@ -136,7 +137,12 @@ def resolve_users(ids) -> dict:
         f"{base}/internal/users", json={"ids": ids}, headers=_itoken(), timeout=10
     )
     resp.raise_for_status()
-    return {u["id"]: u["display_name"] for u in resp.json().get("users", [])}
+    return {u["id"]: u for u in resp.json().get("users", [])}
+
+
+def resolve_users(ids) -> dict:
+    """id -> display_name only (for callers that don't need the avatar)."""
+    return {uid: u.get("display_name") for uid, u in resolve_users_full(ids).items()}
 
 
 class WagerError(Exception):
@@ -616,13 +622,15 @@ def _enrich(wagers):
     ids = set()
     for w in wagers:
         ids.update([w.proposer_id, w.acceptor_id, w.winner_user_id])
-    names = resolve_users(ids)
+    users = resolve_users_full(ids)
     out = []
     for w in wagers:
         d = w.to_dict()
-        d["proposer_name"] = names.get(w.proposer_id, f"User {w.proposer_id}")
-        d["acceptor_name"] = names.get(w.acceptor_id, f"User {w.acceptor_id}")
-        d["winner_name"] = names.get(w.winner_user_id) if w.winner_user_id else None
+        d["proposer_name"] = (users.get(w.proposer_id) or {}).get("display_name") or f"User {w.proposer_id}"
+        d["acceptor_name"] = (users.get(w.acceptor_id) or {}).get("display_name") or f"User {w.acceptor_id}"
+        d["proposer_avatar_key"] = (users.get(w.proposer_id) or {}).get("avatar_key")
+        d["acceptor_avatar_key"] = (users.get(w.acceptor_id) or {}).get("avatar_key")
+        d["winner_name"] = (users.get(w.winner_user_id) or {}).get("display_name") if w.winner_user_id else None
         out.append(d)
     return out
 

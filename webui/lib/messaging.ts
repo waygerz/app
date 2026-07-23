@@ -7,6 +7,7 @@ const MESSAGING_API = API.messaging;
 export type ConversationUser = {
   id: string;
   display_name: string;
+  avatar_key?: string | null;
 };
 
 export type Conversation = {

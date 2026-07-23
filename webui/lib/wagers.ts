@@ -42,6 +42,8 @@ export interface Wager {
   cancel_requested_at: string | null;
   proposer_name: string;
   acceptor_name: string;
+  proposer_avatar_key?: string | null;
+  acceptor_avatar_key?: string | null;
   winner_name: string | null;
   created_at: string;
   completed_at: string | null;

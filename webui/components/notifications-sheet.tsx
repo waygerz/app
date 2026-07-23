@@ -16,15 +16,29 @@ import { wagersApi, type WagerResult } from '@/lib/wagers';
 import { friendsApi } from '@/lib/friends';
 import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
+import { cn } from '@/lib/utils';
 
 type BadgeVariant =
   | 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'outline' | 'destructive';
+
+// A left-edge accent colour per badge type, so the eye can triage the list at a
+// glance: amber = needs you, green = won, red = lost, etc.
+const ACCENT: Record<BadgeVariant, string> = {
+  primary: 'border-s-primary',
+  info: 'border-s-[var(--color-info-accent,var(--color-violet-500))]',
+  success: 'border-s-brand',
+  warning: 'border-s-[var(--color-warning-accent,var(--color-yellow-500))]',
+  destructive: 'border-s-destructive',
+  secondary: 'border-s-border',
+  outline: 'border-s-border',
+};
 
 interface Notif {
   id: string;
   tab: 'bets' | 'friends';
   userId: string;
   userName: string;
+  avatarKey?: string | null;
   title: string;
   sub?: string;
   /** The pick, as a sentence ("Anky took Atlanta Braves for 10"). */
@@ -90,6 +104,7 @@ export function NotificationsSheet() {
       const iAmProposer = String(w.proposer_id) === me;
       const other = iAmProposer ? w.acceptor_name : w.proposer_name;
       const otherId = iAmProposer ? w.acceptor_id : w.proposer_id;
+      const otherAvatar = iAmProposer ? w.acceptor_avatar_key : w.proposer_avatar_key;
       const amount = formatCredits(w.amount_cents);
       // Line 2 is the matchup; line 3 attributes the pick to whoever proposed it
       // ("Anky took Atlanta Braves for 10"), so it always reads from the
@@ -173,6 +188,7 @@ export function NotificationsSheet() {
           tab: 'bets',
           userId: otherId,
           userName: other,
+          avatarKey: otherAvatar,
           sortTime: new Date(time ?? 0).getTime() || 0,
         });
       }
@@ -184,6 +200,7 @@ export function NotificationsSheet() {
         tab: 'friends',
         userId: String(fr.user_id),
         userName: fr.display_name,
+        avatarKey: fr.avatar_key,
         title: `${fr.display_name} sent you a friend request`,
         time: null,
         actionable: true,
@@ -216,21 +233,30 @@ export function NotificationsSheet() {
     if (items.length === 0) return <p className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyText}</p>;
     return (
       <div className="flex flex-col">
-        {items.map((n, i) => (
-          <div key={n.id}>
-            {i > 0 && <div className="border-b border-border" />}
-            <div className="flex gap-3 px-4 py-3">
-              <UserAvatar userId={n.userId} name={n.userName} className="size-10 shrink-0" />
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <div className="text-sm text-foreground">{n.title}</div>
-                {n.sub && <div className="truncate text-xs text-muted-foreground">{n.sub}</div>}
-                {n.pick && <div className="truncate text-xs text-muted-foreground">{n.pick}</div>}
-                <div className="pt-0.5">
-                  <Badge size="sm" appearance="light" variant={n.badge.variant}>{n.badge.label}</Badge>
-                </div>
-                {n.time && <div className="text-[11px] text-muted-foreground">{timeAgo(n.time)}</div>}
-                {n.actions && <div className="flex gap-2 pt-1.5">{n.actions}</div>}
+        {items.map((n) => (
+          <div
+            key={n.id}
+            className={cn(
+              'flex gap-3 border-s-2 border-b border-b-border px-4 py-3 transition-colors',
+              ACCENT[n.badge.variant] ?? 'border-s-border',
+              n.actionable && 'bg-primary/[0.04]',
+            )}
+          >
+            <UserAvatar
+              userId={n.userId}
+              name={n.userName}
+              imageUrl={n.avatarKey}
+              className="size-10 shrink-0"
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="text-sm text-foreground">{n.title}</div>
+              {n.sub && <div className="truncate text-xs text-muted-foreground">{n.sub}</div>}
+              {n.pick && <div className="truncate text-xs text-muted-foreground">{n.pick}</div>}
+              <div className="flex items-center gap-2 pt-0.5">
+                <Badge size="sm" appearance="light" variant={n.badge.variant}>{n.badge.label}</Badge>
+                {n.time && <span className="text-[11px] text-muted-foreground">{timeAgo(n.time)}</span>}
               </div>
+              {n.actions && <div className="flex gap-2 pt-1.5">{n.actions}</div>}
             </div>
           </div>
         ))}

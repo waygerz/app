@@ -25,7 +25,8 @@ def _direct_key(a, b):
     return ":".join(sorted([str(a), str(b)]))
 
 
-def resolve_users(ids) -> dict:
+def resolve_users_full(ids) -> dict:
+    """id -> full user dict ({display_name, avatar_key, ...}) from auth."""
     ids = list({str(i) for i in ids if i})
     if not ids:
         return {}
@@ -36,7 +37,12 @@ def resolve_users(ids) -> dict:
         timeout=10,
     )
     resp.raise_for_status()
-    return {u["id"]: u["display_name"] for u in resp.json().get("users", [])}
+    return {u["id"]: u for u in resp.json().get("users", [])}
+
+
+def resolve_users(ids) -> dict:
+    """id -> display_name only (for callers that don't need the avatar)."""
+    return {uid: u.get("display_name") for uid, u in resolve_users_full(ids).items()}
 
 
 def _are_friends(a, b):
@@ -142,7 +148,8 @@ def _serialize_conversations(me, convs):
             other_ids.append(other_id)
         out.append((conv, last))
 
-    names = resolve_users([*author_ids, *other_ids])
+    users = resolve_users_full([*author_ids, *other_ids])
+    names = {uid: u.get("display_name") for uid, u in users.items()}
     unread = service_unread.unread_counts_for_user(me, [c.id for c, _ in out])
     rows = []
     for conv, last in out:
@@ -155,6 +162,7 @@ def _serialize_conversations(me, convs):
             other_user = {
                 "id": other_id,
                 "display_name": names.get(other_id, "User"),
+                "avatar_key": (users.get(other_id) or {}).get("avatar_key"),
             }
         rows.append(
             conv.to_dict(
