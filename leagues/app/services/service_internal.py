@@ -162,12 +162,24 @@ def add_activity(league_id):
     league_id = str(league_id)
     data = request.get_json(silent=True) or {}
     dedup_key = data.get("dedup_key")
-    if dedup_key:
-        if LeagueFeed.query.filter_by(dedup_key=dedup_key).first():
+    existing = LeagueFeed.query.filter_by(dedup_key=dedup_key).first() if dedup_key else None
+    if existing:
+        # Default: dedup_key means "post once" (skip repeats). With upsert set,
+        # a repeat updates the post in place instead — e.g. a multi-opponent bet
+        # gaining another acceptor re-renders the same row with the new list.
+        if not data.get("upsert"):
             return {"ok": True, "deduped": True}, 200
+        existing.event_type = data.get("event_type", existing.event_type)
+        existing.author_id = data.get("author_id", existing.author_id)
+        existing.title = data.get("title", existing.title)
+        existing.body = data.get("body", existing.body)
+        existing.meta = data.get("meta", existing.meta)
+        db.session.commit()
+        return {"ok": True, "id": existing.id, "updated": True}, 200
     item = add_feed(
         league_id, feed_model.ACTIVITY,
         event_type=data.get("event_type"),
+        author_id=data.get("author_id"),
         title=data.get("title"), body=data.get("body"),
         link_url=data.get("link_url"), link_label=data.get("link_label"),
         meta=data.get("meta"), dedup_key=dedup_key,

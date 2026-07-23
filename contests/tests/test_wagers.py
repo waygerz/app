@@ -31,15 +31,51 @@ def test_accept_posts_league_feed(app, calls, monkeypatch):
     feed_posts = []
     monkeypatch.setattr(svc, "post_league_activity", lambda lid, p: feed_posts.append((lid, p)))
     monkeypatch.setattr(svc, "resolve_users", lambda ids: {U1: "Alice", U2: "Bob"})
-    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)  # Alice takes Home vs Bob
     svc.accept(w, U2)
     assert len(feed_posts) == 1
     lid, payload = feed_posts[0]
     assert lid == LG
     assert payload["event_type"] == "wager_accepted"
-    assert payload["dedup_key"] == f"wager_accepted:{w.id}"
-    assert "Alice vs Bob" in payload["title"]
+    # The proposer is the author (drives the avatar) and the title names the pick.
+    assert payload["author_id"] == U1
+    assert payload["title"] == "Alice took Home for $50 against Bob"
+    assert payload["upsert"] is True
     assert payload["body"] == "Away at Home · 50.00 credits each"
+
+
+def test_accept_aggregates_multiple_opponents(app, calls, monkeypatch):
+    feed_posts = []
+    monkeypatch.setattr(svc, "post_league_activity", lambda lid, p: feed_posts.append((lid, p)))
+    monkeypatch.setattr(svc, "resolve_users",
+                        lambda ids: {U1: "Anky", U2: "Johnny", U3: "Richard"})
+    # Anky offers the same bet to two members; they accept in turn.
+    results = svc.propose_many(U1, LG, "ev1", "home", 1000, [U2, U3])
+    wagers = [r["wager"] for r in results]
+    svc.accept(wagers[0], U2)
+    svc.accept(wagers[1], U3)
+
+    # Same group dedup_key both times (one upserted post, not two).
+    assert len({p["dedup_key"] for _, p in feed_posts}) == 1
+    assert all(p["upsert"] for _, p in feed_posts)
+    # Final title lists both opponents with the "over" connector (order of the
+    # two names isn't asserted — sibling wagers can share a created_at).
+    final = feed_posts[-1][1]["title"]
+    assert final.startswith("Anky took Home for $10 over ")
+    assert "Johnny" in final and "Richard" in final
+
+
+def test_opponent_phrase_shapes():
+    assert svc._opponent_phrase(["A"]) == "A"
+    assert svc._opponent_phrase(["A", "B"]) == "A and B"
+    assert svc._opponent_phrase(["A", "B", "C"]) == "A, B and 1 other"
+    assert svc._opponent_phrase(["A", "B", "C", "D"]) == "A, B and 2 others"
+
+
+def test_format_stake_strips_whole_dollars():
+    assert svc._format_stake(1000) == "$10"
+    assert svc._format_stake(1050) == "$10.50"
+    assert svc._format_stake(500) == "$5"
 
 
 def test_propose_requires_comembership(app, calls, monkeypatch):

@@ -80,7 +80,13 @@ function PostHeader({
   const isWinner = item.event_type === 'period_final';
   const isAnnouncement = item.kind === 'announcement';
 
-  const heading = item.author_name ?? item.title ?? 'Update';
+  // Activity posts embed the actor in the title ("Anky took … against Johnny"),
+  // so the title is the heading and the author's avatar sits beside it.
+  // Announcements/chat lead with the poster's name, with any title below.
+  const heading =
+    item.kind === 'activity'
+      ? item.title ?? item.author_name ?? 'Update'
+      : item.author_name ?? item.title ?? 'Update';
 
   return (
     <div className={cn('flex flex-col gap-4 p-4 sm:p-5', className)}>

@@ -270,21 +270,62 @@ def _format_credits(amount_cents):
     return f"{amount_cents / 100:.2f}"
 
 
+def _format_stake(amount_cents):
+    """Dollar-style stake for the feed title: $10, or $10.50 when not whole."""
+    dollars = amount_cents / 100
+    return f"${dollars:.0f}" if amount_cents % 100 == 0 else f"${dollars:.2f}"
+
+
+def _opponent_phrase(names):
+    """"Johnny" / "Johnny and Richard" / "Johnny, Richard and 2 others"."""
+    n = len(names)
+    if n == 0:
+        return ""
+    if n == 1:
+        return names[0]
+    if n == 2:
+        return f"{names[0]} and {names[1]}"
+    extra = n - 2
+    return f"{names[0]}, {names[1]} and {extra} other{'s' if extra > 1 else ''}"
+
+
 def _post_accepted_activity(wager):
-    names = resolve_users([wager.proposer_id, wager.acceptor_id])
+    # One bet can be offered to several members (propose_many makes an
+    # independent wager per opponent). Collapse the accepted siblings — same
+    # proposer, event, side and stake — into a single feed post that names all
+    # the opponents, upserted so it grows as each of them accepts.
+    siblings = (
+        Wager.query.filter_by(
+            league_id=wager.league_id, event_id=wager.event_id,
+            proposer_id=wager.proposer_id, proposer_side=wager.proposer_side,
+            amount_cents=wager.amount_cents, status=ACCEPTED,
+        )
+        .order_by(Wager.created_at.asc())
+        .all()
+    )
+    names = resolve_users([wager.proposer_id] + [w.acceptor_id for w in siblings])
     proposer = names.get(wager.proposer_id, "Member")
-    acceptor = names.get(wager.acceptor_id, "Member")
-    stake = _format_credits(wager.amount_cents)
+    team = wager.home_team if wager.proposer_side == "home" else wager.away_team
+    opponents = [names.get(w.acceptor_id, "Member") for w in siblings]
+    connector = "against" if len(opponents) == 1 else "over"
+    title = (
+        f"{proposer} took {team} for {_format_stake(wager.amount_cents)} "
+        f"{connector} {_opponent_phrase(opponents)}"
+    )
     post_league_activity(wager.league_id, {
         "event_type": "wager_accepted",
-        "title": f"{proposer} vs {acceptor} — bet is on",
-        "body": f"{wager.event_name} · {stake} credits each",
-        "dedup_key": f"wager_accepted:{wager.id}",
+        "author_id": wager.proposer_id,
+        "title": title,
+        "body": f"{wager.event_name} · {_format_credits(wager.amount_cents)} credits each",
+        "dedup_key": (
+            f"wager_accepted:{wager.proposer_id}:{wager.event_id}:"
+            f"{wager.proposer_side}:{wager.amount_cents}"
+        ),
+        "upsert": True,
         "meta": {
-            "wager_id": wager.id,
             "amount_cents": wager.amount_cents,
             "proposer_id": wager.proposer_id,
-            "acceptor_id": wager.acceptor_id,
+            "acceptor_ids": [w.acceptor_id for w in siblings],
         },
     })
 
