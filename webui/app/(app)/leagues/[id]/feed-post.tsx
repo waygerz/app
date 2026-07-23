@@ -122,8 +122,8 @@ function PostHeader({
       {item.body && (
         <p
           className={cn(
-            'whitespace-pre-wrap break-words text-base leading-relaxed',
-            isWinner ? 'font-medium text-foreground' : 'text-muted-foreground',
+            'whitespace-pre-wrap break-words text-base leading-relaxed text-foreground',
+            isWinner && 'font-medium',
           )}
         >
           {item.body}
