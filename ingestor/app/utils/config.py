@@ -61,7 +61,7 @@ class Config:
     # sports pull fixtures, and how often the scheduler tick actually re-hits ESPN
     # for fixtures (weekly) vs live scores (5 min).
     SCHEDULE_WEEKS_AHEAD = int(os.environ.get("SCHEDULE_WEEKS_AHEAD", 6))
-    SCHEDULE_FIXTURE_TTL = int(os.environ.get("SCHEDULE_FIXTURE_TTL", 604800))  # 7 days
+    SCHEDULE_FIXTURE_TTL = int(os.environ.get("SCHEDULE_FIXTURE_TTL", 86400))  # 1 day — pick up new games / reschedules daily
     SCHEDULE_SCORE_TTL = int(os.environ.get("SCHEDULE_SCORE_TTL", 300))  # 5 minutes
 
     # ---- The Odds API — prices the ESPN team events for H2H betting, matched by
