@@ -77,6 +77,8 @@ export function NotificationsSheet() {
   const acceptBet = useMutation({ mutationFn: (id: string) => wagersApi.accept(id), onSuccess: () => { toast.success('Bet accepted'); refreshWagers(); }, onError: onErr });
   const declineBet = useMutation({ mutationFn: (id: string) => wagersApi.decline(id), onSuccess: () => { toast.success('Bet declined'); refreshWagers(); }, onError: onErr });
   const cancelBet = useMutation({ mutationFn: (id: string) => wagersApi.cancel(id), onSuccess: () => { toast.success('Bet cancelled'); refreshWagers(); }, onError: onErr });
+  const approveCancel = useMutation({ mutationFn: (id: string) => wagersApi.approveCancel(id), onSuccess: () => { toast.success('Bet cancelled — both stakes refunded'); refreshWagers(); }, onError: onErr });
+  const rejectCancel = useMutation({ mutationFn: (id: string) => wagersApi.rejectCancel(id), onSuccess: () => { toast.success('Cancel request declined — the bet stands'); refreshWagers(); }, onError: onErr });
   const confirmBet = useMutation({ mutationFn: ({ id, result }: { id: string; result: WagerResult }) => wagersApi.confirm(id, result), onSuccess: (_d, v) => { toast.success(v.result === 'draw' ? 'Called a draw' : 'Result confirmed'); refreshWagers(); }, onError: onErr });
   const acceptFriend = useMutation({ mutationFn: (id: number) => friendsApi.accept(id), onSuccess: () => { toast.success('Friend added'); qc.invalidateQueries({ queryKey: ['friend-requests'] }); qc.invalidateQueries({ queryKey: ['friends'] }); }, onError: onErr });
   const declineFriend = useMutation({ mutationFn: (id: number) => friendsApi.decline(id), onSuccess: () => { toast.success('Request declined'); qc.invalidateQueries({ queryKey: ['friend-requests'] }); }, onError: onErr });
@@ -117,6 +119,20 @@ export function NotificationsSheet() {
           badge: { label: 'Awaiting', variant: 'warning' },
           actions: <Button size="sm" variant="outline" disabled={cancelBet.isPending} onClick={() => cancelBet.mutate(w.id)}>Cancel</Button>,
         };
+      } else if (w.status === 'accepted' && w.cancel_requested_by && String(w.cancel_requested_by) !== me) {
+        // The other side asked to call the bet off — you approve or reject.
+        n = {
+          title: `${other} wants to cancel`, sub, time: w.cancel_requested_at ?? time, actionable: true,
+          badge: { label: 'Cancel?', variant: 'warning' },
+          actions: (
+            <>
+              <Button size="sm" disabled={approveCancel.isPending} onClick={() => approveCancel.mutate(w.id)}>Approve cancel</Button>
+              <Button size="sm" variant="ghost" disabled={rejectCancel.isPending} onClick={() => rejectCancel.mutate(w.id)}>Reject</Button>
+            </>
+          ),
+        };
+      } else if (w.status === 'accepted' && w.cancel_requested_by && String(w.cancel_requested_by) === me) {
+        n = { title: `Cancel requested vs ${other}`, sub, time: w.cancel_requested_at ?? time, actionable: false, badge: { label: 'Awaiting', variant: 'warning' } };
       } else if (w.status === 'accepted') {
         n = { title: `Bet is live vs ${other}`, sub, time, actionable: false, badge: { label: 'Active', variant: 'info' } };
       } else if (w.status === 'completed') {
