@@ -482,6 +482,22 @@ function WagerBetCard({
   const proposerBox = boxFor(w.winner_user_id === w.proposer_id, true);
   const acceptorBox = boxFor(w.winner_user_id === w.acceptor_id, w.status !== 'open');
 
+  // In a two-team game the opponent's team is just the other half of the same
+  // event, so a second panel spends the card restating what the viewer can
+  // infer — collapse to the side they actually own. Field sports (golf, racing)
+  // pick from a field of dozens, so there both picks carry real information.
+  // A non-participant (no side of their own) always gets the two-sided view.
+  const iAmProposer = !!me && me === w.proposer_id;
+  const iPlay = !!me && (iAmProposer || me === w.acceptor_id);
+  const collapse = iPlay && !field;
+
+  const mine = iAmProposer
+    ? { team: proposerTeam, logo: proposerLogo, abbr: proposerAbbr, box: proposerBox }
+    : { team: acceptorTeam, logo: acceptorLogo, abbr: acceptorAbbr, box: acceptorBox };
+  const theirs = iAmProposer
+    ? { team: acceptorTeam, name: w.acceptor_name }
+    : { team: proposerTeam, name: w.proposer_name };
+
   return (
     <Card className={cn('min-w-0 gap-2.5 border-l-4 p-3', accentClass)}>
       <div className="flex items-center justify-between gap-2">
@@ -491,27 +507,39 @@ function WagerBetCard({
         </Badge>
       </div>
 
-      {/* minmax(0,1fr), not 1fr: grid items default to min-width:auto, so a long
-          team name would push the columns past the card instead of truncating. */}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1.5">
-        <WagerSide
-          userId={w.proposer_id}
-          userName={w.proposer_name}
-          team={proposerTeam}
-          abbr={proposerAbbr}
-          logo={proposerLogo}
-          boxClass={proposerBox}
-        />
-        <span className="self-center text-[10px] font-semibold text-muted-foreground">vs</span>
-        <WagerSide
-          userId={w.acceptor_id}
-          userName={w.acceptor_name}
-          team={acceptorTeam}
-          abbr={acceptorAbbr}
-          logo={acceptorLogo}
-          boxClass={acceptorBox}
-        />
-      </div>
+      {collapse ? (
+        <div className={cn('flex min-w-0 items-center gap-2.5 rounded-lg border px-2.5 py-2', mine.box)}>
+          <TeamLogo src={mine.logo} name={mine.abbr} className="size-8 shrink-0 text-[10px]" />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-foreground">{mine.team}</div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              vs {theirs.name} · {theirs.team}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* minmax(0,1fr), not 1fr: grid items default to min-width:auto, so a long
+           team name would push the columns past the card instead of truncating. */
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1.5">
+          <WagerSide
+            userId={w.proposer_id}
+            userName={w.proposer_name}
+            team={proposerTeam}
+            abbr={proposerAbbr}
+            logo={proposerLogo}
+            boxClass={proposerBox}
+          />
+          <span className="self-center text-[10px] font-semibold text-muted-foreground">vs</span>
+          <WagerSide
+            userId={w.acceptor_id}
+            userName={w.acceptor_name}
+            team={acceptorTeam}
+            abbr={acceptorAbbr}
+            logo={acceptorLogo}
+            boxClass={acceptorBox}
+          />
+        </div>
+      )}
 
       {actions && <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-2.5">{actions}</div>}
     </Card>
