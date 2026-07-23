@@ -255,7 +255,9 @@ export function NotificationsSheet() {
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="gap-0 p-0">
+      {/* w-full: full width on mobile (overrides the sheet's default w-3/4);
+          sm:max-w-sm from the variant still caps it narrow on desktop. */}
+      <SheetContent side="right" className="w-full gap-0 p-0">
         <SheetHeader className="border-b border-border p-4">
           <SheetTitle>Notifications</SheetTitle>
         </SheetHeader>
