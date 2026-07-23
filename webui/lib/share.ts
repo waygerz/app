@@ -8,11 +8,12 @@ export async function shareLink({
   title?: string;
   text?: string;
 }): Promise<'shared' | 'copied'> {
-  const body = text ? `${text}\n${url}` : url;
-
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {
-      await navigator.share({ title, text: body, url });
+      // Keep text and url as SEPARATE fields. Share targets compose them
+      // themselves, so handing over a text that already ends in the url makes
+      // the link show up twice in the message.
+      await navigator.share({ title, text, url });
       return 'shared';
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
@@ -21,8 +22,9 @@ export async function shareLink({
     }
   }
 
+  // The clipboard has no separate url field, so compose one string here.
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(body);
+    await navigator.clipboard.writeText(text ? `${text}\n${url}` : url);
     return 'copied';
   }
 
