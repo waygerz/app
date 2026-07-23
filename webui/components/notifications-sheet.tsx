@@ -27,6 +27,8 @@ interface Notif {
   userName: string;
   title: string;
   sub?: string;
+  /** The pick, as a sentence ("Anky took Atlanta Braves for 10"). */
+  pick?: string;
   time: string | null;
   badge: { label: string; variant: BadgeVariant };
   actions?: ReactNode;
@@ -86,10 +88,15 @@ export function NotificationsSheet() {
       const iAmProposer = String(w.proposer_id) === me;
       const other = iAmProposer ? w.acceptor_name : w.proposer_name;
       const otherId = iAmProposer ? w.acceptor_id : w.proposer_id;
-      const mySide = iAmProposer ? w.proposer_side : w.acceptor_side;
-      const myTeam = mySide === 'home' ? w.home_team : w.away_team;
       const amount = formatCredits(w.amount_cents);
-      const sub = `${w.event_name} · ${myTeam} · ${amount}`;
+      // Line 2 is the matchup; line 3 attributes the pick to whoever proposed it
+      // ("Anky took Atlanta Braves for 10"), so it always reads from the
+      // proposer's side regardless of who's viewing.
+      const proposerTeam = w.proposer_side === 'home' ? w.home_team : w.away_team;
+      const sub = w.event_name;
+      const pick = iAmProposer
+        ? `You took ${proposerTeam} for ${amount}`
+        : `${w.proposer_name} took ${proposerTeam} for ${amount}`;
       const time = w.settled_at ?? w.created_at;
       let n: Omit<Notif, 'id' | 'tab' | 'userId' | 'userName' | 'sortTime'> | null = null;
 
@@ -145,6 +152,7 @@ export function NotificationsSheet() {
       if (n) {
         out.push({
           ...n,
+          pick,
           id: `wager:${w.id}:${w.status}`,
           tab: 'bets',
           userId: otherId,
@@ -200,10 +208,11 @@ export function NotificationsSheet() {
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="text-sm text-foreground">{n.title}</div>
                 {n.sub && <div className="truncate text-xs text-muted-foreground">{n.sub}</div>}
-                <div className="flex items-center gap-2 pt-0.5">
+                {n.pick && <div className="truncate text-xs text-muted-foreground">{n.pick}</div>}
+                <div className="pt-0.5">
                   <Badge size="sm" appearance="light" variant={n.badge.variant}>{n.badge.label}</Badge>
-                  {n.time && <span className="text-[11px] text-muted-foreground">{timeAgo(n.time)}</span>}
                 </div>
+                {n.time && <div className="text-[11px] text-muted-foreground">{timeAgo(n.time)}</div>}
                 {n.actions && <div className="flex gap-2 pt-1.5">{n.actions}</div>}
               </div>
             </div>
