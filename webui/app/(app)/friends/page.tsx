@@ -115,6 +115,7 @@ export default function FriendsPage() {
                 key={r.id}
                 userId={String(r.user_id)}
                 name={r.display_name}
+                imageUrl={r.avatar_key}
                 subtitle="Wants to be friends"
                 actions={
                   <>
@@ -145,6 +146,7 @@ export default function FriendsPage() {
                 key={f.friendship_id}
                 userId={String(f.user_id)}
                 name={f.display_name}
+                imageUrl={f.avatar_key}
                 actions={
                   <>
                     <Button
@@ -192,6 +194,7 @@ export default function FriendsPage() {
                 key={r.id}
                 userId={String(r.user_id)}
                 name={r.display_name}
+                imageUrl={r.avatar_key}
                 subtitle="Pending…"
               />
             ))}

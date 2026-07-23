@@ -15,7 +15,8 @@ def _auth_base():
     return current_app.config["AUTH_URL"]
 
 
-def resolve_users(ids) -> dict:
+def resolve_users_full(ids) -> dict:
+    """id -> full user dict ({display_name, avatar_key, ...}) from auth."""
     ids = list({str(i) for i in ids})
     if not ids:
         return {}
@@ -26,7 +27,12 @@ def resolve_users(ids) -> dict:
         timeout=10,
     )
     resp.raise_for_status()
-    return {u["id"]: u["display_name"] for u in resp.json().get("users", [])}
+    return {u["id"]: u for u in resp.json().get("users", [])}
+
+
+def resolve_users(ids) -> dict:
+    """id -> display_name only (for callers that don't need the avatar)."""
+    return {uid: u.get("display_name") for uid, u in resolve_users_full(ids).items()}
 
 
 def pair(a: str, b: str):
@@ -101,12 +107,14 @@ def list_friends(me: str) -> tuple[dict, int]:
         Friendship.status == ACCEPTED,
         or_(Friendship.requester_id == me, Friendship.addressee_id == me),
     ).all()
-    names = resolve_users([r.other_id(me) for r in rows])
+    users = resolve_users_full([r.other_id(me) for r in rows])
     friends = [
         {
             "friendship_id": r.id,
             "user_id": r.other_id(me),
-            "display_name": names.get(r.other_id(me), f"User {r.other_id(me)}"),
+            "display_name": (users.get(r.other_id(me)) or {}).get("display_name")
+            or f"User {r.other_id(me)}",
+            "avatar_key": (users.get(r.other_id(me)) or {}).get("avatar_key"),
         }
         for r in rows
     ]
@@ -116,26 +124,22 @@ def list_friends(me: str) -> tuple[dict, int]:
 def list_requests(me: str) -> tuple[dict, int]:
     incoming = Friendship.query.filter_by(addressee_id=me, status=PENDING).all()
     outgoing = Friendship.query.filter_by(requester_id=me, status=PENDING).all()
-    names = resolve_users(
+    users = resolve_users_full(
         [r.requester_id for r in incoming] + [r.addressee_id for r in outgoing]
     )
+
+    def _row(rid, uid):
+        u = users.get(uid) or {}
+        return {
+            "id": rid,
+            "user_id": uid,
+            "display_name": u.get("display_name") or f"User {uid}",
+            "avatar_key": u.get("avatar_key"),
+        }
+
     return {
-        "incoming": [
-            {
-                "id": r.id,
-                "user_id": r.requester_id,
-                "display_name": names.get(r.requester_id, f"User {r.requester_id}"),
-            }
-            for r in incoming
-        ],
-        "outgoing": [
-            {
-                "id": r.id,
-                "user_id": r.addressee_id,
-                "display_name": names.get(r.addressee_id, f"User {r.addressee_id}"),
-            }
-            for r in outgoing
-        ],
+        "incoming": [_row(r.id, r.requester_id) for r in incoming],
+        "outgoing": [_row(r.id, r.addressee_id) for r in outgoing],
     }, 200
 
 

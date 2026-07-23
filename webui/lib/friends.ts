@@ -8,12 +8,14 @@ export interface Friend {
   friendship_id: number;
   user_id: number;
   display_name: string;
+  avatar_key?: string | null;
 }
 
 export interface FriendRequest {
   id: number;
   user_id: number;
   display_name: string;
+  avatar_key?: string | null;
 }
 
 export type FriendRelationship =
