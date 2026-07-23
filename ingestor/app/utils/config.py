@@ -62,7 +62,17 @@ class Config:
     # for fixtures (weekly) vs live scores (5 min).
     SCHEDULE_WEEKS_AHEAD = int(os.environ.get("SCHEDULE_WEEKS_AHEAD", 6))
     SCHEDULE_FIXTURE_TTL = int(os.environ.get("SCHEDULE_FIXTURE_TTL", 86400))  # 1 day — pick up new games / reschedules daily
+    # Flat board re-poll, used by the combat (MMA) and field (golf/racing)
+    # syncs, whose cards/tournaments run for days rather than hours.
     SCHEDULE_SCORE_TTL = int(os.environ.get("SCHEDULE_SCORE_TTL", 300))  # 5 minutes
+
+    # Team-sport score refresh is gated on whether a league actually has a game
+    # on, so we poll hard during games and barely at all otherwise. Most leagues
+    # are idle most of the day, making this both fresher in-game and cheaper
+    # overall than one flat interval — which matters on ESPN's unmetered-but-
+    # unofficial API.
+    SCHEDULE_SCORE_TTL_LIVE = int(os.environ.get("SCHEDULE_SCORE_TTL_LIVE", 60))  # 1 min in-game
+    SCHEDULE_SCORE_TTL_IDLE = int(os.environ.get("SCHEDULE_SCORE_TTL_IDLE", 900))  # 15 min idle
 
     # ---- The Odds API — prices the ESPN team events for H2H betting, matched by
     # team-set + date (odds ride on Event.odds). Free tier is 500 credits/mo and a

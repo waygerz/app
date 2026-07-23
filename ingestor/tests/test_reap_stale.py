@@ -69,3 +69,51 @@ def test_null_start_time_is_never_reaped(app):
     n = sched.reap_stale_events()
     assert n == 0
     assert Event.query.filter_by(external_id="no-time").one().status == SCHEDULED
+
+
+# ---- live-window gating (drives the score refresh cadence) -----------------
+
+def _ev_for(league, status, start_dt, ext):
+    return Event(
+        external_id=ext, sport="baseball", league=league,
+        name=f"Game {ext}", home_team="H", away_team="A",
+        status=status, start_time=start_dt,
+    )
+
+
+def test_live_window_true_for_in_progress_game(app):
+    _seed(_ev_for("mlb", LIVE, datetime.utcnow() - timedelta(hours=1), "live-1"))
+    assert sched.has_live_window("baseball", "mlb") is True
+
+
+def test_live_window_true_for_game_about_to_start(app):
+    _seed(_ev_for("mlb", SCHEDULED, datetime.utcnow() + timedelta(minutes=5), "soon"))
+    assert sched.has_live_window("baseball", "mlb") is True
+
+
+def test_live_window_true_when_start_just_passed(app):
+    # ESPN can lag flipping SCHEDULED -> LIVE; keep polling fast.
+    _seed(_ev_for("mlb", SCHEDULED, datetime.utcnow() - timedelta(minutes=20), "just-started"))
+    assert sched.has_live_window("baseball", "mlb") is True
+
+
+def test_live_window_false_when_next_game_is_hours_away(app):
+    _seed(_ev_for("mlb", SCHEDULED, datetime.utcnow() + timedelta(hours=5), "later"))
+    assert sched.has_live_window("baseball", "mlb") is False
+
+
+def test_live_window_false_when_everything_is_final(app):
+    _seed(_ev_for("mlb", FINAL, datetime.utcnow() - timedelta(hours=1), "done-1"))
+    assert sched.has_live_window("baseball", "mlb") is False
+
+
+def test_live_window_is_per_league(app):
+    _seed(_ev_for("mlb", LIVE, datetime.utcnow(), "mlb-live"))
+    assert sched.has_live_window("baseball", "mlb") is True
+    assert sched.has_live_window("baseball", "nope") is False
+
+
+def test_live_window_survives_a_long_running_game(app):
+    # Rain delay: LIVE counts no matter how long ago it started.
+    _seed(_ev_for("mlb", LIVE, datetime.utcnow() - timedelta(hours=9), "marathon"))
+    assert sched.has_live_window("baseball", "mlb") is True

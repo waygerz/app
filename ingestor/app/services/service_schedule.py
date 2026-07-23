@@ -22,6 +22,7 @@ import time
 from datetime import datetime, timedelta
 
 from flask import current_app
+from sqlalchemy import and_, or_
 
 from app.extensions import db, get_redis
 from app.models.event import CANCELLED, FINAL, LIVE, SCHEDULED, Event
@@ -291,10 +292,51 @@ def refresh_fixtures(sport, league, force=False):
     return n
 
 
+# How far around "now" a scheduled game still counts as live-ish: far enough
+# back that a game in progress keeps the fast poll (ESPN can lag flipping a
+# start), and a short lookahead so we're already polling at first pitch.
+_LIVE_LOOKBACK = timedelta(hours=6)
+_LIVE_LOOKAHEAD = timedelta(minutes=15)
+
+
+def has_live_window(sport, league) -> bool:
+    """True if this league has a game in progress or about to start.
+
+    A local DB query — no API call. Anything already LIVE counts regardless of
+    how long it's run (rain delays, extra innings); a SCHEDULED game counts if
+    its start just passed (ESPN hasn't flipped it yet) or is imminent.
+    """
+    now = datetime.utcnow()
+    return db.session.query(
+        Event.query.filter(
+            Event.sport == sport,
+            Event.league == league,
+            or_(
+                Event.status == LIVE,
+                and_(
+                    Event.status == SCHEDULED,
+                    Event.start_time >= now - _LIVE_LOOKBACK,
+                    Event.start_time <= now + _LIVE_LOOKAHEAD,
+                ),
+            ),
+        ).exists()
+    ).scalar()
+
+
 def refresh_scores(sport, league, force=False):
-    """Re-fetch today's board to update live/final scores (gated ~5 min)."""
-    if not force and not _stale(_k_scores(sport, league), current_app.config["SCHEDULE_SCORE_TTL"]):
-        return 0
+    """Re-fetch today's board to update live/final scores.
+
+    Polled every SCHEDULE_SCORE_TTL_LIVE while the league has a game on, and
+    only every SCHEDULE_SCORE_TTL_IDLE otherwise — so scores are near-live
+    during games without hammering ESPN around the clock.
+    """
+    if not force:
+        ttl = current_app.config[
+            "SCHEDULE_SCORE_TTL_LIVE" if has_live_window(sport, league)
+            else "SCHEDULE_SCORE_TTL_IDLE"
+        ]
+        if not _stale(_k_scores(sport, league), ttl):
+            return 0
     try:
         board = _scoreboard(sport, league, {"dates": datetime.utcnow().strftime("%Y%m%d")})
         n = _ingest_events(board.get("events"), sport, league)
