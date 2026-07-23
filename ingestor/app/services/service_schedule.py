@@ -338,7 +338,15 @@ def refresh_scores(sport, league, force=False):
         if not _stale(_k_scores(sport, league), ttl):
             return 0
     try:
-        board = _scoreboard(sport, league, {"dates": datetime.utcnow().strftime("%Y%m%d")})
+        # Yesterday AND today, not just today: ESPN buckets a game under its
+        # LOCAL date, so a 7pm ET game is tomorrow in UTC. Querying only the
+        # current UTC date meant last night's games fell off the board before
+        # their final score landed — they aged out at their 0-0 placeholder and
+        # the stale-event reaper then marked them final, so wagers on them could
+        # never auto-settle.
+        now = datetime.utcnow()
+        dates = f"{(now - timedelta(days=1)).strftime('%Y%m%d')}-{now.strftime('%Y%m%d')}"
+        board = _scoreboard(sport, league, {"dates": dates})
         n = _ingest_events(board.get("events"), sport, league)
         db.session.commit()
     except Exception:

@@ -117,3 +117,25 @@ def test_live_window_survives_a_long_running_game(app):
     # Rain delay: LIVE counts no matter how long ago it started.
     _seed(_ev_for("mlb", LIVE, datetime.utcnow() - timedelta(hours=9), "marathon"))
     assert sched.has_live_window("baseball", "mlb") is True
+
+
+# ---- score refresh queries yesterday+today ---------------------------------
+
+def test_refresh_scores_queries_yesterday_and_today(app, monkeypatch):
+    """ESPN buckets a game under its LOCAL date, so a 7pm ET game lands on the
+    next UTC day. Querying only today's UTC date dropped last night's games
+    before their final score arrived."""
+    seen = {}
+
+    def fake_scoreboard(sport, league, params=None):
+        seen['params'] = params
+        return {"events": []}
+
+    monkeypatch.setattr(sched, "_scoreboard", fake_scoreboard)
+    monkeypatch.setattr(sched, "_mark", lambda key: None)  # no Redis in tests
+    sched.refresh_scores("baseball", "mlb", force=True)
+
+    dates = seen['params']['dates']
+    today = datetime.utcnow().strftime("%Y%m%d")
+    yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y%m%d")
+    assert dates == f"{yesterday}-{today}"

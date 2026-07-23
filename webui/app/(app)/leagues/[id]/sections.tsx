@@ -446,6 +446,51 @@ function wagerStatusBadge(w: Wager, me?: string) {
   return null;
 }
 
+// The game itself, once it's underway: score plus whether the viewer's side is
+// ahead. Renders nothing before first pitch, or when the event carries no score
+// (field sports, or a game we never got a final for).
+function GameScore({ ev, mySide }: { ev: SportEvent; mySide: 'home' | 'away' | null }) {
+  const live = ev.status === 'live';
+  if ((!live && ev.status !== 'final') || ev.home_score == null || ev.away_score == null) {
+    return null;
+  }
+  const { home_score: home, away_score: away } = ev;
+  const mine = mySide === 'home' ? home : away;
+  const theirs = mySide === 'home' ? away : home;
+
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5">
+      <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-semibold">
+        {live ? (
+          <>
+            <span className="size-1.5 animate-pulse rounded-full bg-destructive" aria-hidden />
+            <span className="text-destructive">LIVE</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">FINAL</span>
+        )}
+      </span>
+      <span className="flex min-w-0 items-center gap-1 text-sm font-semibold tabular-nums text-foreground">
+        <span className="truncate">{ev.away_abbr || ev.away_team}</span>
+        <span>{away}</span>
+        <span className="text-muted-foreground">–</span>
+        <span>{home}</span>
+        <span className="truncate">{ev.home_abbr || ev.home_team}</span>
+      </span>
+      {mySide && (
+        <span
+          className={cn(
+            'shrink-0 text-[11px] font-medium',
+            mine > theirs ? 'text-brand' : mine < theirs ? 'text-destructive' : 'text-muted-foreground',
+          )}
+        >
+          {mine > theirs ? 'up' : mine < theirs ? 'down' : 'tied'}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function WagerBetCard({
   w,
   me,
@@ -497,6 +542,9 @@ function WagerBetCard({
   const theirs = iAmProposer
     ? { team: acceptorTeam, name: w.acceptor_name }
     : { team: proposerTeam, name: w.proposer_name };
+  const mySide: 'home' | 'away' | null = iPlay
+    ? (iAmProposer ? w.proposer_side : w.acceptor_side)
+    : null;
 
   return (
     <Card className={cn('min-w-0 gap-2.5 border-l-4 p-3', accentClass)}>
@@ -540,6 +588,9 @@ function WagerBetCard({
           />
         </div>
       )}
+
+      {/* A tournament container has no two-sided score, so field sports skip it. */}
+      {ev && !field && <GameScore ev={ev} mySide={mySide} />}
 
       {actions && <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-2.5">{actions}</div>}
     </Card>
@@ -717,6 +768,11 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
     },
     enabled: eventIds.length > 0,
     staleTime: 5 * 60_000,
+    // Poll only while a game is actually in progress — the ingestor refreshes
+    // those scores every 60s, so 30s here keeps the card within about a minute
+    // of the real score without polling around the clock.
+    refetchInterval: (query) =>
+      Object.values(query.state.data ?? {}).some((e) => e.status === 'live') ? 30_000 : false,
   });
   const eventMap = eventsQ.data ?? {};
 
