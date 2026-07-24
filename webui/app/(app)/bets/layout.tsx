@@ -30,10 +30,7 @@ export default function BetsLayout({ children }: { children: ReactNode }) {
     <div className="container min-w-0 w-full py-8">
       <div className="mb-6 flex items-center gap-3">
         <Ticket className="size-7 text-primary" />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">My Bets</h1>
-          <p className="text-sm text-muted-foreground">Head-to-head wagers across all your leagues</p>
-        </div>
+        <h1 className="text-2xl font-bold text-foreground">My Bets</h1>
       </div>
 
       <nav className="mb-6 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

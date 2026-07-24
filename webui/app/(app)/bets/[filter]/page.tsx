@@ -182,8 +182,6 @@ export default function BetsView() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-muted-foreground">{meta.description}</p>
-
       {wagersQ.isLoading && (
         <div className="flex flex-col gap-2">
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
