@@ -22,7 +22,7 @@ import {
 import { fetchEspnDetail, fetchEspnList, isFieldSport } from '@/lib/espn';
 import { fetchTransactions, formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
-import { EventCard, TeamLogo, formatStart } from '@/components/event-card';
+import { EventCard, ScheduleBoard, TeamLogo, formatStart } from '@/components/event-card';
 import { Combobox } from '@/components/ui/combobox';
 import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
@@ -999,11 +999,17 @@ export function LeagueSportSchedule() {
       {sport && !events.isLoading && !fieldLoading && evs.length > 0 && (
         <>
           {ready.length > 0 && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {ready.map((ev: SportEvent) => (
-                <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
-              ))}
-            </div>
+            fieldSport ? (
+              // Golf/racing tournaments have no two-team odds — keep the cards.
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {ready.map((ev: SportEvent) => (
+                  <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
+                ))}
+              </div>
+            ) : (
+              // Team sports: the sportsbook-style Spread / Total / Winner board.
+              <ScheduleBoard events={ready} onSelect={canBet ? (ev) => setSelected(ev) : undefined} />
+            )
           )}
           {fieldSport && ready.length === 0 && (
             <CenterCard>

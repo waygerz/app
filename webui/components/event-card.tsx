@@ -242,3 +242,130 @@ export function EventCard({ event: ev, onSelect }: { event: SportEvent; onSelect
     </Card>
   );
 }
+
+// ---- Sportsbook-style schedule board ---------------------------------------
+// A dense odds table (Spread / Total / Winner) with away/home rows per game,
+// modelled on a real sportsbook. Team sports only; field sports keep the card.
+
+function BookCell({
+  main,
+  price,
+  onClick,
+}: {
+  main?: string;
+  price?: string;
+  onClick?: () => void;
+}) {
+  const empty = main === undefined && price === undefined;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={empty || !onClick}
+      className={cn(
+        'flex h-9 w-full items-center justify-between gap-1 rounded-md bg-muted/60 px-2.5 text-xs tabular-nums transition-colors sm:h-10 sm:px-3 sm:text-sm',
+        onClick && !empty && 'hover:bg-primary/15 hover:ring-1 hover:ring-primary/40',
+        empty && 'opacity-40',
+      )}
+    >
+      {empty ? (
+        <span className="mx-auto text-muted-foreground">—</span>
+      ) : (
+        <>
+          {main !== undefined && <span className="font-medium text-foreground">{main}</span>}
+          {price !== undefined && (
+            <span className={cn('text-muted-foreground', main === undefined && 'mx-auto text-foreground')}>
+              {price}
+            </span>
+          )}
+        </>
+      )}
+    </button>
+  );
+}
+
+function BookTeamLine({ name, abbr, logo }: { name: string; abbr?: string; logo?: string | null }) {
+  return (
+    <div className="flex h-9 min-w-0 items-center gap-2.5 sm:h-10">
+      <TeamLogo src={logo} name={abbr || name} className="size-6 shrink-0 text-[9px] sm:size-7 sm:text-[10px]" />
+      <span className="truncate text-sm font-medium text-foreground">{name}</span>
+    </div>
+  );
+}
+
+function ScheduleGameRow({ ev, onSelect }: { ev: SportEvent; onSelect?: () => void }) {
+  const o = ev.odds;
+  const sp = o?.spread;
+  const ou = o?.overUnder;
+  const ml = o?.moneyline;
+  // Each column is a pair of [main, price] cells (away then home); a missing
+  // market falls back to the placeholder "—" cell.
+  const cols: { away: [string?, string?]; home: [string?, string?] }[] = [
+    { // Spread
+      away: sp ? [fmtSigned(-sp.line), fmtSigned(sp.away)] : [undefined, undefined],
+      home: sp ? [fmtSigned(sp.line), fmtSigned(sp.home)] : [undefined, undefined],
+    },
+    { // Total
+      away: ou ? [`O ${ou.total}`, fmtSigned(ou.over)] : [undefined, undefined],
+      home: ou ? [`U ${ou.total}`, fmtSigned(ou.under)] : [undefined, undefined],
+    },
+    { // Winner (moneyline) — price only
+      away: [undefined, fmtSigned(ml?.away)],
+      home: [undefined, fmtSigned(ml?.home)],
+    },
+  ];
+
+  return (
+    <div className="border-b border-border py-3 last:border-0">
+      <div className="flex items-stretch gap-2 sm:gap-3">
+        <div className="flex min-w-[7.5rem] flex-1 flex-col justify-between gap-2">
+          <BookTeamLine name={ev.away_team} abbr={ev.away_abbr} logo={ev.away_logo} />
+          <BookTeamLine name={ev.home_team} abbr={ev.home_abbr} logo={ev.home_logo} />
+        </div>
+        {cols.map((c, i) => (
+          <div key={i} className="flex w-[5.75rem] shrink-0 flex-col gap-2 sm:w-28">
+            <BookCell main={c.away[0]} price={c.away[1]} onClick={onSelect} />
+            <BookCell main={c.home[0]} price={c.home[1]} onClick={onSelect} />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
+        {onSelect && (
+          <button
+            type="button"
+            onClick={onSelect}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            More wagers →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function ScheduleBoard({
+  events,
+  onSelect,
+}: {
+  events: SportEvent[];
+  onSelect?: (ev: SportEvent) => void;
+}) {
+  const head = 'w-[5.75rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-28';
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[22rem]">
+        <div className="flex items-center gap-2 pb-2 sm:gap-3">
+          <div className="min-w-[7.5rem] flex-1" />
+          <span className={head}>Spread</span>
+          <span className={head}>Total</span>
+          <span className={head}>Winner</span>
+        </div>
+        {events.map((ev) => (
+          <ScheduleGameRow key={ev.external_id} ev={ev} onSelect={onSelect ? () => onSelect(ev) : undefined} />
+        ))}
+      </div>
+    </div>
+  );
+}
