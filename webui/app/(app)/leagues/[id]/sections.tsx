@@ -1537,6 +1537,7 @@ function ScheduleBetDialog({
   const [side, setSide] = useState<'home' | 'away'>('away');
   const [betType, setBetType] = useState<'straight_up' | 'ats'>('straight_up');
   const [line, setLine] = useState('');
+  const [picked, setPicked] = useState(false); // no cell selected until the user taps one
   const [credits, setCredits] = useState('10');
   const [selected, setSelected] = useState<string[]>([]);
 
@@ -1554,18 +1555,21 @@ function ScheduleBetDialog({
   // Reset the flow whenever a new game is opened.
   useEffect(() => {
     if (open) {
-      setStep('config'); setSide('away'); setBetType('straight_up'); setLine(''); setCredits('10'); setSelected([]);
+      setStep('config'); setSide('away'); setBetType('straight_up'); setLine('');
+      setPicked(false); setCredits('10'); setSelected([]);
     }
   }, [open, event?.external_id]);
 
-  // Default the spread input to the current line for the picked side.
-  useEffect(() => {
-    if (betType === 'ats') {
-      const def = lineFor(side);
-      if (def !== null) setLine(String(def));
+  // Selecting a cell fixes the side, market and (for spread) the line.
+  const pickCell = (s: 'home' | 'away', bt: 'straight_up' | 'ats') => {
+    setSide(s);
+    setBetType(bt);
+    if (bt === 'ats') {
+      const l = lineFor(s);
+      setLine(l !== null ? String(l) : '');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [betType, side, spread]);
+    setPicked(true);
+  };
 
   const opponents = lg.members.filter((m) => m.user_id !== me);
   const toggle = (uid: string) =>
@@ -1591,8 +1595,11 @@ function ScheduleBetDialog({
   const teamName = (s: 'home' | 'away') => (s === 'away' ? event.away_team : event.home_team);
   const teamLogo = (s: 'home' | 'away') => (s === 'away' ? event.away_logo : event.home_logo);
   const teamAbbr = (s: 'home' | 'away') => (s === 'away' ? event.away_abbr : event.home_abbr);
-  const configReady = Number(credits) > 0 && (betType !== 'ats' || line.trim() !== '');
+  const configReady = picked && Number(credits) > 0 && (betType !== 'ats' || line.trim() !== '');
   const canSubmit = selected.length > 0 && configReady;
+  const sign = (n?: number) => (n === undefined || n === null ? undefined : n > 0 ? `+${n}` : `${n}`);
+  const ml = oddsQ.data?.moneyline;
+  const isSel = (s: 'home' | 'away', bt: 'straight_up' | 'ats') => picked && side === s && betType === bt;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1606,49 +1613,71 @@ function ScheduleBetDialog({
         <DialogBody className="flex flex-col gap-4 py-2">
           {step === 'config' ? (
             <>
-              <p className="text-sm text-muted-foreground">Pick the team you want to back.</p>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <p className="text-sm text-muted-foreground">Tap a spread or the winner for the side you want to back.</p>
+
+              {/* Sportsbook-style selectable rows: Spread | Winner per team. */}
+              <div>
+                <div className="flex items-center gap-2 pb-1.5">
+                  <div className="min-w-0 flex-1" />
+                  <span className="w-[4.75rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-24">Spread</span>
+                  <span className="w-[4.75rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-24">Winner</span>
+                </div>
                 {(['away', 'home'] as const).map((s) => {
-                  const logo = teamLogo(s);
+                  const spMain = spread ? sign(s === 'away' ? -spread.line : spread.line) : undefined;
+                  const spPrice = spread ? sign(s === 'away' ? spread.away : spread.home) : undefined;
+                  const mlPrice = sign(s === 'away' ? ml?.away : ml?.home);
+                  const cellCls = (on: boolean, disabled?: boolean) =>
+                    cn(
+                      'flex h-12 w-[4.75rem] shrink-0 flex-col items-center justify-center gap-0 rounded-md border tabular-nums leading-tight transition-colors sm:w-24',
+                      disabled ? 'cursor-not-allowed opacity-40 border-input' : on ? STATE.selected : STATE.idle,
+                    );
                   return (
-                    <button key={s} type="button" onClick={() => setSide(s)} className={`flex flex-1 flex-col items-center gap-2 px-3 py-3 text-center ${pickBtn(side === s)}`}>
-                      {logo ? (
-                        <img src={logo} alt="" className="size-10 object-contain" />
-                      ) : (
-                        <span className="flex size-10 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
-                          {(teamAbbr(s) || teamName(s)).slice(0, 3).toUpperCase()}
-                        </span>
-                      )}
-                      <span className="text-sm font-medium sm:text-base">{teamName(s)}</span>
-                    </button>
+                    <div key={s} className="flex items-center gap-2 border-b border-border py-2 last:border-0">
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                        <TeamLogo src={teamLogo(s)} name={teamAbbr(s) || teamName(s)} className="size-7 shrink-0 text-[10px]" />
+                        <span className="truncate text-sm font-medium text-foreground">{teamName(s)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!spread}
+                        onClick={() => pickCell(s, 'ats')}
+                        className={cellCls(isSel(s, 'ats'), !spread)}
+                      >
+                        {spread ? (
+                          <>
+                            <span className="text-xs font-medium text-foreground">{spMain}</span>
+                            <span className="text-[11px] text-muted-foreground">{spPrice}</span>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => pickCell(s, 'straight_up')}
+                        className={cellCls(isSel(s, 'straight_up'))}
+                      >
+                        {mlPrice ? (
+                          <span className="text-sm font-medium text-foreground">{mlPrice}</span>
+                        ) : (
+                          <span className="text-sm font-medium text-foreground">Win</span>
+                        )}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
-
-              <div className="flex gap-2">
-                {([['straight_up', 'Straight Up'], ['ats', 'ATS']] as const).map(([v, lbl]) => (
-                  <button key={v} type="button" onClick={() => setBetType(v)} className={`flex-1 px-3 py-2 ${pickBtn(betType === v)}`}>
-                    {lbl}
-                  </button>
-                ))}
-              </div>
-
-              {betType === 'ats' && (
-                <div className="flex items-center justify-between gap-3">
-                  <Label>Spread</Label>
-                  <Input
-                    type="number" step="0.5" value={line} onChange={(e) => setLine(e.target.value)}
-                    placeholder={oddsQ.isLoading ? 'Loading line…' : 'e.g. -3.5'} className="max-w-40"
-                  />
-                </div>
-              )}
 
               <div className="flex items-center justify-between gap-3">
                 <Label>Amount (credits)</Label>
                 <Input type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} className="max-w-40" />
               </div>
 
-              <Button className="w-full self-stretch sm:w-auto sm:self-end" disabled={!configReady} onClick={() => setStep('members')}>Next</Button>
+              <Button className="w-full" disabled={!configReady} onClick={() => setStep('members')}>
+                {picked
+                  ? `Bet ${teamName(side)} ${betType === 'ats' ? `${line} spread` : 'to win'}`
+                  : 'Bet'}
+              </Button>
             </>
           ) : (
             <>
