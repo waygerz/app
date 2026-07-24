@@ -1689,7 +1689,7 @@ function ScheduleBetDialog({
                 {opponents.length === 0 && (
                   <p className="text-sm text-muted-foreground">No other members to challenge yet.</p>
                 )}
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="flex flex-col gap-2">
                   {opponents.map((m) => {
                     const on = selected.includes(m.user_id);
                     return (
@@ -1698,10 +1698,24 @@ function ScheduleBetDialog({
                         type="button"
                         aria-pressed={on}
                         onClick={() => toggle(m.user_id)}
-                        className={`flex flex-col items-center gap-2 px-3 py-3 text-center ${pickBtn(on)}`}
+                        className={cn('flex items-center gap-3 px-3 py-2.5 text-left', pickBtn(on))}
                       >
-                        <UserAvatar userId={m.user_id} name={m.display_name} className="size-10" />
-                        <span className="line-clamp-2 text-sm font-medium">{m.display_name}</span>
+                        <UserAvatar
+                          userId={m.user_id}
+                          name={m.display_name}
+                          imageUrl={m.avatar_key}
+                          className="size-10 shrink-0"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.display_name}</span>
+                        <span
+                          className={cn(
+                            'flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
+                            on ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
+                          )}
+                          aria-hidden
+                        >
+                          {on && <Check className="size-3.5" />}
+                        </span>
                       </button>
                     );
                   })}
@@ -1843,7 +1857,7 @@ function MatchupBetDialog({
                 {opponents.length === 0 && (
                   <p className="text-sm text-muted-foreground">No other members to challenge yet.</p>
                 )}
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="flex flex-col gap-2">
                   {opponents.map((m) => {
                     const on = selected.includes(m.user_id);
                     return (
@@ -1852,10 +1866,24 @@ function MatchupBetDialog({
                         type="button"
                         aria-pressed={on}
                         onClick={() => toggle(m.user_id)}
-                        className={`flex flex-col items-center gap-2 px-3 py-3 text-center ${pickBtn(on)}`}
+                        className={cn('flex items-center gap-3 px-3 py-2.5 text-left', pickBtn(on))}
                       >
-                        <UserAvatar userId={m.user_id} name={m.display_name} className="size-10" />
-                        <span className="line-clamp-2 text-sm font-medium">{m.display_name}</span>
+                        <UserAvatar
+                          userId={m.user_id}
+                          name={m.display_name}
+                          imageUrl={m.avatar_key}
+                          className="size-10 shrink-0"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.display_name}</span>
+                        <span
+                          className={cn(
+                            'flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
+                            on ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
+                          )}
+                          aria-hidden
+                        >
+                          {on && <Check className="size-3.5" />}
+                        </span>
                       </button>
                     );
                   })}
