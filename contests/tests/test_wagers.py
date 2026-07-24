@@ -454,6 +454,25 @@ def test_moneyline_winner_is_computed_and_claims(app, calls, monkeypatch):
     assert w.status == SETTLED and ("payout", U1, 10000) in calls
 
 
+def test_moneyline_resolves_from_score_without_winner_side(app, calls, monkeypatch):
+    # The ingestor didn't set winner_side, only the score. A moneyline must
+    # still resolve from the score (home 5 > away 3) rather than falling back
+    # to the manual concede path.
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))  # ws=None
+    svc.settle_one(w)
+    assert w.status == COMPLETED and w.winner_user_id == U1
+
+
+def test_moneyline_equal_score_without_winner_side_is_push(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(2, 2))  # ws=None
+    svc.settle_one(w)
+    assert w.status == REFUNDED
+
+
 def test_moneyline_loser_backed_away(app, calls, monkeypatch):
     w = svc.propose(U1, LG, "ev1", "away", 5000, U2)  # U1 away; home wins -> U2
     svc.accept(w, U2)

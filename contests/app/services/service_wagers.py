@@ -539,9 +539,15 @@ def _resolve_outcome(wager, event):
     if bt == MONEYLINE:
         if ws == "draw":
             return "push"
-        if ws in ("home", "away"):
-            return "proposer" if ws == ps else "acceptor"
-        return None
+        # Prefer the reported winner_side, but the ingestor doesn't always set
+        # it — fall back to the final score so a moneyline still resolves.
+        if ws not in ("home", "away"):
+            if hs is None or aw is None:
+                return None
+            if hs == aw:
+                return "push"
+            ws = "home" if hs > aw else "away"
+        return "proposer" if ws == ps else "acceptor"
 
     if hs is None or aw is None or wager.line is None:
         return None
@@ -802,6 +808,34 @@ def settle_due(refresh=True) -> int:
             continue
         if wager.status != before:
             moved += 1
+
+    # Self-heal: completed wagers whose winner was never stamped (e.g. a
+    # moneyline settled before we read the winner off the score) can now be
+    # resolved. Stamp the winner so the winner-claims-payout path applies
+    # instead of the manual concede fallback; a push refunds both.
+    stuck = Wager.query.filter(
+        Wager.status == COMPLETED, Wager.winner_user_id.is_(None)
+    ).all()
+    for wager in stuck:
+        try:
+            outcome = _resolve_outcome(wager, get_event(wager.event_id))
+            if outcome == "push":
+                account = _account(wager.league_id)
+                refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
+                refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
+                wager.status = REFUNDED
+                wager.settled_at = datetime.utcnow()
+                db.session.commit()
+                _post_settled_activity(wager, "A bet pushed — stakes returned")
+                moved += 1
+            elif outcome in ("proposer", "acceptor"):
+                wager.winner_user_id = _outcome_winner_id(wager, outcome)
+                db.session.commit()
+                _post_completed_activity(wager)
+                moved += 1
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
+            continue
     return moved
 
 
