@@ -5,8 +5,12 @@ import { cn } from '@/lib/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Tabs as TabsPrimitive } from 'radix-ui';
 
-// Variants for TabsList
-const tabsListVariants = cva('flex items-center shrink-0', {
+// Variants for TabsList. Scrolls horizontally when the tabs overflow (triggers
+// stay shrink-0), with the scrollbar hidden — so long tab bars become
+// swipeable pills instead of wrapping or clipping.
+const tabsListVariants = cva(
+  'flex items-center max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+  {
   variants: {
     variant: {
       default: 'bg-accent p-1',

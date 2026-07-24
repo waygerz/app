@@ -289,7 +289,7 @@ export function NotificationsSheet() {
         </SheetHeader>
         <SheetBody className="p-0">
           <Tabs defaultValue="all" className="w-full">
-            <TabsList variant="line" className="w-full gap-6 px-4">
+            <TabsList variant="button" shape="pill" size="sm" className="mx-4 mt-2 gap-1.5">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="bets">Bets</TabsTrigger>
               <TabsTrigger value="friends">Friends</TabsTrigger>

@@ -173,34 +173,32 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
         </DialogContent>
       </Dialog>
 
-      {/* Tab bar scrolls independently — scroll wrapper is NOT the flex row */}
-      <div className="mb-6 w-full min-w-0 border-b border-border">
-        <div
-          className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          aria-label="League sections"
-        >
-          <nav className="flex w-max min-w-full gap-1">
-            {tabs.map((t) => {
-              const isActive = t.end
-                ? pathname === t.to
-                : pathname === t.to || pathname.startsWith(t.to + '/');
-              return (
-                <Link
-                  key={t.to}
-                  href={t.to}
-                  className={cn(
-                    '-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors',
-                    isActive
-                      ? 'border-primary font-medium text-foreground'
-                      : 'border-transparent text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {t.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
+      {/* Scrollable pill nav — swipes horizontally when the tabs overflow. */}
+      <div
+        className="mb-6 w-full min-w-0 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        aria-label="League sections"
+      >
+        <nav className="flex w-max min-w-full gap-1 rounded-xl border border-input bg-background p-1">
+          {tabs.map((t) => {
+            const isActive = t.end
+              ? pathname === t.to
+              : pathname === t.to || pathname.startsWith(t.to + '/');
+            return (
+              <Link
+                key={t.to}
+                href={t.to}
+                className={cn(
+                  'shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </nav>
       </div>
 
       <div className="min-w-0 w-full">

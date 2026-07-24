@@ -452,7 +452,7 @@ export function MessagesSheet() {
             <div className="flex h-[calc(100vh-5.5rem)] flex-col">{renderChat()}</div>
           ) : (
             <Tabs defaultValue="all" className="w-full">
-              <TabsList variant="line" className="w-full gap-6 px-4">
+              <TabsList variant="button" shape="pill" size="sm" className="mx-4 mt-2 gap-1.5">
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="direct">Direct</TabsTrigger>
                 <TabsTrigger value="leagues">Leagues</TabsTrigger>
