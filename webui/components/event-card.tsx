@@ -338,11 +338,8 @@ function ScheduleGameRow({ ev, onSelect }: { ev: SportEvent; onSelect?: () => vo
           </div>
         ))}
       </div>
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-2">
         <span className="text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
-        {onSelect && (
-          <span className="text-xs font-medium text-primary group-hover:underline">Tap to bet →</span>
-        )}
       </div>
     </Wrapper>
   );
