@@ -26,31 +26,12 @@ export function HeaderToolbar() {
 
   return (
     <nav className="flex min-w-0 items-center justify-end gap-1 shrink-0 sm:gap-2.5 lg:w-[200px]">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleTheme}
-        className="text-white/90 hover:text-white"
-        aria-label="Toggle theme"
-      >
-        {theme === 'light' ? <Moon className="size-5" /> : <Sun className="size-5" />}
-      </Button>
-
       {!user ? (
         <Button asChild variant="primary" size="sm">
           <Link href="/login">Log in</Link>
         </Button>
       ) : (
         <>
-          <Button
-            asChild
-            variant="ghost"
-            size="icon"
-            className="text-white/90 hover:text-white"
-            aria-label="Friends"
-          >
-            <Link href="/friends"><Users className="size-5" /></Link>
-          </Button>
           <MessagesSheet />
           <NotificationsSheet />
           <DropdownMenu>
@@ -74,6 +55,13 @@ export function HeaderToolbar() {
                 <Link href="/account">
                   <UserRound className="size-4" />
                   <span>Account</span>
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild>
+                <Link href="/friends">
+                  <Users className="size-4" />
+                  <span>Friends</span>
                 </Link>
               </DropdownMenuItem>
 

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useLayout } from './context';
-import { Home, Ticket, Trophy, Users, type LucideIcon } from 'lucide-react';
+import { Home, Ticket, Trophy, type LucideIcon } from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -18,7 +18,6 @@ const navItems: NavItem[] = [
   { label: 'Leagues', href: '/', icon: Home },
   { label: 'Bets', href: '/bets', icon: Ticket },
   { label: 'Sports', href: '/sports', icon: Trophy },
-  { label: 'Friends', href: '/friends', icon: Users },
 ];
 
 function isItemActive(pathname: string, href: string) {
