@@ -910,49 +910,125 @@ function SportIcon({ logo, emoji, label, px }: { logo?: string; emoji?: string; 
   );
 }
 
+// The next N games across every sport, or one sport's board — as tabs, with
+// "Upcoming" (soonest games league-wide) as the landing tab.
+const UPCOMING_LIMIT = 10;
+
 export function LeagueSports() {
   const lg = useLeague();
+  const { user } = useAuth();
+  const me = user?.id;
+  const canBet = lg.status === 'active';
+  const [tab, setTab] = useState<string>('upcoming'); // 'upcoming' | sport_league_id
+  const [selected, setSelected] = useState<SportEvent | null>(null);
+
   const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
   const evs = events.data ?? [];
-  const metaFor = useSportMeta(evs);
-  const countFor = (id: string) => evs.filter((e) => e.sport_league_id === id).length;
+
+  // Sports as tabs, alphabetical.
+  const sortedSports = [...lg.sports].sort((a, b) =>
+    (a.name || a.sport_league_id).localeCompare(b.name || b.sport_league_id),
+  );
+
+  const byStart = (a: SportEvent, b: SportEvent) =>
+    (a.start_time ?? '').localeCompare(b.start_time ?? '');
+  const shown =
+    tab === 'upcoming'
+      ? [...evs].sort(byStart).slice(0, UPCOMING_LIMIT)
+      : evs.filter((e) => e.sport_league_id === tab).sort(byStart);
+  const teamEvs = shown.filter((e) => !isFieldSport(e.sport));
+  const fieldEvs = shown.filter((e) => isFieldSport(e.sport));
+
+  if (lg.sports.length === 0) {
+    return (
+      <CenterCard>
+        <Trophy className="size-6 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">No sports set for this league yet.</p>
+        {lg.my_role === 'commissioner' && (
+          <Button size="sm" variant="outline" asChild>
+            <Link href={`/leagues/${lg.id}/manage`}>Add sports</Link>
+          </Button>
+        )}
+      </CenterCard>
+    );
+  }
+
+  const pill = (active: boolean) =>
+    cn(
+      'shrink-0 whitespace-nowrap rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
+      active
+        ? 'border-primary bg-primary text-primary-foreground'
+        : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground',
+    );
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Sports</h2>
-        <p className="text-sm text-muted-foreground">The competitions this league bets on.</p>
+      {/* Scrollable pill tabs: Upcoming + each sport. */}
+      <div className="w-full min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex w-max min-w-full gap-2">
+          <button type="button" onClick={() => setTab('upcoming')} className={pill(tab === 'upcoming')}>
+            Upcoming
+          </button>
+          {sortedSports.map((s) => (
+            <button
+              key={s.sport_league_id}
+              type="button"
+              onClick={() => setTab(s.sport_league_id)}
+              className={pill(tab === s.sport_league_id)}
+            >
+              {s.name || s.sport_league_id}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {lg.sports.length === 0 ? (
+      {tab === 'upcoming' && (
+        <p className="text-xs text-muted-foreground">
+          The next {UPCOMING_LIMIT} games across all your sports{canBet ? ' · tap a game to bet' : ''}.
+        </p>
+      )}
+
+      {events.isLoading ? (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
+        </div>
+      ) : shown.length === 0 ? (
         <CenterCard>
-          <Trophy className="size-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">No sports set for this league yet.</p>
-          {lg.my_role === 'commissioner' && (
-            <Button size="sm" variant="outline" asChild>
-              <Link href={`/leagues/${lg.id}/manage`}>Add sports</Link>
-            </Button>
-          )}
+          <CalendarDays className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">No upcoming games right now.</p>
         </CenterCard>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-          {lg.sports.map((s) => {
-            const label = s.name || s.sport_league_id;
-            const meta = metaFor(s.sport_league_id);
-            const n = countFor(s.sport_league_id);
-            return (
-              <Link key={s.sport_league_id} href={`/leagues/${lg.id}/sports/${s.sport_league_id}`} className="group">
-                <Card className="h-32 cursor-pointer items-center justify-center gap-2 p-3 text-center transition-all group-hover:border-primary group-hover:shadow-md sm:p-4">
-                  <SportIcon logo={meta.logo} emoji={meta.emoji} label={label} px={52} />
-                  <span className="line-clamp-1 text-sm font-semibold text-foreground">{label}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {events.isLoading ? '…' : n === 0 ? 'No games' : `${n} game${n === 1 ? '' : 's'}`}
-                  </span>
-                </Card>
-              </Link>
-            );
-          })}
+        <div className="flex flex-col gap-4">
+          {teamEvs.length > 0 && (
+            <ScheduleBoard events={teamEvs} onSelect={canBet ? (ev) => setSelected(ev) : undefined} />
+          )}
+          {fieldEvs.length > 0 && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {fieldEvs.map((ev) => (
+                <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
+              ))}
+            </div>
+          )}
         </div>
+      )}
+
+      {canBet && (
+        <>
+          <ScheduleBetDialog
+            lg={lg}
+            me={me}
+            event={selected && !isFieldSport(selected.sport) ? selected : null}
+            open={!!selected && !isFieldSport(selected.sport)}
+            onOpenChange={(o) => { if (!o) setSelected(null); }}
+          />
+          <MatchupBetDialog
+            lg={lg}
+            me={me}
+            event={selected && isFieldSport(selected.sport) ? selected : null}
+            open={!!selected && isFieldSport(selected.sport)}
+            onOpenChange={(o) => { if (!o) setSelected(null); }}
+          />
+        </>
       )}
     </div>
   );
