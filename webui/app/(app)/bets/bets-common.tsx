@@ -117,12 +117,15 @@ export function WagerRow({
   leagueName,
   ev,
   actions,
+  hideLeagueLink,
 }: {
   w: Wager;
   me: string;
   leagueName?: string;
   ev?: SportEvent | null;
   actions?: React.ReactNode;
+  /** Hide the "View in league" link (redundant when already on that page). */
+  hideLeagueLink?: boolean;
 }) {
   const iAmProposer = w.proposer_id === me;
   const mySide = iAmProposer ? w.proposer_side : w.acceptor_side;
@@ -143,12 +146,14 @@ export function WagerRow({
           vs {opponent} · backing {myPick} · {formatCredits(w.amount_cents)}
         </p>
         {ev && <EventScoreLine ev={ev} mySide={teamSide} />}
-        <Link
-          href={`/leagues/${w.league_id}/play`}
-          className="text-xs text-primary hover:underline"
-        >
-          View in league
-        </Link>
+        {!hideLeagueLink && (
+          <Link
+            href={`/leagues/${w.league_id}/play`}
+            className="text-xs text-primary hover:underline"
+          >
+            View in league
+          </Link>
+        )}
       </div>
       {actions && <div className="flex flex-wrap gap-2 sm:shrink-0">{actions}</div>}
     </Card>

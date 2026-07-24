@@ -16,6 +16,7 @@ import {
   type WeeklyResultRow,
 } from '@/lib/leagues';
 import { cancelLocked, wagerPick, wagersApi, type BetType, type Wager, type WagerResult, type WagerSide } from '@/lib/wagers';
+import { WagerRow } from '@/app/(app)/bets/bets-common';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -666,15 +667,15 @@ function BetSection({
       <h3 className={cn('mb-3 text-sm font-semibold', style.header)}>
         {title} ({wagers.length})
       </h3>
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="flex flex-col gap-2">
         {wagers.map((w) => (
-          <WagerBetCard
+          <WagerRow
             key={w.id}
             w={w}
-            me={me}
+            me={me ?? ''}
             ev={eventMap[w.event_id]}
-            accentClass={style.accent}
             actions={actions?.(w)}
+            hideLeagueLink
           />
         ))}
       </div>
