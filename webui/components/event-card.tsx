@@ -247,48 +247,49 @@ export function EventCard({ event: ev, onSelect }: { event: SportEvent; onSelect
 // A dense odds table (Spread / Total / Winner) with away/home rows per game,
 // modelled on a real sportsbook. Team sports only; field sports keep the card.
 
-function BookCell({
-  main,
-  price,
-  onClick,
-}: {
-  main?: string;
-  price?: string;
-  onClick?: () => void;
-}) {
+function BookCell({ main, price }: { main?: string; price?: string }) {
   const empty = main === undefined && price === undefined;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={empty || !onClick}
+    <div
       className={cn(
-        'flex h-9 w-full items-center justify-between gap-1 rounded-md bg-muted/60 px-2.5 text-xs tabular-nums transition-colors sm:h-10 sm:px-3 sm:text-sm',
-        onClick && !empty && 'hover:bg-primary/15 hover:ring-1 hover:ring-primary/40',
+        // Mobile stacks the line over the price so three columns fit without
+        // scrolling; from sm up it's the wide line-left / price-right cell.
+        'flex h-11 w-full flex-col items-center justify-center gap-0 rounded-md bg-muted/60 px-1.5 tabular-nums leading-tight sm:h-10 sm:flex-row sm:items-center sm:justify-between sm:gap-1 sm:px-3',
         empty && 'opacity-40',
       )}
     >
       {empty ? (
-        <span className="mx-auto text-muted-foreground">—</span>
+        <span className="text-muted-foreground">—</span>
       ) : (
         <>
-          {main !== undefined && <span className="font-medium text-foreground">{main}</span>}
+          {main !== undefined && (
+            <span className="text-xs font-medium text-foreground sm:text-sm">{main}</span>
+          )}
           {price !== undefined && (
-            <span className={cn('text-muted-foreground', main === undefined && 'mx-auto text-foreground')}>
+            <span
+              className={cn(
+                'text-[11px] text-muted-foreground sm:text-sm',
+                main === undefined && 'text-sm text-foreground',
+              )}
+            >
               {price}
             </span>
           )}
         </>
       )}
-    </button>
+    </div>
   );
 }
 
 function BookTeamLine({ name, abbr, logo }: { name: string; abbr?: string; logo?: string | null }) {
   return (
-    <div className="flex h-9 min-w-0 items-center gap-2.5 sm:h-10">
+    <div className="flex h-11 min-w-0 items-center gap-2 sm:h-10 sm:gap-2.5">
       <TeamLogo src={logo} name={abbr || name} className="size-6 shrink-0 text-[9px] sm:size-7 sm:text-[10px]" />
-      <span className="truncate text-sm font-medium text-foreground">{name}</span>
+      {/* Abbreviation on a phone, full name from sm up. */}
+      <span className="truncate text-sm font-medium text-foreground">
+        <span className="sm:hidden">{abbr || name}</span>
+        <span className="hidden sm:inline">{name}</span>
+      </span>
     </div>
   );
 }
@@ -315,33 +316,35 @@ function ScheduleGameRow({ ev, onSelect }: { ev: SportEvent; onSelect?: () => vo
     },
   ];
 
+  const Wrapper = onSelect ? 'button' : 'div';
   return (
-    <div className="border-b border-border py-3 last:border-0">
+    <Wrapper
+      type={onSelect ? 'button' : undefined}
+      onClick={onSelect}
+      className={cn(
+        'block w-full border-b border-border py-3 text-left last:border-0',
+        onSelect && 'group -mx-2 rounded-lg px-2 transition-colors hover:bg-muted/40',
+      )}
+    >
       <div className="flex items-stretch gap-2 sm:gap-3">
-        <div className="flex min-w-[7.5rem] flex-1 flex-col justify-between gap-2">
+        <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
           <BookTeamLine name={ev.away_team} abbr={ev.away_abbr} logo={ev.away_logo} />
           <BookTeamLine name={ev.home_team} abbr={ev.home_abbr} logo={ev.home_logo} />
         </div>
         {cols.map((c, i) => (
-          <div key={i} className="flex w-[5.75rem] shrink-0 flex-col gap-2 sm:w-28">
-            <BookCell main={c.away[0]} price={c.away[1]} onClick={onSelect} />
-            <BookCell main={c.home[0]} price={c.home[1]} onClick={onSelect} />
+          <div key={i} className="flex w-[4.5rem] shrink-0 flex-col gap-2 sm:w-28">
+            <BookCell main={c.away[0]} price={c.away[1]} />
+            <BookCell main={c.home[0]} price={c.home[1]} />
           </div>
         ))}
       </div>
       <div className="mt-2 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
         {onSelect && (
-          <button
-            type="button"
-            onClick={onSelect}
-            className="text-xs font-medium text-primary hover:underline"
-          >
-            More wagers →
-          </button>
+          <span className="text-xs font-medium text-primary group-hover:underline">Tap to bet →</span>
         )}
       </div>
-    </div>
+    </Wrapper>
   );
 }
 
@@ -352,20 +355,20 @@ export function ScheduleBoard({
   events: SportEvent[];
   onSelect?: (ev: SportEvent) => void;
 }) {
-  const head = 'w-[5.75rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-28';
+  const head = 'w-[4.5rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-28';
   return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[22rem]">
-        <div className="flex items-center gap-2 pb-2 sm:gap-3">
-          <div className="min-w-[7.5rem] flex-1" />
-          <span className={head}>Spread</span>
-          <span className={head}>Total</span>
-          <span className={head}>Winner</span>
-        </div>
-        {events.map((ev) => (
-          <ScheduleGameRow key={ev.external_id} ev={ev} onSelect={onSelect ? () => onSelect(ev) : undefined} />
-        ))}
+    <div>
+      {/* Header aligns spacer(flex) + 3 fixed columns with the rows below;
+          gaps here (0.5rem / sm:0.75rem) match ScheduleGameRow's. */}
+      <div className="flex items-center gap-2 pb-2 sm:gap-3">
+        <div className="min-w-0 flex-1" />
+        <span className={head}>Spread</span>
+        <span className={head}>Total</span>
+        <span className={head}>Winner</span>
       </div>
+      {events.map((ev) => (
+        <ScheduleGameRow key={ev.external_id} ev={ev} onSelect={onSelect ? () => onSelect(ev) : undefined} />
+      ))}
     </div>
   );
 }
