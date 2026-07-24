@@ -614,11 +614,15 @@ def settle_one(wager):
             db.session.commit()
             _post_settled_activity(wager, "A bet pushed — stakes returned")
             return wager
-        wager.status = COMPLETED
-        wager.completed_at = datetime.utcnow()
-        wager.winner_user_id = _outcome_winner_id(wager, outcome)
-        db.session.commit()
-        _post_completed_activity(wager)
+        # Only move to `completed` once we actually know who won — that's the one
+        # who confirms. If the score isn't readable yet, leave it accepted and
+        # try again next tick (the pair can still mutually cancel).
+        if outcome in ("proposer", "acceptor"):
+            wager.status = COMPLETED
+            wager.completed_at = datetime.utcnow()
+            wager.winner_user_id = _outcome_winner_id(wager, outcome)
+            db.session.commit()
+            _post_completed_activity(wager)
     return wager
 
 
@@ -638,16 +642,9 @@ _TRASH_TALK = (
 
 
 def _post_completed_activity(wager):
-    # Undeterminable result (no score to read): the pair still settle by hand,
-    # so keep the neutral "ready to settle" prompt.
+    # A completed wager always has a score-decided winner now. Defensive guard:
+    # if somehow called without one, there's nothing to narrate.
     if not wager.winner_user_id:
-        post_league_activity(wager.league_id, {
-            "event_type": "wager_completed",
-            "title": "A bet is ready to settle",
-            "body": f"{wager.event_name} — the winner can now confirm the result.",
-            "dedup_key": f"wager_completed:{wager.id}",
-            "meta": {"wager_id": wager.id, "amount_cents": wager.amount_cents},
-        })
         return
 
     # Score-decided: collapse the cohort (same proposer/event/side/stake — one
@@ -698,18 +695,14 @@ def _post_completed_activity(wager):
     })
 
 
-def confirm(wager, user_id, result=None):
-    """Settle a completed head-to-head wager.
+def confirm(wager, user_id):
+    """Settle a head-to-head wager: the score-decided winner claims the pot.
 
-    Primary path — the score decided it: the winner is computed from the final
-    (moneyline/spread/total) and stamped on the wager. Only that user may
-    confirm, which pays them the pot; the loser has no action. A push refunds
-    both. `result` is ignored here.
-
-    Fallback — no score to go on (unknown/unreported result): the pair settle by
-    hand, exactly as before. `result` is 'lost' (caller concedes — pays the
-    other side) or 'draw' (refund both); 'won' is refused so nobody grabs an
-    unverified pot.
+    The winner is computed from the final score (moneyline/spread/total). Only
+    that user may confirm, which pays them, sets `confirmed`, and moves the
+    wager to settled. A push refunds both. Nobody else has an action — the loser
+    just sees the result. There is no manual concede/draw: if the score can't be
+    read yet, the bet stays open and the pair can still mutually cancel.
 
     Allowed once the event is over: from `completed`, or directly from
     `accepted` once the event has started. A known *future* start is blocked.
@@ -728,54 +721,27 @@ def confirm(wager, user_id, result=None):
     account = _account(wager.league_id)
     now = datetime.utcnow()
 
-    # If the score hasn't been read yet (confirming straight from accepted, or
-    # settle_one hasn't run), resolve it now so the winner path can apply.
+    # If settle_one hasn't read the score yet (confirming straight from
+    # accepted), resolve it now so the winner path can apply.
     if not wager.winner_user_id:
         outcome = _resolve_outcome(wager, get_event(wager.event_id))
         if outcome == "push":
             refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
             refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
             wager.status = REFUNDED
-            wager.confirmed_by_id = user_id
             wager.settled_at = now
             db.session.commit()
             _post_settled_activity(wager, "A bet pushed — stakes returned")
             return wager
         wager.winner_user_id = _outcome_winner_id(wager, outcome)
 
-    # Score-decided winner: only they claim, and it pays them.
-    if wager.winner_user_id:
-        if user_id != wager.winner_user_id:
-            raise WagerError("only the winner can confirm this bet")
-        payout(account, wager.winner_user_id, wager.amount_cents * 2, _ref(wager.id))
-        wager.confirmed_by_id = user_id
-        wager.status = SETTLED
-        wager.settled_at = now
-        db.session.commit()
-        _post_settled_activity(wager, "A wager was settled")
-        return wager
+    if not wager.winner_user_id:
+        raise WagerError("the result isn't in yet — nobody can confirm this bet")
+    if user_id != wager.winner_user_id:
+        raise WagerError("only the winner can confirm this bet")
 
-    # Fallback: undeterminable result — peer concession.
-    result = (result or "").lower()
-    if result == "draw":
-        refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
-        refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
-        wager.status = REFUNDED
-        wager.confirmed_by_id = user_id
-        wager.settled_at = now
-        db.session.commit()
-        _post_settled_activity(wager, "A bet was called a draw")
-        return wager
-    if result == "lost":
-        winner = wager.acceptor_id if user_id == wager.proposer_id else wager.proposer_id
-    elif result == "won":
-        raise WagerError("you can't claim your own win — the losing player concedes, or report a draw")
-    else:
-        raise WagerError("result must be 'lost' or 'draw'")
-
-    payout(account, winner, wager.amount_cents * 2, _ref(wager.id))
-    wager.winner_user_id = winner
-    wager.confirmed_by_id = user_id
+    payout(account, wager.winner_user_id, wager.amount_cents * 2, _ref(wager.id))
+    wager.confirmed = True
     wager.status = SETTLED
     wager.settled_at = now
     db.session.commit()
@@ -963,7 +929,7 @@ def confirm_wager(wager_id, me, data):
     if not w or not w.involves(me):
         return {"error": "wager not found"}, 404
     try:
-        confirm(w, me, (data or {}).get("result"))
+        confirm(w, me)
     except WagerError as e:
         return {"error": str(e)}, 400
     except InsufficientFunds:

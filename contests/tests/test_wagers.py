@@ -135,15 +135,26 @@ def test_cancel_refunds_proposer(app, calls):
 
 
 def test_settle_marks_completed_on_final(app, calls, monkeypatch):
-    # A final event no longer auto-pays — it moves to `completed`, awaiting the
-    # winner's confirmation. No money moves at this step.
+    # A final event no longer auto-pays — it moves to `completed` with the
+    # score-decided winner stamped, awaiting that winner's confirmation. No
+    # money moves at this step.
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))  # U1 (home) wins
+    svc.settle_one(w)
+    assert w.status == COMPLETED and w.completed_at is not None
+    assert w.winner_user_id == U1
+    assert not any(op == "payout" for op, *_ in calls)
+
+
+def test_settle_stays_accepted_when_unresolvable(app, calls, monkeypatch):
+    # Final but no score to read: don't complete with a null winner — leave it
+    # accepted so it retries (the pair can still mutually cancel).
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
     monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
     svc.settle_one(w)
-    assert w.status == COMPLETED and w.completed_at is not None
-    assert w.winner_user_id is None
-    assert not any(op == "payout" for op, *_ in calls)
+    assert w.status == ACCEPTED
 
 
 def test_settle_refunds_on_cancelled(app, calls, monkeypatch):
@@ -162,57 +173,38 @@ def test_settle_noop_when_event_not_final(app, calls):
     assert w.status == ACCEPTED
 
 
-def test_confirm_won_is_rejected(app, calls, monkeypatch):
-    # Nobody can claim their own win — only the losing side settles, so a 'won'
-    # confirmation is refused and no money moves.
+def test_only_winner_can_confirm(app, calls, monkeypatch):
+    # Home wins -> U1 is the winner. The loser (U2) can't confirm; the winner
+    # can, which pays them and marks the bet confirmed + settled.
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
-    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
-    svc.settle_one(w)  # -> COMPLETED
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))
+    svc.settle_one(w)  # -> COMPLETED, winner U1
     with pytest.raises(svc.WagerError):
-        svc.confirm(w, U1, "won")
-    assert w.status == COMPLETED
-    assert not any(op == "payout" for op, _u, _a in calls)
-
-
-def test_confirm_lost_pays_the_other_side(app, calls, monkeypatch):
-    # The loser can concede — marking 'lost' pays the opponent.
-    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
-    svc.accept(w, U2)
-    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
-    svc.settle_one(w)
-    svc.confirm(w, U1, "lost")
-    assert w.status == SETTLED and w.winner_user_id == U2
-    assert ("payout", U2, 10000) in calls
-
-
-def test_confirm_draw_refunds_both(app, calls, monkeypatch):
-    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
-    svc.accept(w, U2)
-    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
-    svc.settle_one(w)
-    svc.confirm(w, U2, "draw")
-    assert w.status == REFUNDED and w.confirmed_by_id == U2
-    assert ("refund", U1, 5000) in calls and ("refund", U2, 5000) in calls
+        svc.confirm(w, U2)
+    assert not any(op == "payout" for op, *_ in calls)
+    svc.confirm(w, U1)
+    assert w.status == SETTLED and w.confirmed is True
+    assert ("payout", U1, 10000) in calls
 
 
 def test_confirm_rejects_unrelated_user(app, calls, monkeypatch):
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
-    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))
     svc.settle_one(w)
     with pytest.raises(svc.WagerError):
-        svc.confirm(w, U99, "lost")
+        svc.confirm(w, U99)
 
 
 def test_confirm_rejects_after_settled(app, calls, monkeypatch):
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
-    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))
     svc.settle_one(w)
-    svc.confirm(w, U1, "lost")  # settles: U2 takes the pot
+    svc.confirm(w, U1)  # winner claims the pot
     with pytest.raises(svc.WagerError):
-        svc.confirm(w, U2, "lost")
+        svc.confirm(w, U1)
 
 
 def test_confirm_blocked_before_known_kickoff(app, calls):
@@ -224,32 +216,33 @@ def test_confirm_blocked_before_known_kickoff(app, calls):
     w.start_time = "2999-01-01T00:00:00Z"
     db.session.commit()
     with pytest.raises(svc.WagerError):
-        svc.confirm(w, U1, "lost")
+        svc.confirm(w, U1)
     assert w.status == ACCEPTED
 
 
-def test_confirm_from_accepted_after_kickoff(app, calls):
-    # Known past start time: peers can settle from ACCEPTED without waiting for
-    # the scheduled sweep.
+def test_confirm_from_accepted_after_kickoff(app, calls, monkeypatch):
+    # Known past start time: the winner can settle from ACCEPTED without waiting
+    # for the scheduled sweep, once the score is in.
     from app.extensions import db
 
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
     w.start_time = "2020-01-01T00:00:00Z"
     db.session.commit()
-    svc.confirm(w, U1, "lost")
-    assert w.status == SETTLED and w.winner_user_id == U2
-    assert ("payout", U2, 10000) in calls
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))  # U1 wins
+    svc.confirm(w, U1)
+    assert w.status == SETTLED and w.winner_user_id == U1
+    assert ("payout", U1, 10000) in calls
 
 
-def test_confirm_allowed_when_start_unknown(app, calls):
-    # Unknown start time (mocked event has start_time None): settlement is allowed
-    # rather than stranding the wager forever — loser-concedes keeps it safe.
+def test_confirm_needs_a_readable_result(app, calls, monkeypatch):
+    # No score to read yet: nobody can confirm (there's no concede fallback).
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
-    svc.confirm(w, U1, "lost")
-    assert w.status == SETTLED and w.winner_user_id == U2
-    assert ("payout", U2, 10000) in calls
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    with pytest.raises(svc.WagerError):
+        svc.confirm(w, U1)
+    assert w.status == ACCEPTED
 
 
 def test_propose_many_creates_one_per_member(app, calls):
@@ -543,17 +536,6 @@ def test_total_exact_is_push(app, calls, monkeypatch):
     assert w.status == REFUNDED
 
 
-def test_undeterminable_falls_back_to_concede(app, calls, monkeypatch):
-    # No scores/winner_side -> winner can't be computed -> concede flow remains.
-    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
-    svc.accept(w, U2)
-    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
-    svc.settle_one(w)
-    assert w.status == COMPLETED and w.winner_user_id is None
-    svc.confirm(w, U1, "lost")  # U1 concedes -> U2 paid
-    assert w.status == SETTLED and w.winner_user_id == U2
-
-
 # ---- trash-talk feed post on a decided bet ----------------------------------
 
 def test_completed_post_names_the_winner(app, calls, monkeypatch):
@@ -590,12 +572,13 @@ def test_completed_post_aggregates_multiple_losers(app, calls, monkeypatch):
     assert "Anky" in body and "Farrell" in body and "Johnny" in body
 
 
-def test_undeterminable_keeps_ready_to_settle(app, calls, monkeypatch):
+def test_unresolvable_final_posts_nothing(app, calls, monkeypatch):
+    # A final we can't read a winner from doesn't complete, so no feed post.
     posts = []
     monkeypatch.setattr(svc, "post_league_activity", lambda lid, p: posts.append(p))
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
     monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
-    svc.settle_one(w)  # no score -> undeterminable
-    completed = [p for p in posts if p["event_type"] == "wager_completed"]
-    assert completed and completed[-1]["title"] == "A bet is ready to settle"
+    svc.settle_one(w)
+    assert w.status == ACCEPTED
+    assert not [p for p in posts if p["event_type"] == "wager_completed"]

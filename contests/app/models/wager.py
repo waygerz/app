@@ -56,8 +56,10 @@ class Wager(db.Model):
 
     status = db.Column(db.String(16), nullable=False, default=OPEN, index=True)
     winner_user_id = db.Column(UUID(as_uuid=False), nullable=True)
-    # Who confirmed the result (the winner self-claiming, or the loser conceding).
-    confirmed_by_id = db.Column(UUID(as_uuid=False), nullable=True)
+    # The winner has claimed the pot. Only the score-decided winner can set this;
+    # doing so pays them and moves the wager to settled.
+    confirmed = db.Column(db.Boolean, nullable=False, default=False,
+                          server_default=db.text("false"))
 
     # Mutual cancellation of an ACCEPTED wager: both sides have money held, so
     # one side asks and the other approves. Null once approved, rejected, or on
@@ -98,7 +100,7 @@ class Wager(db.Model):
             "amount_cents": self.amount_cents,
             "status": self.status,
             "winner_user_id": self.winner_user_id,
-            "confirmed_by_id": self.confirmed_by_id,
+            "confirmed": self.confirmed,
             "cancel_requested_by": self.cancel_requested_by,
             "cancel_requested_at": (
                 self.cancel_requested_at.isoformat() + "Z" if self.cancel_requested_at else None
