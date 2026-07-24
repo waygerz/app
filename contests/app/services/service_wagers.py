@@ -520,13 +520,68 @@ def _likely_over(wager) -> bool:
     return dt + timedelta(hours=COMPLETE_AFTER_HOURS) <= datetime.utcnow()
 
 
+def _resolve_outcome(wager, event):
+    """The bet's outcome from the final score: 'proposer' | 'acceptor' | 'push'
+    | None (can't tell — no/partial result data).
+
+    The proposer's side and line are the reference; the acceptor holds the
+    mirror. Moneyline reads the event's winner_side; spread/total need the two
+    scores.
+    """
+    if not event:
+        return None
+    hs, aw = event.get("home_score"), event.get("away_score")
+    ws = event.get("winner_side")
+    bt = wager.bet_type or MONEYLINE
+    ps = wager.proposer_side
+
+    if bt == MONEYLINE:
+        if ws == "draw":
+            return "push"
+        if ws in ("home", "away"):
+            return "proposer" if ws == ps else "acceptor"
+        return None
+
+    if hs is None or aw is None or wager.line is None:
+        return None
+
+    if bt == SPREAD:
+        p_score = hs if ps == "home" else aw
+        o_score = aw if ps == "home" else hs
+        adj = p_score + wager.line  # proposer's team, spotted its line
+        if adj > o_score:
+            return "proposer"
+        if adj < o_score:
+            return "acceptor"
+        return "push"
+
+    if bt == TOTAL:
+        combined = hs + aw
+        if combined == wager.line:
+            return "push"
+        over_won = combined > wager.line
+        proposer_took_over = ps == "over"
+        return "proposer" if proposer_took_over == over_won else "acceptor"
+
+    return None
+
+
+def _outcome_winner_id(wager, outcome):
+    if outcome == "proposer":
+        return wager.proposer_id
+    if outcome == "acceptor":
+        return wager.acceptor_id
+    return None
+
+
 def settle_one(wager):
     """Advance an accepted wager once its event is over.
 
-    Head-to-head results are peer-confirmed, so this does NOT pick a winner or
-    pay out — it just moves the wager to `completed` (awaiting the winner's
-    confirmation). A cancelled event is the one unambiguous case, so it refunds
-    both sides automatically. No-op until the event is over.
+    On a final result we compute the winner from the score (moneyline/spread/
+    total) and stamp winner_user_id, then move to `completed` so the *winner*
+    can claim the payout (see confirm). A push refunds both automatically, as
+    does a cancelled event. If the result can't be determined (no score data),
+    winner_user_id stays null and the pair fall back to peer concession.
     """
     if wager.status != ACCEPTED:
         return wager
@@ -543,8 +598,18 @@ def settle_one(wager):
         return wager
 
     if status == "final" or _likely_over(wager):
+        outcome = _resolve_outcome(wager, event)
+        if outcome == "push":
+            refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
+            refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
+            wager.status = REFUNDED
+            wager.settled_at = datetime.utcnow()
+            db.session.commit()
+            _post_settled_activity(wager, "A bet pushed — stakes returned")
+            return wager
         wager.status = COMPLETED
         wager.completed_at = datetime.utcnow()
+        wager.winner_user_id = _outcome_winner_id(wager, outcome)
         db.session.commit()
         _post_completed_activity(wager)
     return wager
@@ -560,19 +625,21 @@ def _post_completed_activity(wager):
     })
 
 
-def confirm(wager, user_id, result):
-    """Peer-settle a completed head-to-head wager.
+def confirm(wager, user_id, result=None):
+    """Settle a completed head-to-head wager.
 
-    ``result`` is relative to the caller: 'lost' (caller concedes — pays the
-    other side) or 'draw' (no contest — refund both). A caller cannot claim
-    their own win: nothing verifies the result, so allowing 'won' would let
-    either party take the pot unilaterally. The winner is paid when the loser
-    concedes.
+    Primary path — the score decided it: the winner is computed from the final
+    (moneyline/spread/total) and stamped on the wager. Only that user may
+    confirm, which pays them the pot; the loser has no action. A push refunds
+    both. `result` is ignored here.
+
+    Fallback — no score to go on (unknown/unreported result): the pair settle by
+    hand, exactly as before. `result` is 'lost' (caller concedes — pays the
+    other side) or 'draw' (refund both); 'won' is refused so nobody grabs an
+    unverified pot.
 
     Allowed once the event is over: from `completed`, or directly from
-    `accepted` once the event has started (so it works before the scheduled sweep
-    flips it). A known *future* start is blocked; an unknown start time is
-    allowed (see _has_started — blocking it would strand funds).
+    `accepted` once the event has started. A known *future* start is blocked.
     """
     if not wager.involves(user_id):
         raise WagerError("this wager isn't yours to settle")
@@ -585,10 +652,38 @@ def confirm(wager, user_id, result):
     else:
         raise WagerError("this wager has already been settled")
 
-    result = (result or "").lower()
     account = _account(wager.league_id)
     now = datetime.utcnow()
 
+    # If the score hasn't been read yet (confirming straight from accepted, or
+    # settle_one hasn't run), resolve it now so the winner path can apply.
+    if not wager.winner_user_id:
+        outcome = _resolve_outcome(wager, get_event(wager.event_id))
+        if outcome == "push":
+            refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
+            refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
+            wager.status = REFUNDED
+            wager.confirmed_by_id = user_id
+            wager.settled_at = now
+            db.session.commit()
+            _post_settled_activity(wager, "A bet pushed — stakes returned")
+            return wager
+        wager.winner_user_id = _outcome_winner_id(wager, outcome)
+
+    # Score-decided winner: only they claim, and it pays them.
+    if wager.winner_user_id:
+        if user_id != wager.winner_user_id:
+            raise WagerError("only the winner can confirm this bet")
+        payout(account, wager.winner_user_id, wager.amount_cents * 2, _ref(wager.id))
+        wager.confirmed_by_id = user_id
+        wager.status = SETTLED
+        wager.settled_at = now
+        db.session.commit()
+        _post_settled_activity(wager, "A wager was settled")
+        return wager
+
+    # Fallback: undeterminable result — peer concession.
+    result = (result or "").lower()
     if result == "draw":
         refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
         refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
@@ -598,9 +693,7 @@ def confirm(wager, user_id, result):
         db.session.commit()
         _post_settled_activity(wager, "A bet was called a draw")
         return wager
-
     if result == "lost":
-        # The losing side concedes; the pot goes to the other player.
         winner = wager.acceptor_id if user_id == wager.proposer_id else wager.proposer_id
     elif result == "won":
         raise WagerError("you can't claim your own win — the losing player concedes, or report a draw")

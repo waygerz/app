@@ -492,18 +492,21 @@ function GameScore({ ev, mySide }: { ev: SportEvent; mySide: 'home' | 'away' | n
   );
 }
 
-function WagerBetCard({
+export function WagerBetCard({
   w,
   me,
   ev,
   actions,
   accentClass,
+  leagueName,
 }: {
   w: Wager;
   me?: string;
   ev?: SportEvent | null;
   actions?: ReactNode;
   accentClass: string;
+  /** Shown on the cross-league /bets page so each card names its league. */
+  leagueName?: string;
 }) {
   // Field-sport matchups: the event's home/away hold a tournament placeholder,
   // so use the wager's own stored picks (the two competitors) and show no team
@@ -562,6 +565,13 @@ function WagerBetCard({
 
   return (
     <Card className={cn('min-w-0 gap-2.5 border-l-4 p-3', accentClass)}>
+      {(leagueName || w.event_name) && (
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          {leagueName && <span className="shrink-0 font-medium text-foreground/80">{leagueName}</span>}
+          {leagueName && w.event_name && <span className="shrink-0">·</span>}
+          {w.event_name && <span className="truncate">{w.event_name}</span>}
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         {wagerStatusBadge(w, me)}
         <Badge size="sm" appearance="outline" variant="primary" className="shrink-0">
@@ -759,13 +769,29 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
     );
   };
 
-  const confirmActions = (w: Wager) =>
-    w.proposer_id === me || w.acceptor_id === me ? (
+  const confirmActions = (w: Wager) => {
+    if (w.proposer_id !== me && w.acceptor_id !== me) return null;
+    // Score-decided winner: only the winner acts (claims the payout); the loser
+    // just waits. This is the normal path once a final score is in.
+    if (w.winner_user_id) {
+      if (w.winner_user_id === me) {
+        return (
+          <Button size="sm" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'won' })}>
+            Confirm &amp; get paid
+          </Button>
+        );
+      }
+      return <span className="text-xs text-muted-foreground">You lost — awaiting payout</span>;
+    }
+    // Fallback only: the result couldn't be read from a score, so the pair settle
+    // by hand.
+    return (
       <>
         <Button size="sm" variant="outline" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
         <Button size="sm" variant="ghost" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'draw' })}>Draw</Button>
       </>
-    ) : null;
+    );
+  };
 
   const eventIds = Array.from(new Set(all.map((w) => w.event_id)));
   const eventsQ = useQuery({

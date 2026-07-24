@@ -430,3 +430,106 @@ def test_bet_type_and_line_in_to_dict(app, calls):
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2, bet_type="spread", line=-2.5)
     d = w.to_dict()
     assert d["bet_type"] == "spread" and d["line"] == -2.5
+
+
+# ---- score-decided settlement: winner claims, push refunds -----------------
+
+def _final(hs, aw, ws=None):
+    return {"status": "final", "home_score": hs, "away_score": aw, "winner_side": ws}
+
+
+def test_moneyline_winner_is_computed_and_claims(app, calls, monkeypatch):
+    # U1 backs home; home wins. settle_one stamps U1 as winner (no payout yet).
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3, ws="home"))
+    svc.settle_one(w)
+    assert w.status == COMPLETED and w.winner_user_id == U1
+    assert not any(op == "payout" for op, *_ in calls)  # not paid until claimed
+    # The loser cannot confirm.
+    with pytest.raises(svc.WagerError):
+        svc.confirm(w, U2)
+    # The winner claims -> paid.
+    svc.confirm(w, U1)
+    assert w.status == SETTLED and ("payout", U1, 10000) in calls
+
+
+def test_moneyline_loser_backed_away(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "away", 5000, U2)  # U1 away; home wins -> U2
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3, ws="home"))
+    svc.settle_one(w)
+    assert w.winner_user_id == U2
+
+
+def test_moneyline_draw_is_push_refunds_both(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(2, 2, ws="draw"))
+    svc.settle_one(w)
+    assert w.status == REFUNDED
+    assert ("refund", U1, 5000) in calls and ("refund", U2, 5000) in calls
+
+
+def test_spread_cover(app, calls, monkeypatch):
+    # U1 takes home -1.5; home wins by 2 (5-3) -> covers -> U1 wins.
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2, bet_type="spread", line=-1.5)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))
+    svc.settle_one(w)
+    assert w.winner_user_id == U1
+
+
+def test_spread_no_cover_goes_to_acceptor(app, calls, monkeypatch):
+    # U1 takes home -1.5; home wins by only 1 (4-3) -> doesn't cover -> U2.
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2, bet_type="spread", line=-1.5)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(4, 3))
+    svc.settle_one(w)
+    assert w.winner_user_id == U2
+
+
+def test_spread_exact_is_push(app, calls, monkeypatch):
+    # U1 takes home -2; home wins by exactly 2 -> push.
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2, bet_type="spread", line=-2.0)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))
+    svc.settle_one(w)
+    assert w.status == REFUNDED
+
+
+def test_total_over_wins(app, calls, monkeypatch):
+    # U1 takes Over 8.5; combined 9 -> over -> U1.
+    w = svc.propose(U1, LG, "ev1", "over", 5000, U2, bet_type="total", line=8.5)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 4))
+    svc.settle_one(w)
+    assert w.winner_user_id == U1
+
+
+def test_total_under_wins(app, calls, monkeypatch):
+    # U1 takes Over 8.5; combined 7 -> under -> acceptor.
+    w = svc.propose(U1, LG, "ev1", "over", 5000, U2, bet_type="total", line=8.5)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(4, 3))
+    svc.settle_one(w)
+    assert w.winner_user_id == U2
+
+
+def test_total_exact_is_push(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "under", 5000, U2, bet_type="total", line=7.0)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(4, 3))
+    svc.settle_one(w)
+    assert w.status == REFUNDED
+
+
+def test_undeterminable_falls_back_to_concede(app, calls, monkeypatch):
+    # No scores/winner_side -> winner can't be computed -> concede flow remains.
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    svc.settle_one(w)
+    assert w.status == COMPLETED and w.winner_user_id is None
+    svc.confirm(w, U1, "lost")  # U1 concedes -> U2 paid
+    assert w.status == SETTLED and w.winner_user_id == U2

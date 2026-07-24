@@ -13,7 +13,8 @@ import { fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FILTERS, filterWagers, WagerRow, type BetFilter } from '../bets-common';
+import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
+import { WagerBetCard } from '@/app/(app)/leagues/[id]/sections';
 
 export default function BetsView() {
   const { filter = 'all' } = useParams<{ filter: string }>();
@@ -112,6 +113,18 @@ export default function BetsView() {
 
   function actionsFor(w: Wager) {
     if (w.status === 'completed' && (w.proposer_id === me || w.acceptor_id === me)) {
+      // Score-decided winner: only the winner claims; the loser just waits.
+      if (w.winner_user_id) {
+        if (w.winner_user_id === me) {
+          return (
+            <Button size="sm" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'won' })}>
+              Confirm &amp; get paid
+            </Button>
+          );
+        }
+        return <span className="text-xs text-muted-foreground">You lost — awaiting payout</span>;
+      }
+      // Fallback: result couldn't be read from a score — settle by hand.
       return (
         <>
           <Button size="sm" variant="outline" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
@@ -192,14 +205,15 @@ export default function BetsView() {
         </Card>
       )}
 
-      <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {rows.map((w) => (
-          <WagerRow
+          <WagerBetCard
             key={w.id}
             w={w}
             me={me}
             leagueName={leagueNames.get(w.league_id)}
             ev={eventMap[w.event_id]}
+            accentClass="border-l-border"
             actions={actionsFor(w)}
           />
         ))}

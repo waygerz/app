@@ -17,7 +17,9 @@ export type WagerStatus =
 // Result a member reports when confirming a completed head-to-head wager. Only
 // the losing side settles: 'lost' concedes (pays the opponent) or 'draw'
 // refunds both. There is no 'won' — nobody can claim their own win.
-export type WagerResult = 'lost' | 'draw';
+// 'won' = the score-decided winner claiming their payout (the backend ignores
+// it unless you are that winner); 'lost'/'draw' are the manual concede fallback.
+export type WagerResult = 'won' | 'lost' | 'draw';
 
 export interface Wager {
   id: string;
