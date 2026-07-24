@@ -1674,9 +1674,7 @@ function ScheduleBetDialog({
               </div>
 
               <Button className="w-full" disabled={!configReady} onClick={() => setStep('members')}>
-                {picked
-                  ? `Bet ${teamName(side)} ${betType === 'ats' ? `${line} spread` : 'to win'}`
-                  : 'Bet'}
+                Next
               </Button>
             </>
           ) : (
@@ -1714,7 +1712,7 @@ function ScheduleBetDialog({
                 <Button className="w-full sm:w-auto" disabled={!canSubmit || propose.isPending} onClick={() => propose.mutate()}>
                   {propose.isPending
                     ? 'Sending…'
-                    : `Send bet${selected.length > 1 ? `s (${selected.length})` : ''}`}
+                    : `Bet${selected.length > 1 ? ` (${selected.length})` : ''}`}
                 </Button>
               </div>
             </>
@@ -1868,7 +1866,7 @@ function MatchupBetDialog({
                 <Button className="w-full sm:w-auto" disabled={!canSubmit || propose.isPending} onClick={() => propose.mutate()}>
                   {propose.isPending
                     ? 'Sending…'
-                    : `Send bet${selected.length > 1 ? `s (${selected.length})` : ''}`}
+                    : `Bet${selected.length > 1 ? ` (${selected.length})` : ''}`}
                 </Button>
               </div>
             </>
