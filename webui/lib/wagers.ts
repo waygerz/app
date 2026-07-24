@@ -102,6 +102,89 @@ export function wagerPick(
   return team;
 }
 
+// ---------------------------------------------------------------------------
+// Grouping. One member can offer the same bet (same game, pick, stake) to
+// several friends at once — those land as separate wagers, but the My Bets
+// cards fold the siblings into a single card ("vs Farrell, Johnny +3") whose
+// Cancel / Confirm buttons act on the whole group.
+// ---------------------------------------------------------------------------
+
+export interface WagerGroup {
+  key: string;
+  /** Representative — every sibling shares game, pick, stake, status and action. */
+  rep: Wager;
+  /** All wagers folded into this card (length 1 when there's nothing to fold). */
+  wagers: Wager[];
+  /** The other party of each sibling, in list order. */
+  opponents: { id: string; name: string; avatar_key?: string | null }[];
+  /** True when the viewer proposed the bet (false when they were challenged). */
+  iAmProposer: boolean;
+  /** The side the viewer backs. */
+  viewerSide: WagerSide;
+}
+
+/** The side the viewer is on (their pick), whoever proposed the bet. */
+export function viewerSide(w: Wager, me: string): WagerSide {
+  return w.proposer_id === me ? w.proposer_side : w.acceptor_side;
+}
+
+// Two siblings only merge when they'd render an identical card AND offer the
+// identical action — so a batch button is always valid for every member. That
+// means same game/pick/stake/status/role plus the same cancel and outcome
+// sub-state (so a "you won" bet never merges with a "you lost" one).
+function groupKey(w: Wager, me: string): string {
+  const cancel =
+    w.cancel_requested_by == null ? 'none' : w.cancel_requested_by === me ? 'mine' : 'theirs';
+  const outcome =
+    w.winner_user_id == null ? 'undecided' : w.winner_user_id === me ? 'won' : 'lost';
+  return [
+    w.event_id,
+    viewerSide(w, me),
+    w.bet_type,
+    w.line ?? '',
+    w.amount_cents,
+    w.status,
+    w.proposer_id === me ? 'P' : 'A',
+    cancel,
+    outcome,
+  ].join('|');
+}
+
+/** Fold a flat wager list into cards, preserving first-seen order. */
+export function groupWagers(wagers: Wager[], me: string): WagerGroup[] {
+  const byKey = new Map<string, WagerGroup>();
+  const order: string[] = [];
+  for (const w of wagers) {
+    const key = groupKey(w, me);
+    let g = byKey.get(key);
+    if (!g) {
+      g = {
+        key,
+        rep: w,
+        wagers: [],
+        opponents: [],
+        iAmProposer: w.proposer_id === me,
+        viewerSide: viewerSide(w, me),
+      };
+      byKey.set(key, g);
+      order.push(key);
+    }
+    g.wagers.push(w);
+    g.opponents.push(
+      g.iAmProposer
+        ? { id: w.acceptor_id, name: w.acceptor_name, avatar_key: w.acceptor_avatar_key }
+        : { id: w.proposer_id, name: w.proposer_name, avatar_key: w.proposer_avatar_key },
+    );
+  }
+  return order.map((k) => byKey.get(k)!);
+}
+
+/** "Farrell" · "Farrell, Johnny" · "Farrell, Johnny +3" (first two, then a count). */
+export function opponentsLabel(names: string[]): string {
+  if (names.length <= 2) return names.join(', ');
+  return `${names[0]}, ${names[1]} +${names.length - 2}`;
+}
+
 export interface ProposeInput {
   league_id: string;
   event_id: string;

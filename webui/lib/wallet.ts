@@ -38,9 +38,15 @@ export async function fetchTransactions(account: string): Promise<WalletTxn[]> {
   ).transactions ?? [];
 }
 
+// Play-money amounts render with a $ sign (whole dollars drop the cents):
+// $10, $10.50, $1,000. Still no cash value — it's league play-money.
 export function formatCredits(cents: number): string {
-  return (cents / 100).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const whole = cents % 100 === 0;
+  return (
+    '$' +
+    (cents / 100).toLocaleString(undefined, {
+      minimumFractionDigits: whole ? 0 : 2,
+      maximumFractionDigits: 2,
+    })
+  );
 }

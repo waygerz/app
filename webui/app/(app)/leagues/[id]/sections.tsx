@@ -15,8 +15,7 @@ import {
   type PickRow,
   type WeeklyResultRow,
 } from '@/lib/leagues';
-import { cancelLocked, wagerPick, wagersApi, type BetType, type Wager, type WagerResult, type WagerSide } from '@/lib/wagers';
-import { WagerRow } from '@/app/(app)/bets/bets-common';
+import { cancelLocked, groupWagers, opponentsLabel, wagerPick, wagersApi, type BetType, type Wager, type WagerGroup, type WagerResult, type WagerSide } from '@/lib/wagers';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -425,6 +424,13 @@ function wagerStatusBadge(w: Wager, me?: string) {
     return <Badge size="sm" variant="success" appearance="light">Live</Badge>;
   }
   if (w.status === 'completed') {
+    // Score already decided it — only the winner still has to claim.
+    if (w.winner_user_id === me) {
+      return <Badge size="sm" variant="success" appearance="light">You won</Badge>;
+    }
+    if (w.winner_user_id) {
+      return <Badge size="sm" variant="destructive" appearance="light">You lost</Badge>;
+    }
     return <Badge size="sm" variant="warning" appearance="light">Confirm result</Badge>;
   }
   if (w.status === 'settled') {
@@ -447,211 +453,113 @@ function wagerStatusBadge(w: Wager, me?: string) {
   return null;
 }
 
-// The game itself, once it's underway: score plus whether the viewer's side is
-// ahead. Renders nothing before first pitch, or when the event carries no score
-// (field sports, or a game we never got a final for).
-function GameScore({ ev, mySide }: { ev: SportEvent; mySide: 'home' | 'away' | null }) {
-  const live = ev.status === 'live';
-  if ((!live && ev.status !== 'final') || ev.home_score == null || ev.away_score == null) {
-    return null;
-  }
-  const { home_score: home, away_score: away } = ev;
-  const mine = mySide === 'home' ? home : away;
-  const theirs = mySide === 'home' ? away : home;
-
-  return (
-    <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-2.5 py-1.5">
-      <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-semibold">
-        {live ? (
-          <>
-            <span className="size-1.5 animate-pulse rounded-full bg-destructive" aria-hidden />
-            <span className="text-destructive">LIVE</span>
-          </>
-        ) : (
-          <span className="text-muted-foreground">FINAL</span>
-        )}
-      </span>
-      <span className="flex min-w-0 items-center gap-1 text-sm font-semibold tabular-nums text-foreground">
-        <span className="truncate">{ev.away_abbr || ev.away_team}</span>
-        <span>{away}</span>
-        <span className="text-muted-foreground">–</span>
-        <span>{home}</span>
-        <span className="truncate">{ev.home_abbr || ev.home_team}</span>
-      </span>
-      {mySide && (
-        <span
-          className={cn(
-            'shrink-0 text-[11px] font-medium',
-            mine > theirs ? 'text-brand' : mine < theirs ? 'text-destructive' : 'text-muted-foreground',
-          )}
-        >
-          {mine > theirs ? 'up' : mine < theirs ? 'down' : 'tied'}
-        </span>
-      )}
-    </div>
-  );
-}
-
+// A sportsbook-style bet card: the matchup and score on the left, the viewer's
+// pick and its action on the right, the opponents (folded when a bet went to
+// several friends) and stake across the top. Takes a WagerGroup so one card can
+// stand for a batch — Cancel / Confirm then act on every sibling at once.
 export function WagerBetCard({
-  w,
+  group,
   me,
   ev,
   actions,
-  accentClass,
   leagueName,
 }: {
-  w: Wager;
+  group: WagerGroup;
   me?: string;
   ev?: SportEvent | null;
   actions?: ReactNode;
-  accentClass: string;
   /** Shown on the cross-league /bets page so each card names its league. */
   leagueName?: string;
 }) {
-  // Field-sport matchups: the event's home/away hold a tournament placeholder,
-  // so use the wager's own stored picks (the two competitors) and show no team
-  // logos — TeamLogo falls back to the competitor's initials.
+  const w = group.rep;
+  const side = group.viewerSide;
   const field = !!ev && isFieldSport(ev.sport);
   const isTotal = w.bet_type === 'total';
-  const awayName = field ? w.away_team : (ev?.away_team ?? w.away_team);
-  const homeName = field ? w.home_team : (ev?.home_team ?? w.home_team);
-  // Per-side display: a total is over/under (no team logo, "O 8.5" as the mini
-  // label); everything else is the team the side backs, with its logo.
-  const sideView = (sideVal: WagerSide) => {
-    if (isTotal) {
-      return { team: wagerPick(w, sideVal), abbr: sideVal === 'over' ? 'O' : 'U', logo: null as string | null };
+
+  // Opponents line + verb. Once settled the header narrates the outcome.
+  const names = group.opponents.map((o) => o.name);
+  const settled = w.status === 'settled';
+  const iWon = settled && !!w.winner_user_id && w.winner_user_id === me;
+  const iLost = settled && !!w.winner_user_id && w.winner_user_id !== me;
+  const verb = iWon ? 'beat' : iLost ? 'lost to' : 'vs';
+
+  // Game score line. Winner (higher score) stays bright once final; the loser mutes.
+  const homeAbbr = ev?.home_abbr ?? w.home_team;
+  const awayAbbr = ev?.away_abbr ?? w.away_team;
+  const started = !!ev && ev.status !== 'scheduled' && ev.status !== 'cancelled';
+  const final = ev?.status === 'final';
+  const hs = ev?.home_score ?? null;
+  const as = ev?.away_score ?? null;
+  const homeLost = final && hs != null && as != null && as > hs;
+  const awayLost = final && hs != null && as != null && hs > as;
+  const rows = [
+    { key: 'away', name: ev?.away_team ?? w.away_team, logo: ev?.away_logo ?? null, abbr: awayAbbr, score: as, lost: awayLost },
+    { key: 'home', name: ev?.home_team ?? w.home_team, logo: ev?.home_logo ?? null, abbr: homeAbbr, score: hs, lost: homeLost },
+  ];
+
+  // The viewer's pick, kept short enough for the cell.
+  const shortPick = () => {
+    if (isTotal) return wagerPick(w, side); // "Over 8.5"
+    const abbr = side === 'home' ? homeAbbr : awayAbbr;
+    if (w.bet_type === 'spread' && w.line != null) {
+      const ln = side === w.proposer_side ? w.line : -w.line;
+      return `${abbr} ${ln > 0 ? '+' : ''}${ln}`;
     }
-    const home = sideVal === 'home';
-    const name = home ? homeName : awayName;
-    return {
-      team: wagerPick(w, sideVal),
-      abbr: field ? name : (home ? (ev?.home_abbr ?? name) : (ev?.away_abbr ?? name)),
-      logo: field ? null : (home ? ev?.home_logo ?? null : ev?.away_logo ?? null),
-    };
+    return abbr;
   };
-  const pv = sideView(w.proposer_side);
-  const av = sideView(w.acceptor_side);
-  const proposerTeam = pv.team, proposerAbbr = pv.abbr, proposerLogo = pv.logo;
-  const acceptorTeam = av.team, acceptorAbbr = av.abbr, acceptorLogo = av.logo;
+  const pickCell = settled
+    ? iWon
+      ? 'border-brand bg-brand/10 text-foreground'
+      : 'border-border bg-muted/40 text-muted-foreground'
+    : 'border-primary bg-primary/10 text-foreground';
 
-  // Once decided, the winner's side is green and the loser's muted; before that,
-  // each committed side shows the selection (primary) style.
-  const done = w.status === 'settled' || w.status === 'refunded';
-  const boxFor = (userWon: boolean, committed: boolean) =>
-    done ? (userWon ? STATE.win : STATE.loss) : committed ? STATE.selected : STATE.idle;
-  const proposerBox = boxFor(w.winner_user_id === w.proposer_id, true);
-  const acceptorBox = boxFor(w.winner_user_id === w.acceptor_id, w.status !== 'open');
-
-  // In a two-team game the opponent's team is just the other half of the same
-  // event, so a second panel spends the card restating what the viewer can
-  // infer — collapse to the side they actually own. Field sports (golf, racing)
-  // pick from a field of dozens, so there both picks carry real information.
-  // A non-participant (no side of their own) always gets the two-sided view.
-  const iAmProposer = !!me && me === w.proposer_id;
-  const iPlay = !!me && (iAmProposer || me === w.acceptor_id);
-  const collapse = iPlay && !field;
-
-  const mine = iAmProposer
-    ? { team: proposerTeam, logo: proposerLogo, abbr: proposerAbbr, box: proposerBox }
-    : { team: acceptorTeam, logo: acceptorLogo, abbr: acceptorAbbr, box: acceptorBox };
-  const theirs = iAmProposer
-    ? { team: acceptorTeam, name: w.acceptor_name }
-    : { team: proposerTeam, name: w.proposer_name };
-  // The team the viewer backs — only meaningful for a team-side bet (moneyline
-  // or spread). A total is over/under, so there's no team to colour up/down.
-  const rawSide = iAmProposer ? w.proposer_side : w.acceptor_side;
-  const mySide: 'home' | 'away' | null =
-    iPlay && (rawSide === 'home' || rawSide === 'away') ? rawSide : null;
+  const stake = formatCredits(w.amount_cents);
+  const stakeState = final ? `Final · ${stake}` : stake;
 
   return (
-    <Card className={cn('min-w-0 gap-2.5 border-l-4 p-3', accentClass)}>
-      {(leagueName || w.event_name) && (
-        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          {leagueName && <span className="shrink-0 font-medium text-foreground/80">{leagueName}</span>}
-          {leagueName && w.event_name && <span className="shrink-0">·</span>}
-          {w.event_name && <span className="truncate">{w.event_name}</span>}
+    <Card className="min-w-0 gap-2.5 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 truncate text-xs text-muted-foreground">
+          {leagueName && <span className="font-medium text-foreground/80">{leagueName}</span>}
+          {leagueName && ' · '}
+          {verb} <span className="font-medium text-foreground/90">{opponentsLabel(names)}</span>
         </div>
-      )}
-      <div className="flex items-center justify-between gap-2">
-        {wagerStatusBadge(w, me)}
-        <Badge size="sm" appearance="outline" variant="primary" className="shrink-0">
-          {formatCredits(w.amount_cents)} each
-        </Badge>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="whitespace-nowrap text-[11px] text-muted-foreground">{stakeState}</span>
+          {wagerStatusBadge(w, me)}
+        </div>
       </div>
 
-      {collapse ? (
-        <div className={cn('flex min-w-0 items-center gap-2.5 rounded-lg border px-2.5 py-2', mine.box)}>
-          <TeamLogo src={mine.logo} name={mine.abbr} className="size-8 shrink-0 text-[10px]" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-foreground">{mine.team}</div>
-            <div className="truncate text-[11px] text-muted-foreground">
-              vs {theirs.name} · {theirs.team}
-            </div>
+      <div className="flex items-stretch gap-2.5">
+        {field ? (
+          <div className="flex min-w-0 flex-1 flex-col justify-center">
+            <div className="truncate text-sm font-semibold text-foreground">{wagerPick(w, side)}</div>
+            {w.event_name && <div className="truncate text-[11px] text-muted-foreground">{w.event_name}</div>}
           </div>
+        ) : (
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
+            {rows.map((r) => (
+              <div key={r.key} className="flex items-center gap-2">
+                <TeamLogo src={r.logo} name={r.abbr} className="size-6 shrink-0 text-[9px]" />
+                <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold', r.lost ? 'text-muted-foreground' : 'text-foreground')}>
+                  {r.name}
+                </span>
+                <span className={cn('shrink-0 text-sm font-bold tabular-nums', r.lost ? 'text-muted-foreground' : 'text-foreground')}>
+                  {started && r.score != null ? r.score : '–'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex shrink-0 items-center gap-2">
+          <div className={cn('flex h-9 w-[84px] items-center justify-center rounded-lg border px-1 text-center text-[13px] font-bold leading-none', pickCell)}>
+            <span className="truncate">{shortPick()}</span>
+          </div>
+          {actions && <div className="flex w-[84px] shrink-0 flex-col justify-center gap-1">{actions}</div>}
         </div>
-      ) : (
-        /* minmax(0,1fr), not 1fr: grid items default to min-width:auto, so a long
-           team name would push the columns past the card instead of truncating. */
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1.5">
-          <WagerSide
-            userId={w.proposer_id}
-            userName={w.proposer_name}
-            team={proposerTeam}
-            abbr={proposerAbbr}
-            logo={proposerLogo}
-            boxClass={proposerBox}
-          />
-          <span className="self-center text-[10px] font-semibold text-muted-foreground">vs</span>
-          <WagerSide
-            userId={w.acceptor_id}
-            userName={w.acceptor_name}
-            team={acceptorTeam}
-            abbr={acceptorAbbr}
-            logo={acceptorLogo}
-            boxClass={acceptorBox}
-          />
-        </div>
-      )}
-
-      {/* A tournament container has no two-sided score, so field sports skip it. */}
-      {ev && !field && <GameScore ev={ev} mySide={mySide} />}
-
-      {actions && <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-2.5">{actions}</div>}
-    </Card>
-  );
-}
-
-// One side of a head-to-head card: who bet, and what they're backing. Every
-// level is min-w-0 + truncate so long team names shrink instead of overflowing
-// the card on a phone. The short abbreviation shows on narrow screens and the
-// full team name from sm: up.
-function WagerSide({
-  userId,
-  userName,
-  team,
-  abbr,
-  logo,
-  boxClass,
-}: {
-  userId: string;
-  userName: string;
-  team: string;
-  abbr: string;
-  logo?: string | null;
-  boxClass: string;
-}) {
-  return (
-    <div className={cn('flex min-w-0 flex-col items-center gap-1 rounded-lg border px-1.5 py-2 transition-colors', boxClass)}>
-      <UserAvatar userId={userId} name={userName} className="size-7" />
-      <span className="w-full truncate text-center text-[11px] font-medium leading-tight">{userName}</span>
-      <div className="flex w-full min-w-0 items-center justify-center gap-1">
-        <TeamLogo src={logo} name={abbr} className="size-6 shrink-0 text-[9px]" />
-        <span className="truncate text-xs font-medium text-foreground">
-          <span className="sm:hidden">{abbr}</span>
-          <span className="hidden sm:inline">{team}</span>
-        </span>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -668,24 +576,24 @@ function BetSection({
   wagers: Wager[];
   me?: string;
   eventMap: Record<string, SportEvent>;
-  actions?: (w: Wager) => ReactNode;
+  actions?: (g: WagerGroup) => ReactNode;
 }) {
   if (wagers.length === 0) return null;
   const style = BET_SECTION_TONE[tone];
+  const groups = groupWagers(wagers, me ?? '');
   return (
     <section>
       <h3 className={cn('mb-3 text-sm font-semibold', style.header)}>
         {title} ({wagers.length})
       </h3>
-      <div className="flex flex-col gap-2">
-        {wagers.map((w) => (
-          <WagerRow
-            key={w.id}
-            w={w}
-            me={me ?? ''}
-            ev={eventMap[w.event_id]}
-            actions={actions?.(w)}
-            hideLeagueLink
+      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+        {groups.map((g) => (
+          <WagerBetCard
+            key={g.key}
+            group={g}
+            me={me}
+            ev={eventMap[g.rep.event_id]}
+            actions={actions?.(g)}
           />
         ))}
       </div>
@@ -709,26 +617,29 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
     qc.invalidateQueries({ queryKey: ['wagers-all'] });
   };
   const onErr = (e: Error) => toast.error(e.message);
-  const acceptM = useMutation({ mutationFn: (id: string) => wagersApi.accept(id), onSuccess: refresh, onError: onErr });
-  const declineM = useMutation({ mutationFn: (id: string) => wagersApi.decline(id), onSuccess: refresh, onError: onErr });
-  const cancelM = useMutation({ mutationFn: (id: string) => wagersApi.cancel(id), onSuccess: refresh, onError: onErr });
+  // A card can stand for several siblings (same bet offered to a few friends),
+  // so every action runs across the group's ids at once.
+  const acceptM = useMutation({ mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.accept)), onSuccess: refresh, onError: onErr });
+  const declineM = useMutation({ mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.decline)), onSuccess: refresh, onError: onErr });
+  const cancelM = useMutation({ mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.cancel)), onSuccess: refresh, onError: onErr });
   const reqCancelM = useMutation({
-    mutationFn: (id: string) => wagersApi.requestCancel(id),
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.requestCancel)),
     onSuccess: () => { toast.success('Cancel requested — waiting on your opponent'); refresh(); },
     onError: onErr,
   });
   const approveCancelM = useMutation({
-    mutationFn: (id: string) => wagersApi.approveCancel(id),
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.approveCancel)),
     onSuccess: () => { toast.success('Bet cancelled — both stakes refunded'); refresh(); },
     onError: onErr,
   });
   const rejectCancelM = useMutation({
-    mutationFn: (id: string) => wagersApi.rejectCancel(id),
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.rejectCancel)),
     onSuccess: () => { toast.success('Cancel request declined — the bet stands'); refresh(); },
     onError: onErr,
   });
   const confirmM = useMutation({
-    mutationFn: ({ id, result }: { id: string; result: WagerResult }) => wagersApi.confirm(id, result),
+    mutationFn: ({ ids, result }: { ids: string[]; result: WagerResult }) =>
+      Promise.all(ids.map((id) => wagersApi.confirm(id, result))),
     onSuccess: (_d, v) => { toast.success(v.result === 'draw' ? 'Called a draw' : 'Result confirmed'); refresh(); },
     onError: onErr,
   });
@@ -741,54 +652,55 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const liveCount = pending.length + active.length + awaiting.length;
 
   // Active wagers hold both stakes, so calling one off takes both sides: one
-  // requests, the other approves. Locks 10 minutes before kickoff.
-  const cancelActions = (w: Wager) => {
+  // requests, the other approves. Locks 10 minutes before kickoff. The status
+  // badge carries the state, so the buttons stay terse for the compact column.
+  const cancelActions = (g: WagerGroup) => {
+    const w = g.rep;
+    const ids = g.wagers.map((x) => x.id);
     if (w.proposer_id !== me && w.acceptor_id !== me) return null;
     if (cancelLocked(w)) {
-      return <span className="text-xs text-muted-foreground">Too close to start to cancel</span>;
+      return <span className="text-center text-[11px] text-muted-foreground">Locked</span>;
     }
     if (!w.cancel_requested_by) {
       return (
-        <Button size="sm" variant="outline" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(w.id)}>
-          Request cancel
+        <Button size="sm" variant="outline" className="w-full" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(ids)}>
+          Cancel
         </Button>
       );
     }
     if (w.cancel_requested_by === me) {
-      return <span className="text-xs text-muted-foreground">Cancel requested — waiting on your opponent</span>;
+      return <span className="text-center text-[11px] text-muted-foreground">Requested</span>;
     }
     return (
       <>
-        <Button size="sm" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(w.id)}>
-          Approve cancel
-        </Button>
-        <Button size="sm" variant="ghost" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(w.id)}>
-          Reject
-        </Button>
+        <Button size="sm" className="w-full" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(ids)}>Approve</Button>
+        <Button size="sm" variant="ghost" className="w-full" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(ids)}>Reject</Button>
       </>
     );
   };
 
-  const confirmActions = (w: Wager) => {
+  const confirmActions = (g: WagerGroup) => {
+    const w = g.rep;
+    const ids = g.wagers.map((x) => x.id);
     if (w.proposer_id !== me && w.acceptor_id !== me) return null;
     // Score-decided winner: only the winner acts (claims the payout); the loser
-    // just waits. This is the normal path once a final score is in.
+    // sees no button — the "You lost" badge says it all.
     if (w.winner_user_id) {
       if (w.winner_user_id === me) {
         return (
-          <Button size="sm" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'won' })}>
-            Confirm &amp; get paid
+          <Button size="sm" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ ids, result: 'won' })}>
+            Confirm
           </Button>
         );
       }
-      return <span className="text-xs text-muted-foreground">You lost — awaiting payout</span>;
+      return null;
     }
     // Fallback only: the result couldn't be read from a score, so the pair settle
     // by hand.
     return (
       <>
-        <Button size="sm" variant="outline" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
-        <Button size="sm" variant="ghost" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'draw' })}>Draw</Button>
+        <Button size="sm" variant="outline" className="w-full" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ ids, result: 'lost' })}>I lost</Button>
+        <Button size="sm" variant="ghost" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ ids, result: 'draw' })}>Draw</Button>
       </>
     );
   };
@@ -830,22 +742,24 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
         wagers={pending}
         me={me}
         eventMap={eventMap}
-        actions={(w) =>
-          w.acceptor_id === me ? (
+        actions={(g) => {
+          const w = g.rep;
+          const ids = g.wagers.map((x) => x.id);
+          return w.acceptor_id === me ? (
             <>
-              <Button size="sm" onClick={() => acceptM.mutate(w.id)}>Accept</Button>
-              <Button size="sm" variant="outline" onClick={() => declineM.mutate(w.id)}>Decline</Button>
+              <Button size="sm" className="w-full" disabled={acceptM.isPending} onClick={() => acceptM.mutate(ids)}>Accept</Button>
+              <Button size="sm" variant="outline" className="w-full" disabled={declineM.isPending} onClick={() => declineM.mutate(ids)}>Decline</Button>
             </>
           ) : w.proposer_id === me ? (
             cancelLocked(w) ? (
-              <span className="text-xs text-muted-foreground">Too close to start to cancel</span>
+              <span className="text-center text-[11px] text-muted-foreground">Locked</span>
             ) : (
-              <Button size="sm" variant="outline" disabled={cancelM.isPending} onClick={() => cancelM.mutate(w.id)}>
+              <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>
                 Cancel
               </Button>
             )
-          ) : null
-        }
+          ) : null;
+        }}
       />
       <BetSection
         title="Active"
@@ -1345,8 +1259,8 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
         <section key={s.label} className="flex flex-col gap-3">
           <h2 className="text-base font-semibold text-foreground sm:text-lg">{s.label}</h2>
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {s.wagers.map((w) => (
-              <WagerBetCard key={w.id} w={w} me={me} ev={eventMap[w.event_id]} accentClass={BET_SECTION_TONE.history.accent} />
+            {groupWagers(s.wagers, me ?? '').map((g) => (
+              <WagerBetCard key={g.key} group={g} me={me} ev={eventMap[g.rep.event_id]} />
             ))}
           </div>
         </section>
@@ -1790,7 +1704,7 @@ function ScheduleBetDialog({
               </div>
 
               <div className="flex items-center justify-between gap-3">
-                <Label>Amount (credits)</Label>
+                <Label>Amount ($)</Label>
                 <Input type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} className="max-w-40" />
               </div>
 
@@ -1964,7 +1878,7 @@ function MatchupBetDialog({
                 </>
               )}
               <div className="flex items-center justify-between gap-3">
-                <Label>Amount (credits)</Label>
+                <Label>Amount ($)</Label>
                 <Input type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} className="max-w-40" />
               </div>
               <Button className="w-full self-stretch sm:w-auto sm:self-end" disabled={!configReady} onClick={() => setStep('members')}>Next</Button>
@@ -2558,7 +2472,7 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
               name="min"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Min wager (credits)</FormLabel>
+                  <FormLabel>Min wager ($)</FormLabel>
                   <FormControl>
                     <Input type="number" min={0} placeholder="none" {...field} />
                   </FormControl>
@@ -2571,7 +2485,7 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
               name="max"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Max wager (credits)</FormLabel>
+                  <FormLabel>Max wager ($)</FormLabel>
                   <FormControl>
                     <Input type="number" min={0} placeholder="none" {...field} />
                   </FormControl>

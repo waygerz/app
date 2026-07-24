@@ -1,12 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { cn } from '@/lib/utils';
-import { wagerPick, type Wager, type WagerStatus } from '@/lib/wagers';
-import { type SportEvent } from '@/lib/ingestor';
-import { formatCredits } from '@/lib/wallet';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { type Wager, type WagerStatus } from '@/lib/wagers';
 
 export type BetFilter = 'pending' | 'active' | 'closed' | 'all';
 
@@ -20,7 +14,7 @@ export const FILTERS: { key: BetFilter; label: string; description: string }[] =
 const ACTIVE_STATUSES: WagerStatus[] = ['accepted', 'completed'];
 const CLOSED_STATUSES: WagerStatus[] = ['settled', 'declined', 'cancelled', 'refunded'];
 
-export function filterWagers(wagers: Wager[], filter: BetFilter, me: string): Wager[] {
+export function filterWagers(wagers: Wager[], filter: BetFilter): Wager[] {
   switch (filter) {
     case 'pending':
       return wagers.filter((w) => w.status === 'open');
@@ -35,127 +29,4 @@ export function filterWagers(wagers: Wager[], filter: BetFilter, me: string): Wa
     default:
       return wagers;
   }
-}
-
-// The game's own score/state, shown once it's underway. Nothing before first
-// pitch, or when the event has no two-sided score (field sports, or a game we
-// never got a final for). `mySide` colours whether the viewer is up or down.
-function EventScoreLine({ ev, mySide }: { ev: SportEvent; mySide: 'home' | 'away' | null }) {
-  const live = ev.status === 'live';
-  if ((!live && ev.status !== 'final') || ev.home_score == null || ev.away_score == null) {
-    return null;
-  }
-  const { home_score: home, away_score: away } = ev;
-  // Up/down only for a team-side bet; a total has no "my team".
-  const mine = mySide === 'home' ? home : mySide === 'away' ? away : null;
-  const theirs = mySide === 'home' ? away : mySide === 'away' ? home : null;
-  return (
-    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-      <span className="inline-flex items-center gap-1 font-semibold">
-        {live ? (
-          <>
-            <span className="size-1.5 animate-pulse rounded-full bg-destructive" aria-hidden />
-            <span className="text-destructive">LIVE</span>
-          </>
-        ) : (
-          <span className="text-muted-foreground">FINAL</span>
-        )}
-      </span>
-      <span className="font-semibold tabular-nums text-foreground">
-        {ev.away_abbr || ev.away_team} {away}–{home} {ev.home_abbr || ev.home_team}
-      </span>
-      {mine !== null && theirs !== null && (
-        <span
-          className={cn(
-            'font-medium',
-            mine > theirs ? 'text-brand' : mine < theirs ? 'text-destructive' : 'text-muted-foreground',
-          )}
-        >
-          {mine > theirs ? 'you’re up' : mine < theirs ? 'you’re down' : 'tied'}
-        </span>
-      )}
-    </p>
-  );
-}
-
-function statusBadge(w: Wager, me: string) {
-  if (w.status === 'open' && w.acceptor_id === me) {
-    return <Badge size="sm" variant="warning" appearance="light">Needs response</Badge>;
-  }
-  if (w.status === 'open') {
-    return <Badge size="sm" variant="warning" appearance="light">Awaiting</Badge>;
-  }
-  if (w.status === 'accepted') {
-    return <Badge size="sm" variant="info" appearance="light">Active</Badge>;
-  }
-  if (w.status === 'completed') {
-    return <Badge size="sm" variant="warning" appearance="light">Confirm result</Badge>;
-  }
-  if (w.status === 'settled') {
-    const won = w.winner_user_id === me;
-    return (
-      <Badge size="sm" variant={won ? 'success' : 'destructive'} appearance="light">
-        {won ? 'Won' : 'Lost'}
-      </Badge>
-    );
-  }
-  if (w.status === 'refunded') {
-    return <Badge size="sm" variant="secondary" appearance="light">Push</Badge>;
-  }
-  if (w.status === 'declined') {
-    return <Badge size="sm" variant="secondary" appearance="light">Declined</Badge>;
-  }
-  if (w.status === 'cancelled') {
-    return <Badge size="sm" variant="secondary" appearance="light">Cancelled</Badge>;
-  }
-  return null;
-}
-
-export function WagerRow({
-  w,
-  me,
-  leagueName,
-  ev,
-  actions,
-  hideLeagueLink,
-}: {
-  w: Wager;
-  me: string;
-  leagueName?: string;
-  ev?: SportEvent | null;
-  actions?: React.ReactNode;
-  /** Hide the "View in league" link (redundant when already on that page). */
-  hideLeagueLink?: boolean;
-}) {
-  const iAmProposer = w.proposer_id === me;
-  const mySide = iAmProposer ? w.proposer_side : w.acceptor_side;
-  const opponent = iAmProposer ? w.acceptor_name : w.proposer_name;
-  const myPick = wagerPick(w, mySide);
-  // The score-line up/down colouring only applies to a team-side bet.
-  const teamSide = mySide === 'home' || mySide === 'away' ? mySide : null;
-
-  return (
-    <Card className="flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-medium text-foreground">{w.event_name}</span>
-          {statusBadge(w, me)}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {leagueName && <span className="font-medium text-foreground/80">{leagueName} · </span>}
-          vs {opponent} · backing {myPick} · {formatCredits(w.amount_cents)}
-        </p>
-        {ev && <EventScoreLine ev={ev} mySide={teamSide} />}
-        {!hideLeagueLink && (
-          <Link
-            href={`/leagues/${w.league_id}/play`}
-            className="text-xs text-primary hover:underline"
-          >
-            View in league
-          </Link>
-        )}
-      </div>
-      {actions && <div className="flex flex-wrap gap-2 sm:shrink-0">{actions}</div>}
-    </Card>
-  );
 }

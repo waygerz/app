@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Ticket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi } from '@/lib/leagues';
-import { cancelLocked, wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
+import { cancelLocked, groupWagers, wagersApi, type WagerGroup, type WagerResult } from '@/lib/wagers';
 import { fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,8 +36,8 @@ export default function BetsView() {
   }, [leaguesQ.data]);
 
   const rows = useMemo(
-    () => filterWagers(wagersQ.data ?? [], activeFilter, me),
-    [wagersQ.data, activeFilter, me],
+    () => filterWagers(wagersQ.data ?? [], activeFilter),
+    [wagersQ.data, activeFilter],
   );
 
   // Events behind the bets, for the live/final score line. Keyed on the full
@@ -72,23 +72,26 @@ export default function BetsView() {
   };
   const onErr = (e: Error) => toast.error(e.message);
 
+  // A card can stand for several siblings (the same bet offered to a few
+  // friends), so each action runs across the whole group's ids at once.
   const acceptM = useMutation({
-    mutationFn: (id: string) => wagersApi.accept(id),
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.accept)),
     onSuccess: () => { toast.success('Bet accepted'); refresh(); },
     onError: onErr,
   });
   const declineM = useMutation({
-    mutationFn: (id: string) => wagersApi.decline(id),
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.decline)),
     onSuccess: () => { toast.success('Bet declined'); refresh(); },
     onError: onErr,
   });
   const cancelM = useMutation({
-    mutationFn: (id: string) => wagersApi.cancel(id),
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.cancel)),
     onSuccess: () => { toast.success('Bet cancelled'); refresh(); },
     onError: onErr,
   });
   const confirmM = useMutation({
-    mutationFn: ({ id, result }: { id: string; result: WagerResult }) => wagersApi.confirm(id, result),
+    mutationFn: ({ ids, result }: { ids: string[]; result: WagerResult }) =>
+      Promise.all(ids.map((id) => wagersApi.confirm(id, result))),
     onSuccess: (_d, v) => {
       toast.success(v.result === 'draw' ? 'Called a draw' : 'Result confirmed');
       refresh();
@@ -96,39 +99,43 @@ export default function BetsView() {
     onError: onErr,
   });
   const reqCancelM = useMutation({
-    mutationFn: (id: string) => wagersApi.requestCancel(id),
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.requestCancel)),
     onSuccess: () => { toast.success('Cancel requested — waiting on your opponent'); refresh(); },
     onError: onErr,
   });
   const approveCancelM = useMutation({
-    mutationFn: (id: string) => wagersApi.approveCancel(id),
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.approveCancel)),
     onSuccess: () => { toast.success('Bet cancelled — both stakes refunded'); refresh(); },
     onError: onErr,
   });
   const rejectCancelM = useMutation({
-    mutationFn: (id: string) => wagersApi.rejectCancel(id),
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.rejectCancel)),
     onSuccess: () => { toast.success('Cancel request declined — the bet stands'); refresh(); },
     onError: onErr,
   });
 
-  function actionsFor(w: Wager) {
+  // The status badge on the card carries the state, so the buttons in the
+  // compact action column stay terse.
+  function actionsFor(g: WagerGroup) {
+    const w = g.rep;
+    const ids = g.wagers.map((x) => x.id);
     if (w.status === 'completed' && (w.proposer_id === me || w.acceptor_id === me)) {
-      // Score-decided winner: only the winner claims; the loser just waits.
+      // Score-decided winner: only the winner claims; the loser sees no button.
       if (w.winner_user_id) {
         if (w.winner_user_id === me) {
           return (
-            <Button size="sm" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'won' })}>
-              Confirm &amp; get paid
+            <Button size="sm" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ ids, result: 'won' })}>
+              Confirm
             </Button>
           );
         }
-        return <span className="text-xs text-muted-foreground">You lost — awaiting payout</span>;
+        return null;
       }
       // Fallback: result couldn't be read from a score — settle by hand.
       return (
         <>
-          <Button size="sm" variant="outline" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ id: w.id, result: 'lost' })}>I lost</Button>
-          <Button size="sm" variant="ghost" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ id: w.id, result: 'draw' })}>Draw</Button>
+          <Button size="sm" variant="outline" className="w-full" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ ids, result: 'lost' })}>I lost</Button>
+          <Button size="sm" variant="ghost" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ ids, result: 'draw' })}>Draw</Button>
         </>
       );
     }
@@ -136,40 +143,40 @@ export default function BetsView() {
     // one requests, the other approves. Locks 10 minutes before kickoff.
     if (w.status === 'accepted' && (w.proposer_id === me || w.acceptor_id === me)) {
       if (cancelLocked(w)) {
-        return <span className="text-xs text-muted-foreground">Too close to start to cancel</span>;
+        return <span className="text-center text-[11px] text-muted-foreground">Locked</span>;
       }
       if (!w.cancel_requested_by) {
         return (
-          <Button size="sm" variant="outline" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(w.id)}>
-            Request cancel
+          <Button size="sm" variant="outline" className="w-full" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(ids)}>
+            Cancel
           </Button>
         );
       }
       if (w.cancel_requested_by === me) {
-        return <span className="text-xs text-muted-foreground">Cancel requested — waiting on your opponent</span>;
+        return <span className="text-center text-[11px] text-muted-foreground">Requested</span>;
       }
       return (
         <>
-          <Button size="sm" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(w.id)}>Approve cancel</Button>
-          <Button size="sm" variant="ghost" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(w.id)}>Reject</Button>
+          <Button size="sm" className="w-full" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(ids)}>Approve</Button>
+          <Button size="sm" variant="ghost" className="w-full" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(ids)}>Reject</Button>
         </>
       );
     }
-    if (activeFilter !== 'pending' || w.status !== 'open') return null;
+    if (w.status !== 'open') return null;
     if (w.acceptor_id === me) {
       return (
         <>
-          <Button size="sm" disabled={acceptM.isPending} onClick={() => acceptM.mutate(w.id)}>Accept</Button>
-          <Button size="sm" variant="outline" disabled={declineM.isPending} onClick={() => declineM.mutate(w.id)}>Decline</Button>
+          <Button size="sm" className="w-full" disabled={acceptM.isPending} onClick={() => acceptM.mutate(ids)}>Accept</Button>
+          <Button size="sm" variant="outline" className="w-full" disabled={declineM.isPending} onClick={() => declineM.mutate(ids)}>Decline</Button>
         </>
       );
     }
     if (w.proposer_id === me) {
       if (cancelLocked(w)) {
-        return <span className="text-xs text-muted-foreground">Too close to start to cancel</span>;
+        return <span className="text-center text-[11px] text-muted-foreground">Locked</span>;
       }
       return (
-        <Button size="sm" variant="outline" disabled={cancelM.isPending} onClick={() => cancelM.mutate(w.id)}>Cancel</Button>
+        <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>Cancel</Button>
       );
     }
     return null;
@@ -204,15 +211,14 @@ export default function BetsView() {
       )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {rows.map((w) => (
+        {groupWagers(rows, me).map((g) => (
           <WagerBetCard
-            key={w.id}
-            w={w}
+            key={g.key}
+            group={g}
             me={me}
-            leagueName={leagueNames.get(w.league_id)}
-            ev={eventMap[w.event_id]}
-            accentClass="border-l-border"
-            actions={actionsFor(w)}
+            leagueName={leagueNames.get(g.rep.league_id)}
+            ev={eventMap[g.rep.event_id]}
+            actions={actionsFor(g)}
           />
         ))}
       </div>

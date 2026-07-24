@@ -240,7 +240,7 @@ export default function NewLeaguePage() {
         {/* Starting balance (money only) */}
         {isMoney && (
           <div className="flex flex-col gap-1.5">
-            <Label>Starting balance per member (credits)</Label>
+            <Label>Starting balance per member ($)</Label>
             <Input type="number" min={1} value={startingCredits} onChange={(e) => setStartingCredits(e.target.value)} />
             <span className="text-xs text-muted-foreground">
               No personal wallet — this is each member’s only funds in the league.

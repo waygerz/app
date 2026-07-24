@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Ticket } from 'lucide-react';
-import { useAuth } from '@/auth/AuthContext';
 import { wagersApi } from '@/lib/wagers';
 import { cn } from '@/lib/utils';
 import { FILTERS, filterWagers, type BetFilter } from './bets-common';
@@ -15,14 +14,12 @@ export default function BetsLayout({ children }: { children: ReactNode }) {
     queryKey: ['wagers-all'],
     queryFn: () => wagersApi.all(),
   });
-  const { user } = useAuth();
-  const me = user?.id ?? '';
 
   const counts = useMemo(() => {
     const out = {} as Record<BetFilter, number>;
-    for (const f of FILTERS) out[f.key] = filterWagers(wagers, f.key, me).length;
+    for (const f of FILTERS) out[f.key] = filterWagers(wagers, f.key).length;
     return out;
-  }, [wagers, me]);
+  }, [wagers]);
 
   const pathname = usePathname();
 
