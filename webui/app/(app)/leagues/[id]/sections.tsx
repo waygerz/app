@@ -15,7 +15,7 @@ import {
   type PickRow,
   type WeeklyResultRow,
 } from '@/lib/leagues';
-import { cancelLocked, groupWagers, opponentsLabel, wagerPick, wagersApi, type BetType, type Wager, type WagerGroup, type WagerResult, type WagerSide } from '@/lib/wagers';
+import { cancelLocked, groupWagers, opponentsLabel, wagerPick, wagersApi, type BetType, type Wager, type WagerGroup, type WagerSide } from '@/lib/wagers';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -540,7 +540,7 @@ export function WagerBetCard({
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
             {rows.map((r) => (
               <div key={r.key} className="flex items-center gap-2">
-                <TeamLogo src={r.logo} name={r.abbr} className="size-6 shrink-0 text-[9px]" />
+                <TeamLogo src={r.logo} name={r.abbr} className="size-5 shrink-0 text-[8px]" />
                 <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold', r.lost ? 'text-muted-foreground' : 'text-foreground')}>
                   {r.name}
                 </span>
@@ -638,9 +638,8 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
     onError: onErr,
   });
   const confirmM = useMutation({
-    mutationFn: ({ ids, result }: { ids: string[]; result: WagerResult }) =>
-      Promise.all(ids.map((id) => wagersApi.confirm(id, result))),
-    onSuccess: (_d, v) => { toast.success(v.result === 'draw' ? 'Called a draw' : 'Result confirmed'); refresh(); },
+    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => wagersApi.confirm(id))),
+    onSuccess: () => { toast.success('Result confirmed — you got paid'); refresh(); },
     onError: onErr,
   });
 
@@ -682,26 +681,13 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const confirmActions = (g: WagerGroup) => {
     const w = g.rep;
     const ids = g.wagers.map((x) => x.id);
-    if (w.proposer_id !== me && w.acceptor_id !== me) return null;
-    // Score-decided winner: only the winner acts (claims the payout); the loser
-    // sees no button — the "You lost" badge says it all.
-    if (w.winner_user_id) {
-      if (w.winner_user_id === me) {
-        return (
-          <Button size="sm" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ ids, result: 'won' })}>
-            Confirm
-          </Button>
-        );
-      }
-      return null;
-    }
-    // Fallback only: the result couldn't be read from a score, so the pair settle
-    // by hand.
+    // Only the score-decided winner claims the pot; everyone else just sees the
+    // result in the badge.
+    if (w.winner_user_id !== me) return null;
     return (
-      <>
-        <Button size="sm" variant="outline" className="w-full" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ ids, result: 'lost' })}>I lost</Button>
-        <Button size="sm" variant="ghost" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ ids, result: 'draw' })}>Draw</Button>
-      </>
+      <Button size="sm" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate(ids)}>
+        Confirm
+      </Button>
     );
   };
 

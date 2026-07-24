@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Ticket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi } from '@/lib/leagues';
-import { cancelLocked, groupWagers, wagersApi, type WagerGroup, type WagerResult } from '@/lib/wagers';
+import { cancelLocked, groupWagers, wagersApi, type WagerGroup } from '@/lib/wagers';
 import { fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -90,12 +90,8 @@ export default function BetsView() {
     onError: onErr,
   });
   const confirmM = useMutation({
-    mutationFn: ({ ids, result }: { ids: string[]; result: WagerResult }) =>
-      Promise.all(ids.map((id) => wagersApi.confirm(id, result))),
-    onSuccess: (_d, v) => {
-      toast.success(v.result === 'draw' ? 'Called a draw' : 'Result confirmed');
-      refresh();
-    },
+    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => wagersApi.confirm(id))),
+    onSuccess: () => { toast.success('Result confirmed — you got paid'); refresh(); },
     onError: onErr,
   });
   const reqCancelM = useMutation({
@@ -120,24 +116,16 @@ export default function BetsView() {
     const w = g.rep;
     const ids = g.wagers.map((x) => x.id);
     if (w.status === 'completed' && (w.proposer_id === me || w.acceptor_id === me)) {
-      // Score-decided winner: only the winner claims; the loser sees no button.
-      if (w.winner_user_id) {
-        if (w.winner_user_id === me) {
-          return (
-            <Button size="sm" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ ids, result: 'won' })}>
-              Confirm
-            </Button>
-          );
-        }
-        return null;
+      // Score-decided winner: only the winner claims; everyone else sees no
+      // button (the badge carries the result).
+      if (w.winner_user_id === me) {
+        return (
+          <Button size="sm" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate(ids)}>
+            Confirm
+          </Button>
+        );
       }
-      // Fallback: result couldn't be read from a score — settle by hand.
-      return (
-        <>
-          <Button size="sm" variant="outline" className="w-full" disabled={confirmM.isPending} title="Concede — pays your opponent" onClick={() => confirmM.mutate({ ids, result: 'lost' })}>I lost</Button>
-          <Button size="sm" variant="ghost" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate({ ids, result: 'draw' })}>Draw</Button>
-        </>
-      );
+      return null;
     }
     // Accepted wagers hold both stakes, so calling one off takes both sides:
     // one requests, the other approves. Locks 10 minutes before kickoff.

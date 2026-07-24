@@ -14,13 +14,6 @@ export type WagerStatus =
   | 'cancelled'
   | 'refunded';
 
-// Result a member reports when confirming a completed head-to-head wager. Only
-// the losing side settles: 'lost' concedes (pays the opponent) or 'draw'
-// refunds both. There is no 'won' — nobody can claim their own win.
-// 'won' = the score-decided winner claiming their payout (the backend ignores
-// it unless you are that winner); 'lost'/'draw' are the manual concede fallback.
-export type WagerResult = 'won' | 'lost' | 'draw';
-
 export interface Wager {
   id: string;
   league_id: string;
@@ -40,7 +33,7 @@ export interface Wager {
   amount_cents: number;
   status: WagerStatus;
   winner_user_id: string | null;
-  confirmed_by_id: string | null;
+  confirmed: boolean;
   /** Set while one side is waiting on the other to approve calling the bet off. */
   cancel_requested_by: string | null;
   cancel_requested_at: string | null;
@@ -228,8 +221,7 @@ export const wagersApi = {
   requestCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/request`, { method: 'POST' }),
   approveCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/approve`, { method: 'POST' }),
   rejectCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/reject`, { method: 'POST' }),
-  // Peer-confirm a completed wager: 'lost' concedes to the opponent (paying
-  // them), 'draw' refunds both. The winner is paid when the loser concedes.
-  confirm: (id: string, result: WagerResult) =>
-    req(`${WAGERS_API}/${id}/confirm`, { method: 'POST', body: JSON.stringify({ result }) }),
+  // Confirm a completed wager: only the score-decided winner may, which pays
+  // them the pot. Nobody else has an action.
+  confirm: (id: string) => req(`${WAGERS_API}/${id}/confirm`, { method: 'POST' }),
 };
