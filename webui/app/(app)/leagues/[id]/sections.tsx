@@ -15,7 +15,7 @@ import {
   type PickRow,
   type WeeklyResultRow,
 } from '@/lib/leagues';
-import { cancelLocked, wagersApi, type Wager, type WagerResult } from '@/lib/wagers';
+import { cancelLocked, wagerPick, wagersApi, type BetType, type Wager, type WagerResult, type WagerSide } from '@/lib/wagers';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -508,16 +508,27 @@ function WagerBetCard({
   // so use the wager's own stored picks (the two competitors) and show no team
   // logos — TeamLogo falls back to the competitor's initials.
   const field = !!ev && isFieldSport(ev.sport);
+  const isTotal = w.bet_type === 'total';
   const awayName = field ? w.away_team : (ev?.away_team ?? w.away_team);
   const homeName = field ? w.home_team : (ev?.home_team ?? w.home_team);
-  const proposerIsHome = w.proposer_side === 'home';
-  const acceptorIsHome = w.acceptor_side === 'home';
-  const proposerTeam = proposerIsHome ? homeName : awayName;
-  const acceptorTeam = acceptorIsHome ? homeName : awayName;
-  const proposerLogo = field ? null : (proposerIsHome ? ev?.home_logo : ev?.away_logo);
-  const acceptorLogo = field ? null : (acceptorIsHome ? ev?.home_logo : ev?.away_logo);
-  const proposerAbbr = field ? proposerTeam : (proposerIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName));
-  const acceptorAbbr = field ? acceptorTeam : (acceptorIsHome ? (ev?.home_abbr ?? homeName) : (ev?.away_abbr ?? awayName));
+  // Per-side display: a total is over/under (no team logo, "O 8.5" as the mini
+  // label); everything else is the team the side backs, with its logo.
+  const sideView = (sideVal: WagerSide) => {
+    if (isTotal) {
+      return { team: wagerPick(w, sideVal), abbr: sideVal === 'over' ? 'O' : 'U', logo: null as string | null };
+    }
+    const home = sideVal === 'home';
+    const name = home ? homeName : awayName;
+    return {
+      team: wagerPick(w, sideVal),
+      abbr: field ? name : (home ? (ev?.home_abbr ?? name) : (ev?.away_abbr ?? name)),
+      logo: field ? null : (home ? ev?.home_logo ?? null : ev?.away_logo ?? null),
+    };
+  };
+  const pv = sideView(w.proposer_side);
+  const av = sideView(w.acceptor_side);
+  const proposerTeam = pv.team, proposerAbbr = pv.abbr, proposerLogo = pv.logo;
+  const acceptorTeam = av.team, acceptorAbbr = av.abbr, acceptorLogo = av.logo;
 
   // Once decided, the winner's side is green and the loser's muted; before that,
   // each committed side shows the selection (primary) style.
@@ -542,9 +553,11 @@ function WagerBetCard({
   const theirs = iAmProposer
     ? { team: acceptorTeam, name: w.acceptor_name }
     : { team: proposerTeam, name: w.proposer_name };
-  const mySide: 'home' | 'away' | null = iPlay
-    ? (iAmProposer ? w.proposer_side : w.acceptor_side)
-    : null;
+  // The team the viewer backs — only meaningful for a team-side bet (moneyline
+  // or spread). A total is over/under, so there's no team to colour up/down.
+  const rawSide = iAmProposer ? w.proposer_side : w.acceptor_side;
+  const mySide: 'home' | 'away' | null =
+    iPlay && (rawSide === 'home' || rawSide === 'away') ? rawSide : null;
 
   return (
     <Card className={cn('min-w-0 gap-2.5 border-l-4 p-3', accentClass)}>
@@ -1534,9 +1547,9 @@ function ScheduleBetDialog({
 }) {
   const qc = useQueryClient();
   const [step, setStep] = useState<'config' | 'members'>('config');
-  const [side, setSide] = useState<'home' | 'away'>('away');
-  const [betType, setBetType] = useState<'straight_up' | 'ats'>('straight_up');
-  const [line, setLine] = useState('');
+  const [side, setSide] = useState<WagerSide>('away');
+  const [betType, setBetType] = useState<BetType>('moneyline');
+  const [line, setLine] = useState<number | null>(null);
   const [picked, setPicked] = useState(false); // no cell selected until the user taps one
   const [credits, setCredits] = useState('10');
   const [selected, setSelected] = useState<string[]>([]);
@@ -1549,25 +1562,22 @@ function ScheduleBetDialog({
     staleTime: 5 * 60_000,
   });
   const spread = oddsQ.data?.spread;
-  // home line is spread.line; the away side is its negation.
-  const lineFor = (s: 'home' | 'away') => (spread ? (s === 'home' ? spread.line : -spread.line) : null);
+  const total = oddsQ.data?.overUnder;
+  const ml = oddsQ.data?.moneyline;
 
   // Reset the flow whenever a new game is opened.
   useEffect(() => {
     if (open) {
-      setStep('config'); setSide('away'); setBetType('straight_up'); setLine('');
+      setStep('config'); setSide('away'); setBetType('moneyline'); setLine(null);
       setPicked(false); setCredits('10'); setSelected([]);
     }
   }, [open, event?.external_id]);
 
-  // Selecting a cell fixes the side, market and (for spread) the line.
-  const pickCell = (s: 'home' | 'away', bt: 'straight_up' | 'ats') => {
+  // Tapping a cell fixes the side, market and (for spread/total) the line.
+  const pickCell = (s: WagerSide, bt: BetType, ln: number | null) => {
     setSide(s);
     setBetType(bt);
-    if (bt === 'ats') {
-      const l = lineFor(s);
-      setLine(l !== null ? String(l) : '');
-    }
+    setLine(bt === 'moneyline' ? null : ln);
     setPicked(true);
   };
 
@@ -1579,7 +1589,7 @@ function ScheduleBetDialog({
     mutationFn: () => wagersApi.propose({
       league_id: lg.id, event_id: event!.external_id, side,
       amount_cents: Math.round(Number(credits) * 100), acceptor_ids: selected,
-      bet_type: betType, line: betType === 'ats' ? Number(line) : null,
+      bet_type: betType, line: betType === 'moneyline' ? null : line,
     }),
     onSuccess: (r) => {
       if (r.created.length) toast.success(`Bet sent to ${r.created.length} member${r.created.length === 1 ? '' : 's'}`);
@@ -1595,11 +1605,17 @@ function ScheduleBetDialog({
   const teamName = (s: 'home' | 'away') => (s === 'away' ? event.away_team : event.home_team);
   const teamLogo = (s: 'home' | 'away') => (s === 'away' ? event.away_logo : event.home_logo);
   const teamAbbr = (s: 'home' | 'away') => (s === 'away' ? event.away_abbr : event.home_abbr);
-  const configReady = picked && Number(credits) > 0 && (betType !== 'ats' || line.trim() !== '');
+  const configReady = picked && Number(credits) > 0;
   const canSubmit = selected.length > 0 && configReady;
   const sign = (n?: number) => (n === undefined || n === null ? undefined : n > 0 ? `+${n}` : `${n}`);
-  const ml = oddsQ.data?.moneyline;
-  const isSel = (s: 'home' | 'away', bt: 'straight_up' | 'ats') => picked && side === s && betType === bt;
+  const isSel = (s: WagerSide, bt: BetType) => picked && side === s && betType === bt;
+  // A one-line description of the current pick, for the Next button.
+  const pickLabel = () => {
+    if (!picked) return 'Next';
+    if (betType === 'total') return `Next · ${side === 'over' ? 'Over' : 'Under'} ${line}`;
+    const t = teamName(side as 'home' | 'away');
+    return `Next · ${t}${betType === 'spread' ? ` ${sign(line ?? undefined)}` : ''}`;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1613,55 +1629,57 @@ function ScheduleBetDialog({
         <DialogBody className="flex flex-col gap-4 py-2">
           {step === 'config' ? (
             <>
-              <p className="text-sm text-muted-foreground">Tap a spread or the winner for the side you want to back.</p>
+              <p className="text-sm text-muted-foreground">Tap the market and side you want to back.</p>
 
-              {/* Sportsbook-style selectable rows: Spread | Winner per team. */}
+              {/* Sportsbook-style selectable rows: Spread | Total | Winner. Total
+                  is over on the away row, under on the home row. */}
               <div>
-                <div className="flex items-center gap-2 pb-1.5">
+                <div className="flex items-center gap-1.5 pb-1.5">
                   <div className="min-w-0 flex-1" />
-                  <span className="w-[4.75rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-24">Spread</span>
-                  <span className="w-[4.75rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-24">Winner</span>
+                  {(['Spread', 'Total', 'Winner'] as const).map((h) => (
+                    <span key={h} className="w-[3.75rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-[4.75rem]">{h}</span>
+                  ))}
                 </div>
                 {(['away', 'home'] as const).map((s) => {
                   const spMain = spread ? sign(s === 'away' ? -spread.line : spread.line) : undefined;
                   const spPrice = spread ? sign(s === 'away' ? spread.away : spread.home) : undefined;
                   const mlPrice = sign(s === 'away' ? ml?.away : ml?.home);
+                  // Total: away row = Over, home row = Under.
+                  const ouSide: WagerSide = s === 'away' ? 'over' : 'under';
+                  const ouMain = total ? `${s === 'away' ? 'O' : 'U'} ${total.total}` : undefined;
+                  const ouPrice = total ? sign(s === 'away' ? total.over : total.under) : undefined;
                   const cellCls = (on: boolean, disabled?: boolean) =>
                     cn(
-                      'flex h-12 w-[4.75rem] shrink-0 flex-col items-center justify-center gap-0 rounded-md border tabular-nums leading-tight transition-colors sm:w-24',
+                      'flex h-12 w-[3.75rem] shrink-0 flex-col items-center justify-center gap-0 rounded-md border tabular-nums leading-tight transition-colors sm:w-[4.75rem]',
                       disabled ? 'cursor-not-allowed opacity-40 border-input' : on ? STATE.selected : STATE.idle,
                     );
                   return (
-                    <div key={s} className="flex items-center gap-2 border-b border-border py-2 last:border-0">
+                    <div key={s} className="flex items-center gap-1.5 border-b border-border py-2 last:border-0">
                       <div className="flex min-w-0 flex-1 items-center gap-2.5">
                         <TeamLogo src={teamLogo(s)} name={teamAbbr(s) || teamName(s)} className="size-7 shrink-0 text-[10px]" />
                         <span className="truncate text-sm font-medium text-foreground">{teamName(s)}</span>
                       </div>
-                      <button
-                        type="button"
-                        disabled={!spread}
-                        onClick={() => pickCell(s, 'ats')}
-                        className={cellCls(isSel(s, 'ats'), !spread)}
-                      >
+                      {/* Spread */}
+                      <button type="button" disabled={!spread} onClick={() => pickCell(s, 'spread', s === 'away' ? -spread!.line : spread!.line)} className={cellCls(isSel(s, 'spread'), !spread)}>
                         {spread ? (
                           <>
                             <span className="text-xs font-medium text-foreground">{spMain}</span>
                             <span className="text-[11px] text-muted-foreground">{spPrice}</span>
                           </>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        ) : <span className="text-muted-foreground">—</span>}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => pickCell(s, 'straight_up')}
-                        className={cellCls(isSel(s, 'straight_up'))}
-                      >
-                        {mlPrice ? (
-                          <span className="text-sm font-medium text-foreground">{mlPrice}</span>
-                        ) : (
-                          <span className="text-sm font-medium text-foreground">Win</span>
-                        )}
+                      {/* Total (O/U) */}
+                      <button type="button" disabled={!total} onClick={() => pickCell(ouSide, 'total', total!.total)} className={cellCls(isSel(ouSide, 'total'), !total)}>
+                        {total ? (
+                          <>
+                            <span className="text-xs font-medium text-foreground">{ouMain}</span>
+                            <span className="text-[11px] text-muted-foreground">{ouPrice}</span>
+                          </>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </button>
+                      {/* Winner (moneyline / straight up) */}
+                      <button type="button" onClick={() => pickCell(s, 'moneyline', null)} className={cellCls(isSel(s, 'moneyline'))}>
+                        <span className="text-sm font-medium text-foreground">{mlPrice ?? 'Win'}</span>
                       </button>
                     </div>
                   );
@@ -1674,14 +1692,16 @@ function ScheduleBetDialog({
               </div>
 
               <Button className="w-full" disabled={!configReady} onClick={() => setStep('members')}>
-                Next
+                {pickLabel()}
               </Button>
             </>
           ) : (
             <>
               <div className="text-sm text-foreground">
-                Backing <span className="font-semibold">{teamName(side)}</span>
-                {' · '}{betType === 'ats' ? `ATS ${line || '—'}` : 'Straight up'}
+                {betType === 'total'
+                  ? <>Backing <span className="font-semibold">{side === 'over' ? 'Over' : 'Under'} {line}</span></>
+                  : <>Backing <span className="font-semibold">{teamName(side as 'home' | 'away')}</span>{betType === 'spread' ? ` ${sign(line ?? undefined)}` : ''}</>}
+                {' · '}{betType === 'moneyline' ? 'Straight up' : betType === 'spread' ? 'Spread' : 'Total'}
                 {' · '}{formatCredits(Math.round(Number(credits) * 100))}
               </div>
               <div className="flex flex-col gap-2">

@@ -31,8 +31,10 @@ export interface Wager {
   start_time: string | null;
   proposer_id: string;
   acceptor_id: string;
-  proposer_side: 'home' | 'away';
-  acceptor_side: 'home' | 'away';
+  proposer_side: WagerSide;
+  acceptor_side: WagerSide;
+  bet_type: BetType;
+  line: number | null;
   amount_cents: number;
   status: WagerStatus;
   winner_user_id: string | null;
@@ -69,12 +71,39 @@ function req<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   return apiJson<T>(`${WAGERS_URL}${path}`, options);
 }
 
-export type BetType = 'straight_up' | 'ats';
+export type BetType = 'moneyline' | 'spread' | 'total';
+export type WagerSide = 'home' | 'away' | 'over' | 'under';
+
+/**
+ * The pick as a short phrase from a given side's perspective:
+ *   moneyline → "Atlanta Braves"
+ *   spread    → "Atlanta Braves -1.5"
+ *   total     → "Over 8.5"
+ *
+ * `line` is stored from the proposer's side, so for a spread it flips sign when
+ * we're describing the acceptor's side. A total's line is the same for both.
+ */
+export function wagerPick(
+  w: Pick<Wager, 'bet_type' | 'line' | 'home_team' | 'away_team' | 'proposer_side'>,
+  side: WagerSide,
+): string {
+  if (w.bet_type === 'total') {
+    const l = w.line ?? '';
+    return `${side === 'over' ? 'Over' : 'Under'} ${l}`.trim();
+  }
+  const team = side === 'home' ? w.home_team : w.away_team;
+  if (w.bet_type === 'spread' && w.line != null) {
+    const ln = side === w.proposer_side ? w.line : -w.line;
+    const s = ln > 0 ? `+${ln}` : `${ln}`;
+    return `${team} ${s}`;
+  }
+  return team;
+}
 
 export interface ProposeInput {
   league_id: string;
   event_id: string;
-  side: 'home' | 'away';
+  side: WagerSide;
   amount_cents: number;
   acceptor_ids: string[];
   bet_type?: BetType;

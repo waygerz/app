@@ -12,12 +12,16 @@ from flask import current_app, request
 from app.extensions import db
 from app.models.wager import (
     ACCEPTED,
+    BET_TYPES,
     CANCELLED,
     COMPLETED,
     DECLINED,
+    MONEYLINE,
     OPEN,
     REFUNDED,
     SETTLED,
+    SPREAD,
+    TOTAL,
     Wager,
 )
 
@@ -202,10 +206,24 @@ def _resolve_sides(event, side, home_team, away_team):
 
 
 def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
-            home_team=None, away_team=None):
+            home_team=None, away_team=None, bet_type=None, line=None):
+    bet_type = (bet_type or MONEYLINE).lower()
+    if bet_type not in BET_TYPES:
+        raise WagerError("invalid bet type")
     side = (side or "").lower()
-    if side not in ("home", "away"):
-        raise WagerError("side must be 'home' or 'away'")
+    # A total is over/under; every other market is home/away.
+    valid_sides = ("over", "under") if bet_type == TOTAL else ("home", "away")
+    if side not in valid_sides:
+        raise WagerError(f"side must be one of {' / '.join(valid_sides)}")
+    if bet_type in (SPREAD, TOTAL):
+        if line is None or str(line).strip() == "":
+            raise WagerError("this bet needs a line")
+        try:
+            line = float(line)
+        except (TypeError, ValueError):
+            raise WagerError("invalid line")
+    else:
+        line = None
     amount = int(amount_cents)
     if acceptor_id == proposer_id:
         raise WagerError("you can't bet against yourself")
@@ -226,7 +244,14 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
     if allowed and ev_slid and ev_slid not in allowed:
         raise WagerError("this game isn't in your league's sports")
 
-    ev_home, ev_away, proposer_side = _resolve_sides(event, side, home_team, away_team)
+    if bet_type == TOTAL:
+        # A total has no team side — it's over/under on the combined score. The
+        # matchup (home/away teams) is still stored for display.
+        ev_home = event.get("home_team")
+        ev_away = event.get("away_team")
+        proposer_side = side
+    else:
+        ev_home, ev_away, proposer_side = _resolve_sides(event, side, home_team, away_team)
 
     account = ctx["account"]
     w = Wager(
@@ -241,6 +266,8 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
         proposer_id=proposer_id,
         acceptor_id=acceptor_id,
         proposer_side=proposer_side,
+        bet_type=bet_type,
+        line=line,
         amount_cents=amount,
         status=OPEN,
     )
@@ -257,13 +284,14 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
 
 
 def propose_many(proposer_id, league_id, event_id, side, amount_cents, acceptor_ids,
-                 home_team=None, away_team=None):
+                 home_team=None, away_team=None, bet_type=None, line=None):
     """Send the same bet to several members — one independent wager each."""
     results = []
     for aid in acceptor_ids:
         try:
             wager = propose(proposer_id, league_id, event_id, side, amount_cents, aid,
-                            home_team=home_team, away_team=away_team)
+                            home_team=home_team, away_team=away_team,
+                            bet_type=bet_type, line=line)
             results.append({"acceptor_id": aid, "wager": wager})
         except WagerError as exc:
             results.append({"acceptor_id": aid, "error": str(exc)})
@@ -662,6 +690,8 @@ def propose_wagers(me, data):
         # for team/1v1 events, which carry their own two sides.
         home_team=data.get("home_team"),
         away_team=data.get("away_team"),
+        bet_type=data.get("bet_type"),
+        line=data.get("line"),
     )
     created = [r["wager"] for r in results if "wager" in r]
     errors = [

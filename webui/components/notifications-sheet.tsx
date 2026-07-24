@@ -12,7 +12,7 @@ import {
   Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { wagersApi, type WagerResult } from '@/lib/wagers';
+import { wagerPick, wagersApi, type WagerResult } from '@/lib/wagers';
 import { friendsApi } from '@/lib/friends';
 import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
@@ -107,13 +107,13 @@ export function NotificationsSheet() {
       const otherAvatar = iAmProposer ? w.acceptor_avatar_key : w.proposer_avatar_key;
       const amount = formatCredits(w.amount_cents);
       // Line 2 is the matchup; line 3 attributes the pick to whoever proposed it
-      // ("Anky took Atlanta Braves for 10"), so it always reads from the
-      // proposer's side regardless of who's viewing.
-      const proposerTeam = w.proposer_side === 'home' ? w.home_team : w.away_team;
+      // ("Anky took Atlanta Braves -1.5 for 10"), reading from the proposer's
+      // side and market regardless of who's viewing.
+      const proposerPick = wagerPick(w, w.proposer_side);
       const sub = w.event_name;
       const pick = iAmProposer
-        ? `You took ${proposerTeam} for ${amount}`
-        : `${w.proposer_name} took ${proposerTeam} for ${amount}`;
+        ? `You took ${proposerPick} for ${amount}`
+        : `${w.proposer_name} took ${proposerPick} for ${amount}`;
       const time = w.settled_at ?? w.created_at;
       let n: Omit<Notif, 'id' | 'tab' | 'userId' | 'userName' | 'sortTime'> | null = null;
 

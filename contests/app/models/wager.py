@@ -4,6 +4,12 @@ from sqlalchemy.dialects.postgresql import UUID
 
 from app.extensions import db
 
+# bet types (the market the wager is on)
+MONEYLINE = "moneyline"  # pick the outright winner (SU / straight up)
+SPREAD = "spread"        # pick a team to cover the point/run/puck spread (ATS)
+TOTAL = "total"          # pick the combined score over/under a line
+BET_TYPES = (MONEYLINE, SPREAD, TOTAL)
+
 # statuses
 OPEN = "open"            # proposed, awaiting friend's response
 ACCEPTED = "accepted"    # both staked, event in play
@@ -38,7 +44,14 @@ class Wager(db.Model):
 
     proposer_id = db.Column(UUID(as_uuid=False), nullable=False, index=True)
     acceptor_id = db.Column(UUID(as_uuid=False), nullable=False, index=True)
-    proposer_side = db.Column(db.String(8), nullable=False)  # home | away
+    # For moneyline/spread the side is home|away; for a total it's over|under.
+    proposer_side = db.Column(db.String(8), nullable=False)
+    # The market and (for spread/total) the line the proposer took. bet_type
+    # defaults to moneyline so every pre-existing wager reads as a straight-up
+    # pick. line is the proposer's number: e.g. spread -1.5, total 8.5.
+    bet_type = db.Column(db.String(12), nullable=False, default=MONEYLINE,
+                         server_default=MONEYLINE)
+    line = db.Column(db.Float, nullable=True)
     amount_cents = db.Column(db.BigInteger, nullable=False)
 
     status = db.Column(db.String(16), nullable=False, default=OPEN, index=True)
@@ -56,9 +69,11 @@ class Wager(db.Model):
     completed_at = db.Column(db.DateTime, nullable=True)  # when the event was marked over
     settled_at = db.Column(db.DateTime, nullable=True)
 
+    _OPPOSITE = {"home": "away", "away": "home", "over": "under", "under": "over"}
+
     @property
     def acceptor_side(self) -> str:
-        return "away" if self.proposer_side == "home" else "home"
+        return self._OPPOSITE.get(self.proposer_side, self.proposer_side)
 
     def involves(self, user_id: str) -> bool:
         return user_id in (self.proposer_id, self.acceptor_id)
@@ -78,6 +93,8 @@ class Wager(db.Model):
             "acceptor_id": self.acceptor_id,
             "proposer_side": self.proposer_side,
             "acceptor_side": self.acceptor_side,
+            "bet_type": self.bet_type or MONEYLINE,
+            "line": self.line,
             "amount_cents": self.amount_cents,
             "status": self.status,
             "winner_user_id": self.winner_user_id,

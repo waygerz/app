@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { type Wager, type WagerStatus } from '@/lib/wagers';
+import { wagerPick, type Wager, type WagerStatus } from '@/lib/wagers';
 import { type SportEvent } from '@/lib/ingestor';
 import { formatCredits } from '@/lib/wallet';
 import { Card } from '@/components/ui/card';
@@ -40,14 +40,15 @@ export function filterWagers(wagers: Wager[], filter: BetFilter, me: string): Wa
 // The game's own score/state, shown once it's underway. Nothing before first
 // pitch, or when the event has no two-sided score (field sports, or a game we
 // never got a final for). `mySide` colours whether the viewer is up or down.
-function EventScoreLine({ ev, mySide }: { ev: SportEvent; mySide: 'home' | 'away' }) {
+function EventScoreLine({ ev, mySide }: { ev: SportEvent; mySide: 'home' | 'away' | null }) {
   const live = ev.status === 'live';
   if ((!live && ev.status !== 'final') || ev.home_score == null || ev.away_score == null) {
     return null;
   }
   const { home_score: home, away_score: away } = ev;
-  const mine = mySide === 'home' ? home : away;
-  const theirs = mySide === 'home' ? away : home;
+  // Up/down only for a team-side bet; a total has no "my team".
+  const mine = mySide === 'home' ? home : mySide === 'away' ? away : null;
+  const theirs = mySide === 'home' ? away : mySide === 'away' ? home : null;
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
       <span className="inline-flex items-center gap-1 font-semibold">
@@ -63,14 +64,16 @@ function EventScoreLine({ ev, mySide }: { ev: SportEvent; mySide: 'home' | 'away
       <span className="font-semibold tabular-nums text-foreground">
         {ev.away_abbr || ev.away_team} {away}–{home} {ev.home_abbr || ev.home_team}
       </span>
-      <span
-        className={cn(
-          'font-medium',
-          mine > theirs ? 'text-brand' : mine < theirs ? 'text-destructive' : 'text-muted-foreground',
-        )}
-      >
-        {mine > theirs ? 'you’re up' : mine < theirs ? 'you’re down' : 'tied'}
-      </span>
+      {mine !== null && theirs !== null && (
+        <span
+          className={cn(
+            'font-medium',
+            mine > theirs ? 'text-brand' : mine < theirs ? 'text-destructive' : 'text-muted-foreground',
+          )}
+        >
+          {mine > theirs ? 'you’re up' : mine < theirs ? 'you’re down' : 'tied'}
+        </span>
+      )}
     </p>
   );
 }
@@ -123,8 +126,10 @@ export function WagerRow({
 }) {
   const iAmProposer = w.proposer_id === me;
   const mySide = iAmProposer ? w.proposer_side : w.acceptor_side;
-  const myTeam = mySide === 'home' ? w.home_team : w.away_team;
   const opponent = iAmProposer ? w.acceptor_name : w.proposer_name;
+  const myPick = wagerPick(w, mySide);
+  // The score-line up/down colouring only applies to a team-side bet.
+  const teamSide = mySide === 'home' || mySide === 'away' ? mySide : null;
 
   return (
     <Card className="flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -135,9 +140,9 @@ export function WagerRow({
         </div>
         <p className="text-xs text-muted-foreground">
           {leagueName && <span className="font-medium text-foreground/80">{leagueName} · </span>}
-          vs {opponent} · backing {myTeam} · {formatCredits(w.amount_cents)}
+          vs {opponent} · backing {myPick} · {formatCredits(w.amount_cents)}
         </p>
-        {ev && <EventScoreLine ev={ev} mySide={mySide} />}
+        {ev && <EventScoreLine ev={ev} mySide={teamSide} />}
         <Link
           href={`/leagues/${w.league_id}/play`}
           className="text-xs text-primary hover:underline"

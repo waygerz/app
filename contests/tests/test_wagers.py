@@ -379,3 +379,54 @@ def test_unknown_start_time_does_not_lock(app, calls, monkeypatch):
     w.start_time = None
     svc.request_cancel(w, U1)       # can't prove we're inside the window
     assert w.cancel_requested_by == U1
+
+
+# ---- bet types: moneyline / spread / total ---------------------------------
+
+def test_propose_defaults_to_moneyline(app, calls):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    assert w.bet_type == "moneyline" and w.line is None
+    assert w.proposer_side == "home" and w.acceptor_side == "away"
+
+
+def test_spread_stores_type_and_line(app, calls):
+    w = svc.propose(U1, LG, "ev1", "away", 5000, U2, bet_type="spread", line=-1.5)
+    assert w.bet_type == "spread" and w.line == -1.5
+    assert w.proposer_side == "away" and w.acceptor_side == "home"
+
+
+def test_total_over_under_sides(app, calls):
+    w = svc.propose(U1, LG, "ev1", "over", 5000, U2, bet_type="total", line=8.5)
+    assert w.bet_type == "total" and w.line == 8.5
+    assert w.proposer_side == "over" and w.acceptor_side == "under"
+
+
+def test_spread_requires_a_line(app, calls):
+    with pytest.raises(svc.WagerError):
+        svc.propose(U1, LG, "ev1", "home", 5000, U2, bet_type="spread", line=None)
+
+
+def test_total_requires_a_line(app, calls):
+    with pytest.raises(svc.WagerError):
+        svc.propose(U1, LG, "ev1", "over", 5000, U2, bet_type="total", line=None)
+
+
+def test_total_rejects_home_away_side(app, calls):
+    with pytest.raises(svc.WagerError):
+        svc.propose(U1, LG, "ev1", "home", 5000, U2, bet_type="total", line=8.5)
+
+
+def test_moneyline_rejects_over_under_side(app, calls):
+    with pytest.raises(svc.WagerError):
+        svc.propose(U1, LG, "ev1", "over", 5000, U2)
+
+
+def test_invalid_bet_type_rejected(app, calls):
+    with pytest.raises(svc.WagerError):
+        svc.propose(U1, LG, "ev1", "home", 5000, U2, bet_type="parlay")
+
+
+def test_bet_type_and_line_in_to_dict(app, calls):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2, bet_type="spread", line=-2.5)
+    d = w.to_dict()
+    assert d["bet_type"] == "spread" and d["line"] == -2.5
