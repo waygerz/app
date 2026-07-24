@@ -11,10 +11,10 @@ import { Badge } from '@/components/ui/badge';
 export type BetFilter = 'pending' | 'active' | 'closed' | 'all';
 
 export const FILTERS: { key: BetFilter; label: string; description: string }[] = [
-  { key: 'pending', label: 'Pending', description: 'Proposed bets awaiting accept, decline, or cancel' },
-  { key: 'active', label: 'Active', description: 'Accepted bets in play, plus finished bets waiting on a result' },
-  { key: 'closed', label: 'Closed', description: 'Settled, declined, cancelled, or refunded' },
   { key: 'all', label: 'All', description: 'Every bet, newest first, with its live status and score' },
+  { key: 'active', label: 'Active', description: 'Accepted bets in play, plus finished bets waiting on a result' },
+  { key: 'pending', label: 'Pending', description: 'Proposed bets awaiting accept, decline, or cancel' },
+  { key: 'closed', label: 'Closed', description: 'Settled, declined, cancelled, or refunded' },
 ];
 
 const ACTIVE_STATUSES: WagerStatus[] = ['accepted', 'completed'];

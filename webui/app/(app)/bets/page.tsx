@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 
-// /bets has no content of its own — send to the default filter (replaces the
-// old react-router <Navigate to="/bets/pending" replace />).
+// /bets has no content of its own — send to the default filter (All).
 export default function BetsIndexPage() {
-  redirect('/bets/pending');
+  redirect('/bets/all');
 }

@@ -36,7 +36,7 @@ export default function BetsLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <nav className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-input bg-background p-1.5">
+      <nav className="mb-6 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {FILTERS.map((f) => {
           const to = `/bets/${f.key}`;
           const isActive = pathname === to;
@@ -45,14 +45,17 @@ export default function BetsLayout({ children }: { children: ReactNode }) {
               key={f.key}
               href={to}
               className={cn(
-                'shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                'text-muted-foreground hover:bg-muted hover:text-foreground',
-                isActive && 'bg-muted text-foreground',
+                'shrink-0 whitespace-nowrap rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
+                isActive
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               {f.label}
               {counts[f.key] > 0 && (
-                <span className="ms-1.5 text-xs text-muted-foreground">({counts[f.key]})</span>
+                <span className={cn('ms-1.5 text-xs', isActive ? 'text-primary-foreground/80' : 'text-muted-foreground')}>
+                  ({counts[f.key]})
+                </span>
               )}
             </Link>
           );

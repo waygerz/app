@@ -16,9 +16,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { FILTERS, filterWagers, WagerRow, type BetFilter } from '../bets-common';
 
 export default function BetsView() {
-  const { filter = 'pending' } = useParams<{ filter: string }>();
+  const { filter = 'all' } = useParams<{ filter: string }>();
   const activeFilter: BetFilter =
-    filter === 'open' ? 'pending' : FILTERS.some((f) => f.key === filter) ? (filter as BetFilter) : 'pending';
+    filter === 'open' ? 'pending' : FILTERS.some((f) => f.key === filter) ? (filter as BetFilter) : 'all';
   const meta = FILTERS.find((f) => f.key === activeFilter)!;
 
   const qc = useQueryClient();
