@@ -81,7 +81,12 @@ jobs:
 
   build-push:
     needs: setup
-    runs-on: ubuntu-latest
+    # Native arm64 runner (free for public repos) — builds the linux/arm64
+    # images without QEMU emulation, which was the main source of slow builds.
+    runs-on: ubuntu-24.04-arm
+    # Cap the job so a hung step (e.g. an OIDC/STS stall) fails in minutes and
+    # can be re-dispatched, instead of blocking for GitHub's default 6 hours.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -119,6 +124,9 @@ jobs:
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
+        # STS AssumeRoleWithWebIdentity is normally seconds; this occasionally
+        # hangs. Fail in 5 min so a retry isn't blocked for the whole job.
+        timeout-minutes: 5
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ env.ROLE_ARN }}
@@ -133,11 +141,8 @@ jobs:
             --region "${AWS_REGION}" \
             --repository-names "${{ steps.svc.outputs.REPO }}" >/dev/null
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-
+      # No QEMU: the runner is already arm64, so buildx builds linux/arm64
+      # natively.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
