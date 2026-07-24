@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
-import { useAuth } from '@/auth/AuthContext';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { useMediaSrc } from '@/lib/use-media-src';
 import { UserAvatar } from '@/components/user-avatar';
@@ -77,7 +76,6 @@ function LeagueCover({
 }
 
 export default function HomePage() {
-  const { user } = useAuth();
   const qc = useQueryClient();
   const router = useRouter();
 
@@ -106,21 +104,7 @@ export default function HomePage() {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-            {user ? (
-              <>
-                Welcome back,{' '}
-                <span className="bg-gradient-to-r from-primary via-fuchsia-500 to-brand bg-clip-text text-transparent">
-                  {user.display_name}
-                </span>
-              </>
-            ) : (
-              'Your leagues'
-            )}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your leagues, invites, and where to jump back in.
-          </p>
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">My Leagues</h1>
         </div>
       </div>
 

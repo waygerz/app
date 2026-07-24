@@ -4,6 +4,7 @@ Every wager belongs to a league; money moves through the wallet on that league's
 account (``league:{league_id}``). Validation is delegated to the leagues service
 (``league_context`` + ``are_comembers``) — friendship is no longer required.
 """
+import zlib
 from datetime import datetime, timedelta
 
 import requests
@@ -615,13 +616,79 @@ def settle_one(wager):
     return wager
 
 
+# Trash-talk lines for a decided bet. {W} = winner(s), {L} = loser(s). Picked
+# deterministically per bet (crc of the group key) so it doesn't change as the
+# post upserts.
+_TRASH_TALK = (
+    "{W} beat {L}. 💀",
+    "{W} cooked {L}. 🔥",
+    "{W} sent {L} home crying. 😭",
+    "{W} took {L} to school. 🎒",
+    "Bad day to be {L} — {W} ran it back. 🏃",
+    "{W} owns {L} now. 📝",
+    "{W} made {L} pay up. 💸",
+    "Somebody check on {L}… {W} did NOT hold back. 🫡",
+)
+
+
 def _post_completed_activity(wager):
+    # Undeterminable result (no score to read): the pair still settle by hand,
+    # so keep the neutral "ready to settle" prompt.
+    if not wager.winner_user_id:
+        post_league_activity(wager.league_id, {
+            "event_type": "wager_completed",
+            "title": "A bet is ready to settle",
+            "body": f"{wager.event_name} — the winner can now confirm the result.",
+            "dedup_key": f"wager_completed:{wager.id}",
+            "meta": {"wager_id": wager.id, "amount_cents": wager.amount_cents},
+        })
+        return
+
+    # Score-decided: collapse the cohort (same proposer/event/side/stake — one
+    # bet offered to several members) into one post naming who beat whom. Every
+    # sibling shares the outcome, so the proposer either beat all acceptors or
+    # each acceptor beat the proposer.
+    siblings = (
+        Wager.query.filter(
+            Wager.league_id == wager.league_id,
+            Wager.event_id == wager.event_id,
+            Wager.proposer_id == wager.proposer_id,
+            Wager.proposer_side == wager.proposer_side,
+            Wager.amount_cents == wager.amount_cents,
+            Wager.status.in_([COMPLETED, SETTLED]),
+            Wager.winner_user_id.isnot(None),
+        )
+        .order_by(Wager.created_at.asc())
+        .all()
+    )
+    if not siblings:
+        siblings = [wager]
+
+    names = resolve_users(
+        [wager.proposer_id] + [w.acceptor_id for w in siblings]
+    )
+    proposer = names.get(wager.proposer_id, "Someone")
+    acceptors = [names.get(w.acceptor_id, "Someone") for w in siblings]
+    proposer_won = wager.winner_user_id == wager.proposer_id
+
+    if proposer_won:
+        winners_txt, losers_txt = proposer, _opponent_phrase(acceptors)
+        author = wager.proposer_id
+    else:
+        winners_txt, losers_txt = _opponent_phrase(acceptors), proposer
+        author = siblings[0].acceptor_id
+
+    key = f"{wager.proposer_id}:{wager.event_id}:{wager.proposer_side}:{wager.amount_cents}"
+    line = _TRASH_TALK[zlib.crc32(key.encode()) % len(_TRASH_TALK)]
+
     post_league_activity(wager.league_id, {
         "event_type": "wager_completed",
-        "title": "A bet is ready to settle",
-        "body": f"{wager.event_name} — the winner can now confirm the result.",
-        "dedup_key": f"wager_completed:{wager.id}",
-        "meta": {"wager_id": wager.id, "amount_cents": wager.amount_cents},
+        "author_id": author,
+        "title": wager.event_name or "Bet settled",
+        "body": line.format(W=winners_txt, L=losers_txt),
+        "dedup_key": f"wager_result:{key}",
+        "upsert": True,
+        "meta": {"amount_cents": wager.amount_cents},
     })
 
 

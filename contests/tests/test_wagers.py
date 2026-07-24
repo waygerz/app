@@ -533,3 +533,50 @@ def test_undeterminable_falls_back_to_concede(app, calls, monkeypatch):
     assert w.status == COMPLETED and w.winner_user_id is None
     svc.confirm(w, U1, "lost")  # U1 concedes -> U2 paid
     assert w.status == SETTLED and w.winner_user_id == U2
+
+
+# ---- trash-talk feed post on a decided bet ----------------------------------
+
+def test_completed_post_names_the_winner(app, calls, monkeypatch):
+    posts = []
+    monkeypatch.setattr(svc, "post_league_activity", lambda lid, p: posts.append(p))
+    monkeypatch.setattr(svc, "resolve_users", lambda ids: {U1: "Anky", U2: "Farrell"})
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)  # Anky home
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3, ws="home"))
+    svc.settle_one(w)  # Anky wins
+    completed = [p for p in posts if p["event_type"] == "wager_completed"]
+    assert completed, "expected a wager_completed post"
+    body = completed[-1]["body"]
+    assert "Anky" in body and "Farrell" in body
+    assert completed[-1]["author_id"] == U1  # winner drives the avatar
+
+
+def test_completed_post_aggregates_multiple_losers(app, calls, monkeypatch):
+    posts = []
+    monkeypatch.setattr(svc, "post_league_activity", lambda lid, p: posts.append(p))
+    monkeypatch.setattr(svc, "resolve_users",
+                        lambda ids: {U1: "Anky", U2: "Farrell", U3: "Johnny"})
+    results = svc.propose_many(U1, LG, "ev1", "home", 1000, [U2, U3])
+    wagers = [r["wager"] for r in results]
+    for wg in wagers:
+        svc.accept(wg, wg.acceptor_id)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3, ws="home"))
+    for wg in wagers:
+        svc.settle_one(wg)
+    completed = [p for p in posts if p["event_type"] == "wager_completed"]
+    # One upserted post (same dedup_key), naming both losers.
+    assert len({p["dedup_key"] for p in completed}) == 1
+    body = completed[-1]["body"]
+    assert "Anky" in body and "Farrell" in body and "Johnny" in body
+
+
+def test_undeterminable_keeps_ready_to_settle(app, calls, monkeypatch):
+    posts = []
+    monkeypatch.setattr(svc, "post_league_activity", lambda lid, p: posts.append(p))
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    svc.settle_one(w)  # no score -> undeterminable
+    completed = [p for p in posts if p["event_type"] == "wager_completed"]
+    assert completed and completed[-1]["title"] == "A bet is ready to settle"
