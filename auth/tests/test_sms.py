@@ -1,78 +1,70 @@
-"""OTP SMS delivery (Twilio) — configuration gate + send path.
+"""OTP delivery: auth hands the code to the notifications service, and always
+falls back to logging so the login flow can't be broken by a delivery failure.
 
-These don't need the twilio package installed or a real account: the client
-builder is monkeypatched, so only the log-only path ever imports twilio.
+No network here — requests.post is monkeypatched.
 """
 import logging
 
 from app.services import service_sms
 from app.utils.config import Config
 
-
-def _set(monkeypatch, sid, token, frm):
-    monkeypatch.setattr(Config, "TWILIO_ACCOUNT_SID", sid)
-    monkeypatch.setattr(Config, "TWILIO_AUTH_TOKEN", token)
-    monkeypatch.setattr(Config, "TWILIO_FROM", frm)
+_URL = "http://notifications:8000/v1/platform/notifications"
 
 
-def test_not_configured_when_empty(monkeypatch):
-    _set(monkeypatch, "", "", "")
-    assert service_sms.provider_configured() is False
+class _Resp:
+    def __init__(self, ok, status_code=200, text=""):
+        self.ok = ok
+        self.status_code = status_code
+        self.text = text
 
 
-def test_not_configured_with_dummy_placeholders(monkeypatch):
-    # The values docker-compose ships must NOT count as configured.
-    _set(monkeypatch, "ACdummy00000000000000000000000000", "dummy_auth_token_replace_me", "+15555550100")
-    assert service_sms.provider_configured() is False
+def test_send_posts_to_notifications(monkeypatch):
+    monkeypatch.setattr(Config, "INTERNAL_NOTIFICATIONS_URL", _URL)
+    calls = {}
 
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.update(url=url, json=json, headers=headers)
+        return _Resp(True)
 
-def test_configured_with_real_looking_values(monkeypatch):
-    _set(monkeypatch, "AC" + "a" * 32, "a_real_looking_token", "+15551234567")
-    assert service_sms.provider_configured() is True
-
-
-def test_send_logs_and_skips_twilio_when_unconfigured(monkeypatch, caplog):
-    _set(monkeypatch, "", "", "")
-
-    def _boom():
-        raise AssertionError("must not build a Twilio client when unconfigured")
-
-    monkeypatch.setattr(service_sms, "_client", _boom)
-    with caplog.at_level(logging.INFO):
-        service_sms.send_otp("+15551112222", "123456")
-    assert "no provider" in caplog.text
-
-
-def test_send_calls_twilio_when_configured(monkeypatch):
-    _set(monkeypatch, "AC" + "a" * 32, "token", "+15551234567")
-    sent = {}
-
-    class FakeMessages:
-        def create(self, to, from_, body):
-            sent.update(to=to, from_=from_, body=body)
-
-    class FakeClient:
-        messages = FakeMessages()
-
-    monkeypatch.setattr(service_sms, "_client", lambda: FakeClient())
+    monkeypatch.setattr(service_sms.requests, "post", fake_post)
     service_sms.send_otp("+15551112222", "123456")
-    assert sent["to"] == "+15551112222"
-    assert sent["from_"] == "+15551234567"
-    assert "123456" in sent["body"]
+    assert calls["url"] == f"{_URL}/internal/send"
+    assert calls["json"] == {
+        "to": "+15551112222",
+        "category": "otp",
+        "template_key": "otp_code",
+        "context": {"code": "123456"},
+    }
+    assert "X-Internal-Token" in calls["headers"]
 
 
-def test_send_swallows_provider_errors(monkeypatch, caplog):
-    # A Twilio failure must not bubble up and break the login flow.
-    _set(monkeypatch, "AC" + "a" * 32, "token", "+15551234567")
+def test_falls_back_to_log_on_http_error(monkeypatch, caplog):
+    monkeypatch.setattr(Config, "INTERNAL_NOTIFICATIONS_URL", _URL)
+    monkeypatch.setattr(service_sms.requests, "post", lambda *a, **k: _Resp(False, 502, "boom"))
+    with caplog.at_level(logging.INFO):
+        service_sms.send_otp("+15551112222", "000000")
+    assert "fallback log" in caplog.text
 
-    class FakeMessages:
-        def create(self, **_):
-            raise RuntimeError("twilio down")
 
-    class FakeClient:
-        messages = FakeMessages()
+def test_falls_back_when_call_raises(monkeypatch, caplog):
+    monkeypatch.setattr(Config, "INTERNAL_NOTIFICATIONS_URL", _URL)
 
-    monkeypatch.setattr(service_sms, "_client", lambda: FakeClient())
-    with caplog.at_level(logging.ERROR):
-        service_sms.send_otp("+15551112222", "123456")  # must not raise
-    assert "auth_otp_send_failed" in caplog.text
+    def boom(*a, **k):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr(service_sms.requests, "post", boom)
+    with caplog.at_level(logging.INFO):
+        service_sms.send_otp("+15551112222", "000000")
+    assert "fallback log" in caplog.text
+
+
+def test_logs_and_skips_post_when_no_url(monkeypatch, caplog):
+    monkeypatch.setattr(Config, "INTERNAL_NOTIFICATIONS_URL", "")
+
+    def boom(*a, **k):
+        raise AssertionError("must not POST when no notifications URL is set")
+
+    monkeypatch.setattr(service_sms.requests, "post", boom)
+    with caplog.at_level(logging.INFO):
+        service_sms.send_otp("+15551112222", "000000")
+    assert "fallback log" in caplog.text

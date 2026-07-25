@@ -1,62 +1,47 @@
-"""OTP delivery over SMS.
+"""OTP delivery.
 
-Sends the login code through Twilio when the provider is configured
-(TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM). Until real credentials
-are wired in — or while they're left at their dummy placeholders — this falls
-back to logging the code, and the API also reveals it on-screen when
-AUTH_REVEAL_OTP is set (see service_auth._reveal_otp). Turn AUTH_REVEAL_OTP off
-once real SMS delivery is confirmed.
+Auth doesn't talk to an SMS provider directly — it hands the code to the
+notifications service, which renders the `otp_code` template and sends it via
+whatever provider is configured there (log / AWS / Twilio). This keeps a single
+SMS path and one place to manage templates, providers, and compliance.
+
+If the notifications call fails for any reason (service down, template not
+seeded, network) we log the code so the login flow never breaks; with
+AUTH_REVEAL_OTP on it's also returned in the API response for testing. Turn
+AUTH_REVEAL_OTP off once real delivery through notifications is confirmed.
 """
 import logging
+
+import requests
 
 from app.utils.config import Config
 
 logger = logging.getLogger(__name__)
 
-# Substrings that mark a value as a stand-in rather than a real credential, so
-# shipping dummy placeholders keeps delivery in safe log-only mode.
-_PLACEHOLDER_MARKERS = ("dummy", "xxxx", "changeme", "placeholder", "replace_me")
-
-
-def _looks_real(value: str) -> bool:
-    v = (value or "").strip()
-    if not v:
-        return False
-    low = v.lower()
-    return not any(m in low for m in _PLACEHOLDER_MARKERS)
-
-
-def provider_configured() -> bool:
-    """True only when all three Twilio settings are present and non-placeholder."""
-    return (
-        _looks_real(Config.TWILIO_ACCOUNT_SID)
-        and _looks_real(Config.TWILIO_AUTH_TOKEN)
-        and _looks_real(Config.TWILIO_FROM)
-    )
-
-
-def _client():
-    # Imported lazily so the twilio dependency is only touched when we actually
-    # send — log-only mode never needs it.
-    from twilio.rest import Client
-
-    return Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
-
 
 def send_otp(phone: str, code: str) -> None:
-    if not provider_configured():
-        # No provider (or dummy creds): log only. AUTH_REVEAL_OTP still surfaces
-        # the code in the API response for testing.
-        logger.info("auth_otp_send (no provider) phone=%s code=%s", phone, code)
-        return
-    try:
-        _client().messages.create(
-            to=phone,
-            from_=Config.TWILIO_FROM,
-            body=f"Your Waygerz verification code is {code}",
-        )
-        logger.info("auth_otp_send (twilio) phone=%s", phone)
-    except Exception:  # noqa: BLE001
-        # Never let an SMS hiccup break the login flow. Log it; with
-        # AUTH_REVEAL_OTP on the code is still returned for testing.
-        logger.exception("auth_otp_send_failed phone=%s", phone)
+    url = Config.INTERNAL_NOTIFICATIONS_URL
+    if url:
+        try:
+            resp = requests.post(
+                f"{url}/internal/send",
+                json={
+                    "to": phone,
+                    "category": "otp",
+                    "template_key": "otp_code",
+                    "context": {"code": code},
+                },
+                headers={"X-Internal-Token": Config.INTERNAL_TOKEN},
+                timeout=10,
+            )
+            if resp.ok:
+                logger.info("auth_otp_send (notifications) phone=%s", phone)
+                return
+            logger.warning(
+                "auth_otp_send notifications %s: %s", resp.status_code, resp.text[:200]
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("auth_otp_send notifications call failed phone=%s", phone)
+    # Fallback: no notifications URL configured, or the call failed. Log the
+    # code; with AUTH_REVEAL_OTP on it's still returned in the API response.
+    logger.info("auth_otp_send (fallback log) phone=%s code=%s", phone, code)

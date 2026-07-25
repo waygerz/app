@@ -89,14 +89,36 @@ services:
       SERVICE_GROUP: platform
       SERVICE_NAME: auth
       DB_SCHEMA: auth
-      # TEMPORARY: no SMS provider yet, so reveal the OTP in the API response
-      # (shown beneath the login card) for testing. While this is "true" there is
-      # NO real phone verification. Set to "false" once real SMS is wired.
+      # TEMPORARY: reveal the OTP in the API response (shown beneath the login
+      # card) for testing until real SMS delivery is confirmed. While "true"
+      # there is NO real phone verification. Set to "false" once live.
       AUTH_REVEAL_OTP: "true"
-      # SMS provider (Twilio). Dummy placeholders — the "dummy"/"replace_me"
-      # markers keep OTP delivery in log-only mode. Swap for real values (via
-      # secrets in prod) to send texts, then set AUTH_REVEAL_OTP to "false".
-      # See auth/app/services/service_sms.py.
+      # OTP is delivered by the notifications service (see auth service_sms).
+      INTERNAL_NOTIFICATIONS_URL: "http://notifications:8000/v1/platform/notifications"
+    depends_on:
+      pgsql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    restart: unless-stopped
+
+  notifications:
+    build: ./notifications
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: platform
+      SERVICE_NAME: notifications
+      DB_SCHEMA: notifications
+      SMS_BRAND_PREFIX: "Waygerz"
+      # SMS provider: "log" (default — prints, sends nothing), "aws", or
+      # "twilio". Stays on "log" with the dummy creds below; set to "twilio"
+      # once real TWILIO_* are supplied (via secrets in prod).
+      SMS_PROVIDER: "log"
       TWILIO_ACCOUNT_SID: "ACdummy00000000000000000000000000"
       TWILIO_AUTH_TOKEN: "dummy_auth_token_replace_me"
       TWILIO_FROM: "+15555550100"

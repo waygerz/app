@@ -54,12 +54,12 @@ class Config:
     AUTH_OTP_MAX_ATTEMPTS = int(os.environ.get("AUTH_OTP_MAX_ATTEMPTS", 5))
     # Short-lived "phone proven, awaiting profile" ticket for new-user signup.
     AUTH_REG_TICKET_TTL_SECONDS = int(os.environ.get("AUTH_REG_TICKET_TTL_SECONDS", 900))
-    # SMS provider (Twilio). Empty or placeholder values keep OTP delivery in
-    # log-only mode (see service_sms); set these via secrets in prod, then turn
-    # AUTH_REVEAL_OTP off. TWILIO_FROM is a Twilio number or Messaging Service SID.
-    TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
-    TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
-    TWILIO_FROM = os.environ.get("TWILIO_FROM", "")
+    # OTP is delivered by the notifications service (see service_sms). Points at
+    # its API base incl. the /v1/... prefix; the send path is appended. Empty
+    # falls back to log-only (with AUTH_REVEAL_OTP surfacing the code).
+    INTERNAL_NOTIFICATIONS_URL = os.environ.get(
+        "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
+    )
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 
     @classmethod

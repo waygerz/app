@@ -20,13 +20,18 @@ class Config:
 
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 
-    # SMS provider: "log" (default — prints, sends nothing) or "aws".
-    # Switch to "aws" only once 10DLC registration is approved (see README).
+    # SMS provider: "log" (default — prints, sends nothing), "aws", or "twilio".
+    # Switch off "log" only once the provider's number/registration is approved.
     SMS_PROVIDER = os.environ.get("SMS_PROVIDER", "log")
     AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
     # 10DLC pool / origination identity (phone pool ARN or number id).
     SMS_ORIGINATION_IDENTITY = os.environ.get("SMS_ORIGINATION_IDENTITY", "")
     SMS_BRAND_PREFIX = os.environ.get("SMS_BRAND_PREFIX", "Waygerz")
+    # Twilio (used when SMS_PROVIDER=twilio). TWILIO_FROM is a number or
+    # Messaging Service SID. Empty until real credentials are wired via secrets.
+    TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    TWILIO_FROM = os.environ.get("TWILIO_FROM", "")
 
     @classmethod
     def api_prefix(cls) -> str:

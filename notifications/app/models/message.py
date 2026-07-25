@@ -19,7 +19,9 @@ class Message(db.Model):
     id = db.Column(
         UUID(as_uuid=False), primary_key=True, server_default=db.text("gen_random_uuid()")
     )
-    user_id = db.Column(UUID(as_uuid=False), nullable=False, index=True)
+    # Nullable: transactional OTP messages go to a phone that may not be a user
+    # yet (signup), so they carry no user_id.
+    user_id = db.Column(UUID(as_uuid=False), nullable=True, index=True)
     channel = db.Column(db.String(16), nullable=False, default="sms")  # sms|email|push
     category = db.Column(db.String(32), nullable=False)  # otp|wager_alert|weekly_digest
     # idempotency for event-driven sends (e.g. "wager:{id}:accepted"); OTP carries

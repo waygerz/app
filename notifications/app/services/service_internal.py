@@ -44,8 +44,28 @@ class AwsProvider(SmsProvider):
         return resp.get("MessageId", "")
 
 
+class TwilioProvider(SmsProvider):
+    """Twilio Programmable Messaging."""
+
+    def send(self, to: str, body: str) -> str:
+        from twilio.rest import Client  # imported lazily so log/aws don't need it
+        client = Client(
+            current_app.config["TWILIO_ACCOUNT_SID"],
+            current_app.config["TWILIO_AUTH_TOKEN"],
+        )
+        msg = client.messages.create(
+            to=to, from_=current_app.config["TWILIO_FROM"], body=body
+        )
+        return msg.sid
+
+
 def get_provider() -> SmsProvider:
-    return AwsProvider() if current_app.config["SMS_PROVIDER"] == "aws" else LogProvider()
+    provider = current_app.config["SMS_PROVIDER"]
+    if provider == "aws":
+        return AwsProvider()
+    if provider == "twilio":
+        return TwilioProvider()
+    return LogProvider()
 
 
 def render(key: str, context: dict, *, locale: str = "en", channel: str = "sms") -> str:
@@ -84,16 +104,22 @@ def send(data: dict) -> tuple[dict, int]:
     context = data.get("context") or {}
     dedup_key = data.get("dedup_key")
 
-    if not (user_id and to and key):
-        return {"error": "user_id, to and template_key are required"}, 400
+    # OTP is transactional: it always sends, needs no known user (a phone may be
+    # signing up), and ignores marketing preferences.
+    transactional = category == "otp"
+    if not (to and key):
+        return {"error": "to and template_key are required"}, 400
+    if not (user_id or transactional):
+        return {"error": "user_id is required for non-transactional messages"}, 400
 
-    prefs = _prefs(user_id)
-    if prefs.opted_out:
-        return {"skipped": "opted_out"}, 200
-    if category == "weekly_digest" and not prefs.weekly_digest:
-        return {"skipped": "not_subscribed"}, 200
-    if category == "wager_alert" and not prefs.wager_alerts:
-        return {"skipped": "muted"}, 200
+    if user_id and not transactional:
+        prefs = _prefs(user_id)
+        if prefs.opted_out:
+            return {"skipped": "opted_out"}, 200
+        if category == "weekly_digest" and not prefs.weekly_digest:
+            return {"skipped": "not_subscribed"}, 200
+        if category == "wager_alert" and not prefs.wager_alerts:
+            return {"skipped": "muted"}, 200
 
     if dedup_key and Message.query.filter_by(dedup_key=dedup_key).first():
         return {"deduped": True}, 200
@@ -103,7 +129,7 @@ def send(data: dict) -> tuple[dict, int]:
     except RenderError as e:
         return {"error": str(e)}, 400
 
-    msg = Message(user_id=user_id, category=category, body=body, dedup_key=dedup_key)
+    msg = Message(user_id=user_id or None, category=category, body=body, dedup_key=dedup_key)
     db.session.add(msg)
     db.session.flush()
     try:
