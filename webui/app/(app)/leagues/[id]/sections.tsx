@@ -1578,7 +1578,6 @@ function ScheduleBetDialog({
   });
   const spread = oddsQ.data?.spread;
   const total = oddsQ.data?.overUnder;
-  const ml = oddsQ.data?.moneyline;
 
   // Reset the flow whenever a new game is opened.
   useEffect(() => {
@@ -1651,14 +1650,13 @@ function ScheduleBetDialog({
               <div>
                 <div className="flex items-center gap-1.5 pb-1.5">
                   <div className="min-w-0 flex-1" />
-                  {(['Spread', 'Total', 'Winner'] as const).map((h) => (
+                  {(['Spread', 'Total', 'SU'] as const).map((h) => (
                     <span key={h} className="w-[3.75rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-[4.75rem]">{h}</span>
                   ))}
                 </div>
                 {(['away', 'home'] as const).map((s) => {
                   const spMain = spread ? sign(s === 'away' ? -spread.line : spread.line) : undefined;
                   const spPrice = spread ? sign(s === 'away' ? spread.away : spread.home) : undefined;
-                  const mlPrice = sign(s === 'away' ? ml?.away : ml?.home);
                   // Total: away row = Over, home row = Under.
                   const ouSide: WagerSide = s === 'away' ? 'over' : 'under';
                   const ouMain = total ? `${s === 'away' ? 'O' : 'U'} ${total.total}` : undefined;
@@ -1692,9 +1690,10 @@ function ScheduleBetDialog({
                           </>
                         ) : <span className="text-muted-foreground">—</span>}
                       </button>
-                      {/* Winner (moneyline / straight up) */}
+                      {/* SU — straight up (moneyline). Friends don't lay a price,
+                          so we show "SU" instead of the sportsbook money line. */}
                       <button type="button" onClick={() => pickCell(s, 'moneyline', null)} className={cellCls(isSel(s, 'moneyline'))}>
-                        <span className="text-sm font-medium text-foreground">{mlPrice ?? 'Win'}</span>
+                        <span className="text-sm font-medium text-foreground">SU</span>
                       </button>
                     </div>
                   );
