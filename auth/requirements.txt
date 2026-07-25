@@ -8,4 +8,5 @@ redis==5.0.8
 gunicorn==22.0.0
 python-dotenv==1.0.1
 phonenumbers==8.13.45
+twilio==9.10.9
 pytest==8.3.2

@@ -93,6 +93,13 @@ services:
       # (shown beneath the login card) for testing. While this is "true" there is
       # NO real phone verification. Set to "false" once real SMS is wired.
       AUTH_REVEAL_OTP: "true"
+      # SMS provider (Twilio). Dummy placeholders — the "dummy"/"replace_me"
+      # markers keep OTP delivery in log-only mode. Swap for real values (via
+      # secrets in prod) to send texts, then set AUTH_REVEAL_OTP to "false".
+      # See auth/app/services/service_sms.py.
+      TWILIO_ACCOUNT_SID: "ACdummy00000000000000000000000000"
+      TWILIO_AUTH_TOKEN: "dummy_auth_token_replace_me"
+      TWILIO_FROM: "+15555550100"
     depends_on:
       pgsql: { condition: service_healthy }
       redis: { condition: service_healthy }
