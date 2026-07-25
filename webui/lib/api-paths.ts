@@ -9,4 +9,5 @@ export const API = {
   messaging: '/v1/social/messaging',
   media: '/v1/platform/media',
   ingestor: '/v1/platform/ingestor',
+  notifications: '/v1/platform/notifications',
 } as const;

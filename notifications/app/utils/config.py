@@ -19,6 +19,23 @@ class Config:
     }
 
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
+    # For resolving a recipient's phone from their user_id (SMS channel), so a
+    # trigger only needs to pass user_id. Base incl. the /v1/... prefix.
+    INTERNAL_AUTH_URL = os.environ.get(
+        "INTERNAL_AUTH_URL", "http://auth:8000/v1/platform/auth"
+    )
+
+    # JWT — verified locally with the shared secret so the user-facing feed
+    # endpoints read the same waygerz_access cookie every other service does.
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-change-me")
+    JWT_TOKEN_LOCATION = ["cookies", "headers"]
+    JWT_COOKIE_SECURE = os.environ.get("AUTH_COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
+    JWT_COOKIE_SAMESITE = os.environ.get("AUTH_COOKIE_SAMESITE", "Lax")
+    JWT_COOKIE_CSRF_PROTECT = False
+    JWT_ACCESS_COOKIE_NAME = os.environ.get("AUTH_COOKIE_ACCESS_NAME", "waygerz_access")
+    JWT_REFRESH_COOKIE_NAME = os.environ.get("AUTH_COOKIE_REFRESH_NAME", "waygerz_refresh")
+    JWT_COOKIE_DOMAIN = os.environ.get("AUTH_COOKIE_DOMAIN") or None
+    JWT_COOKIE_PATH = os.environ.get("AUTH_COOKIE_PATH", "/")
 
     # SMS provider: "log" (default — prints, sends nothing), "aws", or "twilio".
     # Switch off "log" only once the provider's number/registration is approved.

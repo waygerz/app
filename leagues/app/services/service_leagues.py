@@ -89,6 +89,31 @@ def _headers():
     return {"X-Internal-Token": current_app.config["INTERNAL_TOKEN"]}
 
 
+def _notify_league(user_id, template_key, title, context, *, ref_id=None, deep_link=None, dedup_key=None):
+    """Fan a league event out to a member's notifications (in-app feed + SMS).
+    Best-effort — never let a notification failure affect the league action."""
+    try:
+        base = current_app.config["NOTIFICATIONS_URL"]
+        requests.post(
+            f"{base}/internal/notify",
+            json={
+                "user_id": str(user_id),
+                "category": "league_invite",
+                "template_key": template_key,
+                "title": title,
+                "context": context,
+                "ref_type": "league",
+                "ref_id": ref_id,
+                "deep_link": deep_link,
+                "dedup_key": dedup_key,
+            },
+            headers=_headers(),
+            timeout=10,
+        )
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("league notify failed user=%s key=%s", user_id, template_key)
+
+
 def wallet_account_balances(account) -> dict:
     r = requests.post(
         f"{current_app.config['WALLET_URL']}/internal/account-balances",
@@ -1290,6 +1315,23 @@ def invite_friends(league_id, me, data):
         ))
         invited.append(uid)
     db.session.commit()
+
+    if invited:
+        inviter_name = resolve_users([me]).get(str(me)) or "A friend"
+        for uid in invited:
+            _notify_league(
+                uid,
+                "league_invite",
+                f"Invite to {league.name}",
+                {
+                    "inviter_name": inviter_name,
+                    "league": league.name,
+                    "link": "https://waygerz.com/leagues",
+                },
+                ref_id=league_id,
+                deep_link="/leagues",
+                dedup_key=f"league_invite:{league_id}:{uid}",
+            )
     return {"invited": invited}, 201
 
 

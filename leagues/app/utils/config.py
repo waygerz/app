@@ -49,6 +49,10 @@ class Config:
     FRIENDS_URL = os.environ.get("INTERNAL_FRIENDS_URL", "http://friends:8000")
     INGESTOR_URL = os.environ.get("INTERNAL_INGESTOR_URL", "http://ingestor:8000")
     CONTESTS_URL = os.environ.get("INTERNAL_CONTESTS_URL", "http://contests:8000")
+    # Notifications fan-out (in-app feed + SMS). Base incl. the /v1/... prefix.
+    NOTIFICATIONS_URL = os.environ.get(
+        "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
+    )
 
     @classmethod
     def api_prefix(cls) -> str:

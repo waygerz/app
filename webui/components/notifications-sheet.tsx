@@ -1,54 +1,25 @@
 'use client';
 
-import { useMemo, type ReactNode } from 'react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { UserAvatar } from '@/components/user-avatar';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { wagerPick, wagersApi } from '@/lib/wagers';
-import { friendsApi } from '@/lib/friends';
-import { formatCredits } from '@/lib/wallet';
+import { notificationsApi, type FeedNotification } from '@/lib/notifications';
 import { useAuth } from '@/auth/AuthContext';
 import { cn } from '@/lib/utils';
 
-type BadgeVariant =
-  | 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'outline' | 'destructive';
-
-// A left-edge accent colour per badge type, so the eye can triage the list at a
-// glance: amber = needs you, green = won, red = lost, etc.
-const ACCENT: Record<BadgeVariant, string> = {
-  primary: 'border-s-primary',
-  info: 'border-s-[var(--color-info-accent,var(--color-violet-500))]',
-  success: 'border-s-brand',
-  warning: 'border-s-[var(--color-warning-accent,var(--color-yellow-500))]',
-  destructive: 'border-s-destructive',
-  secondary: 'border-s-border',
-  outline: 'border-s-border',
+// A left-edge accent per category so the list triages at a glance.
+const ACCENT: Record<string, string> = {
+  wager_alert: 'border-s-primary',
+  league_invite: 'border-s-brand',
+  friend_request: 'border-s-[var(--color-violet-500,var(--color-primary))]',
+  weekly_digest: 'border-s-[var(--color-yellow-500,var(--color-primary))]',
 };
-
-interface Notif {
-  id: string;
-  tab: 'bets' | 'friends';
-  userId: string;
-  userName: string;
-  avatarKey?: string | null;
-  title: string;
-  sub?: string;
-  /** The pick, as a sentence ("Anky took Atlanta Braves for 10"). */
-  pick?: string;
-  time: string | null;
-  badge: { label: string; variant: BadgeVariant };
-  actions?: ReactNode;
-  actionable: boolean;
-  sortTime: number;
-}
 
 function timeAgo(iso: string | null) {
   if (!iso) return '';
@@ -67,210 +38,38 @@ function timeAgo(iso: string | null) {
 
 export function NotificationsSheet() {
   const { user } = useAuth();
-  const me = String(user?.id ?? '');
   const qc = useQueryClient();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
 
-  const wagersQ = useQuery({
-    queryKey: ['wagers-all'],
-    queryFn: () => wagersApi.all(),
+  // The unified server feed: everything that fanned out to a notification (and,
+  // where applicable, an SMS) lands here.
+  const feedQ = useQuery({
+    queryKey: ['notifications-feed'],
+    queryFn: () => notificationsApi.list(50),
     enabled: !!user,
-    staleTime: 30_000,
+    staleTime: 20_000,
+    refetchInterval: 60_000,
   });
-  const friendReqQ = useQuery({
-    queryKey: ['friend-requests'],
-    queryFn: () => friendsApi.requests(),
-    enabled: !!user,
-    staleTime: 30_000,
+  const items = feedQ.data?.notifications ?? [];
+  const unread = feedQ.data?.unread ?? 0;
+
+  const markRead = useMutation({
+    mutationFn: (ids?: string[]) => notificationsApi.markRead(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications-feed'] }),
   });
 
-  const refreshWagers = () => {
-    qc.invalidateQueries({ queryKey: ['wagers-all'] });
-    qc.invalidateQueries({ queryKey: ['wagers'] });
-  };
-  const onErr = (e: Error) => toast.error(e.message);
-  const acceptBet = useMutation({ mutationFn: (id: string) => wagersApi.accept(id), onSuccess: () => { toast.success('Bet accepted'); refreshWagers(); }, onError: onErr });
-  const declineBet = useMutation({ mutationFn: (id: string) => wagersApi.decline(id), onSuccess: () => { toast.success('Bet declined'); refreshWagers(); }, onError: onErr });
-  const cancelBet = useMutation({ mutationFn: (id: string) => wagersApi.cancel(id), onSuccess: () => { toast.success('Bet cancelled'); refreshWagers(); }, onError: onErr });
-  const approveCancel = useMutation({ mutationFn: (id: string) => wagersApi.approveCancel(id), onSuccess: () => { toast.success('Bet cancelled — both stakes refunded'); refreshWagers(); }, onError: onErr });
-  const rejectCancel = useMutation({ mutationFn: (id: string) => wagersApi.rejectCancel(id), onSuccess: () => { toast.success('Cancel request declined — the bet stands'); refreshWagers(); }, onError: onErr });
-  const confirmBet = useMutation({ mutationFn: (id: string) => wagersApi.confirm(id), onSuccess: () => { toast.success('Result confirmed — you got paid'); refreshWagers(); }, onError: onErr });
-  const acceptFriend = useMutation({ mutationFn: (id: number) => friendsApi.accept(id), onSuccess: () => { toast.success('Friend added'); qc.invalidateQueries({ queryKey: ['friend-requests'] }); qc.invalidateQueries({ queryKey: ['friends'] }); }, onError: onErr });
-  const declineFriend = useMutation({ mutationFn: (id: number) => friendsApi.decline(id), onSuccess: () => { toast.success('Request declined'); qc.invalidateQueries({ queryKey: ['friend-requests'] }); }, onError: onErr });
-
-  const notifs = useMemo<Notif[]>(() => {
-    const out: Notif[] = [];
-
-    for (const w of wagersQ.data ?? []) {
-      const iAmProposer = String(w.proposer_id) === me;
-      const other = iAmProposer ? w.acceptor_name : w.proposer_name;
-      const otherId = iAmProposer ? w.acceptor_id : w.proposer_id;
-      const otherAvatar = iAmProposer ? w.acceptor_avatar_key : w.proposer_avatar_key;
-      const amount = formatCredits(w.amount_cents);
-      // Line 2 is the matchup; line 3 attributes the pick to whoever proposed it
-      // ("Anky took Atlanta Braves -1.5 for 10"), reading from the proposer's
-      // side and market regardless of who's viewing.
-      const proposerPick = wagerPick(w, w.proposer_side);
-      const sub = w.event_name;
-      const pick = iAmProposer
-        ? `You took ${proposerPick} for ${amount}`
-        : `${w.proposer_name} took ${proposerPick} for ${amount}`;
-      const time = w.settled_at ?? w.created_at;
-      let n: Omit<Notif, 'id' | 'tab' | 'userId' | 'userName' | 'sortTime'> | null = null;
-
-      if (w.status === 'open' && !iAmProposer) {
-        n = {
-          title: `${w.proposer_name} challenged you`, sub, time, actionable: true,
-          badge: { label: 'Pending', variant: 'warning' },
-          actions: (
-            <>
-              <Button size="sm" disabled={acceptBet.isPending} onClick={() => acceptBet.mutate(w.id)}>Accept</Button>
-              <Button size="sm" variant="outline" disabled={declineBet.isPending} onClick={() => declineBet.mutate(w.id)}>Decline</Button>
-            </>
-          ),
-        };
-      } else if (w.status === 'open' && iAmProposer) {
-        n = {
-          title: `You challenged ${w.acceptor_name}`, sub, time, actionable: false,
-          badge: { label: 'Awaiting', variant: 'warning' },
-          actions: <Button size="sm" variant="outline" disabled={cancelBet.isPending} onClick={() => cancelBet.mutate(w.id)}>Cancel</Button>,
-        };
-      } else if (w.status === 'accepted' && w.cancel_requested_by && String(w.cancel_requested_by) !== me) {
-        // The other side asked to call the bet off — you approve or reject.
-        n = {
-          title: `${other} wants to cancel`, sub, time: w.cancel_requested_at ?? time, actionable: true,
-          badge: { label: 'Cancel?', variant: 'warning' },
-          actions: (
-            <>
-              <Button size="sm" disabled={approveCancel.isPending} onClick={() => approveCancel.mutate(w.id)}>Approve cancel</Button>
-              <Button size="sm" variant="ghost" disabled={rejectCancel.isPending} onClick={() => rejectCancel.mutate(w.id)}>Reject</Button>
-            </>
-          ),
-        };
-      } else if (w.status === 'accepted' && w.cancel_requested_by && String(w.cancel_requested_by) === me) {
-        n = { title: `Cancel requested vs ${other}`, sub, time: w.cancel_requested_at ?? time, actionable: false, badge: { label: 'Awaiting', variant: 'warning' } };
-      } else if (w.status === 'accepted') {
-        n = { title: `Bet is live vs ${other}`, sub, time, actionable: false, badge: { label: 'Active', variant: 'info' } };
-      } else if (w.status === 'completed') {
-        // Only the score-decided winner acts (claims the pot); the loser just
-        // sees the result.
-        const iWon = String(w.winner_user_id ?? '') === me;
-        n = iWon
-          ? {
-              title: `You won vs ${other} — confirm to get paid`, sub, time: w.completed_at ?? time, actionable: true,
-              badge: { label: 'You won', variant: 'success' },
-              actions: (
-                <Button size="sm" disabled={confirmBet.isPending} onClick={() => confirmBet.mutate(w.id)}>Confirm</Button>
-              ),
-            }
-          : {
-              title: `You lost vs ${other}`, sub, time: w.completed_at ?? time, actionable: false,
-              badge: { label: 'You lost', variant: 'destructive' },
-            };
-      } else if (w.status === 'settled') {
-        const won = String(w.winner_user_id ?? '') === me;
-        n = {
-          title: `You ${won ? 'won' : 'lost'} your bet vs ${other}`, sub, time, actionable: false,
-          badge: won ? { label: 'Won', variant: 'success' } : { label: 'Lost', variant: 'destructive' },
-        };
-      } else if (w.status === 'refunded') {
-        n = { title: `Bet pushed vs ${other}`, sub, time, actionable: false, badge: { label: 'Push', variant: 'secondary' } };
-      } else if (w.status === 'declined') {
-        n = {
-          title: iAmProposer ? `${w.acceptor_name} declined your bet` : `You declined ${w.proposer_name}`,
-          sub, time, actionable: false, badge: { label: 'Declined', variant: 'secondary' },
-        };
-      } else if (w.status === 'cancelled') {
-        n = {
-          title: iAmProposer ? `You cancelled your bet` : `${w.proposer_name} cancelled a bet`,
-          sub, time, actionable: false, badge: { label: 'Cancelled', variant: 'secondary' },
-        };
-      }
-      if (n) {
-        out.push({
-          ...n,
-          pick,
-          id: `wager:${w.id}:${w.status}`,
-          tab: 'bets',
-          userId: otherId,
-          userName: other,
-          avatarKey: otherAvatar,
-          sortTime: new Date(time ?? 0).getTime() || 0,
-        });
-      }
+  // Opening an item marks it read and jumps to where the live action lives.
+  const openItem = (n: FeedNotification) => {
+    if (!n.read) markRead.mutate([n.id]);
+    if (n.deep_link) {
+      setOpen(false);
+      router.push(n.deep_link);
     }
-
-    for (const fr of friendReqQ.data?.incoming ?? []) {
-      out.push({
-        id: `friendreq:${fr.id}`,
-        tab: 'friends',
-        userId: String(fr.user_id),
-        userName: fr.display_name,
-        avatarKey: fr.avatar_key,
-        title: `${fr.display_name} sent you a friend request`,
-        time: null,
-        actionable: true,
-        badge: { label: 'Friend request', variant: 'primary' }, sortTime: Date.now(),
-        actions: (
-          <>
-            <Button size="sm" disabled={acceptFriend.isPending} onClick={() => acceptFriend.mutate(fr.id)}>Accept</Button>
-            <Button size="sm" variant="outline" disabled={declineFriend.isPending} onClick={() => declineFriend.mutate(fr.id)}>Decline</Button>
-          </>
-        ),
-      });
-    }
-
-    // Actionable items first, then most-recent.
-    out.sort((a, b) => Number(b.actionable) - Number(a.actionable) || b.sortTime - a.sortTime);
-    return out;
-  }, [wagersQ.data, friendReqQ.data, me, acceptBet, declineBet, cancelBet, acceptFriend, declineFriend]);
-
-  const actionableCount = notifs.filter((n) => n.actionable).length;
-  const loading = wagersQ.isLoading || friendReqQ.isLoading;
-
-  const lists: Record<'all' | 'bets' | 'friends', Notif[]> = {
-    all: notifs,
-    bets: notifs.filter((n) => n.tab === 'bets'),
-    friends: notifs.filter((n) => n.tab === 'friends'),
   };
-
-  function renderList(items: Notif[], emptyText: string) {
-    if (loading) return <p className="px-4 py-10 text-center text-sm text-muted-foreground">Loading…</p>;
-    if (items.length === 0) return <p className="px-4 py-10 text-center text-sm text-muted-foreground">{emptyText}</p>;
-    return (
-      <div className="flex flex-col">
-        {items.map((n) => (
-          <div
-            key={n.id}
-            className={cn(
-              'flex gap-3 border-s-2 border-b border-b-border px-4 py-3 transition-colors',
-              ACCENT[n.badge.variant] ?? 'border-s-border',
-              n.actionable && 'bg-primary/[0.04]',
-            )}
-          >
-            <UserAvatar
-              userId={n.userId}
-              name={n.userName}
-              imageUrl={n.avatarKey}
-              className="size-10 shrink-0"
-            />
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="text-sm text-foreground">{n.title}</div>
-              {n.sub && <div className="truncate text-xs text-muted-foreground">{n.sub}</div>}
-              {n.pick && <div className="truncate text-xs text-muted-foreground">{n.pick}</div>}
-              <div className="flex items-center gap-2 pt-0.5">
-                <Badge size="sm" appearance="light" variant={n.badge.variant}>{n.badge.label}</Badge>
-                {n.time && <span className="text-[11px] text-muted-foreground">{timeAgo(n.time)}</span>}
-              </div>
-              {n.actions && <div className="flex gap-2 pt-1.5">{n.actions}</div>}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
 
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button
           variant="ghost"
@@ -279,32 +78,68 @@ export function NotificationsSheet() {
           aria-label="Notifications"
         >
           <Bell className="size-5" />
-          {actionableCount > 0 && (
+          {unread > 0 && (
             <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-white">
-              {actionableCount > 9 ? '9+' : actionableCount}
+              {unread > 9 ? '9+' : unread}
             </span>
           )}
         </Button>
       </SheetTrigger>
-      {/* w-full: full width on mobile (overrides the sheet's default w-3/4);
-          sm:max-w-sm from the variant still caps it narrow on desktop. */}
+      {/* w-full on mobile; the variant's sm:max-w-sm keeps it narrow on desktop. */}
       <SheetContent side="right" className="w-full gap-0 p-0">
-        <SheetHeader className="border-b border-border p-4">
+        <SheetHeader className="flex-row items-center justify-between gap-2 border-b border-border p-4">
           <SheetTitle>Notifications</SheetTitle>
+          {unread > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={markRead.isPending}
+              onClick={() => markRead.mutate(undefined)}
+            >
+              Mark all read
+            </Button>
+          )}
         </SheetHeader>
         <SheetBody className="p-0">
-          <Tabs defaultValue="all" className="w-full">
-            <TabsList variant="button" shape="pill" size="sm" className="mx-4 mt-2 gap-1.5">
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="bets">Bets</TabsTrigger>
-              <TabsTrigger value="friends">Friends</TabsTrigger>
-            </TabsList>
-            <ScrollArea className="h-[calc(100vh-8.5rem)]">
-              <TabsContent value="all" className="mt-0">{renderList(lists.all, 'Nothing here yet.')}</TabsContent>
-              <TabsContent value="bets" className="mt-0">{renderList(lists.bets, 'No bets yet.')}</TabsContent>
-              <TabsContent value="friends" className="mt-0">{renderList(lists.friends, 'No friend requests.')}</TabsContent>
-            </ScrollArea>
-          </Tabs>
+          <ScrollArea className="h-[calc(100vh-4.5rem)]">
+            {feedQ.isLoading ? (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : items.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                You&apos;re all caught up.
+              </p>
+            ) : (
+              <div className="flex flex-col">
+                {items.map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => openItem(n)}
+                    className={cn(
+                      'flex items-start gap-2.5 border-s-2 border-b border-b-border px-4 py-3 text-left transition-colors hover:bg-muted/40',
+                      ACCENT[n.category] ?? 'border-s-border',
+                      !n.read && 'bg-primary/[0.04]',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'mt-1.5 size-2 shrink-0 rounded-full',
+                        n.read ? 'bg-transparent' : 'bg-primary',
+                      )}
+                      aria-hidden
+                    />
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <div className={cn('text-sm text-foreground', !n.read && 'font-medium')}>{n.title}</div>
+                      {n.body && n.body !== n.title && (
+                        <div className="text-xs text-muted-foreground">{n.body}</div>
+                      )}
+                      <span className="text-[11px] text-muted-foreground">{timeAgo(n.created_at)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
         </SheetBody>
       </SheetContent>
     </Sheet>

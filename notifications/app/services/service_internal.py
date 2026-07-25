@@ -1,15 +1,38 @@
 """Internal notifications: render, send, preferences (service-to-service)."""
+import logging
 import re
 
+import requests
 from flask import current_app
 
 from app.extensions import db
 from app.models.message import FAILED, SENT, Message
+from app.models.notification import Notification
 from app.models.preference import NotificationPreference
 from app.models.template import NotificationTemplate
 from app.utils.config import Config
 
 _VAR = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+logger = logging.getLogger(__name__)
+
+
+def _resolve_phone(user_id: str):
+    """Look a recipient's phone up from auth so triggers only pass user_id."""
+    try:
+        base = current_app.config["INTERNAL_AUTH_URL"]
+        resp = requests.post(
+            f"{base}/internal/users",
+            json={"ids": [user_id]},
+            headers={"X-Internal-Token": current_app.config["INTERNAL_TOKEN"]},
+            timeout=10,
+        )
+        if resp.ok:
+            users = resp.json().get("users") or []
+            if users:
+                return users[0].get("phone")
+    except Exception:  # noqa: BLE001
+        logger.exception("notify phone lookup failed user_id=%s", user_id)
+    return None
 
 
 class RenderError(ValueError):
@@ -141,6 +164,82 @@ def send(data: dict) -> tuple[dict, int]:
         return {"error": f"send failed: {exc}", "message": msg.to_dict()}, 502
     db.session.commit()
     return {"message": msg.to_dict()}, 200
+
+
+def notify(data: dict) -> tuple[dict, int]:
+    """One trigger, fanned out to the in-app feed and (optionally) SMS. Body:
+      { user_id, category, title, template_key?, context{}, to?,
+        channels? (default ["inapp","sms"]), ref_type?, ref_id?, deep_link?,
+        dedup_key? }
+
+    The template renders the shared body (used for both the feed row and the
+    text). The feed row is the app's notifications sheet; SMS reuses send() so
+    it keeps the same prefs, dedup and delivery. A fully opted-out user gets
+    neither. Returns what happened per channel.
+    """
+    user_id = str(data.get("user_id", ""))
+    category = data.get("category", "")
+    title = data.get("title", "")
+    key = data.get("template_key", "")
+    context = data.get("context") or {}
+    channels = data.get("channels") or ["inapp", "sms"]
+    to = data.get("to")
+    dedup_key = data.get("dedup_key")
+
+    if not (user_id and category and (title or key)):
+        return {"error": "user_id, category and a title or template_key are required"}, 400
+
+    # Shared body: render the template if given, else fall back to the title.
+    try:
+        body = render(key, context) if key else title
+    except RenderError as e:
+        return {"error": str(e)}, 400
+
+    prefs = _prefs(user_id)
+    result: dict = {}
+
+    # In-app feed. Honors a full opt-out, but not per-category mutes — the bell
+    # should still reflect activity unless the user turned everything off.
+    if "inapp" in channels:
+        if prefs.opted_out:
+            result["inapp"] = "opted_out"
+        elif dedup_key and Notification.query.filter_by(dedup_key=dedup_key).first():
+            result["inapp"] = "deduped"
+        else:
+            n = Notification(
+                user_id=user_id,
+                category=category,
+                title=title or body,
+                body=body,
+                ref_type=data.get("ref_type"),
+                ref_id=data.get("ref_id"),
+                deep_link=data.get("deep_link"),
+                dedup_key=dedup_key,
+            )
+            db.session.add(n)
+            db.session.commit()
+            result["inapp"] = n.id
+
+    # SMS via the existing pipeline (prefs + dedup + provider). Needs a template
+    # to render and a phone — resolved from the recipient's user_id when the
+    # caller didn't pass one. A distinct dedup suffix keeps it independent of the
+    # feed row's dedup.
+    if "sms" in channels and key and not to:
+        to = _resolve_phone(user_id)
+    if "sms" in channels and to and key:
+        sms_body, _ = send(
+            {
+                "user_id": user_id,
+                "to": to,
+                "category": category,
+                "template_key": key,
+                "context": context,
+                "dedup_key": f"{dedup_key}:sms" if dedup_key else None,
+            }
+        )
+        result["sms"] = sms_body
+
+    return {"result": result}, 200
 
 
 def set_preferences(data: dict) -> tuple[dict, int]:

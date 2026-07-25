@@ -8,6 +8,11 @@ def send():
     return jsonify(body), status
 
 
+def notify():
+    body, status = svc.notify(request.get_json(silent=True) or {})
+    return jsonify(body), status
+
+
 def set_preferences():
     body, status = svc.set_preferences(request.get_json(silent=True) or {})
     return jsonify(body), status

@@ -12,6 +12,12 @@ def send():
     return ctrl.send()
 
 
+@notifications_internal_bp.post("/notify")
+@internal_only
+def notify():
+    return ctrl.notify()
+
+
 @notifications_internal_bp.post("/preferences")
 @internal_only
 def set_preferences():

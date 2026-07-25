@@ -53,6 +53,11 @@ class Config:
     WALLET_URL = os.environ.get("INTERNAL_WALLET_URL", "http://wallet:8000")
     INGESTOR_URL = os.environ.get("INTERNAL_INGESTOR_URL", "http://ingestor:8000")
     LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000")
+    # Notifications fan-out (in-app feed + SMS). Base incl. the /v1/... prefix;
+    # the /internal/notify path is appended.
+    NOTIFICATIONS_URL = os.environ.get(
+        "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
+    )
 
     @classmethod
     def api_prefix(cls) -> str:

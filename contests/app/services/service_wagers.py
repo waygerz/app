@@ -162,6 +162,42 @@ def _account(league_id):
     return f"league:{league_id}"
 
 
+def _name(user_id):
+    return resolve_users([user_id]).get(str(user_id)) or "Someone"
+
+
+def _notify(user_id, template_key, title, context, *, ref_id=None, deep_link=None, dedup_key=None):
+    """Fan a wager event out to one member's notifications (in-app feed + SMS).
+
+    Best-effort — a notification failure must never affect the bet itself, so
+    everything is wrapped and swallowed.
+    """
+    try:
+        base = current_app.config["NOTIFICATIONS_URL"]
+        requests.post(
+            f"{base}/internal/notify",
+            json={
+                "user_id": str(user_id),
+                "category": "wager_alert",
+                "template_key": template_key,
+                "title": title,
+                "context": context,
+                "ref_type": "wager",
+                "ref_id": ref_id,
+                "deep_link": deep_link,
+                "dedup_key": dedup_key,
+            },
+            headers=_itoken(),
+            timeout=10,
+        )
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("wager notify failed user=%s key=%s", user_id, template_key)
+
+
+def _matchup(wager):
+    return wager.event_name or f"{wager.away_team} at {wager.home_team}"
+
+
 def _validate_context(league_id, proposer_id, amount):
     """Resolve + check the league context for a new bet. Returns the context."""
     ctx = league_context(league_id)
@@ -281,6 +317,21 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
         db.session.rollback()
         raise
     db.session.commit()
+
+    _notify(
+        acceptor_id,
+        "wager_proposed",
+        "New bet challenge",
+        {
+            "from_name": _name(proposer_id),
+            "amount": _format_stake(amount),
+            "matchup": _matchup(w),
+            "league": w.league or "your league",
+        },
+        ref_id=w.id,
+        deep_link="/bets/pending",
+        dedup_key=f"wager_proposed:{w.id}",
+    )
     return w
 
 
@@ -376,6 +427,19 @@ def accept(wager, user_id):
     wager.status = ACCEPTED
     db.session.commit()
     _post_accepted_activity(wager)
+    _notify(
+        wager.proposer_id,
+        "wager_accepted",
+        "Bet accepted",
+        {
+            "other_name": _name(user_id),
+            "matchup": _matchup(wager),
+            "league": wager.league or "your league",
+        },
+        ref_id=wager.id,
+        deep_link=f"/leagues/{wager.league_id}/play",
+        dedup_key=f"wager_accepted:{wager.id}",
+    )
     return wager
 
 
@@ -623,7 +687,29 @@ def settle_one(wager):
             wager.winner_user_id = _outcome_winner_id(wager, outcome)
             db.session.commit()
             _post_completed_activity(wager)
+            _notify_settled(wager)
     return wager
+
+
+def _notify_settled(wager):
+    """Tell both members the game finished: winner (claim) and loser."""
+    winner = wager.winner_user_id
+    if not winner:
+        return
+    loser = wager.acceptor_id if winner == wager.proposer_id else wager.proposer_id
+    matchup, league = _matchup(wager), (wager.league or "your league")
+    _notify(
+        winner, "wager_settled_win", "You won!",
+        {"amount": _format_stake(wager.amount_cents), "matchup": matchup, "league": league},
+        ref_id=wager.id, deep_link="/bets/active",
+        dedup_key=f"wager_settled:{wager.id}:{winner}",
+    )
+    _notify(
+        loser, "wager_settled_loss", "Tough luck",
+        {"matchup": matchup, "league": league},
+        ref_id=wager.id, deep_link="/bets/closed",
+        dedup_key=f"wager_settled:{wager.id}:{loser}",
+    )
 
 
 # Trash-talk lines for a decided bet. {W} = winner(s), {L} = loser(s). Picked

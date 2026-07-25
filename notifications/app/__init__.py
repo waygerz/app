@@ -2,7 +2,7 @@ from flask import Flask
 from sqlalchemy import text
 
 from app.utils.config import Config
-from app.extensions import cors, db, migrate
+from app.extensions import cors, db, jwt, migrate
 
 
 def create_app(config_class=Config):
@@ -11,6 +11,7 @@ def create_app(config_class=Config):
 
     db.init_app(app)
     migrate.init_app(app, db)
+    jwt.init_app(app)
     cors.init_app(app, resources={r"/*": {"origins": "*"}})
 
     from app import models  # noqa: F401
