@@ -81,10 +81,22 @@ function CenterCard({ children }: { children: ReactNode }) {
 
 // Scheduled games restricted to a league's own sport-leagues (so an NBA league
 // never shows college-football games). Pass the league's sport_league_ids.
+//
+// Fetch each sport-league's OWN soonest games and merge, rather than one
+// combined call: a single call caps at 50 events total, so an in-season daily
+// sport (MLB has a game every day) fills all 50 slots and crowds out sports
+// whose next game is weeks away (NFL opens in August, NHL in September). That
+// left their tabs empty even though the schedule was there. Per-sport fetches
+// guarantee every configured sport gets its own upcoming list.
 function useScheduled(sportLeagueIds: string[]) {
   return useQuery({
     queryKey: ['schedule', [...sportLeagueIds].sort()],
-    queryFn: () => fetchUpcomingEvents(50, sportLeagueIds),
+    queryFn: async () => {
+      const lists = await Promise.all(
+        sportLeagueIds.map((id) => fetchUpcomingEvents(50, [id])),
+      );
+      return lists.flat();
+    },
     enabled: sportLeagueIds.length > 0,
   });
 }
