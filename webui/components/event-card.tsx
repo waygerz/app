@@ -298,7 +298,6 @@ function ScheduleGameRow({ ev, onSelect }: { ev: SportEvent; onSelect?: () => vo
   const o = ev.odds;
   const sp = o?.spread;
   const ou = o?.overUnder;
-  const ml = o?.moneyline;
   // Each column is a pair of [main, price] cells (away then home); a missing
   // market falls back to the placeholder "—" cell.
   const cols: { away: [string?, string?]; home: [string?, string?] }[] = [
@@ -310,9 +309,9 @@ function ScheduleGameRow({ ev, onSelect }: { ev: SportEvent; onSelect?: () => vo
       away: ou ? [`O ${ou.total}`, fmtSigned(ou.over)] : [undefined, undefined],
       home: ou ? [`U ${ou.total}`, fmtSigned(ou.under)] : [undefined, undefined],
     },
-    { // Winner (moneyline) — price only
-      away: [undefined, fmtSigned(ml?.away)],
-      home: [undefined, fmtSigned(ml?.home)],
+    { // Winner — straight up: friends pick a side, no money line
+      away: ['SU', undefined],
+      home: ['SU', undefined],
     },
   ];
 
