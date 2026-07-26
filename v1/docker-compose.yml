@@ -31,8 +31,9 @@ x-app-db: &app-db
 #   ───────────────────
 #   sum limits  ~2020M
 #
-# Run all compose commands from this directory (app/). Deploy scripts cd here
-# automatically: bash _scripts/deploy.sh from the repo root.
+# This compose file and every build context live under v1/. Run all compose
+# commands from this directory (v1/); build contexts are relative to it
+# (./auth, ./webui, …) and .env is expected alongside it (v1/.env).
 
 services:
   # ---- Infra ----------------------------------------------------------------

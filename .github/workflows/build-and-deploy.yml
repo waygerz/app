@@ -104,16 +104,18 @@ jobs:
         run: |
           set -euo pipefail
           SVC="${{ matrix.service }}"
-          echo "CTX=${SVC}" >> "$GITHUB_OUTPUT"
+          # Service directories live under v1/ (repo root holds only compose +
+          # docs). ECR repo + ECS service names are unversioned — just ${SVC}.
+          echo "CTX=v1/${SVC}" >> "$GITHUB_OUTPUT"
           echo "REPO=waygerz/${SVC}" >> "$GITHUB_OUTPUT"
           echo "ECS_SERVICE=${SVC}" >> "$GITHUB_OUTPUT"
           # webui is the Next.js standalone app: docker/Dockerfile + baked API
           # base ("" so the browser calls /v1/... directly, matching ALB rules).
           if [ "${SVC}" = "webui" ]; then
-            echo "DOCKERFILE=webui/docker/Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "DOCKERFILE=v1/webui/docker/Dockerfile" >> "$GITHUB_OUTPUT"
             echo "BUILD_ARGS=NEXT_PUBLIC_API_URL=" >> "$GITHUB_OUTPUT"
           else
-            echo "DOCKERFILE=${SVC}/Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "DOCKERFILE=v1/${SVC}/Dockerfile" >> "$GITHUB_OUTPUT"
             echo "BUILD_ARGS=" >> "$GITHUB_OUTPUT"
           fi
 
