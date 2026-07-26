@@ -110,6 +110,30 @@ def test_cannot_bet_self(app, calls):
         svc.propose(U1, LG, "ev1", "home", 5000, U1)
 
 
+def test_propose_allows_zero_stake_bragging_rights(app, calls, monkeypatch):
+    # A $0 "bragging rights" wager is valid and bypasses the league minimum —
+    # no money is on the line.
+    monkeypatch.setattr(svc, "league_context", lambda lid: {
+        "league_id": lid, "league_type": "head_to_head", "status": "active",
+        "account": f"league:{lid}", "period_status": "open", "rules": {},
+        "sport_league_ids": [], "min_wager_cents": 10000, "max_wager_cents": None,
+    })
+    w = svc.propose(U1, LG, "ev1", "home", 0, U2)
+    assert w.amount_cents == 0
+
+
+def test_propose_rejects_negative_amount(app, calls):
+    with pytest.raises(svc.WagerError):
+        svc.propose(U1, LG, "ev1", "home", -100, U2)
+
+
+def test_wallet_op_skips_zero_stake(app):
+    # Production guard: a zero (or falsy) amount never hits the wallet service,
+    # so holds/payouts/refunds on a bragging-rights wager are all no-ops.
+    assert svc._wallet_op("hold", "league:x", U1, 0, "ref") == {"skipped": "zero_stake"}
+    assert svc._wallet_op("payout", "league:x", U1, 0, "ref") == {"skipped": "zero_stake"}
+
+
 def test_propose_rejects_non_scheduled_event(app, calls, monkeypatch):
     monkeypatch.setattr(
         svc, "get_event", lambda eid: {"status": "final", "name": "x",

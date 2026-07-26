@@ -64,7 +64,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock } from 'lucide-react';
+import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import { dispatchOpenChat } from '@/lib/open-chat';
@@ -415,6 +415,77 @@ const STATE = {
 
 const pickBtn = (selected: boolean) =>
   `rounded-lg border text-sm transition-colors ${selected ? STATE.selected : STATE.idle}`;
+
+// Amount step: quick-pick stake chips. The first chip is a beer — a $0 "bragging
+// rights" wager (no money, just pride and a beer for the loser 🍺), which the
+// backend accepts as valid, skipping the wallet and the league min/max. Then
+// dollar presets, and a "Custom" chip that reveals a free-type field for any
+// other amount. Replaces the old always-on amount input.
+const STAKE_PRESETS = [5, 10, 25, 50];
+function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) => void }) {
+  const val = Number(credits);
+  const brag = credits.trim() !== '' && val === 0;
+  const isPreset = STAKE_PRESETS.includes(val);
+  const [customOpen, setCustomOpen] = useState(false);
+  // Custom is active when the chip was tapped, or when the current stake is a
+  // real amount that isn't the beer or a preset (e.g. reopening an edited bet).
+  const custom = customOpen || (credits.trim() !== '' && !brag && !isPreset);
+  const chip = (on: boolean) =>
+    cn('inline-flex items-center justify-center rounded-full border font-semibold tabular-nums transition-colors',
+      on ? STATE.selected : STATE.idle);
+  const pick = (v: string) => { setCustomOpen(false); onPick(v); };
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>Amount</Label>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          aria-pressed={brag}
+          aria-label="Bragging rights — $0, loser buys the beer"
+          title="Bragging rights — $0"
+          onClick={() => pick('0')}
+          className={cn(chip(brag), 'px-3 py-2')}
+        >
+          <Beer aria-hidden className="size-4" />
+        </button>
+        {STAKE_PRESETS.map((amt) => {
+          const on = !custom && val === amt;
+          return (
+            <button
+              key={amt}
+              type="button"
+              aria-pressed={on}
+              onClick={() => pick(String(amt))}
+              className={cn(chip(on), 'px-4 py-2 text-sm')}
+            >
+              ${amt}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-pressed={custom}
+          onClick={() => { setCustomOpen(true); onPick(''); }}
+          className={cn(chip(custom), 'px-4 py-2 text-sm')}
+        >
+          Custom
+        </button>
+      </div>
+      {custom && (
+        <Input
+          type="number"
+          min={1}
+          inputMode="numeric"
+          autoFocus
+          placeholder="Enter amount ($)"
+          value={credits}
+          onChange={(e) => onPick(e.target.value)}
+          className="max-w-40"
+        />
+      )}
+    </div>
+  );
+}
 
 function wagerStatusBadge(w: Wager, me?: string) {
   if (w.status === 'open' && w.acceptor_id === me) {
@@ -1619,7 +1690,7 @@ function ScheduleBetDialog({
   const teamName = (s: 'home' | 'away') => (s === 'away' ? event.away_team : event.home_team);
   const teamLogo = (s: 'home' | 'away') => (s === 'away' ? event.away_logo : event.home_logo);
   const teamAbbr = (s: 'home' | 'away') => (s === 'away' ? event.away_abbr : event.home_abbr);
-  const configReady = picked && Number(credits) > 0;
+  const configReady = picked && credits.trim() !== '' && Number(credits) >= 0;
   const canSubmit = selected.length > 0 && configReady;
   const sign = (n?: number) => (n === undefined || n === null ? undefined : n > 0 ? `+${n}` : `${n}`);
   const isSel = (s: WagerSide, bt: BetType) => picked && side === s && betType === bt;
@@ -1700,10 +1771,7 @@ function ScheduleBetDialog({
                 })}
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <Label>Amount ($)</Label>
-                <Input type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} className="max-w-40" />
-              </div>
+              <StakeChips credits={credits} onPick={setCredits} />
 
               <Button className="w-full" disabled={!configReady} onClick={() => setStep('members')}>
                 {pickLabel()}
@@ -1830,7 +1898,7 @@ function MatchupBetDialog({
   const distinct =
     myPick.trim() !== '' && theirPick.trim() !== '' &&
     myPick.trim().toLowerCase() !== theirPick.trim().toLowerCase();
-  const configReady = distinct && Number(credits) > 0;
+  const configReady = distinct && credits.trim() !== '' && Number(credits) >= 0;
   const canSubmit = selected.length > 0 && configReady;
 
   return (
@@ -1874,10 +1942,7 @@ function MatchupBetDialog({
                   </div>
                 </>
               )}
-              <div className="flex items-center justify-between gap-3">
-                <Label>Amount ($)</Label>
-                <Input type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} className="max-w-40" />
-              </div>
+              <StakeChips credits={credits} onPick={setCredits} />
               <Button className="w-full self-stretch sm:w-auto sm:self-end" disabled={!configReady} onClick={() => setStep('members')}>Next</Button>
             </>
           ) : (

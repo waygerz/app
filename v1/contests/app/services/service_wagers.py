@@ -107,6 +107,11 @@ def post_league_activity(league_id, payload):
 
 
 def _wallet_op(op, account, user_id, amount_cents, ref):
+    # A $0 "bragging rights" wager stakes no money, so every wallet op — hold on
+    # propose/accept, payout on settle, refund on cancel/void — is a no-op. Short
+    # -circuit here so no call site has to special-case the zero-stake path.
+    if not amount_cents or int(amount_cents) <= 0:
+        return {"skipped": "zero_stake"}
     base = current_app.config["WALLET_URL"]
     resp = requests.post(
         f"{base}/internal/{op}",
@@ -209,13 +214,16 @@ def _validate_context(league_id, proposer_id, amount):
         raise WagerError("this league isn't active yet")
     if ctx.get("period_status") != "open":
         raise WagerError("betting is closed for this period")
-    if amount <= 0:
-        raise WagerError("amount must be positive")
-    minw, maxw = ctx.get("min_wager_cents"), ctx.get("max_wager_cents")
-    if minw and amount < minw:
-        raise WagerError("amount is below the league minimum")
-    if maxw and amount > maxw:
-        raise WagerError("amount is above the league maximum")
+    if amount < 0:
+        raise WagerError("amount can't be negative")
+    # $0 is a valid "bragging rights" wager — no money changes hands, so the
+    # league's min/max stake bounds don't apply. Enforce them only for real money.
+    if amount > 0:
+        minw, maxw = ctx.get("min_wager_cents"), ctx.get("max_wager_cents")
+        if minw and amount < minw:
+            raise WagerError("amount is below the league minimum")
+        if maxw and amount > maxw:
+            raise WagerError("amount is above the league maximum")
     rules = ctx.get("rules") or {}
     if rules.get("who_can_propose") == "commissioner" and proposer_id != ctx.get("commissioner_id"):
         raise WagerError("only the commissioner can propose bets in this league")
