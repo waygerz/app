@@ -38,6 +38,10 @@ STARTER_TEMPLATES = [
      "Tough luck — you lost your bet on {{matchup}} ({{league}})."),
     ("league_invite", "wager_alert",
      "{{inviter_name}} invited you to {{league}} on Waygerz. Join: {{link}}"),
+    ("friend_request", "friend_request",
+     "{{from_name}} sent you a friend request on Waygerz. Open the app to accept."),
+    ("friend_accepted", "friend_request",
+     "{{from_name}} accepted your friend request on Waygerz."),
     ("weekly_digest", "weekly_digest",
      "{{league}} {{period}}: {{standings_line}}. See full standings in the app."),
 ]

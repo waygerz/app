@@ -44,6 +44,9 @@ class Config:
     ]
 
     AUTH_URL = os.environ.get("INTERNAL_AUTH_URL", "http://auth:8000")
+    NOTIFICATIONS_URL = os.environ.get(
+        "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
+    )
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 
     @classmethod

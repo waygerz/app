@@ -6,6 +6,7 @@ import requests
 from flask import current_app
 
 from app.extensions import db
+from app.models.channel_pref import NotificationChannelPref
 from app.models.message import FAILED, SENT, Message
 from app.models.notification import Notification
 from app.models.preference import NotificationPreference
@@ -14,6 +15,31 @@ from app.utils.config import Config
 
 _VAR = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 logger = logging.getLogger(__name__)
+
+# The user-configurable notification types and their default per-channel opt-in.
+# `weekly_digest` is promotional → opt-in (off); everything else is
+# transactional-ish and on by default. A category absent here is treated as
+# on for both channels (so a newly added event type still notifies).
+CHANNELS = ("sms", "inapp")
+CHANNEL_DEFAULTS = {
+    "wager_alert": {"sms": True, "inapp": True},
+    "league_invite": {"sms": True, "inapp": True},
+    "friend_request": {"sms": True, "inapp": True},
+    "weekly_digest": {"sms": False, "inapp": False},
+}
+
+
+def channel_default(category: str, channel: str) -> bool:
+    return CHANNEL_DEFAULTS.get(category, {}).get(channel, True)
+
+
+def channel_enabled(user_id: str, category: str, channel: str) -> bool:
+    """Is (category, channel) on for this user? Global opt-out wins; otherwise a
+    stored override wins; otherwise the code default."""
+    if _prefs(user_id).opted_out:
+        return False
+    row = db.session.get(NotificationChannelPref, (str(user_id), category, channel))
+    return row.enabled if row is not None else channel_default(category, channel)
 
 
 def _resolve_phone(user_id: str):
@@ -135,14 +161,8 @@ def send(data: dict) -> tuple[dict, int]:
     if not (user_id or transactional):
         return {"error": "user_id is required for non-transactional messages"}, 400
 
-    if user_id and not transactional:
-        prefs = _prefs(user_id)
-        if prefs.opted_out:
-            return {"skipped": "opted_out"}, 200
-        if category == "weekly_digest" and not prefs.weekly_digest:
-            return {"skipped": "not_subscribed"}, 200
-        if category == "wager_alert" and not prefs.wager_alerts:
-            return {"skipped": "muted"}, 200
+    if user_id and not transactional and not channel_enabled(user_id, category, "sms"):
+        return {"skipped": "muted"}, 200
 
     if dedup_key and Message.query.filter_by(dedup_key=dedup_key).first():
         return {"deduped": True}, 200
@@ -195,14 +215,12 @@ def notify(data: dict) -> tuple[dict, int]:
     except RenderError as e:
         return {"error": str(e)}, 400
 
-    prefs = _prefs(user_id)
     result: dict = {}
 
-    # In-app feed. Honors a full opt-out, but not per-category mutes — the bell
-    # should still reflect activity unless the user turned everything off.
+    # In-app feed. Honors the global stop and the per-type in-app opt-in.
     if "inapp" in channels:
-        if prefs.opted_out:
-            result["inapp"] = "opted_out"
+        if not channel_enabled(user_id, category, "inapp"):
+            result["inapp"] = "muted"
         elif dedup_key and Notification.query.filter_by(dedup_key=dedup_key).first():
             result["inapp"] = "deduped"
         else:
@@ -242,10 +260,49 @@ def notify(data: dict) -> tuple[dict, int]:
     return {"result": result}, 200
 
 
-def set_preferences(data: dict) -> tuple[dict, int]:
-    p = _prefs(str(data.get("user_id", "")))
-    for f in ("wager_alerts", "weekly_digest", "opted_out"):
-        if f in data:
-            setattr(p, f, bool(data[f]))
+def get_preferences_matrix(user_id: str) -> dict:
+    """The user's full preference state: the global stop plus every configurable
+    (category, channel) resolved to its effective on/off (stored override or
+    default)."""
+    user_id = str(user_id)
+    stored = {
+        (r.category, r.channel): r.enabled
+        for r in NotificationChannelPref.query.filter_by(user_id=user_id).all()
+    }
+    channels = {
+        cat: {
+            ch: stored.get((cat, ch), channel_default(cat, ch))
+            for ch in CHANNELS
+        }
+        for cat in CHANNEL_DEFAULTS
+    }
+    return {"opted_out": _prefs(user_id).opted_out, "channels": channels}
+
+
+def set_preferences_matrix(user_id: str, data: dict) -> dict:
+    """Apply a partial preference patch. `opted_out` sets the global stop;
+    `channels` is {category: {channel: bool}} and upserts only the pairs given.
+    Unknown categories/channels are ignored."""
+    user_id = str(user_id)
+    p = _prefs(user_id)
+    if "opted_out" in data:
+        p.opted_out = bool(data["opted_out"])
+    for cat, chans in (data.get("channels") or {}).items():
+        if cat not in CHANNEL_DEFAULTS or not isinstance(chans, dict):
+            continue
+        for ch, val in chans.items():
+            if ch not in CHANNELS:
+                continue
+            row = db.session.get(NotificationChannelPref, (user_id, cat, ch))
+            if row is None:
+                row = NotificationChannelPref(user_id=user_id, category=cat, channel=ch)
+                db.session.add(row)
+            row.enabled = bool(val)
     db.session.commit()
-    return {"preferences": p.to_dict()}, 200
+    return get_preferences_matrix(user_id)
+
+
+def set_preferences(data: dict) -> tuple[dict, int]:
+    """Internal (service-to-service) entrypoint — user_id comes from the body."""
+    matrix = set_preferences_matrix(str(data.get("user_id", "")), data)
+    return {"preferences": matrix}, 200

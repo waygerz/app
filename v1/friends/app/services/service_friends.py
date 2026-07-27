@@ -44,6 +44,31 @@ def pair(a: str, b: str):
     ).first()
 
 
+def _notify_friend(user_id, template_key, from_name, *, ref_id=None, dedup_key=None):
+    """Fan a friend event out to the recipient's notifications (in-app + SMS).
+    Best-effort — a notification failure must never affect the friendship action."""
+    try:
+        base = current_app.config["NOTIFICATIONS_URL"]
+        requests.post(
+            f"{base}/internal/notify",
+            json={
+                "user_id": str(user_id),
+                "category": "friend_request",
+                "template_key": template_key,
+                "title": from_name,
+                "context": {"from_name": from_name},
+                "ref_type": "friend",
+                "ref_id": ref_id,
+                "deep_link": "/friends",
+                "dedup_key": dedup_key,
+            },
+            headers=_auth_headers(),
+            timeout=10,
+        )
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("friend notify failed user=%s key=%s", user_id, template_key)
+
+
 def _relationship(me: str | None, target_id: str) -> str:
     if not me or me == target_id:
         return "none"
@@ -92,6 +117,9 @@ def send_request(me: str, data: dict) -> tuple[dict, int]:
     fr = Friendship(requester_id=me, addressee_id=target_id, status=PENDING)
     db.session.add(fr)
     db.session.commit()
+    my_name = resolve_users([me]).get(str(me)) or "Someone"
+    _notify_friend(target_id, "friend_request", my_name, ref_id=str(me),
+                   dedup_key=f"friend_req:{fr.id}")
     return {
         "request": {
             "id": fr.id,
@@ -149,6 +177,9 @@ def accept(me: str, req_id: str) -> tuple[dict, int]:
         return {"error": "request not found"}, 404
     fr.status = ACCEPTED
     db.session.commit()
+    my_name = resolve_users([me]).get(str(me)) or "Someone"
+    _notify_friend(fr.requester_id, "friend_accepted", my_name, ref_id=str(me),
+                   dedup_key=f"friend_acc:{fr.id}")
     return {"ok": True}, 200
 
 

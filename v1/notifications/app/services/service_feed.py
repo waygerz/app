@@ -1,13 +1,12 @@
 """User-facing notification feed (the app's notifications sheet)."""
 from app.extensions import db
 from app.models.notification import Notification
-from app.services.service_internal import _prefs
+from app.services.service_internal import (
+    get_preferences_matrix,
+    set_preferences_matrix,
+)
 
 _MAX_LIMIT = 100
-
-# Fields a user may flip for themselves. Mirrors NotificationPreference; the
-# per-category flags gate SMS, `opted_out` is the global STOP (in-app + SMS).
-_PREF_FIELDS = ("wager_alerts", "weekly_digest", "opted_out")
 
 
 def list_feed(user_id: str, *, limit: int = 50, unread_only: bool = False) -> tuple[dict, int]:
@@ -36,15 +35,10 @@ def mark_read(user_id: str, ids=None) -> tuple[dict, int]:
 
 
 def get_preferences(user_id: str) -> tuple[dict, int]:
-    return {"preferences": _prefs(user_id).to_dict()}, 200
+    return {"preferences": get_preferences_matrix(user_id)}, 200
 
 
 def update_preferences(user_id: str, data: dict) -> tuple[dict, int]:
-    """Patch the caller's own preferences — only the whitelisted flags, and only
-    for `user_id` (taken from the JWT, never the body)."""
-    p = _prefs(user_id)
-    for f in _PREF_FIELDS:
-        if f in data:
-            setattr(p, f, bool(data[f]))
-    db.session.commit()
-    return {"preferences": p.to_dict()}, 200
+    """Patch the caller's own preferences. user_id comes from the JWT, never the
+    body, so a user can only ever edit their own settings."""
+    return {"preferences": set_preferences_matrix(user_id, data)}, 200

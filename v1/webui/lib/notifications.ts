@@ -18,10 +18,24 @@ export interface FeedNotification {
   created_at: string;
 }
 
+export type NotificationCategory =
+  | 'wager_alert'
+  | 'league_invite'
+  | 'friend_request'
+  | 'weekly_digest';
+export type NotificationChannel = 'sms' | 'inapp';
+
+export type ChannelToggles = Record<NotificationChannel, boolean>;
+
 export interface NotificationPreferences {
-  wager_alerts: boolean; // SMS for wager events (proposed/accepted/settled)
-  weekly_digest: boolean; // weekly league recap text (opt-in)
   opted_out: boolean; // global STOP — silences the in-app bell and SMS
+  channels: Record<NotificationCategory, ChannelToggles>;
+}
+
+// A partial patch: set opted_out and/or any subset of category→channel toggles.
+export interface NotificationPreferencesPatch {
+  opted_out?: boolean;
+  channels?: Partial<Record<NotificationCategory, Partial<ChannelToggles>>>;
 }
 
 function req<T = any>(path: string, options: RequestInit = {}): Promise<T> {
@@ -40,7 +54,7 @@ export const notificationsApi = {
     }),
   getPreferences: () =>
     req<{ preferences: NotificationPreferences }>(`${API.notifications}/me/preferences`),
-  updatePreferences: (patch: Partial<NotificationPreferences>) =>
+  updatePreferences: (patch: NotificationPreferencesPatch) =>
     req<{ preferences: NotificationPreferences }>(`${API.notifications}/me/preferences`, {
       method: 'PUT',
       body: JSON.stringify(patch),
