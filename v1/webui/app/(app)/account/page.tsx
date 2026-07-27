@@ -9,6 +9,7 @@ import { imageToWebp } from '@/lib/imageToWebp';
 import { mediaApi } from '@/lib/media';
 import { UserAvatar } from '@/components/user-avatar';
 import { ColorPicker } from '@/components/theme/color-picker';
+import { NotificationsCard } from '@/components/account/notifications-card';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -184,6 +185,9 @@ export default function AccountPage() {
           </div>
           <ColorPicker />
         </Card>
+
+        {/* Notifications — SMS opt-in + global pause */}
+        <NotificationsCard />
 
         {/* Phone (read-only — it's the sign-in identity) */}
         <Card className="gap-2 p-5">

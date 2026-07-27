@@ -20,3 +20,14 @@ def mark_read():
     data = request.get_json(silent=True) or {}
     body, status = svc.mark_read(get_jwt_identity(), ids=data.get("ids"))
     return jsonify(body), status
+
+
+def get_preferences():
+    body, status = svc.get_preferences(get_jwt_identity())
+    return jsonify(body), status
+
+
+def update_preferences():
+    data = request.get_json(silent=True) or {}
+    body, status = svc.update_preferences(get_jwt_identity(), data)
+    return jsonify(body), status

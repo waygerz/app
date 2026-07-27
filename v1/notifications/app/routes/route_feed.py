@@ -22,3 +22,15 @@ def unread_count():
 @jwt_required(locations=["cookies", "headers"])
 def mark_read():
     return ctrl.mark_read()
+
+
+@notifications_feed_bp.get("/me/preferences")
+@jwt_required(locations=["cookies", "headers"])
+def get_preferences():
+    return ctrl.get_preferences()
+
+
+@notifications_feed_bp.put("/me/preferences")
+@jwt_required(locations=["cookies", "headers"])
+def update_preferences():
+    return ctrl.update_preferences()
