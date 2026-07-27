@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { LayoutProvider } from '@/components/shell/context';
 import { Header } from '@/components/shell/header';
 import { ScreenLoader } from '@/components/screen-loader';
+import { ProfileDialogProvider } from '@/components/profile-dialog-provider';
 import { useAuth } from '@/auth/AuthContext';
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -40,13 +41,15 @@ export default function Layout({ children }: { children: ReactNode }) {
         } as React.CSSProperties
       }
     >
-      <Header />
-      <main
-        className="flex w-full min-w-0 max-w-full grow flex-col overflow-x-hidden pt-(--header-height-mobile) lg:pt-(--header-height)"
-        role="main"
-      >
-        {children}
-      </main>
+      <ProfileDialogProvider me={user.id}>
+        <Header />
+        <main
+          className="flex w-full min-w-0 max-w-full grow flex-col overflow-x-hidden pt-(--header-height-mobile) lg:pt-(--header-height)"
+          role="main"
+        >
+          {children}
+        </main>
+      </ProfileDialogProvider>
     </LayoutProvider>
   );
 }

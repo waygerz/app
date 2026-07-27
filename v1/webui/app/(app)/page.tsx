@@ -251,6 +251,7 @@ export default function HomePage() {
                                 name={m.display_name}
                                 imageUrl={m.avatar_key}
                                 className="size-7 border-2 border-background"
+                                clickable={false}
                               />
                             ))}
                             {c.member_count > (c.top_members?.length ?? 0) && (

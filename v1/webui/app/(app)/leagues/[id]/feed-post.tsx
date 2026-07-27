@@ -98,6 +98,7 @@ function PostHeader({
             name={item.author_name ?? 'Member'}
             imageUrl={authorAvatarKey}
             className="size-10 shrink-0"
+            clickable={false}
           />
         ) : (
           <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-full', ev.chip)} aria-hidden>

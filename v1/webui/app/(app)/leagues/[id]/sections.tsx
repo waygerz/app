@@ -1422,7 +1422,7 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
                 >
                   {isWinner ? <Trophy className="size-3" /> : tied ? `T${r.rank}` : r.rank}
                 </div>
-                <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-14 shrink-0" />
+                <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-14 shrink-0" clickable={false} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-foreground">
                     {r.display_name}

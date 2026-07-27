@@ -36,7 +36,7 @@ export function HeaderToolbar() {
           <NotificationsSheet />
           <DropdownMenu>
             <DropdownMenuTrigger className="cursor-pointer">
-              <UserAvatar userId={user.id} name={user.display_name} imageUrl={user.avatar_key} className="size-8" />
+              <UserAvatar userId={user.id} name={user.display_name} imageUrl={user.avatar_key} className="size-8" clickable={false} />
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" side="bottom" align="end" sideOffset={11}>
               <div className="flex items-center gap-3 px-3 py-2">

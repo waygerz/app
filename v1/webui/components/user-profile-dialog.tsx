@@ -105,6 +105,7 @@ export function UserProfileDialog({
               imageUrl={avatarKey}
               className="size-20"
               fallbackClassName="text-2xl"
+              clickable={false}
             />
             <div className="flex flex-col gap-0.5">
               <span className="text-lg font-semibold text-foreground">{name}</span>

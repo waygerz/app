@@ -139,7 +139,7 @@ export default function AccountPage() {
                         active ? 'ring-green-400' : 'ring-transparent hover:ring-input',
                       )}
                     >
-                      <UserAvatar userId={user.id} name={user.display_name} imageUrl={a.s3_key} className="size-14" />
+                      <UserAvatar userId={user.id} name={user.display_name} imageUrl={a.s3_key} className="size-14" clickable={false} />
                       {active && (
                         <span className="absolute -right-1 -top-1 rounded-full bg-green-500 p-0.5 text-white">
                           <Check className="size-3" />

@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import { useAuth } from '@/auth/AuthContext';
+import { type ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
-import { UserProfileDialog } from '@/components/user-profile-dialog';
+import { useProfileDialog } from '@/components/profile-dialog-context';
 import { cn } from '@/lib/utils';
 
 /**
@@ -13,8 +12,8 @@ import { cn } from '@/lib/utils';
  * vertical "mini card" (Metronic CardUserMini). Used on /friends and the
  * league Members page (paired with a 1-col mobile grid).
  *
- * Tapping the avatar or name opens a profile dialog (basic details + the
- * head-to-head bet history with that person). Disabled for your own card.
+ * Tapping the avatar or name opens that person's profile dialog (details +
+ * head-to-head bet history). Your own card isn't clickable.
  */
 export function UserMiniCard({
   userId,
@@ -34,75 +33,40 @@ export function UserMiniCard({
   /** Message button / actions dropdown — right of the name on mobile, centered under the card on sm+. */
   actions?: ReactNode;
 }) {
-  const { user } = useAuth();
-  const isSelf = user?.id === userId;
-  const [open, setOpen] = useState(false);
-  const focusRing =
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+  const profile = useProfileDialog();
+  const canOpen = !!profile && profile.me !== userId;
 
   return (
-    <>
-      <Card className="flex flex-row items-center gap-3 p-3 sm:flex-col sm:items-center sm:gap-1.5 sm:p-5 sm:text-center lg:py-8">
-        {isSelf ? (
-          <UserAvatar
-            userId={userId}
-            name={name}
-            imageUrl={imageUrl}
-            className="size-12 shrink-0 sm:mb-2 sm:size-20"
-            fallbackClassName="text-lg sm:text-xl"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            aria-label={`View ${name}'s profile`}
-            className={cn('shrink-0 rounded-full transition hover:opacity-90 sm:mb-2', focusRing)}
-          >
-            <UserAvatar
-              userId={userId}
-              name={name}
-              imageUrl={imageUrl}
-              className="size-12 sm:size-20"
-              fallbackClassName="text-lg sm:text-xl"
-            />
-          </button>
-        )}
-        <div className="flex min-w-0 flex-1 flex-col sm:max-w-full sm:flex-none sm:items-center">
-          <div className="flex min-w-0 max-w-full items-center gap-1.5">
-            {isSelf ? (
-              <span className="truncate text-sm font-medium text-foreground sm:text-base">{name}</span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setOpen(true)}
-                className={cn(
-                  'truncate rounded text-sm font-medium text-foreground hover:underline sm:text-base',
-                  focusRing,
-                )}
-              >
-                {name}
-              </button>
-            )}
-            {badge}
-          </div>
-          {subtitle && <div className="truncate text-xs text-muted-foreground sm:text-sm">{subtitle}</div>}
+    <Card className="flex flex-row items-center gap-3 p-3 sm:flex-col sm:items-center sm:gap-1.5 sm:p-5 sm:text-center lg:py-8">
+      <UserAvatar
+        userId={userId}
+        name={name}
+        imageUrl={imageUrl}
+        className="size-12 shrink-0 sm:mb-2 sm:size-20"
+        fallbackClassName="text-lg sm:text-xl"
+      />
+      <div className="flex min-w-0 flex-1 flex-col sm:max-w-full sm:flex-none sm:items-center">
+        <div className="flex min-w-0 max-w-full items-center gap-1.5">
+          {canOpen ? (
+            <button
+              type="button"
+              onClick={() => profile?.openProfile({ userId, name, avatarKey: imageUrl })}
+              className="truncate rounded text-sm font-medium text-foreground hover:underline focus-visible:outline-none focus-visible:underline sm:text-base"
+            >
+              {name}
+            </button>
+          ) : (
+            <span className="truncate text-sm font-medium text-foreground sm:text-base">{name}</span>
+          )}
+          {badge}
         </div>
-        {actions && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:mt-2 sm:w-full sm:justify-center">
-            {actions}
-          </div>
-        )}
-      </Card>
-
-      {!isSelf && (
-        <UserProfileDialog
-          userId={userId}
-          name={name}
-          avatarKey={imageUrl}
-          open={open}
-          onOpenChange={setOpen}
-        />
+        {subtitle && <div className="truncate text-xs text-muted-foreground sm:text-sm">{subtitle}</div>}
+      </div>
+      {actions && (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:mt-2 sm:w-full sm:justify-center">
+          {actions}
+        </div>
       )}
-    </>
+    </Card>
   );
 }

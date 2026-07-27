@@ -238,6 +238,7 @@ export function MessagesSheet() {
           name={title}
           imageUrl={conv.other_user?.avatar_key}
           className="size-10 shrink-0"
+          clickable={false}
         />
       );
     const unread = (conv.unread_count ?? 0) > 0;
