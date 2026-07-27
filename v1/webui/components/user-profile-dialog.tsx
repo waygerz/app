@@ -85,13 +85,22 @@ export function UserProfileDialog({
     return { wins, losses };
   }, [bets, me, userId]);
 
+  // Name who's ahead so the two numbers can't be misread. `wins`/`losses` are
+  // always from your perspective; the leader's tally is shown first.
+  const total = bets.length;
+  const totalLabel = `${total} bet${total === 1 ? '' : 's'}`;
   const decided = wins + losses;
+  const firstName = name.split(' ')[0] || name;
   const record =
     decided === 0
-      ? bets.length > 0
-        ? `${bets.length} bet${bets.length === 1 ? '' : 's'}, none settled yet`
+      ? total > 0
+        ? `${totalLabel}, none settled yet`
         : 'No bets yet'
-      : `${wins}–${losses} vs you · ${bets.length} total`;
+      : wins === losses
+        ? `Even ${wins}–${losses} · ${totalLabel}`
+        : wins > losses
+          ? `You lead ${wins}–${losses} · ${totalLabel}`
+          : `${firstName} leads ${losses}–${wins} · ${totalLabel}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
