@@ -1032,6 +1032,8 @@ export function LeagueUpcomingGames() {
   const shown = [...(events.data ?? [])]
     .sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''))
     .slice(0, UPCOMING_LIMIT);
+  const teamEvs = shown.filter((e) => !isFieldSport(e.sport));
+  const fieldEvs = shown.filter((e) => isFieldSport(e.sport));
 
   if (lg.sports.length === 0) return null;
 
@@ -1047,8 +1049,15 @@ export function LeagueUpcomingGames() {
       ) : shown.length === 0 ? (
         <p className="text-sm text-muted-foreground">No upcoming games.</p>
       ) : (
-        <div className="flex flex-col gap-3">
-          {shown.map((ev) => (
+        <div className="flex flex-col gap-4">
+          {teamEvs.length > 0 && (
+            // Sportsbook table (Spread/Total/Winner). overflow-x-auto guards the
+            // narrow 1/3 aside from breaking layout if the columns don't fit.
+            <div className="overflow-x-auto">
+              <ScheduleBoard events={teamEvs} onSelect={canBet ? (ev) => setSelected(ev) : undefined} />
+            </div>
+          )}
+          {fieldEvs.map((ev) => (
             <EventCard
               key={ev.external_id}
               event={ev}
