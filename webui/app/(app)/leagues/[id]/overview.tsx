@@ -8,7 +8,6 @@ import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext';
 import { commentsApi } from '@/lib/comments';
 import { leaguesApi, type LeagueDetail } from '@/lib/leagues';
-import { formatCredits } from '@/lib/wallet';
 import { fetchUpcomingEvents } from '@/lib/ingestor';
 import { formatStart } from '@/components/event-card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -106,7 +105,6 @@ export function LeagueOverview() {
 
   const isCommish = lg.my_role === 'commissioner';
   const canModerate = isCommish || lg.my_role === 'moderator';
-  const isMoney = lg.league_type !== 'pickem';
   const membersById = new Map(lg.members.map((m) => [String(m.user_id), m]));
 
   return (
@@ -196,13 +194,6 @@ export function LeagueOverview() {
           <Card className="gap-2 p-4">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Description</span>
             <p className="break-words text-sm text-foreground">{lg.description}</p>
-          </Card>
-        )}
-
-        {isMoney && (
-          <Card className="gap-1 p-5">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">My balance</span>
-            <span className="text-3xl font-bold text-foreground">{formatCredits(lg.my_balance_cents ?? 0)}</span>
           </Card>
         )}
 

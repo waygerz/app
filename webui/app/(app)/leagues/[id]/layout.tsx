@@ -6,6 +6,7 @@ import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { leaguesApi, leagueTypeLabel, type LeagueType } from '@/lib/leagues';
+import { formatCredits } from '@/lib/wallet';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
 import { Card } from '@/components/ui/card';
@@ -112,6 +113,14 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
               <Badge size="sm" appearance="light">{leagueTypeLabel(lg.league_type)}</Badge>
               {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
             </div>
+            {isMoney && (
+              <p className="mt-1 text-sm">
+                <span className="font-bold tabular-nums text-foreground">
+                  {formatCredits(lg.my_balance_cents ?? 0)}
+                </span>
+                <span className="ml-1.5 text-muted-foreground">balance</span>
+              </p>
+            )}
             <p className="mt-1 break-words text-xs text-muted-foreground sm:text-sm">
               {lg.members.length} member{lg.members.length === 1 ? '' : 's'}
               {lg.current_period ? ` · ${lg.current_period.label} (${lg.current_period.status})` : ''}
