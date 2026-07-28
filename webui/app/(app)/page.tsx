@@ -34,11 +34,13 @@ const accentFor = (t: string) => TYPE_ACCENT[t] ?? TYPE_ACCENT.head_to_head;
 
 // League card cover: the logo on a type-accent banner. The stored logo_url is an
 // S3 object key, so it must be resolved through useMediaSrc (a raw <img src> on
-// the key never loads). Stretched to fill the banner (object-fill) so it spans
-// full width. The initials sit underneath as a stable placeholder and the logo
-// fades in over them once decoded — so the banner never pops, and a failed
-// resolve or a broken image just leaves the initials showing. `children` are the
-// overlays, which paint above both (positioned siblings paint in DOM order).
+// the key never loads). Scaled with object-contain so the logo keeps its aspect
+// ratio — it fills whichever dimension binds first and is never stretched to fit
+// both. The initials sit underneath as a stable placeholder and fade out once the
+// logo decodes, so the letterbox bands show the gradient rather than the initials
+// behind the logo; a failed resolve or broken image just leaves the initials
+// showing. `children` are the overlays, which paint above both (positioned
+// siblings paint in DOM order).
 function LeagueCover({
   logoUrl,
   name,
@@ -56,7 +58,11 @@ function LeagueCover({
 
   return (
     <div className={`relative h-36 w-full overflow-hidden bg-gradient-to-br sm:h-40 ${gradient}`}>
-      <span className="absolute inset-0 flex items-center justify-center text-4xl font-bold tracking-tight text-white/95">
+      <span
+        className={`absolute inset-0 flex items-center justify-center text-4xl font-bold tracking-tight text-white/95 transition-opacity duration-300 ${
+          loaded ? 'opacity-0' : 'opacity-100'
+        }`}
+      >
         {name.slice(0, 2).toUpperCase()}
       </span>
       {src && !failed && (
@@ -65,7 +71,7 @@ function LeagueCover({
           alt=""
           onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
-          className={`relative h-full w-full object-fill transition-opacity duration-300 ${
+          className={`relative h-full w-full object-contain transition-opacity duration-300 ${
             loaded ? 'opacity-100' : 'opacity-0'
           }`}
         />
@@ -160,7 +166,7 @@ export default function HomePage() {
         // height, same body rows) so nothing shifts when the data lands.
         <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="h-full flex-col gap-0 overflow-hidden border-0 p-0 shadow-sm">
+            <Card key={i} className="h-full flex-col gap-0 overflow-hidden border border-border p-0 shadow-sm">
               <Skeleton className="h-36 w-full rounded-none sm:h-40" />
               <div className="flex flex-col gap-3 px-5 py-4">
                 <Skeleton className="h-6 w-3/4" />
@@ -217,7 +223,7 @@ export default function HomePage() {
             const a = accentFor(c.league_type);
             return (
               <Link key={c.id} href={`/leagues/${c.id}`} className="group">
-                <Card className="h-full flex-col gap-0 overflow-hidden border-0 p-0 shadow-sm shadow-black/8 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg">
+                <Card className="h-full flex-col gap-0 overflow-hidden border border-border p-0 shadow-sm shadow-black/8 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg">
                   {/* Cover: league logo (resolved via media) on a type-accent banner. */}
                   <LeagueCover logoUrl={c.logo_url} name={c.name} gradient={a.bar}>
                     {(c.unread_feed_count ?? 0) > 0 && (
@@ -263,7 +269,7 @@ export default function HomePage() {
                       </div>
                       <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${a.chip}`}>
                         <a.icon className="size-3" />
-                        {leagueTypeLabel(c.league_type)}
+                        <span className="hidden sm:inline">{leagueTypeLabel(c.league_type)}</span>
                       </span>
                     </div>
                   </div>
