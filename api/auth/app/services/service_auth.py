@@ -3,7 +3,7 @@ import random
 import secrets
 
 import phonenumbers
-from flask import current_app, jsonify, make_response
+from flask import current_app, jsonify, make_response, request
 from flask_jwt_extended import create_access_token, create_refresh_token
 
 from app.extensions import db, get_redis
@@ -104,6 +104,13 @@ def _device_uuid(data: dict) -> str | None:
     return str(value)
 
 
+def wants_tokens() -> bool:
+    """Native clients (no cookie jar) send `X-Client-Type: mobile` to get the
+    access + refresh tokens in the JSON body. Web ignores the body tokens and
+    rides on the HttpOnly cookies as before."""
+    return request.headers.get("X-Client-Type", "").strip().lower() == "mobile"
+
+
 def _issue_auth_response(user, *, device_uuid: str | None, status: int = 200):
     user_uuid = str(user.id)
     phone = user.phone
@@ -136,7 +143,11 @@ def _issue_auth_response(user, *, device_uuid: str | None, status: int = 200):
             ttl=_refresh_ttl(),
         )
 
-    response = make_response(jsonify({"user": user.to_dict()}), status)
+    body = {"user": user.to_dict()}
+    if wants_tokens():
+        body["access_token"] = access_token
+        body["refresh_token"] = refresh_token
+    response = make_response(jsonify(body), status)
     attach_auth_cookies(response, access_token, refresh_token)
     return response
 

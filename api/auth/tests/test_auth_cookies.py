@@ -118,6 +118,51 @@ def test_refresh_rotates_tokens(client, user, device_uuid):
     assert any(refresh_name in c for c in refreshed.headers.getlist("Set-Cookie"))
 
 
+def test_mobile_login_returns_body_tokens(client, user, device_uuid):
+    """X-Client-Type: mobile → access + refresh tokens in the body, usable as Bearer."""
+    start = client.post("/v1/platform/auth/otp/start", json={"phone": user["phone"]})
+    code = start.get_json()["dev_otp"]
+    res = client.post(
+        "/v1/platform/auth/otp/verify",
+        json={"phone": user["phone"], "otp": code, "device_uuid": device_uuid},
+        headers={"X-Client-Type": "mobile"},
+    )
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data.get("access_token") and data.get("refresh_token")
+    assert data["user"]["phone"] == user["phone"]
+
+    me = client.get(
+        "/v1/platform/auth/me",
+        headers={"Authorization": f"Bearer {data['access_token']}"},
+    )
+    assert me.status_code == 200
+    assert me.get_json()["user"]["id"] == user["id"]
+
+
+def test_mobile_refresh_via_body_rotates(client, user, device_uuid):
+    """Native refresh: no cookie — the refresh token comes from the body, and the
+    rotated pair is returned in the body."""
+    start = client.post("/v1/platform/auth/otp/start", json={"phone": user["phone"]})
+    code = start.get_json()["dev_otp"]
+    login = client.post(
+        "/v1/platform/auth/otp/verify",
+        json={"phone": user["phone"], "otp": code, "device_uuid": device_uuid},
+        headers={"X-Client-Type": "mobile"},
+    ).get_json()
+    old_refresh = login["refresh_token"]
+
+    refreshed = client.post(
+        "/v1/platform/auth/refresh",
+        json={"refresh_token": old_refresh, "device_uuid": device_uuid},
+        headers={"X-Client-Type": "mobile"},
+    )
+    assert refreshed.status_code == 200
+    data = refreshed.get_json()
+    assert data.get("access_token") and data.get("refresh_token")
+    assert data["refresh_token"] != old_refresh  # rotated
+
+
 def test_logout_clears_session(client, user, device_uuid):
     res = _login(client, user, device_uuid)
     access_name, refresh_name = auth_cookie_names()

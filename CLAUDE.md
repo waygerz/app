@@ -63,7 +63,11 @@ Conventions that matter across all services:
 - **Auth is decentralized JWT.** `auth` mints the JWT; every service verifies it
   locally with the shared `JWT_SECRET_KEY` (flask-jwt-extended). There is **no**
   central auth check in the gateway — it just forwards the `Authorization`
-  header / cookies. Tokens live in cookies `waygerz_access` / `waygerz_refresh`.
+  header / cookies. Web tokens live in HttpOnly cookies `waygerz_access` /
+  `waygerz_refresh`. **Native clients** send `X-Client-Type: mobile` on
+  login/verify/complete/refresh to receive `access_token` + `refresh_token` in
+  the JSON body instead (refresh accepts the token from the body too); every
+  service already verifies `Authorization: Bearer` via `locations=["cookies","headers"]`.
 - **Internal endpoints are private to the compose network.** Routes under
   `/internal/*` (and wagers `/admin/*`) are guarded by the `X-Internal-Token`
   header (`app/utils/guards.py::internal_only`) and are **deliberately not routed
