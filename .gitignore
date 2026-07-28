@@ -6,8 +6,8 @@
 *.key
 
 # Certbot runtime data (real TLS certs + private keys)
-v1/gateway/certbot/conf/
-v1/gateway/certbot/www/
+api/gateway/certbot/conf/
+api/gateway/certbot/www/
 
 # --- Python ---
 __pycache__/

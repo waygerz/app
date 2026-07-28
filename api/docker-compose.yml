@@ -31,9 +31,11 @@ x-app-db: &app-db
 #   ───────────────────
 #   sum limits  ~2020M
 #
-# This compose file and every build context live under v1/. Run all compose
-# commands from this directory (v1/); build contexts are relative to it
-# (./auth, ./webui, …) and .env is expected alongside it (v1/.env).
+# This compose file and the backend service build contexts live under api/. Run
+# all compose commands from this directory (api/); backend contexts are relative
+# to it (./auth, ./gateway, …) and .env is expected alongside it (api/.env).
+# webui is the one exception — it lives at the repo root, so its context is
+# ../webui.
 
 services:
   # ---- Infra ----------------------------------------------------------------
@@ -308,7 +310,9 @@ services:
     # Next.js (standalone) SSR container on :3000 — replaces the old static
     # nginx build. The gateway proxies to webui:3000 (see gateway conf).
     build:
-      context: ./webui
+      # webui now lives at the repo root (sibling of api/), so its context is
+      # one level up from this compose file.
+      context: ../webui
       dockerfile: docker/Dockerfile
       args:
         # Client API base baked at build. "/api" behind the nginx gateway;
