@@ -5,6 +5,7 @@ class Config:
     SERVICE_GROUP = os.environ.get("SERVICE_GROUP", "platform")
     SERVICE_NAME = os.environ.get("SERVICE_NAME", "notifications")
     APP_ENV = os.environ.get("APP_ENV", "development")
+    GIT_SHA = os.environ.get("GIT_SHA", "dev")
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
     SQLALCHEMY_DATABASE_URI = os.environ.get(

@@ -16,4 +16,7 @@ EXPOSE 8000
 # Threaded worker: on-demand external fetches (RTS + ESPN) block inline, so serve
 # them on threads (shared memory, thread-safe) to avoid head-of-line blocking the
 # whole ingestor behind one slow fetch. Also makes the ESPN single-flight effective.
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
+
 CMD ["gunicorn", "-b", "0.0.0.0:8000", "wsgi:app", "--workers", "1", "--threads", "8", "--timeout", "120"]

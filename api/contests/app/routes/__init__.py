@@ -1,15 +1,19 @@
-from flask import Blueprint
+from flask import Blueprint, current_app, jsonify
 
 from app.utils.config import Config
 
-from app.routes.route_health import contests_health_bp
 from app.routes.route_internal import contests_internal_bp
 from app.routes.route_wagers import wagers_bp
 
 service_bp = Blueprint(Config.SERVICE_NAME, __name__)
 
+
+@service_bp.get("/health")
+def health():
+    return jsonify(status="ok", service=current_app.config["SERVICE_NAME"], version=current_app.config["GIT_SHA"])
+
+
 for bp in [
-    contests_health_bp,
     wagers_bp,
 ]:
     service_bp.register_blueprint(bp)

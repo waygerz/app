@@ -117,7 +117,7 @@ jobs:
           else
             echo "CTX=api/${SVC}" >> "$GITHUB_OUTPUT"
             echo "DOCKERFILE=api/${SVC}/Dockerfile" >> "$GITHUB_OUTPUT"
-            echo "BUILD_ARGS=" >> "$GITHUB_OUTPUT"
+            echo "BUILD_ARGS=GIT_SHA=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Fail fast if build context missing

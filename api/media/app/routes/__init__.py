@@ -1,14 +1,26 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify
 
 from app.utils.config import Config
 
-from app.routes.route_health import health_bp
 from app.routes.route_internal import internal_bp
 from app.routes.route_uploads import uploads_bp
 
 service_bp = Blueprint(Config.SERVICE_NAME, __name__)
 
-for bp in [health_bp, uploads_bp]:
+
+@service_bp.get("/health")
+def health():
+    return jsonify(
+        {
+            "service": Config.SERVICE_NAME,
+            "status": "ok",
+            "version": Config.GIT_SHA,
+            "media_mock": Config.MEDIA_MOCK,
+        }
+    )
+
+
+for bp in [uploads_bp]:
     service_bp.register_blueprint(bp)
 
 

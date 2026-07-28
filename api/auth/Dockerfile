@@ -18,4 +18,7 @@ EXPOSE 8000
 # one request at a time. Behind Service Connect (no ALB queue to absorb the
 # pile-up) that serialization turns concurrent callers into 10s read timeouts —
 # which on the refresh path looks like token reuse and hard-logs the user out.
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
+
 CMD ["gunicorn", "-b", "0.0.0.0:8000", "wsgi:app", "--workers", "1", "--threads", "8", "--worker-class", "gthread", "--timeout", "120"]

@@ -14,4 +14,7 @@ COPY . .
 EXPOSE 8000
 
 # gthread: SSE stream endpoints hold connections open alongside normal API traffic.
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
+
 CMD ["gunicorn", "-b", "0.0.0.0:8000", "wsgi:app", "--workers", "1", "--threads", "4", "--worker-class", "gthread", "--timeout", "120"]

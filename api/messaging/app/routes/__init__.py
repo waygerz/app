@@ -1,13 +1,18 @@
-from flask import Blueprint
+from flask import Blueprint, current_app, jsonify
 
 from app.utils.config import Config
 
-from app.routes.route_health import messaging_health_bp
 from app.routes.route_messaging import messaging_bp
 
 service_bp = Blueprint(Config.SERVICE_NAME, __name__)
 
-for bp in [messaging_health_bp, messaging_bp]:
+
+@service_bp.get("/health")
+def health():
+    return jsonify(status="ok", service=current_app.config["SERVICE_NAME"], version=current_app.config["GIT_SHA"])
+
+
+for bp in [messaging_bp]:
     service_bp.register_blueprint(bp)
 
 
