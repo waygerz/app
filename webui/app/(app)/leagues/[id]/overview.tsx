@@ -8,9 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext';
 import { commentsApi } from '@/lib/comments';
 import { leaguesApi, type LeagueDetail } from '@/lib/leagues';
-import { fetchUpcomingEvents } from '@/lib/ingestor';
-import { formatStart } from '@/components/event-card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { LeagueUpcomingGames } from './sections';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -61,23 +59,6 @@ export function LeagueOverview() {
     queryKey: ['feed-engagement', lg.id, postIds.join(',')],
     queryFn: () => commentsApi.engagement(postIds),
     enabled: postIds.length > 0,
-  });
-
-  // Next 10 upcoming games across the league's sports. Per-sport fetch then
-  // merge (a combined call caps at 50 and a daily sport crowds out sports whose
-  // next game is weeks away) — same rationale as the Play schedule.
-  const sportLeagueIds = lg.sports.map((s) => s.sport_league_id).filter(Boolean);
-  const upcoming = useQuery({
-    queryKey: ['league-upcoming', lg.id, [...sportLeagueIds].sort()],
-    queryFn: async () => {
-      const lists = await Promise.all(sportLeagueIds.map((id) => fetchUpcomingEvents(10, [id])));
-      return lists
-        .flat()
-        .filter((e) => e.start_time)
-        .sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''))
-        .slice(0, 10);
-    },
-    enabled: sportLeagueIds.length > 0,
   });
 
   const refresh = () => {
@@ -197,36 +178,8 @@ export function LeagueOverview() {
           </Card>
         )}
 
-        {/* Upcoming games — desktop only; the aside stacks under the feed on mobile. */}
-        {sportLeagueIds.length > 0 && (
-          <Card className="hidden gap-3 p-4 lg:flex">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Upcoming games
-            </span>
-            {upcoming.isLoading ? (
-              <div className="flex flex-col gap-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-9 rounded-md" />
-                ))}
-              </div>
-            ) : (upcoming.data?.length ?? 0) === 0 ? (
-              <p className="text-sm text-muted-foreground">No upcoming games.</p>
-            ) : (
-              <ul className="flex flex-col divide-y divide-border">
-                {upcoming.data!.map((ev) => (
-                  <li key={ev.id} className="flex items-center justify-between gap-3 py-2">
-                    <span className="min-w-0 truncate text-sm text-foreground">
-                      {ev.away_abbr || ev.away_team} @ {ev.home_abbr || ev.home_team}
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatStart(ev.start_time)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        )}
+        {/* Upcoming games — tap-to-bet cards; desktop-only (aside stacks on mobile). */}
+        <LeagueUpcomingGames />
 
         {!isCommish && (
           <AlertDialog open={leaveOpen} onOpenChange={setLeaveOpen}>

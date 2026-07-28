@@ -1017,6 +1017,68 @@ export function LeagueSports() {
   );
 }
 
+// Compact upcoming-games board for the Overview aside: the next N games across
+// the league's sports as tap-to-bet cards, reusing the same EventCard + wager
+// dialogs as the Sports hub. Desktop-only (the aside stacks under the feed on
+// mobile, where the Sports tab already covers this).
+export function LeagueUpcomingGames() {
+  const lg = useLeague();
+  const { user } = useAuth();
+  const me = user?.id;
+  const canBet = lg.status === 'active';
+  const [selected, setSelected] = useState<SportEvent | null>(null);
+
+  const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
+  const shown = [...(events.data ?? [])]
+    .sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''))
+    .slice(0, UPCOMING_LIMIT);
+
+  if (lg.sports.length === 0) return null;
+
+  return (
+    <Card className="hidden gap-3 p-4 lg:flex">
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Upcoming games
+      </span>
+      {events.isLoading ? (
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        </div>
+      ) : shown.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No upcoming games.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {shown.map((ev) => (
+            <EventCard
+              key={ev.external_id}
+              event={ev}
+              onSelect={canBet ? () => setSelected(ev) : undefined}
+            />
+          ))}
+        </div>
+      )}
+      {canBet && (
+        <>
+          <ScheduleBetDialog
+            lg={lg}
+            me={me}
+            event={selected && !isFieldSport(selected.sport) ? selected : null}
+            open={!!selected && !isFieldSport(selected.sport)}
+            onOpenChange={(o) => { if (!o) setSelected(null); }}
+          />
+          <MatchupBetDialog
+            lg={lg}
+            me={me}
+            event={selected && isFieldSport(selected.sport) ? selected : null}
+            open={!!selected && isFieldSport(selected.sport)}
+            onOpenChange={(o) => { if (!o) setSelected(null); }}
+          />
+        </>
+      )}
+    </Card>
+  );
+}
+
 // One sport's upcoming schedule; tap a game to propose a wager.
 export function LeagueSportSchedule() {
   const lg = useLeague();
