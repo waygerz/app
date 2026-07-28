@@ -198,7 +198,7 @@ export default function BetsView() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="overflow-hidden rounded-xl border border-border">
         {groupWagers(rows, me).map((g) => (
           <WagerBetCard
             key={g.key}

@@ -597,52 +597,72 @@ export function WagerBetCard({
     : 'border-primary bg-primary/10 text-foreground';
 
   const stake = formatCredits(w.amount_cents);
-  const stakeState = final ? `Final · ${stake}` : stake;
+
+  // Left rail colour encodes state at a glance: won / lost / push once settled,
+  // else amber (open offer), blue (game live), violet (accepted, awaiting).
+  const railTone = settled
+    ? iWon ? 'bg-brand' : iLost ? 'bg-destructive' : 'bg-muted-foreground/50'
+    : w.status === 'open' ? 'bg-amber-500'
+    : started && !final ? 'bg-blue-500'
+    : 'bg-primary';
+
+  // Compact "AWAY sc · HOME sc" for team sports; loser mutes once final.
+  const teamCell = (r: (typeof rows)[number]) => (
+    <span key={r.key} className="flex items-center gap-1.5">
+      <TeamLogo src={r.logo} name={r.abbr} className="size-5 shrink-0 text-[8px]" />
+      <span className={cn('tabular-nums', r.lost && 'text-muted-foreground')}>
+        {r.abbr}{started && r.score != null ? ` ${r.score}` : ''}
+      </span>
+    </span>
+  );
 
   return (
-    <Card className="min-w-0 gap-2.5 p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 truncate text-xs text-muted-foreground">
-          {leagueName && <span className="font-medium text-foreground/80">{leagueName}</span>}
-          {leagueName && ' · '}
-          {verb} <span className="font-medium text-foreground/90">{opponentsLabel(names)}</span>
+    <div className="flex items-center gap-3 border-b border-border px-3.5 py-3 last:border-b-0 hover:bg-muted/30">
+      {/* state rail */}
+      <span className={cn('h-9 w-1 shrink-0 rounded-full', railTone)} />
+
+      {/* matchup + context */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 truncate text-sm font-semibold text-foreground">
+          {field ? (
+            <span className="truncate">{wagerPick(w, side)}</span>
+          ) : (
+            <>
+              {teamCell(rows[0])}
+              <span className="text-muted-foreground/50">·</span>
+              {teamCell(rows[1])}
+            </>
+          )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="whitespace-nowrap text-[11px] text-muted-foreground">{stakeState}</span>
-          {wagerStatusBadge(w, me)}
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+          {leagueName && <span className="font-medium text-foreground/80">{leagueName} · </span>}
+          {verb} <span className="text-foreground/80">{opponentsLabel(names)}</span>
+          {' · '}{stake}
+          {field && w.event_name ? ` · ${w.event_name}` : ''}
         </div>
       </div>
 
-      <div className="flex items-stretch gap-2.5">
-        {field ? (
-          <div className="flex min-w-0 flex-1 flex-col justify-center">
-            <div className="truncate text-sm font-semibold text-foreground">{wagerPick(w, side)}</div>
-            {w.event_name && <div className="truncate text-[11px] text-muted-foreground">{w.event_name}</div>}
+      {/* the viewer's pick */}
+      <span className={cn('flex h-8 shrink-0 items-center rounded-lg border px-2.5 text-[13px] font-bold tabular-nums', pickCell)}>
+        <span className="max-w-[96px] truncate">{shortPick()}</span>
+      </span>
+
+      {/* right: actions when interactive, else settled outcome, else live status */}
+      <div className="flex w-[84px] shrink-0 items-center justify-end">
+        {actions ? (
+          <div className="flex w-full flex-col items-stretch gap-1">{actions}</div>
+        ) : settled ? (
+          <div className="text-right leading-tight">
+            <div className={cn('text-sm font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
+              {iWon ? `+${stake}` : iLost ? `−${stake}` : stake}
+            </div>
+            <div className="text-[11px] font-medium text-muted-foreground">{iWon ? 'Won' : iLost ? 'Lost' : 'Push'}</div>
           </div>
         ) : (
-          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
-            {rows.map((r) => (
-              <div key={r.key} className="flex items-center gap-2">
-                <TeamLogo src={r.logo} name={r.abbr} className="size-5 shrink-0 text-[8px]" />
-                <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold', r.lost ? 'text-muted-foreground' : 'text-foreground')}>
-                  {r.name}
-                </span>
-                <span className={cn('shrink-0 text-sm font-bold tabular-nums', r.lost ? 'text-muted-foreground' : 'text-foreground')}>
-                  {started && r.score != null ? r.score : '–'}
-                </span>
-              </div>
-            ))}
-          </div>
+          wagerStatusBadge(w, me)
         )}
-
-        <div className="flex shrink-0 items-center gap-2">
-          <div className={cn('flex h-9 w-[84px] items-center justify-center rounded-lg border px-1 text-center text-[13px] font-bold leading-none', pickCell)}>
-            <span className="truncate">{shortPick()}</span>
-          </div>
-          {actions && <div className="flex w-[84px] shrink-0 flex-col justify-center gap-1">{actions}</div>}
-        </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -669,7 +689,7 @@ function BetSection({
       <h3 className={cn('mb-3 text-sm font-semibold', style.header)}>
         {title} ({wagers.length})
       </h3>
-      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+      <div className="overflow-hidden rounded-xl border border-border">
         {groups.map((g) => (
           <WagerBetCard
             key={g.key}
@@ -1411,7 +1431,7 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
       {sections.map((s) => (
         <section key={s.label} className="flex flex-col gap-3">
           <h2 className="text-base font-semibold text-foreground sm:text-lg">{s.label}</h2>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="overflow-hidden rounded-xl border border-border">
             {groupWagers(s.wagers, me ?? '').map((g) => (
               <WagerBetCard key={g.key} group={g} me={me} ev={eventMap[g.rep.event_id]} />
             ))}
