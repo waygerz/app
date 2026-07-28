@@ -120,25 +120,24 @@ function OddsCell({ main, sub }: { main: string; sub?: string }) {
 
 // Odds as three stat columns (spread / money / total) with two rows — away on
 // top, home below — matching the team order in the matchup above.
+// Straight-up betting: show only the lines (spread / total). No money line, and
+// no juice/price on the spread or total.
 function OddsPanel({ odds }: { odds: EventOdds }) {
-  const { moneyline, spread, overUnder } = odds;
-  if (!moneyline && !spread && !overUnder) {
+  const { spread, overUnder } = odds;
+  if (!spread && !overUnder) {
     return <div className="text-center text-xs text-muted-foreground">No odds available.</div>;
   }
   const head = 'text-center text-[10px] font-medium uppercase tracking-wide text-muted-foreground';
   return (
-    <div className="grid grid-cols-3 items-start gap-x-1 gap-y-1.5 rounded-md bg-muted/50 p-2 sm:gap-x-2">
+    <div className="grid grid-cols-2 items-start gap-x-1 gap-y-1.5 rounded-md bg-muted/50 p-2 sm:gap-x-2">
       <span className={head}>Spread</span>
-      <span className={head}>Money</span>
       <span className={head}>Total</span>
 
-      <OddsCell main={spread ? fmtSigned(-spread.line) : '—'} sub={spread ? `(${fmtSigned(spread.away)})` : undefined} />
-      <OddsCell main={fmtSigned(moneyline?.away)} />
-      <OddsCell main={overUnder ? `O ${overUnder.total}` : '—'} sub={overUnder ? `(${fmtSigned(overUnder.over)})` : undefined} />
+      <OddsCell main={spread ? fmtSigned(-spread.line) : '—'} />
+      <OddsCell main={overUnder ? `O ${overUnder.total}` : '—'} />
 
-      <OddsCell main={spread ? fmtSigned(spread.line) : '—'} sub={spread ? `(${fmtSigned(spread.home)})` : undefined} />
-      <OddsCell main={fmtSigned(moneyline?.home)} />
-      <OddsCell main={overUnder ? `U ${overUnder.total}` : '—'} sub={overUnder ? `(${fmtSigned(overUnder.under)})` : undefined} />
+      <OddsCell main={spread ? fmtSigned(spread.line) : '—'} />
+      <OddsCell main={overUnder ? `U ${overUnder.total}` : '—'} />
     </div>
   );
 }

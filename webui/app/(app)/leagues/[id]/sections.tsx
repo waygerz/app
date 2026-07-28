@@ -1798,11 +1798,9 @@ function ScheduleBetDialog({
                 </div>
                 {(['away', 'home'] as const).map((s) => {
                   const spMain = spread ? sign(s === 'away' ? -spread.line : spread.line) : undefined;
-                  const spPrice = spread ? sign(s === 'away' ? spread.away : spread.home) : undefined;
                   // Total: away row = Over, home row = Under.
                   const ouSide: WagerSide = s === 'away' ? 'over' : 'under';
                   const ouMain = total ? `${s === 'away' ? 'O' : 'U'} ${total.total}` : undefined;
-                  const ouPrice = total ? sign(s === 'away' ? total.over : total.under) : undefined;
                   const cellCls = (on: boolean, disabled?: boolean) =>
                     cn(
                       'flex h-12 w-[3.75rem] shrink-0 flex-col items-center justify-center gap-0 rounded-md border tabular-nums leading-tight transition-colors sm:w-[4.75rem]',
@@ -1817,19 +1815,13 @@ function ScheduleBetDialog({
                       {/* Spread */}
                       <button type="button" disabled={!spread} onClick={() => pickCell(s, 'spread', s === 'away' ? -spread!.line : spread!.line)} className={cellCls(isSel(s, 'spread'), !spread)}>
                         {spread ? (
-                          <>
-                            <span className="text-xs font-medium text-foreground">{spMain}</span>
-                            <span className="text-[11px] text-muted-foreground">{spPrice}</span>
-                          </>
+                          <span className="text-xs font-medium text-foreground">{spMain}</span>
                         ) : <span className="text-muted-foreground">—</span>}
                       </button>
                       {/* Total (O/U) */}
                       <button type="button" disabled={!total} onClick={() => pickCell(ouSide, 'total', total!.total)} className={cellCls(isSel(ouSide, 'total'), !total)}>
                         {total ? (
-                          <>
-                            <span className="text-xs font-medium text-foreground">{ouMain}</span>
-                            <span className="text-[11px] text-muted-foreground">{ouPrice}</span>
-                          </>
+                          <span className="text-xs font-medium text-foreground">{ouMain}</span>
                         ) : <span className="text-muted-foreground">—</span>}
                       </button>
                       {/* SU — straight up (moneyline). Friends don't lay a price,
