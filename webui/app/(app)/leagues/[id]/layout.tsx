@@ -26,6 +26,8 @@ const PLAY_TAB: Record<LeagueType, string> = {
   pickem: 'Picks',
 };
 
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 export default function LeagueLayout({ children }: { children: ReactNode }) {
   const { id = '' } = useParams<{ id: string }>();
   const pathname = usePathname();
@@ -143,7 +145,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
             <DialogTitle>{lg.name} details</DialogTitle>
           </DialogHeader>
           <DialogBody className="flex flex-col items-center gap-4 py-2">
-            <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={112} />
+            <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={88} />
             <div className="flex flex-col items-center gap-1.5 text-center">
               <h2 className="text-lg font-bold text-foreground">{lg.name}</h2>
               <div className="flex flex-wrap items-center justify-center gap-2">
@@ -152,7 +154,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
               </div>
               <p className="text-sm text-muted-foreground">
                 {lg.members.length} member{lg.members.length === 1 ? '' : 's'}
-                {lg.current_period ? ` · ${lg.current_period.label} (${lg.current_period.status})` : ''}
+                {lg.current_period ? ` · ${lg.current_period.label} · ${cap(lg.current_period.status)}` : ''}
               </p>
             </div>
 
@@ -165,18 +167,15 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
               Invite
             </Button>
 
-            <div className="w-full rounded-lg border border-border p-3">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Commissioner</span>
-              <div className="mt-2 flex items-center gap-3">
-                {commish && (
-                  <UserAvatar userId={commish.user_id} name={commish.display_name} imageUrl={commish.avatar_key} className="size-10 shrink-0" />
-                )}
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                  {commish?.display_name ?? '—'}
-                </span>
-                <Badge size="sm" appearance="light">Commish</Badge>
+            {commish && (
+              <div className="flex w-full items-center gap-3 border-t border-border pt-4">
+                <UserAvatar userId={commish.user_id} name={commish.display_name} imageUrl={commish.avatar_key} className="size-9 shrink-0" />
+                <div className="min-w-0 flex-1 text-left leading-tight">
+                  <div className="truncate text-sm font-medium text-foreground">{commish.display_name}</div>
+                  <div className="text-xs text-muted-foreground">Commissioner</div>
+                </div>
               </div>
-            </div>
+            )}
           </DialogBody>
         </DialogContent>
       </Dialog>
