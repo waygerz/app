@@ -438,7 +438,7 @@ function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) 
   return (
     <div className="flex flex-col gap-2">
       <Label>Amount</Label>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           aria-pressed={brag}
@@ -466,24 +466,26 @@ function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) 
         <button
           type="button"
           aria-pressed={custom}
+          aria-label="Custom amount"
           onClick={() => { setCustomOpen(true); onPick(''); }}
           className={cn(chip(custom), 'px-4 py-2 text-sm')}
         >
-          Custom
+          $
         </button>
+        {/* Custom amount input appears inline, to the right of the $ chip. */}
+        {custom && (
+          <Input
+            type="number"
+            min={1}
+            inputMode="numeric"
+            autoFocus
+            placeholder="Amount"
+            value={credits}
+            onChange={(e) => onPick(e.target.value)}
+            className="h-9 w-28"
+          />
+        )}
       </div>
-      {custom && (
-        <Input
-          type="number"
-          min={1}
-          inputMode="numeric"
-          autoFocus
-          placeholder="Enter amount ($)"
-          value={credits}
-          onChange={(e) => onPick(e.target.value)}
-          className="max-w-40"
-        />
-      )}
     </div>
   );
 }
