@@ -34,13 +34,12 @@ const accentFor = (t: string) => TYPE_ACCENT[t] ?? TYPE_ACCENT.head_to_head;
 
 // League card cover: the logo on a type-accent banner. The stored logo_url is an
 // S3 object key, so it must be resolved through useMediaSrc (a raw <img src> on
-// the key never loads). Scaled with object-contain so the logo keeps its aspect
-// ratio — it fills whichever dimension binds first and is never stretched to fit
-// both. The initials sit underneath as a stable placeholder and fade out once the
-// logo decodes, so the letterbox bands show the gradient rather than the initials
-// behind the logo; a failed resolve or broken image just leaves the initials
-// showing. `children` are the overlays, which paint above both (positioned
-// siblings paint in DOM order).
+// the key never loads). Scaled with object-cover so the logo spans the banner
+// full width (and height) without distortion — aspect ratio is preserved and any
+// overflow is cropped, rather than leaving letterbox bands. The initials sit
+// underneath as a stable placeholder and fade out once the logo decodes; a failed
+// resolve or broken image just leaves the initials showing. `children` are the
+// overlays, which paint above both (positioned siblings paint in DOM order).
 function LeagueCover({
   logoUrl,
   name,
@@ -71,7 +70,7 @@ function LeagueCover({
           alt=""
           onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
-          className={`relative h-full w-full object-contain transition-opacity duration-300 ${
+          className={`relative h-full w-full object-cover transition-opacity duration-300 ${
             loaded ? 'opacity-100' : 'opacity-0'
           }`}
         />
@@ -228,7 +227,7 @@ export default function HomePage() {
                   <LeagueCover logoUrl={c.logo_url} name={c.name} gradient={a.bar}>
                     {(c.unread_feed_count ?? 0) > 0 && (
                       <span
-                        className="absolute left-3 top-3 inline-flex min-w-6 items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-sm font-bold text-white shadow-sm"
+                        className="absolute left-3 top-3 inline-flex min-w-9 items-center justify-center rounded-full bg-red-500 px-3 py-1 text-[21px] font-bold text-white shadow-sm"
                         title="Unread posts and notices"
                       >
                         {c.unread_feed_count}
