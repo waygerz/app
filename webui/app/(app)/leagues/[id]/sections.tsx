@@ -26,6 +26,7 @@ import { EventCard, ScheduleBoard, TeamLogo, formatStart } from '@/components/ev
 import { Combobox } from '@/components/ui/combobox';
 import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
+import { useProfileDialog } from '@/components/profile-dialog-context';
 import { UserMiniCard } from '@/components/user-mini-card';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { mediaApi } from '@/lib/media';
@@ -540,6 +541,103 @@ function wagerStatusBadge(w: Wager, me?: string) {
 // pick and its action on the right, the opponents (folded when a bet went to
 // several friends) and stake across the top. Takes a WagerGroup so one card can
 // stand for a batch — Cancel / Confirm then act on every sibling at once.
+// Read-only detail view of an existing wager — matchup + scores, the viewer's
+// pick, stake, opponent and outcome. Opened from a ledger row's pick chip or
+// settled result. No editing: bets are placed from the Schedule tab.
+function BetDetailsDialog({
+  group,
+  me,
+  ev,
+  open,
+  onOpenChange,
+}: {
+  group: WagerGroup;
+  me?: string;
+  ev?: SportEvent | null;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+}) {
+  const w = group.rep;
+  const side = group.viewerSide;
+  const field = !!ev && isFieldSport(ev.sport);
+  const settled = w.status === 'settled';
+  const iWon = settled && !!w.winner_user_id && w.winner_user_id === me;
+  const iLost = settled && !!w.winner_user_id && w.winner_user_id !== me;
+  const started = !!ev && ev.status !== 'scheduled' && ev.status !== 'cancelled';
+  const final = ev?.status === 'final';
+  const hs = ev?.home_score ?? null;
+  const as = ev?.away_score ?? null;
+  const awayLost = final && hs != null && as != null && hs > as;
+  const homeLost = final && hs != null && as != null && as > hs;
+  const stake = formatCredits(w.amount_cents);
+  const betTypeLabel = w.bet_type === 'moneyline' ? 'Straight up' : w.bet_type === 'spread' ? 'Spread' : 'Total';
+  const opp = group.opponents[0];
+
+  const teamRow = (name: string, logo: string | null, score: number | null, lost: boolean) => (
+    <div className="flex items-center gap-3">
+      <TeamLogo src={logo} name={name} className="size-8 shrink-0 text-[10px] sm:size-8 sm:text-[10px]" />
+      <span className={cn('min-w-0 flex-1 truncate text-base font-semibold', lost ? 'text-muted-foreground' : 'text-foreground')}>{name}</span>
+      <span className={cn('text-lg font-bold tabular-nums', lost ? 'text-muted-foreground' : 'text-foreground')}>
+        {started && score != null ? score : '–'}
+      </span>
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{field ? (w.event_name || 'Matchup') : `${w.away_team} @ ${w.home_team}`}</DialogTitle>
+          <DialogDescription className="sr-only">Bet details</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="flex flex-col gap-3">
+          {!field && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              {teamRow(ev?.away_team ?? w.away_team, ev?.away_logo ?? null, as, awayLost)}
+              {teamRow(ev?.home_team ?? w.home_team, ev?.home_logo ?? null, hs, homeLost)}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Your pick · {betTypeLabel}</div>
+              <div className="mt-0.5 truncate text-base font-bold text-foreground">{wagerPick(w, side)}</div>
+            </div>
+            <div className="shrink-0 text-right">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Stake</div>
+              <div className="mt-0.5 text-base font-bold tabular-nums text-foreground">{stake}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              {opp && <UserAvatar userId={opp.id} name={opp.name} imageUrl={opp.avatar_key} className="size-8 shrink-0" />}
+              <div className="min-w-0">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {group.iAmProposer ? 'Challenged' : 'Offered by'}
+                </div>
+                <div className="truncate text-sm font-semibold text-foreground">{opponentsLabel(group.opponents.map((o) => o.name))}</div>
+              </div>
+            </div>
+            <div className="shrink-0 text-right">
+              {settled ? (
+                <>
+                  <div className={cn('text-base font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
+                    {iWon ? `+${stake}` : iLost ? `−${stake}` : stake}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{iWon ? 'Won' : iLost ? 'Lost' : 'Push'}</div>
+                </>
+              ) : (
+                wagerStatusBadge(w, me)
+              )}
+            </div>
+          </div>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function WagerBetCard({
   group,
   me,
@@ -556,6 +654,8 @@ export function WagerBetCard({
 }) {
   const w = group.rep;
   const side = group.viewerSide;
+  const profile = useProfileDialog();
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const field = !!ev && isFieldSport(ev.sport);
   const isTotal = w.bet_type === 'total';
 
@@ -612,55 +712,77 @@ export function WagerBetCard({
   const logoCls = 'size-5 sm:size-5 shrink-0 text-[9px] sm:text-[9px]';
   const teamTxt = (r: (typeof rows)[number]) =>
     `${r.abbr}${started && r.score != null ? ` ${r.score}` : ''}`;
+  // Single opponent's name opens their profile (head-to-head record); the pick
+  // chip and settled outcome open the read-only bet details.
+  const soloOpp = group.opponents.length === 1 ? group.opponents[0] : null;
 
   return (
-    <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3.5 border-b border-border px-4 py-2.5 last:border-b-0 hover:bg-muted/30">
-      {/* state rail */}
-      <span className={cn('h-8 w-[3px] shrink-0 rounded-full', railTone)} />
+    <>
+      <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3.5 border-b border-border px-4 py-2.5 last:border-b-0 hover:bg-muted/30">
+        {/* state rail */}
+        <span className={cn('h-8 w-[3px] shrink-0 rounded-full', railTone)} />
 
-      {/* matchup + context */}
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 truncate text-[15px] font-bold tracking-tight">
-          {field ? (
-            <span className="truncate text-foreground">{wagerPick(w, side)}</span>
+        {/* matchup + context */}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 truncate text-[15px] font-bold tracking-tight">
+            {field ? (
+              <span className="truncate text-foreground">{wagerPick(w, side)}</span>
+            ) : (
+              <>
+                <TeamLogo src={rows[0].logo} name={rows[0].abbr} className={logoCls} />
+                <span className={cn('tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[0])}</span>
+                <span className="font-medium text-muted-foreground/60">·</span>
+                <span className={cn('tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[1])}</span>
+              </>
+            )}
+          </div>
+          <div className="mt-1 truncate text-xs text-muted-foreground">
+            {leagueName && <span className="font-medium text-foreground/80">{leagueName} · </span>}
+            {verb}{' '}
+            {soloOpp && profile ? (
+              <button
+                type="button"
+                onClick={() => profile.openProfile({ userId: soloOpp.id, name: soloOpp.name, avatarKey: soloOpp.avatar_key })}
+                className="font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {soloOpp.name}
+              </button>
+            ) : (
+              <span className="text-foreground/80">{opponentsLabel(names)}</span>
+            )}
+            {' · '}{stake}
+            {field && w.event_name ? ` · ${w.event_name}` : ''}
+          </div>
+        </div>
+
+        {/* the viewer's pick — opens read-only details */}
+        <button
+          type="button"
+          onClick={() => setDetailsOpen(true)}
+          className={cn('flex h-8 items-center justify-center rounded-lg border px-2.5 text-[13px] font-extrabold tabular-nums transition hover:brightness-110', pickCell)}
+        >
+          <span className="max-w-[104px] truncate">{shortPick()}</span>
+        </button>
+
+        {/* right: actions when interactive, else settled outcome (opens details), else live status */}
+        <div className="flex min-w-[64px] items-center justify-end text-right">
+          {actions ? (
+            <div className="flex w-[84px] flex-col items-stretch gap-1">{actions}</div>
+          ) : settled ? (
+            <button type="button" onClick={() => setDetailsOpen(true)} className="leading-tight transition hover:opacity-80">
+              <div className={cn('text-sm font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
+                {iWon ? `+${stake}` : iLost ? `−${stake}` : stake}
+              </div>
+              <div className="text-[11px] font-medium text-muted-foreground">{iWon ? 'Won' : iLost ? 'Lost' : 'Push'}</div>
+            </button>
           ) : (
-            <>
-              <TeamLogo src={rows[0].logo} name={rows[0].abbr} className={logoCls} />
-              <span className={cn('tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[0])}</span>
-              <span className="font-medium text-muted-foreground/60">·</span>
-              <span className={cn('tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[1])}</span>
-            </>
+            wagerStatusBadge(w, me)
           )}
         </div>
-        <div className="mt-1 truncate text-xs text-muted-foreground">
-          {leagueName && <span className="font-medium text-foreground/80">{leagueName} · </span>}
-          {verb} <span className="text-foreground/80">{opponentsLabel(names)}</span>
-          {' · '}{stake}
-          {field && w.event_name ? ` · ${w.event_name}` : ''}
-        </div>
       </div>
 
-      {/* the viewer's pick */}
-      <span className={cn('flex h-8 items-center justify-center rounded-lg border px-2.5 text-[13px] font-extrabold tabular-nums', pickCell)}>
-        <span className="max-w-[104px] truncate">{shortPick()}</span>
-      </span>
-
-      {/* right: actions when interactive, else settled outcome, else live status */}
-      <div className="flex min-w-[64px] items-center justify-end text-right">
-        {actions ? (
-          <div className="flex w-[84px] flex-col items-stretch gap-1">{actions}</div>
-        ) : settled ? (
-          <div className="leading-tight">
-            <div className={cn('text-sm font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
-              {iWon ? `+${stake}` : iLost ? `−${stake}` : stake}
-            </div>
-            <div className="text-[11px] font-medium text-muted-foreground">{iWon ? 'Won' : iLost ? 'Lost' : 'Push'}</div>
-          </div>
-        ) : (
-          wagerStatusBadge(w, me)
-        )}
-      </div>
-    </div>
+      <BetDetailsDialog group={group} me={me} ev={ev} open={detailsOpen} onOpenChange={setDetailsOpen} />
+    </>
   );
 }
 
