@@ -64,16 +64,15 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   const isMoney = lg.league_type !== 'pickem';
   const commish = lg.members.find((m) => m.role === 'commissioner');
 
-  // Order follows the betting lifecycle: place a bet (Sports) → track it
-  // (My Bets) → see outcomes (Results) → where you rank (Standings), then the
-  // league's social/reference tabs, then admin. Sports/Activity are money-only,
-  // so pick'em collapses to Overview · Picks · Results · Standings · Members.
+  // Overview, then Sports (money-only), the reference tabs Results → Standings,
+  // then the play tab (My Bets / Picks) sitting just before Wallet (money-only),
+  // then Members and admin. Pick'em drops Sports/Wallet.
   const tabs = [
     { to: `/leagues/${id}`, label: 'Overview', end: true },
     ...(isMoney ? [{ to: `/leagues/${id}/sports`, label: 'Sports', end: false }] : []),
-    { to: `/leagues/${id}/play`, label: PLAY_TAB[lg.league_type], end: false },
     { to: `/leagues/${id}/results`, label: 'Results', end: false },
     { to: `/leagues/${id}/standings`, label: 'Standings', end: false },
+    { to: `/leagues/${id}/play`, label: PLAY_TAB[lg.league_type], end: false },
     ...(isMoney ? [{ to: `/leagues/${id}/activity`, label: 'Wallet', end: false }] : []),
     { to: `/leagues/${id}/members`, label: 'Members', end: false },
     ...(isCommish ? [{ to: `/leagues/${id}/manage`, label: 'Manage', end: false }] : []),
