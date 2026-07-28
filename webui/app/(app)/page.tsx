@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
-import { formatCredits } from '@/lib/wallet';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { useMediaSrc } from '@/lib/use-media-src';
 import { UserAvatar } from '@/components/user-avatar';
@@ -171,10 +170,6 @@ export default function HomePage() {
               <div className="flex flex-col gap-2 px-5 py-4">
                 <Skeleton className="h-6 w-3/4" />
                 <div className="flex items-center justify-between gap-2">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-5 w-16" />
-                </div>
-                <div className="flex items-center justify-between gap-2">
                   <Skeleton className="h-7 w-20 rounded-full" />
                   <Skeleton className="size-7 rounded-full" />
                 </div>
@@ -249,16 +244,6 @@ export default function HomePage() {
                     <span className="truncate text-lg font-semibold text-foreground transition-colors group-hover:text-primary">
                       {c.name}
                     </span>
-                    {c.my_balance_cents != null && (
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          My balance
-                        </span>
-                        <span className="text-base font-bold tabular-nums text-foreground">
-                          {formatCredits(c.my_balance_cents)}
-                        </span>
-                      </div>
-                    )}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         {(c.top_members?.length ?? 0) > 0 && (

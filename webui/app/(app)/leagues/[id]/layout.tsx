@@ -105,7 +105,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
             className="shrink-0 rounded-full transition-opacity hover:opacity-80"
             aria-label="League details"
           >
-            <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={56} />
+            <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={80} />
           </button>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
