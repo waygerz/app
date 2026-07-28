@@ -983,7 +983,20 @@ export function LeagueSports() {
       ) : (
         <div className="flex flex-col gap-4">
           {teamEvs.length > 0 && (
-            <ScheduleBoard events={teamEvs} onSelect={canBet ? (ev) => setSelected(ev) : undefined} />
+            // Two side-by-side boards on desktop so games fill the width instead
+            // of one narrow column; single column (stacked) on mobile.
+            <div className="grid grid-cols-1 gap-x-8 gap-y-2 lg:grid-cols-2">
+              <ScheduleBoard
+                events={teamEvs.slice(0, Math.ceil(teamEvs.length / 2))}
+                onSelect={canBet ? (ev) => setSelected(ev) : undefined}
+              />
+              {teamEvs.length > 1 && (
+                <ScheduleBoard
+                  events={teamEvs.slice(Math.ceil(teamEvs.length / 2))}
+                  onSelect={canBet ? (ev) => setSelected(ev) : undefined}
+                />
+              )}
+            </div>
           )}
           {fieldEvs.length > 0 && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
