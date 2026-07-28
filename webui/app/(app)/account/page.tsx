@@ -9,6 +9,7 @@ import { imageToWebp } from '@/lib/imageToWebp';
 import { mediaApi } from '@/lib/media';
 import { UserAvatar } from '@/components/user-avatar';
 import { ColorPicker } from '@/components/theme/color-picker';
+import { SurfacePicker } from '@/components/theme/surface-picker';
 import { NotificationsCard } from '@/components/account/notifications-card';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -180,10 +181,13 @@ export default function AccountPage() {
           <div className="flex flex-col gap-1">
             <h2 className="text-base font-semibold text-foreground">Appearance</h2>
             <p className="text-xs text-muted-foreground">
-              Pick your primary and accent colors. Applies across the app on this device.
+              Colors and dark shade. Applies across the app on this device.
             </p>
           </div>
           <ColorPicker />
+          <div className="border-t border-border pt-4">
+            <SurfacePicker />
+          </div>
         </Card>
 
         {/* Notifications — SMS opt-in + global pause */}

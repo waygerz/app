@@ -39,11 +39,31 @@ const ACCENT_KEY = 'waygerz-accent';
 export const DEFAULT_PRIMARY: Hue = 'violet';
 export const DEFAULT_ACCENT: Hue = 'green';
 
+/**
+ * The dark-mode neutral "surface" the user can pick (only affects dark mode).
+ * `.dark` defaults to Slate; `data-surface` on <html> swaps the neutral ramp —
+ * see the `.dark[data-surface=…]` rules in globals.css. `bg`/`card`/`border`
+ * are just for the picker preview swatch.
+ */
+export type Surface = 'slate' | 'soft' | 'lifted' | 'flat';
+export const SURFACES: { key: Surface; label: string; bg: string; card: string; border: string }[] = [
+  { key: 'slate', label: 'Slate', bg: '#0e0f14', card: '#191b24', border: '#2e3040' },
+  { key: 'soft', label: 'Soft', bg: '#0f0f12', card: '#17171b', border: '#2b2b33' },
+  { key: 'lifted', label: 'Lifted', bg: '#131318', card: '#1e1e26', border: '#33333d' },
+  { key: 'flat', label: 'Flat', bg: '#09090b', card: '#09090b', border: '#27272a' },
+];
+
+const SURFACE_KEYS = new Set<string>(SURFACES.map((s) => s.key));
+const SURFACE_KEY = 'waygerz-surface';
+export const DEFAULT_SURFACE: Surface = 'slate';
+
 type ColorThemeValue = {
   primary: Hue;
   accent: Hue;
+  surface: Surface;
   setPrimary: (hue: Hue) => void;
   setAccent: (hue: Hue) => void;
+  setSurface: (surface: Surface) => void;
 };
 
 const ColorThemeContext = createContext<ColorThemeValue | null>(null);
@@ -52,16 +72,22 @@ function coerce(value: string | null | undefined, fallback: Hue): Hue {
   return value && HUE_KEYS.has(value) ? (value as Hue) : fallback;
 }
 
+function coerceSurface(value: string | null | undefined): Surface {
+  return value && SURFACE_KEYS.has(value) ? (value as Surface) : DEFAULT_SURFACE;
+}
+
 export function ColorThemeProvider({ children }: { children: ReactNode }) {
   // SSR renders the defaults; the blocking script (see colorThemeScript) has
-  // already set the real hue on <html> before paint, so there's no flash.
+  // already set the real values on <html> before paint, so there's no flash.
   const [primary, setPrimaryState] = useState<Hue>(DEFAULT_PRIMARY);
   const [accent, setAccentState] = useState<Hue>(DEFAULT_ACCENT);
+  const [surface, setSurfaceState] = useState<Surface>(DEFAULT_SURFACE);
 
   useEffect(() => {
     const el = document.documentElement;
     setPrimaryState(coerce(el.dataset.primary, DEFAULT_PRIMARY));
     setAccentState(coerce(el.dataset.accent, DEFAULT_ACCENT));
+    setSurfaceState(coerceSurface(el.dataset.surface));
   }, []);
 
   const setPrimary = useCallback((hue: Hue) => {
@@ -85,8 +111,18 @@ export function ColorThemeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const setSurface = useCallback((next: Surface) => {
+    setSurfaceState(next);
+    document.documentElement.dataset.surface = next;
+    try {
+      localStorage.setItem(SURFACE_KEY, next);
+    } catch {
+      /* see setPrimary */
+    }
+  }, []);
+
   return (
-    <ColorThemeContext.Provider value={{ primary, accent, setPrimary, setAccent }}>
+    <ColorThemeContext.Provider value={{ primary, accent, surface, setPrimary, setAccent, setSurface }}>
       {children}
     </ColorThemeContext.Provider>
   );
@@ -102,6 +138,7 @@ export function useColorTheme(): ColorThemeValue {
 
 /**
  * Runs synchronously in <head> before first paint to stamp the persisted hues
- * onto <html>, so the ROYGBIV CSS applies with no flash of the default theme.
+ * and dark surface onto <html>, so the themed CSS applies with no flash of the
+ * default.
  */
-export const colorThemeScript = `(function(){try{var e=document.documentElement,g=function(k,d){var v=localStorage.getItem(k);return v==='red'||v==='orange'||v==='yellow'||v==='green'||v==='blue'||v==='indigo'||v==='violet'?v:d};e.dataset.primary=g('${PRIMARY_KEY}','${DEFAULT_PRIMARY}');e.dataset.accent=g('${ACCENT_KEY}','${DEFAULT_ACCENT}');}catch(_){}})();`;
+export const colorThemeScript = `(function(){try{var e=document.documentElement,g=function(k,d){var v=localStorage.getItem(k);return v==='red'||v==='orange'||v==='yellow'||v==='green'||v==='blue'||v==='indigo'||v==='violet'?v:d};e.dataset.primary=g('${PRIMARY_KEY}','${DEFAULT_PRIMARY}');e.dataset.accent=g('${ACCENT_KEY}','${DEFAULT_ACCENT}');var s=localStorage.getItem('${SURFACE_KEY}');e.dataset.surface=(s==='slate'||s==='soft'||s==='lifted'||s==='flat')?s:'${DEFAULT_SURFACE}';}catch(_){}})();`;

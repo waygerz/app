@@ -71,6 +71,40 @@
   --ring: var(--color-violet-500);
 }
 
+/* Dark surface variants — the neutral ground is pickable from /account
+   (data-surface on <html>, set before paint). .dark above is the Slate default;
+   these override only the neutral surfaces, not text/accent colours. */
+.dark[data-surface='flat'] {
+  --background: var(--color-zinc-950);
+  --card: var(--color-zinc-950);
+  --popover: var(--color-zinc-950);
+  --secondary: var(--color-zinc-800);
+  --muted: var(--color-zinc-900);
+  --accent: var(--color-zinc-900);
+  --border: var(--color-zinc-800);
+  --input: var(--color-zinc-800);
+}
+.dark[data-surface='soft'] {
+  --background: #0f0f12;
+  --card: #17171b;
+  --popover: #17171b;
+  --secondary: #26262e;
+  --muted: #1f1f26;
+  --accent: #1f1f26;
+  --border: #2b2b33;
+  --input: #2b2b33;
+}
+.dark[data-surface='lifted'] {
+  --background: #131318;
+  --card: #1e1e26;
+  --popover: #1e1e26;
+  --secondary: #2f2f3a;
+  --muted: #26262f;
+  --accent: #26262f;
+  --border: #33333d;
+  --input: #33333d;
+}
+
 /**
  * User-selectable ROYGBIV colors. `data-primary` / `data-accent` on <html>
  * (set by colorThemeScript before paint) remap the primary + accent (--brand)
