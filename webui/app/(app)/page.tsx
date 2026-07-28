@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
+import { formatCredits } from '@/lib/wallet';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { useMediaSrc } from '@/lib/use-media-src';
 import { UserAvatar } from '@/components/user-avatar';
@@ -56,7 +57,7 @@ function LeagueCover({
   const [failed, setFailed] = useState(false);
 
   return (
-    <div className={`relative h-36 w-full overflow-hidden bg-gradient-to-br sm:h-40 ${gradient}`}>
+    <div className={`relative h-44 w-full overflow-hidden bg-gradient-to-br sm:h-48 ${gradient}`}>
       <span
         className={`absolute inset-0 flex items-center justify-center text-4xl font-bold tracking-tight text-white/95 transition-opacity duration-300 ${
           loaded ? 'opacity-0' : 'opacity-100'
@@ -166,12 +167,16 @@ export default function HomePage() {
         <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i} className="h-full flex-col gap-0 overflow-hidden border border-border p-0 shadow-sm">
-              <Skeleton className="h-36 w-full rounded-none sm:h-40" />
-              <div className="flex flex-col gap-3 px-5 py-4">
+              <Skeleton className="h-44 w-full rounded-none sm:h-48" />
+              <div className="flex flex-col gap-2 px-5 py-4">
                 <Skeleton className="h-6 w-3/4" />
                 <div className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-5 w-16" />
+                </div>
+                <div className="flex items-center justify-between gap-2">
                   <Skeleton className="h-7 w-20 rounded-full" />
-                  <Skeleton className="h-5 w-24 rounded-full" />
+                  <Skeleton className="size-7 rounded-full" />
                 </div>
               </div>
             </Card>
@@ -239,11 +244,21 @@ export default function HomePage() {
                       </Badge>
                     )}
                   </LeagueCover>
-                  {/* Body: title, then members (left) and league type (right). */}
-                  <div className="flex flex-col gap-3 px-5 py-4">
+                  {/* Body: title, my balance (money leagues), then members + type icon. */}
+                  <div className="flex flex-col gap-2 px-5 py-4">
                     <span className="truncate text-lg font-semibold text-foreground transition-colors group-hover:text-primary">
                       {c.name}
                     </span>
+                    {c.my_balance_cents != null && (
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          My balance
+                        </span>
+                        <span className="text-base font-bold tabular-nums text-foreground">
+                          {formatCredits(c.my_balance_cents)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         {(c.top_members?.length ?? 0) > 0 && (
@@ -266,9 +281,12 @@ export default function HomePage() {
                           </div>
                         )}
                       </div>
-                      <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${a.chip}`}>
-                        <a.icon className="size-3" />
-                        <span className="hidden sm:inline">{leagueTypeLabel(c.league_type)}</span>
+                      <span
+                        className={`inline-flex shrink-0 items-center justify-center rounded-full p-1.5 ${a.chip}`}
+                        title={leagueTypeLabel(c.league_type)}
+                        aria-label={leagueTypeLabel(c.league_type)}
+                      >
+                        <a.icon className="size-4" />
                       </span>
                     </div>
                   </div>

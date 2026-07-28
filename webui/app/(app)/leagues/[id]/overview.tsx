@@ -9,8 +9,10 @@ import { useAuth } from '@/auth/AuthContext';
 import { commentsApi } from '@/lib/comments';
 import { leaguesApi, type LeagueDetail } from '@/lib/leagues';
 import { formatCredits } from '@/lib/wallet';
+import { fetchUpcomingEvents } from '@/lib/ingestor';
+import { formatStart } from '@/components/event-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -62,6 +64,23 @@ export function LeagueOverview() {
     enabled: postIds.length > 0,
   });
 
+  // Next 10 upcoming games across the league's sports. Per-sport fetch then
+  // merge (a combined call caps at 50 and a daily sport crowds out sports whose
+  // next game is weeks away) — same rationale as the Play schedule.
+  const sportLeagueIds = lg.sports.map((s) => s.sport_league_id).filter(Boolean);
+  const upcoming = useQuery({
+    queryKey: ['league-upcoming', lg.id, [...sportLeagueIds].sort()],
+    queryFn: async () => {
+      const lists = await Promise.all(sportLeagueIds.map((id) => fetchUpcomingEvents(10, [id])));
+      return lists
+        .flat()
+        .filter((e) => e.start_time)
+        .sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''))
+        .slice(0, 10);
+    },
+    enabled: sportLeagueIds.length > 0,
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['league', lg.id] });
     qc.invalidateQueries({ queryKey: ['league-feed', lg.id] });
@@ -88,7 +107,6 @@ export function LeagueOverview() {
   const isCommish = lg.my_role === 'commissioner';
   const canModerate = isCommish || lg.my_role === 'moderator';
   const isMoney = lg.league_type !== 'pickem';
-  const commish = lg.members.find((m) => m.role === 'commissioner');
   const membersById = new Map(lg.members.map((m) => [String(m.user_id), m]));
 
   return (
@@ -172,21 +190,8 @@ export function LeagueOverview() {
         </section>
       </div>
 
-      {/* Right aside: commissioner → description → balance → invite */}
+      {/* Right aside: description → balance → invite */}
       <div className="flex min-w-0 flex-col gap-6">
-        <Card className="gap-2 p-4">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Commissioner</span>
-          <div className="flex items-center gap-3">
-            {commish && (
-              <UserAvatar userId={commish.user_id} name={commish.display_name} imageUrl={commish.avatar_key} className="size-10 shrink-0" />
-            )}
-            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-sm font-medium text-foreground">{commish?.display_name ?? '—'}</span>
-              <Badge size="sm" appearance="light">Commish</Badge>
-            </div>
-          </div>
-        </Card>
-
         {lg.description && (
           <Card className="gap-2 p-4">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Description</span>
@@ -198,6 +203,37 @@ export function LeagueOverview() {
           <Card className="gap-1 p-5">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">My balance</span>
             <span className="text-3xl font-bold text-foreground">{formatCredits(lg.my_balance_cents ?? 0)}</span>
+          </Card>
+        )}
+
+        {/* Upcoming games — desktop only; the aside stacks under the feed on mobile. */}
+        {sportLeagueIds.length > 0 && (
+          <Card className="hidden gap-3 p-4 lg:flex">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Upcoming games
+            </span>
+            {upcoming.isLoading ? (
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-9 rounded-md" />
+                ))}
+              </div>
+            ) : (upcoming.data?.length ?? 0) === 0 ? (
+              <p className="text-sm text-muted-foreground">No upcoming games.</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-border">
+                {upcoming.data!.map((ev) => (
+                  <li key={ev.id} className="flex items-center justify-between gap-3 py-2">
+                    <span className="min-w-0 truncate text-sm text-foreground">
+                      {ev.away_abbr || ev.away_team} @ {ev.home_abbr || ev.home_team}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatStart(ev.start_time)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         )}
 
