@@ -163,9 +163,9 @@ export default function HomePage() {
       {leagues.isLoading ? (
         // Skeleton mirrors the real card geometry (same breakpoints, same cover
         // height, same body rows) so nothing shifts when the data lands.
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:pb-0 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="h-full flex-col gap-0 overflow-hidden border border-border p-0 shadow-sm">
+            <Card key={i} className="h-full w-[70%] shrink-0 snap-start flex-col gap-0 overflow-hidden border border-border p-0 shadow-sm md:w-auto">
               <Skeleton className="h-44 w-full rounded-none sm:h-48" />
               <div className="flex flex-col gap-2 px-5 py-4">
                 <Skeleton className="h-6 w-3/4" />
@@ -217,11 +217,11 @@ export default function HomePage() {
           </Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:pb-0 xl:grid-cols-4">
           {data.map((c) => {
             const a = accentFor(c.league_type);
             return (
-              <Link key={c.id} href={`/leagues/${c.id}`} className="group">
+              <Link key={c.id} href={`/leagues/${c.id}`} className="group w-[70%] shrink-0 snap-start md:w-auto">
                 <Card className="h-full flex-col gap-0 overflow-hidden border border-border p-0 shadow-sm shadow-black/8 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg">
                   {/* Cover: league logo (resolved via media) on a type-accent banner. */}
                   <LeagueCover logoUrl={c.logo_url} name={c.name} gradient={a.bar}>
