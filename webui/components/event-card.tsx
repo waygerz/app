@@ -281,11 +281,12 @@ function BookCell({ main, price }: { main?: string; price?: string }) {
 }
 
 function BookTeamLine({ name, abbr, logo }: { name: string; abbr?: string; logo?: string | null }) {
+  // Styled like a pick cell — the team line IS the "Winner" (straight-up) pick.
   return (
-    <div className="flex h-11 min-w-0 items-center gap-2 sm:h-10 sm:gap-2.5">
+    <div className="flex h-11 min-w-0 items-center gap-2 rounded-md bg-muted/60 px-2.5 sm:h-10 sm:gap-2.5">
       <TeamLogo src={logo} name={abbr || name} className="size-6 shrink-0 text-[9px] sm:size-7 sm:text-[10px]" />
       {/* Abbreviation on a phone, full name from sm up. */}
-      <span className="truncate text-sm font-medium text-foreground">
+      <span className="truncate text-sm font-semibold text-foreground">
         <span className="sm:hidden">{abbr || name}</span>
         <span className="hidden sm:inline">{name}</span>
       </span>
@@ -307,10 +308,6 @@ function ScheduleGameRow({ ev, onSelect }: { ev: SportEvent; onSelect?: () => vo
     { // Total — line only (no over/under juice).
       away: ou ? [`O ${ou.total}`, undefined] : [undefined, undefined],
       home: ou ? [`U ${ou.total}`, undefined] : [undefined, undefined],
-    },
-    { // Winner — straight up: friends pick a side, no money line
-      away: ['SU', undefined],
-      home: ['SU', undefined],
     },
   ];
 
@@ -353,13 +350,12 @@ export function ScheduleBoard({
   const head = 'w-[4.5rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-28';
   return (
     <div>
-      {/* Header aligns spacer(flex) + 3 fixed columns with the rows below;
-          gaps here (0.5rem / sm:0.75rem) match ScheduleGameRow's. */}
+      {/* "Winner" labels the team column (the team line is the straight-up pick);
+          Spread/Total head the two fixed columns. Gaps match ScheduleGameRow's. */}
       <div className="flex items-center gap-2 pb-2 sm:gap-3">
-        <div className="min-w-0 flex-1" />
+        <span className="min-w-0 flex-1 pl-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Winner</span>
         <span className={head}>Spread</span>
         <span className={head}>Total</span>
-        <span className={head}>Winner</span>
       </div>
       {events.map((ev) => (
         <ScheduleGameRow key={ev.external_id} ev={ev} onSelect={onSelect ? () => onSelect(ev) : undefined} />

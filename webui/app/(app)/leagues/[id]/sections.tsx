@@ -662,8 +662,11 @@ export function WagerBetCard({
   // Opponents line + verb. Once settled the header narrates the outcome.
   const names = group.opponents.map((o) => o.name);
   const settled = w.status === 'settled';
-  const iWon = settled && !!w.winner_user_id && w.winner_user_id === me;
-  const iLost = settled && !!w.winner_user_id && w.winner_user_id !== me;
+  // The outcome is known once a bet is completed (game final) or settled, so the
+  // pick chip + rail can show win/loss even before the payout is confirmed.
+  const decided = settled || w.status === 'completed';
+  const iWon = decided && !!w.winner_user_id && w.winner_user_id === me;
+  const iLost = decided && !!w.winner_user_id && w.winner_user_id !== me;
   const verb = iWon ? 'beat' : iLost ? 'lost to' : 'vs';
 
   // Game score line. Winner (higher score) stays bright once final; the loser mutes.
@@ -690,18 +693,23 @@ export function WagerBetCard({
     }
     return abbr;
   };
-  const pickCell = settled
-    ? iWon
-      ? 'border-brand bg-brand/10 text-foreground'
-      : 'border-border bg-muted/40 text-muted-foreground'
-    : 'border-primary bg-primary/10 text-foreground';
+  // The viewer's pick chip carries the outcome: green won, red lost, muted push,
+  // else the accent (active/pending).
+  const pickCell = iWon
+    ? 'border-brand bg-brand/10 text-foreground'
+    : iLost
+      ? 'border-destructive bg-destructive/10 text-foreground'
+      : decided
+        ? 'border-border bg-muted/40 text-muted-foreground'
+        : 'border-primary bg-primary/10 text-foreground';
 
   const stake = formatCredits(w.amount_cents);
 
   // Left rail colour encodes state at a glance: won / lost / push once settled,
   // else amber (open offer), blue (game live), violet (accepted, awaiting).
-  const railTone = settled
-    ? iWon ? 'bg-brand' : iLost ? 'bg-destructive' : 'bg-muted-foreground/50'
+  const railTone = iWon ? 'bg-brand'
+    : iLost ? 'bg-destructive'
+    : decided ? 'bg-muted-foreground/50'
     : w.status === 'open' ? 'bg-amber-500'
     : started && !final ? 'bg-blue-500'
     : 'bg-primary';
@@ -775,7 +783,8 @@ export function WagerBetCard({
               </div>
               <div className="text-[11px] font-medium text-muted-foreground">{iWon ? 'Won' : iLost ? 'Lost' : 'Push'}</div>
             </button>
-          ) : (
+          ) : iWon || iLost ? null : (
+            // Win/loss is shown by the pick-chip border, so no badge here.
             wagerStatusBadge(w, me)
           )}
         </div>
@@ -1944,8 +1953,8 @@ function ScheduleBetDialog({
                   is over on the away row, under on the home row. */}
               <div>
                 <div className="flex items-center gap-1.5 pb-1.5">
-                  <div className="min-w-0 flex-1" />
-                  {(['Spread', 'Total', 'Winner'] as const).map((h) => (
+                  <span className="min-w-0 flex-1 pl-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Winner</span>
+                  {(['Spread', 'Total'] as const).map((h) => (
                     <span key={h} className="w-[3.75rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-[4.75rem]">{h}</span>
                   ))}
                 </div>
@@ -1961,10 +1970,18 @@ function ScheduleBetDialog({
                     );
                   return (
                     <div key={s} className="flex items-center gap-1.5 border-b border-border py-2 last:border-0">
-                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                      {/* The team name IS the straight-up (Winner) pick. */}
+                      <button
+                        type="button"
+                        onClick={() => pickCell(s, 'moneyline', null)}
+                        className={cn(
+                          'flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-md border px-2.5 transition-colors',
+                          isSel(s, 'moneyline') ? STATE.selected : STATE.idle,
+                        )}
+                      >
                         <TeamLogo src={teamLogo(s)} name={teamAbbr(s) || teamName(s)} className="size-7 shrink-0 text-[10px]" />
                         <span className="truncate text-sm font-medium text-foreground">{teamName(s)}</span>
-                      </div>
+                      </button>
                       {/* Spread */}
                       <button type="button" disabled={!spread} onClick={() => pickCell(s, 'spread', s === 'away' ? -spread!.line : spread!.line)} className={cellCls(isSel(s, 'spread'), !spread)}>
                         {spread ? (
@@ -1976,11 +1993,6 @@ function ScheduleBetDialog({
                         {total ? (
                           <span className="text-xs font-medium text-foreground">{ouMain}</span>
                         ) : <span className="text-muted-foreground">—</span>}
-                      </button>
-                      {/* SU — straight up (moneyline). Friends don't lay a price,
-                          so we show "SU" instead of the sportsbook money line. */}
-                      <button type="button" onClick={() => pickCell(s, 'moneyline', null)} className={cellCls(isSel(s, 'moneyline'))}>
-                        <span className="text-sm font-medium text-foreground">SU</span>
                       </button>
                     </div>
                   );
