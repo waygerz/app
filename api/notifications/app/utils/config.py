@@ -50,6 +50,15 @@ class Config:
     TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
     TWILIO_FROM = os.environ.get("TWILIO_FROM", "")
 
+    # Push provider: "log" (default — prints, sends nothing) or "fcm". FCM's
+    # HTTP v1 API relays to APNs for iOS too, so one credential covers both
+    # platforms. Creds arrive as a service-account JSON (string or file path),
+    # wired via secrets in prod; stays on "log" until then.
+    PUSH_PROVIDER = os.environ.get("PUSH_PROVIDER", "log")
+    FCM_PROJECT_ID = os.environ.get("FCM_PROJECT_ID", "")
+    FCM_CREDENTIALS_JSON = os.environ.get("FCM_CREDENTIALS_JSON", "")  # inline JSON
+    FCM_CREDENTIALS_FILE = os.environ.get("FCM_CREDENTIALS_FILE", "")  # or a path
+
     @classmethod
     def api_prefix(cls) -> str:
         return f"/v1/{cls.SERVICE_GROUP}/{cls.SERVICE_NAME}"

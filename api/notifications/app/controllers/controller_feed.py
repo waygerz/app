@@ -31,3 +31,15 @@ def update_preferences():
     data = request.get_json(silent=True) or {}
     body, status = svc.update_preferences(get_jwt_identity(), data)
     return jsonify(body), status
+
+
+def register_device():
+    data = request.get_json(silent=True) or {}
+    body, status = svc.register_device(get_jwt_identity(), data)
+    return jsonify(body), status
+
+
+def unregister_device():
+    data = request.get_json(silent=True) or {}
+    body, status = svc.unregister_device(get_jwt_identity(), data)
+    return jsonify(body), status

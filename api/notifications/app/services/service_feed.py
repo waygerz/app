@@ -3,7 +3,9 @@ from app.extensions import db
 from app.models.notification import Notification
 from app.services.service_internal import (
     get_preferences_matrix,
+    register_device as _register_device,
     set_preferences_matrix,
+    unregister_device as _unregister_device,
 )
 
 _MAX_LIMIT = 100
@@ -42,3 +44,18 @@ def update_preferences(user_id: str, data: dict) -> tuple[dict, int]:
     """Patch the caller's own preferences. user_id comes from the JWT, never the
     body, so a user can only ever edit their own settings."""
     return {"preferences": set_preferences_matrix(user_id, data)}, 200
+
+
+def register_device(user_id: str, data: dict) -> tuple[dict, int]:
+    """Register (or refresh) the caller's push token for one device."""
+    try:
+        device = _register_device(user_id, data.get("platform"), data.get("token"))
+    except ValueError as e:
+        return {"error": str(e)}, 400
+    return {"device": device}, 200
+
+
+def unregister_device(user_id: str, data: dict) -> tuple[dict, int]:
+    """Drop one of the caller's push tokens (logout / uninstall)."""
+    removed = _unregister_device(user_id, data.get("token"))
+    return {"removed": removed}, 200

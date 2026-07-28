@@ -34,3 +34,15 @@ def get_preferences():
 @jwt_required(locations=["cookies", "headers"])
 def update_preferences():
     return ctrl.update_preferences()
+
+
+@notifications_feed_bp.post("/me/devices")
+@jwt_required(locations=["cookies", "headers"])
+def register_device():
+    return ctrl.register_device()
+
+
+@notifications_feed_bp.delete("/me/devices")
+@jwt_required(locations=["cookies", "headers"])
+def unregister_device():
+    return ctrl.unregister_device()
