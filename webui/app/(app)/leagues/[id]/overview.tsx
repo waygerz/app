@@ -89,9 +89,9 @@ export function LeagueOverview() {
   const membersById = new Map(lg.members.map((m) => [String(m.user_id), m]));
 
   return (
-    <div className="grid min-w-0 gap-6 lg:grid-cols-3">
+    <div className="grid min-w-0 gap-6 lg:grid-cols-2">
       {/* Left: feed */}
-      <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+      <div className="flex min-w-0 flex-col gap-6">
         <section>
           {canModerate && (
             <Card className="mb-3 min-w-0 flex-row items-center gap-3 p-3">
