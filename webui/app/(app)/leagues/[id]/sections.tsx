@@ -422,7 +422,7 @@ const pickBtn = (selected: boolean) =>
 // backend accepts as valid, skipping the wallet and the league min/max. Then
 // dollar presets, and a "Custom" chip that reveals a free-type field for any
 // other amount. Replaces the old always-on amount input.
-const STAKE_PRESETS = [5, 10, 25, 50];
+const STAKE_PRESETS = [10, 20];
 function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) => void }) {
   const val = Number(credits);
   const brag = credits.trim() !== '' && val === 0;
@@ -438,7 +438,7 @@ function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) 
   return (
     <div className="flex flex-col gap-2">
       <Label>Amount</Label>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
         <button
           type="button"
           aria-pressed={brag}
@@ -482,7 +482,7 @@ function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) 
             placeholder="Amount"
             value={credits}
             onChange={(e) => onPick(e.target.value)}
-            className="h-9 w-28"
+            className="h-9 min-w-0 flex-1 rounded-full"
           />
         )}
       </div>
@@ -543,6 +543,20 @@ function wagerStatusBadge(w: Wager, me?: string) {
 // pick and its action on the right, the opponents (folded when a bet went to
 // several friends) and stake across the top. Takes a WagerGroup so one card can
 // stand for a batch — Cancel / Confirm then act on every sibling at once.
+// $0 stakes are "bragging rights — loser buys the beer", so render the beer
+// glass in place of "$0" (a won/lost outcome passes a sign for real amounts).
+function StakeText({ cents, sign }: { cents: number; sign?: string }) {
+  if (cents === 0) {
+    return <Beer aria-label="Bragging rights — $0" className="inline-block size-[1em] align-[-0.15em]" />;
+  }
+  return (
+    <>
+      {sign ?? ''}
+      {formatCredits(cents)}
+    </>
+  );
+}
+
 // Read-only detail view of an existing wager — matchup + scores, the viewer's
 // pick, stake, opponent and outcome. Opened from a ledger row's pick chip or
 // settled result. No editing: bets are placed from the Schedule tab.
@@ -571,7 +585,6 @@ function BetDetailsDialog({
   const as = ev?.away_score ?? null;
   const awayLost = final && hs != null && as != null && hs > as;
   const homeLost = final && hs != null && as != null && as > hs;
-  const stake = formatCredits(w.amount_cents);
   const betTypeLabel = w.bet_type === 'moneyline' ? 'Straight up' : w.bet_type === 'spread' ? 'Spread' : 'Total';
   const opp = group.opponents[0];
 
@@ -607,7 +620,7 @@ function BetDetailsDialog({
             </div>
             <div className="shrink-0 text-right">
               <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Stake</div>
-              <div className="mt-0.5 text-base font-bold tabular-nums text-foreground">{stake}</div>
+              <div className="mt-0.5 text-base font-bold tabular-nums text-foreground"><StakeText cents={w.amount_cents} /></div>
             </div>
           </div>
 
@@ -625,7 +638,7 @@ function BetDetailsDialog({
               {settled ? (
                 <>
                   <div className={cn('text-base font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
-                    {iWon ? `+${stake}` : iLost ? `−${stake}` : stake}
+                    <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
                   </div>
                   <div className="text-xs text-muted-foreground">{iWon ? 'Won' : iLost ? 'Lost' : 'Push'}</div>
                 </>
@@ -705,8 +718,6 @@ export function WagerBetCard({
         ? 'border-border bg-muted/40 text-muted-foreground'
         : 'border-primary bg-primary/10 text-foreground';
 
-  const stake = formatCredits(w.amount_cents);
-
   // Left rail colour encodes state at a glance: won / lost / push once settled,
   // else amber (open offer), blue (game live), violet (accepted, awaiting).
   const railTone = iWon ? 'bg-brand'
@@ -760,7 +771,7 @@ export function WagerBetCard({
             ) : (
               <span className="text-foreground/80">{opponentsLabel(names)}</span>
             )}
-            {' · '}{stake}
+            {' · '}<StakeText cents={w.amount_cents} />
             {field && w.event_name ? ` · ${w.event_name}` : ''}
           </div>
         </div>
@@ -781,7 +792,7 @@ export function WagerBetCard({
           ) : settled ? (
             <button type="button" onClick={() => setDetailsOpen(true)} className="leading-tight transition hover:opacity-80">
               <div className={cn('text-sm font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
-                {iWon ? `+${stake}` : iLost ? `−${stake}` : stake}
+                <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
               </div>
               <div className="text-[11px] font-medium text-muted-foreground">{iWon ? 'Won' : iLost ? 'Lost' : 'Push'}</div>
             </button>
