@@ -301,13 +301,13 @@ function ScheduleGameRow({ ev, onSelect }: { ev: SportEvent; onSelect?: () => vo
   // Each column is a pair of [main, price] cells (away then home); a missing
   // market falls back to the placeholder "—" cell.
   const cols: { away: [string?, string?]; home: [string?, string?] }[] = [
-    { // Spread
-      away: sp ? [fmtSigned(-sp.line), fmtSigned(sp.away)] : [undefined, undefined],
-      home: sp ? [fmtSigned(sp.line), fmtSigned(sp.home)] : [undefined, undefined],
+    { // Spread — line only; Waygerz is straight-up, so no juice/price is shown.
+      away: sp ? [fmtSigned(-sp.line), undefined] : [undefined, undefined],
+      home: sp ? [fmtSigned(sp.line), undefined] : [undefined, undefined],
     },
-    { // Total
-      away: ou ? [`O ${ou.total}`, fmtSigned(ou.over)] : [undefined, undefined],
-      home: ou ? [`U ${ou.total}`, fmtSigned(ou.under)] : [undefined, undefined],
+    { // Total — line only (no over/under juice).
+      away: ou ? [`O ${ou.total}`, undefined] : [undefined, undefined],
+      home: ou ? [`U ${ou.total}`, undefined] : [undefined, undefined],
     },
     { // Winner — straight up: friends pick a side, no money line
       away: ['SU', undefined],
