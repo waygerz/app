@@ -606,35 +606,33 @@ export function WagerBetCard({
     : started && !final ? 'bg-blue-500'
     : 'bg-primary';
 
-  // Compact "AWAY sc · HOME sc" for team sports; loser mutes once final.
-  const teamCell = (r: (typeof rows)[number]) => (
-    <span key={r.key} className="flex items-center gap-1.5">
-      <TeamLogo src={r.logo} name={r.abbr} className="size-5 shrink-0 text-[8px]" />
-      <span className={cn('tabular-nums', r.lost && 'text-muted-foreground')}>
-        {r.abbr}{started && r.score != null ? ` ${r.score}` : ''}
-      </span>
-    </span>
-  );
+  // A single small team logo (away) then "AWAY sc · HOME sc" as text — kept
+  // compact to match the ledger. TeamLogo bakes sm:size-14 / sm:text-base, so
+  // the sm: variants must be overridden too or the logo balloons on desktop.
+  const logoCls = 'size-5 sm:size-5 shrink-0 text-[9px] sm:text-[9px]';
+  const teamTxt = (r: (typeof rows)[number]) =>
+    `${r.abbr}${started && r.score != null ? ` ${r.score}` : ''}`;
 
   return (
-    <div className="flex items-center gap-3 border-b border-border px-3.5 py-3 last:border-b-0 hover:bg-muted/30">
+    <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3.5 border-b border-border px-4 py-2.5 last:border-b-0 hover:bg-muted/30">
       {/* state rail */}
-      <span className={cn('h-9 w-1 shrink-0 rounded-full', railTone)} />
+      <span className={cn('h-8 w-[3px] shrink-0 rounded-full', railTone)} />
 
       {/* matchup + context */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 truncate text-sm font-semibold text-foreground">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 truncate text-[15px] font-bold tracking-tight">
           {field ? (
-            <span className="truncate">{wagerPick(w, side)}</span>
+            <span className="truncate text-foreground">{wagerPick(w, side)}</span>
           ) : (
             <>
-              {teamCell(rows[0])}
-              <span className="text-muted-foreground/50">·</span>
-              {teamCell(rows[1])}
+              <TeamLogo src={rows[0].logo} name={rows[0].abbr} className={logoCls} />
+              <span className={cn('tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[0])}</span>
+              <span className="font-medium text-muted-foreground/60">·</span>
+              <span className={cn('tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[1])}</span>
             </>
           )}
         </div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">
+        <div className="mt-1 truncate text-xs text-muted-foreground">
           {leagueName && <span className="font-medium text-foreground/80">{leagueName} · </span>}
           {verb} <span className="text-foreground/80">{opponentsLabel(names)}</span>
           {' · '}{stake}
@@ -643,16 +641,16 @@ export function WagerBetCard({
       </div>
 
       {/* the viewer's pick */}
-      <span className={cn('flex h-8 shrink-0 items-center rounded-lg border px-2.5 text-[13px] font-bold tabular-nums', pickCell)}>
-        <span className="max-w-[96px] truncate">{shortPick()}</span>
+      <span className={cn('flex h-8 items-center justify-center rounded-lg border px-2.5 text-[13px] font-extrabold tabular-nums', pickCell)}>
+        <span className="max-w-[104px] truncate">{shortPick()}</span>
       </span>
 
       {/* right: actions when interactive, else settled outcome, else live status */}
-      <div className="flex w-[84px] shrink-0 items-center justify-end">
+      <div className="flex min-w-[64px] items-center justify-end text-right">
         {actions ? (
-          <div className="flex w-full flex-col items-stretch gap-1">{actions}</div>
+          <div className="flex w-[84px] flex-col items-stretch gap-1">{actions}</div>
         ) : settled ? (
-          <div className="text-right leading-tight">
+          <div className="leading-tight">
             <div className={cn('text-sm font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
               {iWon ? `+${stake}` : iLost ? `−${stake}` : stake}
             </div>
