@@ -158,7 +158,7 @@ export default function HomePage() {
       {leagues.isLoading ? (
         // Skeleton mirrors the real card geometry (same breakpoints, same cover
         // height, same body rows) so nothing shifts when the data lands.
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i} className="h-full flex-col gap-0 overflow-hidden border-0 p-0 shadow-sm">
               <Skeleton className="h-36 w-full rounded-none sm:h-40" />
@@ -212,7 +212,7 @@ export default function HomePage() {
           </Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
           {data.map((c) => {
             const a = accentFor(c.league_type);
             return (
@@ -222,10 +222,9 @@ export default function HomePage() {
                   <LeagueCover logoUrl={c.logo_url} name={c.name} gradient={a.bar}>
                     {(c.unread_feed_count ?? 0) > 0 && (
                       <span
-                        className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground shadow-sm"
+                        className="absolute left-3 top-3 inline-flex min-w-6 items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-sm font-bold text-white shadow-sm"
                         title="Unread posts and notices"
                       >
-                        <Inbox className="size-3" />
                         {c.unread_feed_count}
                       </span>
                     )}
