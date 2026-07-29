@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { redirect, useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Ticket } from 'lucide-react';
+import { Ticket, Lock } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi } from '@/lib/leagues';
 import { cancelLocked, groupWagers, wagersApi, type WagerGroup } from '@/lib/wagers';
@@ -14,7 +14,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
-import { WagerBetCard } from '@/app/(app)/leagues/[id]/sections';
+import { WagerBetCard, StatusIcon } from '@/app/(app)/leagues/[id]/sections';
 
 export default function BetsView() {
   const { filter = 'all' } = useParams<{ filter: string }>();
@@ -131,7 +131,7 @@ export default function BetsView() {
     // one requests, the other approves. Locks 10 minutes before kickoff.
     if (w.status === 'accepted' && (w.proposer_id === me || w.acceptor_id === me)) {
       if (cancelLocked(w)) {
-        return <span className="text-center text-[11px] text-muted-foreground">Locked</span>;
+        return <StatusIcon icon={Lock} label="Locked" />;
       }
       if (!w.cancel_requested_by) {
         return (
@@ -161,7 +161,7 @@ export default function BetsView() {
     }
     if (w.proposer_id === me) {
       if (cancelLocked(w)) {
-        return <span className="text-center text-[11px] text-muted-foreground">Locked</span>;
+        return <StatusIcon icon={Lock} label="Locked" />;
       }
       return (
         <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>Cancel</Button>

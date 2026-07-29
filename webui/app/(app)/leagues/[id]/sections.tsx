@@ -541,10 +541,10 @@ function wagerStatusBadge(w: Wager, me?: string) {
 
 // A terse status indicator: a muted icon standing in for a text label (Locked,
 // Cancelled). Hover / screen-reader text still carries the word.
-function StatusIcon({ icon: Icon, label }: { icon: typeof Lock; label: string }) {
+export function StatusIcon({ icon: Icon, label }: { icon: typeof Lock; label: string }) {
   return (
     <span className="flex items-center justify-center text-muted-foreground" title={label} aria-label={label}>
-      <Icon className="size-4" />
+      <Icon className="size-5" />
     </span>
   );
 }
@@ -791,11 +791,16 @@ export function WagerBetCard({
           {actions ? (
             <div className="flex w-[84px] flex-col items-stretch gap-1">{actions}</div>
           ) : settled ? (
-            <button type="button" onClick={() => setDetailsOpen(true)} className="leading-tight transition hover:opacity-80">
-              <div className={cn('text-sm font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
-                <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
-              </div>
-              <div className="text-[11px] font-medium text-muted-foreground">{iWon ? 'Won' : iLost ? 'Lost' : 'Push'}</div>
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(true)}
+              title={iWon ? 'Won' : iLost ? 'Lost' : 'Push'}
+              className={cn(
+                'text-base font-extrabold tabular-nums transition hover:opacity-80',
+                iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground',
+              )}
+            >
+              <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
             </button>
           ) : iWon || iLost ? null : (
             // Win/loss is shown by the pick-chip border, so no badge here.
