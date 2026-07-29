@@ -65,7 +65,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer } from 'lucide-react';
+import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Ban, Beer } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import { dispatchOpenChat } from '@/lib/open-chat';
@@ -534,9 +534,19 @@ function wagerStatusBadge(w: Wager, me?: string) {
     return <Badge size="sm" variant="secondary" appearance="light">Declined</Badge>;
   }
   if (w.status === 'cancelled') {
-    return <Badge size="sm" variant="secondary" appearance="light">Cancelled</Badge>;
+    return <StatusIcon icon={Ban} label="Cancelled" />;
   }
   return null;
+}
+
+// A terse status indicator: a muted icon standing in for a text label (Locked,
+// Cancelled). Hover / screen-reader text still carries the word.
+function StatusIcon({ icon: Icon, label }: { icon: typeof Lock; label: string }) {
+  return (
+    <span className="flex items-center justify-center text-muted-foreground" title={label} aria-label={label}>
+      <Icon className="size-4" />
+    </span>
+  );
 }
 
 // A sportsbook-style bet card: the matchup and score on the left, the viewer's
@@ -776,16 +786,7 @@ export function WagerBetCard({
           </div>
         </div>
 
-        {/* the viewer's pick — opens read-only details */}
-        <button
-          type="button"
-          onClick={() => setDetailsOpen(true)}
-          className={cn('flex h-8 items-center justify-center rounded-lg border px-2.5 text-[13px] font-extrabold tabular-nums transition hover:brightness-110', pickCell)}
-        >
-          <span className="max-w-[104px] truncate">{shortPick()}</span>
-        </button>
-
-        {/* right: actions when interactive, else settled outcome (opens details), else live status */}
+        {/* status: actions when interactive, else settled outcome (opens details), else live status — sits to the left of the pick */}
         <div className="flex min-w-[64px] items-center justify-end text-right">
           {actions ? (
             <div className="flex w-[84px] flex-col items-stretch gap-1">{actions}</div>
@@ -801,6 +802,15 @@ export function WagerBetCard({
             wagerStatusBadge(w, me)
           )}
         </div>
+
+        {/* the viewer's pick — far right, opens read-only details */}
+        <button
+          type="button"
+          onClick={() => setDetailsOpen(true)}
+          className={cn('flex h-8 items-center justify-center rounded-lg border px-2.5 text-[13px] font-extrabold tabular-nums transition hover:brightness-110', pickCell)}
+        >
+          <span className="max-w-[104px] truncate">{shortPick()}</span>
+        </button>
       </div>
 
       <BetDetailsDialog group={group} me={me} ev={ev} open={detailsOpen} onOpenChange={setDetailsOpen} />
@@ -903,7 +913,7 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
     const ids = g.wagers.map((x) => x.id);
     if (w.proposer_id !== me && w.acceptor_id !== me) return null;
     if (cancelLocked(w)) {
-      return <span className="text-center text-[11px] text-muted-foreground">Locked</span>;
+      return <StatusIcon icon={Lock} label="Locked" />;
     }
     if (!w.cancel_requested_by) {
       return (
@@ -983,7 +993,7 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
             </>
           ) : w.proposer_id === me ? (
             cancelLocked(w) ? (
-              <span className="text-center text-[11px] text-muted-foreground">Locked</span>
+              <StatusIcon icon={Lock} label="Locked" />
             ) : (
               <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>
                 Cancel
