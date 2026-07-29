@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
 import { LeagueAvatar } from '@/components/league-avatar';
-import { useMediaSrc } from '@/lib/use-media-src';
 import { UserAvatar } from '@/components/user-avatar';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,54 +29,6 @@ const TYPE_ACCENT: Record<string, { bar: string; chip: string; border: string; i
   },
 };
 const accentFor = (t: string) => TYPE_ACCENT[t] ?? TYPE_ACCENT.head_to_head;
-
-// League card cover: the logo on a type-accent banner. The stored logo_url is an
-// S3 object key, so it must be resolved through useMediaSrc (a raw <img src> on
-// the key never loads). Scaled with object-cover so the logo spans the banner
-// full width (and height) without distortion — aspect ratio is preserved and any
-// overflow is cropped, rather than leaving letterbox bands. The initials sit
-// underneath as a stable placeholder and fade out once the logo decodes; a failed
-// resolve or broken image just leaves the initials showing. `children` are the
-// overlays, which paint above both (positioned siblings paint in DOM order).
-function LeagueCover({
-  logoUrl,
-  name,
-  gradient,
-  children,
-}: {
-  logoUrl: string | null;
-  name: string;
-  gradient: string;
-  children?: ReactNode;
-}) {
-  const src = useMediaSrc(logoUrl);
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  return (
-    <div className={`relative h-44 w-full overflow-hidden bg-gradient-to-br sm:h-48 ${gradient}`}>
-      <span
-        className={`absolute inset-0 flex items-center justify-center text-4xl font-bold tracking-tight text-white/95 transition-opacity duration-300 ${
-          loaded ? 'opacity-0' : 'opacity-100'
-        }`}
-      >
-        {name.slice(0, 2).toUpperCase()}
-      </span>
-      {src && !failed && (
-        <img
-          src={src}
-          alt=""
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
-          className={`relative h-full w-full object-cover transition-opacity duration-300 ${
-            loaded ? 'opacity-100' : 'opacity-0'
-          }`}
-        />
-      )}
-      {children}
-    </div>
-  );
-}
 
 export default function HomePage() {
   const qc = useQueryClient();
@@ -163,15 +113,15 @@ export default function HomePage() {
       {leagues.isLoading ? (
         // Skeleton mirrors the real card geometry (same breakpoints, same cover
         // height, same body rows) so nothing shifts when the data lands.
-        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:pb-0 xl:grid-cols-4">
+        <div className="flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="h-full w-[70%] shrink-0 snap-start flex-col gap-0 overflow-hidden border border-border p-0 shadow-sm md:w-auto">
-              <Skeleton className="h-44 w-full rounded-none sm:h-48" />
-              <div className="flex flex-col gap-2 px-5 py-4">
-                <Skeleton className="h-6 w-3/4" />
-                <div className="flex items-center justify-between gap-2">
-                  <Skeleton className="h-7 w-20 rounded-full" />
-                  <Skeleton className="size-7 rounded-full" />
+            <Card key={i} className="flex-row items-center gap-4 border border-border p-4 shadow-sm">
+              <Skeleton className="size-[72px] rounded-xl" />
+              <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+                <Skeleton className="h-6 w-2/3" />
+                <div className="flex items-center gap-2.5">
+                  <Skeleton className="h-6 w-24 rounded-md" />
+                  <Skeleton className="h-9 w-24 rounded-full" />
                 </div>
               </div>
             </Card>
@@ -217,63 +167,65 @@ export default function HomePage() {
           </Button>
         </Card>
       ) : (
-        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:gap-4 md:overflow-visible md:pb-0 xl:grid-cols-4">
+        <div className="flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4">
           {data.map((c) => {
             const a = accentFor(c.league_type);
+            const extra = c.member_count - (c.top_members?.length ?? 0);
             return (
-              <Link key={c.id} href={`/leagues/${c.id}`} className="group w-[70%] shrink-0 snap-start md:w-auto">
-                <Card className="h-full flex-col gap-0 overflow-hidden border border-border p-0 shadow-sm shadow-black/8 transition-all group-hover:-translate-y-0.5 group-hover:shadow-lg">
-                  {/* Cover: league logo (resolved via media) on a type-accent banner. */}
-                  <LeagueCover logoUrl={c.logo_url} name={c.name} gradient={a.bar}>
+              <Link key={c.id} href={`/leagues/${c.id}`} className="group">
+                <Card className="flex-row items-center gap-4 border border-border p-4 shadow-sm transition-all group-hover:border-primary/40 group-hover:shadow-md">
+                  {/* Logo (1.5× the old card): media-resolved, initials fallback. */}
+                  <LeagueAvatar name={c.name} logoUrl={c.logo_url} id={c.id} size={72} />
+
+                  {/* Title + social meta: type chip and the member avatar stack. */}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-lg font-bold tracking-tight text-foreground transition-colors group-hover:text-primary sm:text-xl">
+                      {c.name}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2.5">
+                      <span
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${a.chip}`}
+                      >
+                        <a.icon className="size-3.5" />
+                        {leagueTypeLabel(c.league_type)}
+                      </span>
+                      {(c.top_members?.length ?? 0) > 0 && (
+                        <div className="flex -space-x-2.5">
+                          {c.top_members!.map((m) => (
+                            <UserAvatar
+                              key={m.user_id}
+                              userId={m.user_id}
+                              name={m.display_name}
+                              imageUrl={m.avatar_key}
+                              className="size-9 border-2 border-card"
+                              clickable={false}
+                            />
+                          ))}
+                          {extra > 0 && (
+                            <div className="flex size-9 items-center justify-center rounded-full border-2 border-card bg-muted text-[11px] font-semibold text-muted-foreground">
+                              +{extra}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: unread posts (prominent) or draft state. */}
+                  <div className="flex shrink-0 items-center gap-2">
+                    {c.status === 'draft' && (
+                      <Badge size="sm" variant="warning" appearance="light">
+                        Draft
+                      </Badge>
+                    )}
                     {(c.unread_feed_count ?? 0) > 0 && (
                       <span
-                        className="absolute left-3 top-3 inline-flex min-w-9 items-center justify-center rounded-full bg-red-500 px-3 py-1 text-[21px] font-bold text-white shadow-sm"
+                        className="flex min-w-7 items-center justify-center rounded-full bg-red-500 px-2.5 py-1 text-sm font-bold text-white shadow-sm"
                         title="Unread posts and notices"
                       >
                         {c.unread_feed_count}
                       </span>
                     )}
-                    {c.status === 'draft' && (
-                      <Badge size="sm" variant="warning" appearance="light" className="absolute right-3 top-3">
-                        Draft
-                      </Badge>
-                    )}
-                  </LeagueCover>
-                  {/* Body: title, my balance (money leagues), then members + type icon. */}
-                  <div className="flex flex-col gap-2 px-5 py-4">
-                    <span className="truncate text-lg font-semibold text-foreground transition-colors group-hover:text-primary">
-                      {c.name}
-                    </span>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        {(c.top_members?.length ?? 0) > 0 && (
-                          <div className="flex -space-x-2">
-                            {c.top_members!.map((m) => (
-                              <UserAvatar
-                                key={m.user_id}
-                                userId={m.user_id}
-                                name={m.display_name}
-                                imageUrl={m.avatar_key}
-                                className="size-7 border-2 border-background"
-                                clickable={false}
-                              />
-                            ))}
-                            {c.member_count > (c.top_members?.length ?? 0) && (
-                              <div className="flex size-7 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-semibold text-muted-foreground">
-                                +{c.member_count - (c.top_members?.length ?? 0)}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <span
-                        className={`inline-flex shrink-0 items-center justify-center rounded-full p-1.5 ${a.chip}`}
-                        title={leagueTypeLabel(c.league_type)}
-                        aria-label={leagueTypeLabel(c.league_type)}
-                      >
-                        <a.icon className="size-4" />
-                      </span>
-                    </div>
                   </div>
                 </Card>
               </Link>
