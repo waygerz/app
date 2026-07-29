@@ -220,10 +220,10 @@ export default function HomePage() {
                     )}
                     {(c.unread_feed_count ?? 0) > 0 && (
                       <span
-                        className="flex min-w-7 items-center justify-center rounded-full bg-red-500 px-2.5 py-1 text-sm font-bold text-white shadow-sm"
+                        className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-extrabold leading-none text-white"
                         title="Unread posts and notices"
                       >
-                        {c.unread_feed_count}
+                        {(c.unread_feed_count ?? 0) > 99 ? '99+' : c.unread_feed_count}
                       </span>
                     )}
                   </div>
