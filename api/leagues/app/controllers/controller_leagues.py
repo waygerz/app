@@ -17,9 +17,11 @@ def my_leagues():
 
 
 def resolve_code(code):
+    # optional=True ignores a *missing* token, but a present-but-expired cookie
+    # still raises — so keep the verify inside the try and fall back to anon.
     me = None
-    verify_jwt_in_request(optional=True, locations=["cookies", "headers"])
     try:
+        verify_jwt_in_request(optional=True, locations=["cookies", "headers"])
         me = get_jwt_identity()
     except Exception:  # noqa: BLE001
         me = None

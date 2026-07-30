@@ -37,8 +37,9 @@ def upgrade():
         sa.Column('consumed_at', sa.DateTime(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('code', name='uq_league_invite_code'),
     )
+    # Uniqueness comes from the unique index (matches the model's
+    # `unique=True, index=True`) — no separate named constraint, to avoid drift.
     with op.batch_alter_table('league_invite_codes', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_league_invite_codes_code'), ['code'], unique=True)
         batch_op.create_index(batch_op.f('ix_league_invite_codes_league_id'), ['league_id'], unique=False)
@@ -56,7 +57,7 @@ def upgrade():
             sa.text(
                 "INSERT INTO league_invite_codes "
                 "(code, league_id, created_by, single_use, created_at) "
-                "VALUES (:code, :lid, :cb, false, now())"
+                "VALUES (:code, :lid, :cb, false, timezone('utc', now()))"
             ),
             {"code": code, "lid": lid, "cb": commish},
         )

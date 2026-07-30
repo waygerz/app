@@ -28,8 +28,9 @@ def upgrade():
         sa.Column('consumed_at', sa.DateTime(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('code', name='uq_friend_invite_code'),
     )
+    # Uniqueness comes from the unique index (matches the model's
+    # `unique=True, index=True`) — no separate named constraint, to avoid drift.
     with op.batch_alter_table('friend_invite_codes', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_friend_invite_codes_code'), ['code'], unique=True)
         batch_op.create_index(batch_op.f('ix_friend_invite_codes_owner_id'), ['owner_id'], unique=False)
