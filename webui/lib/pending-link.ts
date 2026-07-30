@@ -1,8 +1,11 @@
+// A share code (/j/<code>) stashed before login and replayed after, so the
+// login-page banner can preview it. The actual post-login return rides on the
+// ?next= param; this stash only powers the banner.
 const STORAGE_KEY = 'waygerz_pending_link';
 
-export type PendingLink =
-  | { kind: 'invite'; code: string }
-  | { kind: 'friend'; userId: string };
+export interface PendingLink {
+  code: string;
+}
 
 export function savePendingLink(link: PendingLink): void {
   try {
@@ -17,12 +20,7 @@ export function readPendingLink(): PendingLink | null {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PendingLink>;
-    if (parsed.kind === 'invite' && parsed.code) {
-      return { kind: 'invite', code: String(parsed.code).toUpperCase() };
-    }
-    if (parsed.kind === 'friend' && parsed.userId) {
-      return { kind: 'friend', userId: String(parsed.userId) };
-    }
+    if (parsed.code) return { code: String(parsed.code).toUpperCase() };
   } catch {
     // ignore corrupt storage
   }
@@ -37,19 +35,11 @@ export function clearPendingLink(): void {
   }
 }
 
-export function savePendingLinkFromLocation(pathname: string, search: string): PendingLink | null {
-  const params = new URLSearchParams(search);
-  if (pathname === '/invite') {
-    const code = (params.get('code') || '').trim().toUpperCase();
+export function savePendingLinkFromLocation(pathname: string): PendingLink | null {
+  if (pathname.startsWith('/j/')) {
+    const code = pathname.slice('/j/'.length).split('/')[0].trim().toUpperCase();
     if (!code) return null;
-    const link: PendingLink = { kind: 'invite', code };
-    savePendingLink(link);
-    return link;
-  }
-  if (pathname === '/add-friend') {
-    const userId = (params.get('u') || '').trim();
-    if (!userId) return null;
-    const link: PendingLink = { kind: 'friend', userId };
+    const link: PendingLink = { code };
     savePendingLink(link);
     return link;
   }
@@ -60,6 +50,5 @@ export function savePendingLinkFromReturnPath(returnPath: string): PendingLink |
   if (!returnPath.startsWith('/')) return null;
   const q = returnPath.indexOf('?');
   const pathname = q === -1 ? returnPath : returnPath.slice(0, q);
-  const search = q === -1 ? '' : returnPath.slice(q);
-  return savePendingLinkFromLocation(pathname, search);
+  return savePendingLinkFromLocation(pathname);
 }

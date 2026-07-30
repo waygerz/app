@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Share2, MessageCircle, EllipsisVertical, UserMinus } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { friendsApi, type Friend, type FriendRequest } from '@/lib/friends';
+import { myFriendCode, inviteUrl } from '@/lib/invites';
 import { messagingApi } from '@/lib/messaging';
 import { dispatchOpenChat } from '@/lib/open-chat';
 import { shareLink } from '@/lib/share';
@@ -59,6 +60,8 @@ export default function FriendsPage() {
 
   const friends = useQuery({ queryKey: ['friends'], queryFn: friendsApi.list });
   const requests = useQuery({ queryKey: ['friend-requests'], queryFn: friendsApi.requests });
+  // The personal, reusable friend link is a real code now (no raw user id in the URL).
+  const myCode = useQuery({ queryKey: ['my-friend-code'], queryFn: myFriendCode, enabled: !!user });
 
   function refresh() {
     qc.invalidateQueries({ queryKey: ['friends'] });
@@ -97,7 +100,7 @@ export default function FriendsPage() {
 
   const incoming = requests.data?.incoming ?? [];
   const outgoing = requests.data?.outgoing ?? [];
-  const inviteLink = user ? friendsApi.inviteLink(String(user.id)) : '';
+  const inviteLink = myCode.data?.code ? inviteUrl(myCode.data.code) : '';
 
   return (
     <div className="container py-8">

@@ -41,8 +41,8 @@ export interface LeagueMember {
 export interface LeagueDetail extends LeagueCard {
   commissioner_id: string;
   description: string | null;
-  join_code: string;
-  invite_token: string;
+  // Reusable share code for the /j/<code> deep link. Null only mid-migration.
+  invite_code: string | null;
   period_type: 'weekly' | 'season';
   starting_balance_cents: number | null;
   min_wager_cents: number | null;
@@ -57,25 +57,6 @@ export interface LeagueDetail extends LeagueCard {
 export interface LeagueSportRef {
   sport_league_id: string;
   name: string | null;
-}
-
-export interface LeaguePreview {
-  id: string;
-  name: string;
-  logo_url: string | null;
-  description: string | null;
-  league_type: LeagueType;
-  status: string;
-  period_type: 'weekly' | 'season';
-  starting_balance_cents: number | null;
-  min_wager_cents: number | null;
-  max_wager_cents: number | null;
-  rules: Record<string, unknown>;
-  member_count: number;
-  sports: LeagueSportRef[];
-  commissioner_name: string | null;
-  join_code: string;
-  viewer_membership?: 'none' | 'member' | 'left' | null;
 }
 
 export interface FeedItem {
@@ -120,12 +101,8 @@ function req<T = any>(path: string, options: RequestInit = {}): Promise<T> {
 export const leaguesApi = {
   list: () => req<{ leagues: LeagueCard[] }>(`${LEAGUES_API}/`).then((d) => d.leagues ?? []),
   get: (id: string) => req<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}`).then((d) => d.league),
-  preview: (code: string) =>
-    req<{ preview: LeaguePreview }>(`${LEAGUES_API}/preview?code=${encodeURIComponent(code)}`).then((d) => d.preview),
   create: (input: CreateLeagueInput) =>
     req<{ league: LeagueDetail }>(`${LEAGUES_API}/`, { method: 'POST', body: JSON.stringify(input) }).then((d) => d.league),
-  join: (code: string) =>
-    req<{ league: LeagueDetail }>(`${LEAGUES_API}/join`, { method: 'POST', body: JSON.stringify({ code }) }).then((d) => d.league),
   activate: (id: string) =>
     req<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}/activate`, { method: 'POST' }).then((d) => d.league),
   update: (id: string, payload: Record<string, unknown>) =>

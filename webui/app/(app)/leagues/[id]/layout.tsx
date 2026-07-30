@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { UserPlus } from 'lucide-react';
 import { shareLink } from '@/lib/share';
+import { inviteUrl } from '@/lib/invites';
 import { LeagueProvider } from './league-context';
 
 const PLAY_TAB: Record<LeagueType, string> = {
@@ -81,7 +82,11 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   ];
 
   const shareInvite = async () => {
-    const inviteLink = `${window.location.origin}/invite?code=${lg.join_code}`;
+    if (!lg.invite_code) {
+      toast.error('No invite link for this league yet');
+      return;
+    }
+    const inviteLink = inviteUrl(lg.invite_code);
     try {
       const result = await shareLink({
         url: inviteLink,

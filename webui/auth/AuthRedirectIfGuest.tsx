@@ -24,7 +24,7 @@ export function AuthRedirectIfGuest({ children }: { children: ReactNode }) {
     const qs = searchParams.toString();
     const search = qs ? `?${qs}` : '';
     const returnTo = pathname + search;
-    savePendingLinkFromLocation(pathname, search);
+    savePendingLinkFromLocation(pathname);
     redirect(`/login?next=${encodeURIComponent(safeReturnPath(returnTo))}`);
   }
 

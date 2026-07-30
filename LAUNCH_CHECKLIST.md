@@ -26,8 +26,7 @@ Route access is gated by `webui/proxy.ts`:
 | ✓ | Path | Purpose | Cards / Tables / Lists | Data |
 |---|------|---------|------------------------|------|
 | ☐ | `/welcome` | Marketing landing (also what `/` rewrites to for signed-out visitors) | Hero + CTA, **feature cards** grid, "How it works" step cards, "Two ways to play" (H2H vs Pick'em) cards, FAQ accordion, footer — all static | none |
-| ☐ | `/invite?code=` | Preview & join a league invite | One league **Card**: LeagueAvatar, name, type badge, member count, commissioner, description, detail rows (period, balance, min/max wager, sports), Join/Decline | `leaguesApi.preview` / `.join` |
-| ☐ | `/add-friend?u=` | Preview & send a friend request | One user **Card**: avatar, name, relationship-driven action buttons (add / accept+decline / pending / friends) | `friendsApi.invitePreview` / `addByUserId` / `accept` / `decline` |
+| ☐ | `/j/[code]` | Unified invite deep link — resolves a league **or** friend code (prefix `L`/`F`) and renders the right preview + actions; guests bounce to login and replay after | One **Card**: league preview (avatar, type, members, commissioner, detail rows, Join/Rejoin) **or** friend preview (avatar, name, Add / Accept+Decline / already-friends → Dashboard). Invalid/expired/consumed → message + Dashboard | `resolveCode` / `actOnCode` (`lib/invites.ts`) → leagues or friends `/j/<code>` |
 
 ## 🔑 Guest-only (bounces signed-in users home)
 

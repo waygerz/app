@@ -18,8 +18,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 // session ping-pong between / and /login.
 const SESSION_COOKIES = ['waygerz_access', 'waygerz_refresh'];
 
-// No auth required (shareable deep links).
-const PUBLIC_PREFIXES = ['/invite', '/add-friend'];
+// No auth required (shareable deep links). `/j/<code>` is the unified invite
+// route; the page itself resolves the code and bounces guests to login.
+const PUBLIC_PREFIXES = ['/j'];
 // Only for signed-OUT users; signed-in users get bounced home.
 const GUEST_PREFIXES = ['/login', '/signup', '/welcome'];
 

@@ -158,13 +158,13 @@ no lifetime control. Replace with a code:
 
 ## Phasing
 
-**Phase 1 — web + backend (ship at launch)**
-- [ ] `friend_invite_codes` table + resolve/act endpoints (friends); remove raw-uuid endpoint
-- [ ] `league_invite_codes` table + resolve/act (leagues); drop `join_code`/`invite_token` + old `preview`/`join`
-- [ ] `lib/invites.ts`, `lib/invite-links.ts`, collapsed `pending-link.ts`
-- [ ] `/j/[code]` route; delete `/invite` + `/add-friend`
-- [ ] `proxy.ts` public prefix → `/j`
-- [ ] Point both share buttons at the new builder
+**Phase 1 — web + backend (ship at launch)** ✅ built (2026-07-30), pending deploy
+- [x] `friend_invite_codes` table + resolve/act endpoints (friends); remove raw-uuid endpoint
+- [x] `league_invite_codes` table + resolve/act (leagues); drop `join_code`/`invite_token` + old `preview`/`join`
+- [x] `lib/invites.ts` (resolveCode/actOnCode/myFriendCode/inviteUrl), collapsed `pending-link.ts`
+- [x] `/j/[code]` route; delete `/invite` + `/add-friend`
+- [x] `proxy.ts` public prefix → `/j`
+- [x] Point both share buttons (league layout, friends page) at the new builder
 
 **Phase 2 — mobile-ready (with the apps)**
 - [ ] `.well-known/apple-app-site-association` + `assetlinks.json` (real app IDs)
