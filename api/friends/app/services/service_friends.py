@@ -80,7 +80,7 @@ def _notify_friend(user_id, template_key, from_name, *, ref_id=None, dedup_key=N
                 "dedup_key": dedup_key,
             },
             headers=_auth_headers(),
-            timeout=10,
+            timeout=3,  # best-effort; fail fast so the action never blocks on it
         )
     except Exception:  # noqa: BLE001
         current_app.logger.exception("friend notify failed user=%s key=%s", user_id, template_key)

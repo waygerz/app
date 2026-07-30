@@ -113,7 +113,7 @@ def _notify_league(user_id, template_key, title, context, *, actor=None, ref_id=
                 "dedup_key": dedup_key,
             },
             headers=_headers(),
-            timeout=10,
+            timeout=3,  # best-effort; fail fast so the action never blocks on it
         )
     except Exception:  # noqa: BLE001
         current_app.logger.exception("league notify failed user=%s key=%s", user_id, template_key)

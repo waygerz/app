@@ -223,7 +223,9 @@ def _notify(user_id, template_key, title, context, *, actor_uid=None, ref_id=Non
                 "dedup_key": dedup_key,
             },
             headers=_itoken(),
-            timeout=10,
+            # Best-effort + currently reachable only via the flaky ALB URL, so
+            # fail fast rather than block the user's action for 10s.
+            timeout=3,
         )
     except Exception:  # noqa: BLE001
         current_app.logger.exception("wager notify failed user=%s key=%s", user_id, template_key)
