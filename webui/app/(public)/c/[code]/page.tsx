@@ -264,7 +264,8 @@ function CodeContent({ code }: { code: string }) {
 
         <div className="flex flex-col">
           <Row label="Matchup" value={w.event_name || `${w.away_team} @ ${w.home_team}`} />
-          <Row label="Your pick" value={wagerPick(w, w.acceptor_side)} />
+          {/* The acceptor takes acceptor_side; only they see "Your pick". */}
+          {rel === 'acceptor' && <Row label="Your pick" value={wagerPick(w, w.acceptor_side)} />}
           <Row label="Stake" value={formatCredits(w.amount_cents)} />
         </div>
 

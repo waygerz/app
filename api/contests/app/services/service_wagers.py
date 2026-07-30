@@ -337,17 +337,18 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
     db.session.add(w)
     db.session.flush()  # assign id for the ref
 
+    # Mint the /c/<code> deep link in the SAME transaction as the wager so a
+    # code failure (or an InsufficientFunds rollback) never leaves a committed,
+    # funded wager without its link. Lets the acceptor Accept/Reject straight
+    # from the notification (incl. SMS).
+    code = generate_wager_code()
+    db.session.add(WagerInviteCode(code=code, wager_id=w.id, created_by=proposer_id))
+
     try:
         hold(account, proposer_id, amount, _ref(w.id))
     except InsufficientFunds:
         db.session.rollback()
         raise
-    db.session.commit()
-
-    # Mint a short /c/<code> deep link to this specific wager so the acceptor
-    # can Accept/Reject it straight from the notification (incl. SMS).
-    code = generate_wager_code()
-    db.session.add(WagerInviteCode(code=code, wager_id=w.id, created_by=proposer_id))
     db.session.commit()
 
     _notify(
