@@ -93,7 +93,7 @@ def _headers():
     return {"X-Internal-Token": current_app.config["INTERNAL_TOKEN"]}
 
 
-def _notify_league(user_id, template_key, title, context, *, ref_id=None, deep_link=None, dedup_key=None):
+def _notify_league(user_id, template_key, title, context, *, actor=None, ref_id=None, deep_link=None, dedup_key=None):
     """Fan a league event out to a member's notifications (in-app feed + SMS).
     Best-effort — never let a notification failure affect the league action."""
     try:
@@ -106,6 +106,7 @@ def _notify_league(user_id, template_key, title, context, *, ref_id=None, deep_l
                 "template_key": template_key,
                 "title": title,
                 "context": context,
+                "actor": actor,
                 "ref_type": "league",
                 "ref_id": ref_id,
                 "deep_link": deep_link,
@@ -1382,6 +1383,8 @@ def invite_friends(league_id, me, data):
                     "league": league.name,
                     "link": "https://waygerz.com/leagues",
                 },
+                # A league invite's "face" is the league itself (its logo).
+                actor={"id": str(league_id), "name": league.name, "avatar_key": league.logo_url},
                 ref_id=league_id,
                 deep_link="/leagues",
                 dedup_key=f"league_invite:{league_id}:{uid}",

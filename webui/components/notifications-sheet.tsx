@@ -18,6 +18,7 @@ import { actOnCode } from '@/lib/invites';
 import { friendsApi } from '@/lib/friends';
 import { leaguesApi } from '@/lib/leagues';
 import { UserAvatar } from '@/components/user-avatar';
+import { LeagueAvatar } from '@/components/league-avatar';
 import { useAuth } from '@/auth/AuthContext';
 import { cn } from '@/lib/utils';
 
@@ -204,13 +205,22 @@ export function NotificationsSheet() {
                           who it's from; otherwise a category icon chip. */}
                       {n.actor_id ? (
                         <div className="relative shrink-0">
-                          <UserAvatar
-                            userId={n.actor_id}
-                            name={n.actor_name ?? 'Someone'}
-                            imageUrl={n.actor_avatar_key}
-                            className="size-9"
-                            clickable={false}
-                          />
+                          {n.ref_type === 'league' ? (
+                            <LeagueAvatar
+                              name={n.actor_name ?? 'League'}
+                              logoUrl={n.actor_avatar_key}
+                              id={n.actor_id}
+                              size={36}
+                            />
+                          ) : (
+                            <UserAvatar
+                              userId={n.actor_id}
+                              name={n.actor_name ?? 'Someone'}
+                              imageUrl={n.actor_avatar_key}
+                              className="size-9"
+                              clickable={false}
+                            />
+                          )}
                           <span className={cn('absolute -bottom-1 -end-1 flex size-4 items-center justify-center rounded-full ring-2 ring-background', meta.tint)}>
                             <Icon className="size-2.5" />
                           </span>

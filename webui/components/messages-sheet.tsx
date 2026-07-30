@@ -539,8 +539,8 @@ export function MessagesSheet() {
     items.sort((a, b) => a.at - b.at);
 
     return (
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="flex items-center gap-2.5 border-b border-border px-3 py-2">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center gap-2.5 border-b border-border px-3 py-2">
           <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Back to inbox"
             onClick={() => setActiveId(null)}>
             <ArrowLeft className="size-4" />
@@ -577,7 +577,7 @@ export function MessagesSheet() {
           </div>
         </ScrollArea>
 
-        <div className="flex items-center gap-2 border-t border-border p-3">
+        <div className="flex shrink-0 items-center gap-2 border-t border-border p-3">
           <Input
             value={draft}
             onChange={(e) => {
@@ -621,11 +621,11 @@ export function MessagesSheet() {
         <SheetHeader className="border-b border-border p-4">
           <SheetTitle>{activeId ? 'Conversation' : 'Messages'}</SheetTitle>
         </SheetHeader>
-        <SheetBody className="min-h-0 flex-1 p-0">
+        <SheetBody className="flex min-h-0 flex-1 flex-col p-0">
           {activeId ? (
-            <div className="flex h-[calc(100vh-5.5rem)] flex-col">{renderChat()}</div>
+            renderChat()
           ) : (
-            <ScrollArea className="h-[calc(100vh-5.5rem)]">{renderInbox()}</ScrollArea>
+            <ScrollArea className="min-h-0 flex-1">{renderInbox()}</ScrollArea>
           )}
         </SheetBody>
       </SheetContent>
