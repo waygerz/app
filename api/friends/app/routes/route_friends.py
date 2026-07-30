@@ -5,9 +5,19 @@ from app.controllers import controller_friends as ctrl
 friends_bp = Blueprint("friends", __name__)
 
 
-@friends_bp.get("/users/<uuid:target_id>/invite-preview")
-def invite_preview(target_id):
-    return ctrl.invite_preview(target_id)
+@friends_bp.get("/my-code")
+def my_code():
+    return ctrl.my_code()
+
+
+@friends_bp.get("/j/<code>")
+def resolve_code(code):
+    return ctrl.resolve_code(code)
+
+
+@friends_bp.post("/j/<code>/act")
+def act_on_code(code):
+    return ctrl.act_on_code(code)
 
 
 @friends_bp.post("/requests")

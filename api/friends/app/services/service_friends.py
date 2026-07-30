@@ -1,10 +1,20 @@
 """Friends domain: requests, listings, accept/decline + auth lookups."""
+import secrets
+from datetime import datetime
+
 import requests
 from flask import current_app
 from sqlalchemy import and_, or_
 
 from app.extensions import db
 from app.models.friendship import ACCEPTED, PENDING, Friendship
+from app.models.invite_code import FriendInviteCode
+
+# No ambiguous characters (no I/O/0/1). Leading "F" marks a friend code so a
+# client routes /j/<code> by prefix without a lookup.
+_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+CODE_PREFIX = "F"
+_CODE_BODY_LEN = 6
 
 
 def _auth_headers():
@@ -82,21 +92,113 @@ def _relationship(me: str | None, target_id: str) -> str:
     return "none"
 
 
-def invite_preview(me: str | None, target_id: str) -> tuple[dict, int]:
-    target_id = str(target_id)
-    name = resolve_users([target_id]).get(target_id)
-    if not name:
-        return {"error": "user not found"}, 404
-    rel = _relationship(me, target_id)
-    if me and me == target_id:
+# ---- Invite codes ---------------------------------------------------------
+def generate_friend_code() -> str:
+    """A unique, type-prefixed invite code (e.g. F7M2PJH)."""
+    for _ in range(10):
+        code = CODE_PREFIX + "".join(secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_BODY_LEN))
+        if not FriendInviteCode.query.filter_by(code=code).first():
+            return code
+    return CODE_PREFIX + "".join(secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_BODY_LEN + 1))
+
+
+def _code_state(rec) -> str:
+    if rec.consumed_at:
+        return "consumed"
+    if rec.expires_at and rec.expires_at < datetime.utcnow():
+        return "expired"
+    return "ok"
+
+
+def my_code(me: str) -> tuple[dict, int]:
+    """Get-or-create the caller's reusable personal friend link code."""
+    rec = (
+        FriendInviteCode.query.filter_by(owner_id=me, single_use=False)
+        .order_by(FriendInviteCode.created_at.asc())
+        .first()
+    )
+    if not rec:
+        rec = FriendInviteCode(code=generate_friend_code(), owner_id=me, single_use=False)
+        db.session.add(rec)
+        db.session.commit()
+    return {"code": rec.code}, 200
+
+
+def resolve_code(me: str | None, code: str) -> tuple[dict, int]:
+    """Unified /j/<code> resolver — the shared contract shape (see
+    INVITE_CODES_DESIGN.md). JWT optional so signed-out users see the preview."""
+    code = (code or "").strip().upper()
+    rec = FriendInviteCode.query.filter_by(code=code).first()
+    if not rec:
+        return {"type": "friend", "code": code, "target_id": None,
+                "state": "invalid", "single_use": False,
+                "viewer": {"authenticated": bool(me), "relationship": "none"},
+                "preview": None, "actions": []}, 404
+    owner = str(rec.owner_id)
+    user = resolve_users_full([owner]).get(owner) or {}
+    state = _code_state(rec)
+    rel = _relationship(me, owner) if me else "none"
+    if me and me == owner:
         rel = "self"
-    row = pair(me, target_id) if me else None
+    row = pair(me, owner) if me else None
     request_id = row.id if row and row.status == PENDING else None
+
+    actions: list[str] = []
+    if state == "ok" and me and rel not in ("self", "friends", "pending_out"):
+        actions = ["accept", "decline"] if rel == "pending_in" else ["add"]
+
     return {
-        "user": {"id": target_id, "display_name": name},
-        "relationship": rel,
-        "request_id": request_id,
+        "type": "friend",
+        "code": code,
+        "target_id": owner,
+        "state": state,
+        "single_use": rec.single_use,
+        "viewer": {
+            "authenticated": bool(me),
+            "relationship": rel,
+            "request_id": request_id,
+        },
+        "preview": {"user": {
+            "id": owner,
+            "display_name": user.get("display_name") or f"User {owner[:8]}",
+            "avatar_key": user.get("avatar_key"),
+        }},
+        "actions": actions,
     }, 200
+
+
+def act_on_code(me: str, code: str, data: dict) -> tuple[dict, int]:
+    """Perform a /j/<code> action (add/accept/decline), consuming single-use codes."""
+    action = (data.get("action") or "").strip().lower()
+    code = (code or "").strip().upper()
+    rec = FriendInviteCode.query.filter_by(code=code).first()
+    if not rec:
+        return {"error": "invite not found"}, 404
+    owner = str(rec.owner_id)
+    state = _code_state(rec)
+    if state != "ok":
+        return {"error": f"invite {state}"}, 409
+    if me == owner:
+        return {"error": "you can't add yourself"}, 400
+
+    if action == "add":
+        _body, status = send_request(me, {"user_id": owner})
+        if status >= 400:
+            return _body, status
+    elif action in ("accept", "decline"):
+        row = pair(me, owner)
+        if not row or row.status != PENDING or row.addressee_id != me:
+            return {"error": "no pending request to act on"}, 409
+        _body, status = accept(me, row.id) if action == "accept" else decline(me, row.id)
+        if status >= 400:
+            return _body, status
+    else:
+        return {"error": "unsupported action"}, 400
+
+    if rec.single_use:
+        rec.consumed_at = datetime.utcnow()
+        db.session.commit()
+    return {"type": "friend", "target_id": owner}, 200
 
 
 def send_request(me: str, data: dict) -> tuple[dict, int]:

@@ -4,14 +4,28 @@ from flask_jwt_extended import get_jwt_identity, jwt_required, verify_jwt_in_req
 from app.services import service_friends as svc
 
 
-def invite_preview(target_id):
+def resolve_code(code):
     me = None
     verify_jwt_in_request(optional=True, locations=["cookies", "headers"])
     try:
         me = get_jwt_identity()
     except Exception:  # noqa: BLE001
         me = None
-    body, status = svc.invite_preview(me, str(target_id))
+    body, status = svc.resolve_code(me, str(code))
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def act_on_code(code):
+    body, status = svc.act_on_code(
+        get_jwt_identity(), str(code), request.get_json(silent=True) or {}
+    )
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def my_code():
+    body, status = svc.my_code(get_jwt_identity())
     return jsonify(body), status
 
 
