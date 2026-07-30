@@ -4,6 +4,12 @@ Consolidate the two share-link routes (`/invite?code=` for leagues, `/add-friend
 for friends) into **one deep-linkable route `/j/<code>`** that works on web today
 and iOS/Android later.
 
+> **Dev-stage cleanup:** no production invite data to preserve, so we **remove all
+> old share-link code outright** — no redirect shims, no back-compat resolvers. New
+> tables are still created via the normal per-service `flask db migrate` (that's how
+> the schema lands in every env), but the revisions may freely drop the old
+> columns/tables with no data-preservation logic.
+
 ## Decisions (locked)
 
 1. **Per-service codes, shared response contract.** Each owning service (leagues,
@@ -11,12 +17,22 @@ and iOS/Android later.
    return an identical JSON shape. The code's **type prefix** tells the client which
    service to call. No new microservice; no new server-to-server internal calls.
 2. **Per-code lifetime flag.** Every code carries `single_use` (+ optional
-   `expires_at`). Reusable share links stay reusable (one league code the whole
-   group joins with; a personal friend link); single-use codes are stamped
+   `expires_at`). Reusable share links stay reusable; single-use codes are stamped
    `consumed_at` on accept/decline and can't be replayed.
-3. **Universal Links / App Links now, deferred deep linking later.** Ship
+3. **Friend links are reusable** and befriend the code owner. On resolve, if the
+   viewer is **already friends**, show a message + a **Dashboard** button (no action).
+4. **Universal Links / App Links now, deferred deep linking later.** Ship
    `.well-known` association files for `/j/*` with the apps; deferred
    resolve-after-install is a fast-follow.
+
+## Scope note — two different "league invite" features
+
+- **Shareable link** (reusable `join_code` + `invite_token` on the `leagues` table)
+  — **replaced** by `/j/L…`. All old code removed.
+- **Targeted invite inbox** (`league_invites` rows; a commissioner invites specific
+  friends by user-id, who see them in the "Invites (N)" list on `/` and accept via
+  `POST /<league_id>/join`) — **out of scope, kept as-is**. It is not a shareable
+  link.
 
 ## Code format
 
@@ -29,8 +45,8 @@ and iOS/Android later.
 - **URL carries the bare code**: `/j/L4K9QX7` (path param, not query — Universal/App
   Link matching is path-based). UI may render it grouped (`L4K9-QX7`) for typing;
   dashes are stripped on input.
-- **Back-compat:** the legacy league `join_code` (`WAYG-XXXX`) still resolves — the
-  leagues resolver accepts both the new `L…` codes and old `WAYG-…` codes.
+- No legacy-format acceptance — the old `WAYG-XXXX` codes are removed with everything
+  else.
 
 ## Shared response contract
 
@@ -62,6 +78,9 @@ users see the preview):
 - friend `accept` → `/friends`
 - any `decline`   → `/` (dashboard)
 
+**`actions: []` (nothing to do)** covers: already a member, already friends, `self`,
+`expired`, `consumed`. The client shows the matching message + a **Dashboard** button.
+
 ## Backend changes
 
 ### friends service (`api/friends/`) — gains a real code table
@@ -69,26 +88,29 @@ users see the preview):
 Today the friend link embeds a **raw user UUID** (`?u=<uuid>`) — a privacy leak and
 no lifetime control. Replace with a code:
 
-- New table `friend_invite_codes`: `code` (unique, indexed), `owner_id` (the sender;
-  accepting befriends this user), `single_use`, `expires_at`, `consumed_at`,
-  `created_at`.
-- Each user has one **persistent reusable** personal code (`single_use=false`),
-  generated lazily on first share — mirrors how a league owns its `join_code`.
-- Endpoints: `GET /j/<code>` (resolve → uniform shape; relationship computed from
-  `friendships`), `POST /j/<code>/act` (accept → create/accept friendship, consume if
-  single_use; decline → delete pending row, consume). Reuse existing
+- New table `friend_invite_codes`: `code` (unique, indexed), `owner_id` (accepting
+  befriends this user), `single_use` (default **false** — friend links are reusable),
+  `expires_at`, `consumed_at`, `created_at`.
+- Each user has one **persistent reusable** personal code, generated lazily on first
+  share — mirrors how a league owns its `join_code`.
+- Endpoints: `GET /j/<code>` (resolve; relationship computed from `friendships` — if
+  `friends`, return `actions: []`), `POST /j/<code>/act` (accept → create/accept
+  friendship; decline → delete pending row; consume if single_use). Reuse existing
   `service_friends` logic underneath.
+- **Remove:** the raw-uuid `GET /users/<id>/invite-preview` endpoint and any code path
+  that keys friend invites on a bare user-id.
 
-### leagues service (`api/leagues/`) — add a codes table alongside `join_code`
+### leagues service (`api/leagues/`) — replace join_code with a codes table
 
 - New table `league_invite_codes`: `code` (unique), `league_id`, `created_by`,
-  `single_use`, `expires_at`, `consumed_at`, `created_at`.
-- Migrate each league's existing reusable `join_code` in as a `single_use=false`
-  row; keep the `leagues.join_code` column as the denormalized back-compat pointer.
-- One-time league invites become new `single_use=true` rows.
-- Endpoints: `GET /j/<code>` and `POST /j/<code>/act` wrapping the existing
-  `preview` / `join_by_code` logic in the uniform contract + consumption. Old
-  `preview` / `join` stay for back-compat.
+  `single_use`, `expires_at`, `consumed_at`, `created_at`. A league's default
+  reusable code is a `single_use=false` row created at league creation; one-time
+  invites are `single_use=true` rows.
+- Endpoints: `GET /j/<code>` and `POST /j/<code>/act` in the uniform contract, built
+  on the existing `preview` / `join_by_code` logic.
+- **Remove:** the `leagues.join_code` and `leagues.invite_token` columns, the old
+  `GET /preview` and `POST /join` endpoints, and the `?code` / `?invite_token`
+  handling. (The targeted `league_invites` inbox stays — see scope note.)
 
 ### gateway (`api/gateway/conf.d/default.conf`)
 
@@ -101,21 +123,22 @@ no lifetime control. Replace with a code:
 ## webui changes
 
 - **New route** `app/(public)/j/[code]/page.tsx`: read `params.code`, strip dashes,
-  pick service by prefix, call resolve, render the existing league-preview or
-  friend-preview card, and Accept/Decline → `act` → redirect from the returned
-  `{type, target_id}`.
-- **Redirect shims:** keep `/invite` and `/add-friend` as thin redirects to
-  `/j/<code>` so links already shared in the wild keep working. (`/add-friend?u=` has
-  no code — the shim resolves the user's current code, or we keep the raw-uuid
-  resolver path alive during transition.)
+  pick service by prefix, call resolve, render the league- or friend-preview card,
+  and Accept/Decline → `act` → redirect from the returned `{type, target_id}`. The
+  already-friends / already-member / expired / consumed states render a message + a
+  **Dashboard** button.
+- **Delete** `app/(public)/invite/` and `app/(public)/add-friend/` entirely (no
+  shims).
 - **`lib/invites.ts`** (new): `resolveCode(code)` + `actOnCode(code, action)` — the
   single client for both types (prefix switch lives here, one place).
-- **`lib/invite-links.ts`** (new): one builder for share URLs — fixes today's split
-  where `lib/friends.ts` centralizes its URL but the league URL is inlined in
-  `leagues/[id]/layout.tsx`. Both share buttons call this.
-- **`lib/pending-link.ts`:** generalize the stash to a single `{ code }` item and
-  match `/j/` (drop the two hardcoded route strings).
-- **`proxy.ts`:** add `/j` to `PUBLIC_PREFIXES` (keep the old two during transition).
+- **`lib/invite-links.ts`** (new): one builder for share URLs — replaces today's
+  split (`lib/friends.ts` inline URL + the league URL inlined in
+  `leagues/[id]/layout.tsx`). Both share buttons call this.
+- **`lib/pending-link.ts`:** collapse the stash to a single `{ code }` item and match
+  `/j/` (drop the `/invite` + `/add-friend` route strings).
+- **`proxy.ts`:** replace the `/invite` + `/add-friend` public prefixes with `/j`.
+- **Remove:** `friendsApi.invitePreview` / `inviteLink`, `leaguesApi.preview` / `join`
+  and their callers, once migrated to `lib/invites.ts`.
 
 ## Mobile (Flutter, iOS + Android)
 
@@ -136,11 +159,11 @@ no lifetime control. Replace with a code:
 ## Phasing
 
 **Phase 1 — web + backend (ship at launch)**
-- [ ] `friend_invite_codes` table + resolve/act endpoints (friends)
-- [ ] `league_invite_codes` table + migration of existing `join_code` + resolve/act (leagues)
-- [ ] `lib/invites.ts`, `lib/invite-links.ts`, generalized `pending-link.ts`
-- [ ] `/j/[code]` route + `/invite` & `/add-friend` redirect shims
-- [ ] `proxy.ts` public prefix
+- [ ] `friend_invite_codes` table + resolve/act endpoints (friends); remove raw-uuid endpoint
+- [ ] `league_invite_codes` table + resolve/act (leagues); drop `join_code`/`invite_token` + old `preview`/`join`
+- [ ] `lib/invites.ts`, `lib/invite-links.ts`, collapsed `pending-link.ts`
+- [ ] `/j/[code]` route; delete `/invite` + `/add-friend`
+- [ ] `proxy.ts` public prefix → `/j`
 - [ ] Point both share buttons at the new builder
 
 **Phase 2 — mobile-ready (with the apps)**
@@ -151,11 +174,3 @@ no lifetime control. Replace with a code:
 **Phase 3 — fast-follow**
 - [ ] Deferred deep linking (resolve a code after install-from-store)
 - [ ] UI to mint single-use / expiring invites
-- [ ] Retire the legacy `/invite` + `/add-friend` routes once traffic drains
-
-## Open questions to settle before Phase 1
-
-- **Friend "add me" link** is inherently reusable (`single_use=false`, one per user).
-  Confirm we also want single-use friend invites, or reusable-only for friends.
-- **Old `/add-friend?u=<uuid>` links already shared:** keep the raw-uuid resolver
-  alive indefinitely, or sunset with the shim in Phase 3?
