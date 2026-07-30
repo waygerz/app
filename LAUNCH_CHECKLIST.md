@@ -26,7 +26,7 @@ Route access is gated by `webui/proxy.ts`:
 | ✓ | Path | Purpose | Cards / Tables / Lists | Data |
 |---|------|---------|------------------------|------|
 | ☐ | `/welcome` | Marketing landing (also what `/` rewrites to for signed-out visitors) | Hero + CTA, **feature cards** grid, "How it works" step cards, "Two ways to play" (H2H vs Pick'em) cards, FAQ accordion, footer — all static | none |
-| ☐ | `/c/[code]` | Unified invite deep link — resolves a league **or** friend code (prefix `L`/`F`) and renders the right preview + actions; guests bounce to login and replay after | One **Card**: league preview (avatar, type, members, commissioner, detail rows, Join/Rejoin) **or** friend preview (avatar, name, Add / Accept+Decline / already-friends → Dashboard). Invalid/expired/consumed → message + Dashboard | `resolveCode` / `actOnCode` (`lib/invites.ts`) → leagues or friends `/c/<code>` |
+| ☐ | `/c/[code]` | Unified deep link — resolves a league (`L`), friend (`F`) **or** bet (`B`) code and renders the right preview + actions; guests bounce to login and replay after | One **Card**: league preview (Join/Rejoin) **·** friend preview (Add / Accept+Decline / already-friends → Dashboard) **·** bet challenge (proposer, matchup, your pick, stake, **Accept/Reject** — acceptor only). Invalid/consumed → message + Dashboard | `resolveCode` / `actOnCode` (`lib/invites.ts`) → leagues / friends / **contests** `/c/<code>` |
 
 ## 🔑 Guest-only (bounces signed-in users home)
 
