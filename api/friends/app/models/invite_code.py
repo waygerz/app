@@ -6,7 +6,7 @@ from app.extensions import db
 
 
 class FriendInviteCode(db.Model):
-    """A shareable /j/<code> link that befriends the code's owner. A user's
+    """A shareable /c/<code> link that befriends the code's owner. A user's
     personal, reusable link is single_use=False; one-time invites are
     single_use=True and get stamped consumed_at when used."""
 

@@ -70,7 +70,7 @@ def test_weekly_pickem_end_to_end(client, auth_headers, app, monkeypatch):
         assert periods[0].status == "open" and periods[1].status == "upcoming"
 
     # --- 2) A second member joins ------------------------------------------
-    assert client.post(f"{API_PREFIX}/j/{code}/act", json={"action": "join"},
+    assert client.post(f"{API_PREFIX}/c/{code}/act", json={"action": "join"},
                        headers=auth_headers(member)).status_code == 200
 
     # --- 3) Both submit picks (G3 carries the tiebreaker) ------------------

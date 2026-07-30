@@ -37,7 +37,7 @@ class League(db.Model):
     league_type = db.Column(db.String(16), nullable=False, index=True)
     status = db.Column(db.String(16), nullable=False, default=DRAFT, index=True)
     # Shareable join links live in the league_invite_codes table (see the
-    # LeagueInviteCode model), resolved via the unified /j/<code> route.
+    # LeagueInviteCode model), resolved via the unified /c/<code> route.
     period_type = db.Column(db.String(8), nullable=False, default=SEASON)
     starting_balance_cents = db.Column(db.BigInteger, nullable=True)  # null for pickem
     min_wager_cents = db.Column(db.BigInteger, nullable=True)

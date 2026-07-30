@@ -10,12 +10,12 @@ def my_code():
     return ctrl.my_code()
 
 
-@friends_bp.get("/j/<code>")
+@friends_bp.get("/c/<code>")
 def resolve_code(code):
     return ctrl.resolve_code(code)
 
 
-@friends_bp.post("/j/<code>/act")
+@friends_bp.post("/c/<code>/act")
 def act_on_code(code):
     return ctrl.act_on_code(code)
 

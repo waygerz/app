@@ -11,7 +11,7 @@ from app.models.friendship import ACCEPTED, PENDING, Friendship
 from app.models.invite_code import FriendInviteCode
 
 # No ambiguous characters (no I/O/0/1). Leading "F" marks a friend code so a
-# client routes /j/<code> by prefix without a lookup.
+# client routes /c/<code> by prefix without a lookup.
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 CODE_PREFIX = "F"
 _CODE_BODY_LEN = 6
@@ -125,7 +125,7 @@ def my_code(me: str) -> tuple[dict, int]:
 
 
 def resolve_code(me: str | None, code: str) -> tuple[dict, int]:
-    """Unified /j/<code> resolver — the shared contract shape (see
+    """Unified /c/<code> resolver — the shared contract shape (see
     INVITE_CODES_DESIGN.md). JWT optional so signed-out users see the preview."""
     code = (code or "").strip().upper()
     rec = FriendInviteCode.query.filter_by(code=code).first()
@@ -168,7 +168,7 @@ def resolve_code(me: str | None, code: str) -> tuple[dict, int]:
 
 
 def act_on_code(me: str, code: str, data: dict) -> tuple[dict, int]:
-    """Perform a /j/<code> action (add/accept/decline), consuming single-use codes."""
+    """Perform a /c/<code> action (add/accept/decline), consuming single-use codes."""
     action = (data.get("action") or "").strip().lower()
     code = (code or "").strip().upper()
     rec = FriendInviteCode.query.filter_by(code=code).first()

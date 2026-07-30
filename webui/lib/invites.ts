@@ -1,4 +1,4 @@
-// Unified invite-code client for the /j/<code> route. The code's leading
+// Unified invite-code client for the /c/<code> route. The code's leading
 // letter picks the owning service (L -> leagues, F -> friends); both return the
 // same shared contract shape (see INVITE_CODES_DESIGN.md).
 import { API } from './api-paths';
@@ -61,7 +61,7 @@ function serviceFor(code: string): string {
  * 404 so invalid/expired/consumed states still render. */
 export async function resolveCode(code: string): Promise<ResolvedCode> {
   const c = normalizeCode(code);
-  const res = await apiFetch(`${BASE}${serviceFor(c)}/j/${encodeURIComponent(c)}`);
+  const res = await apiFetch(`${BASE}${serviceFor(c)}/c/${encodeURIComponent(c)}`);
   const data = await res.json().catch(() => null);
   if (data && typeof data === 'object' && 'type' in data) {
     return data as ResolvedCode;
@@ -81,7 +81,7 @@ export async function resolveCode(code: string): Promise<ResolvedCode> {
 /** Perform an action on a code; returns where the client should navigate. */
 export function actOnCode(code: string, action: InviteAction): Promise<ActResult> {
   const c = normalizeCode(code);
-  return apiJson<ActResult>(`${BASE}${serviceFor(c)}/j/${encodeURIComponent(c)}/act`, {
+  return apiJson<ActResult>(`${BASE}${serviceFor(c)}/c/${encodeURIComponent(c)}/act`, {
     method: 'POST',
     body: JSON.stringify({ action }),
   });
@@ -94,5 +94,5 @@ export function myFriendCode(): Promise<{ code: string }> {
 
 /** Build the shareable deep link for a code. Client-only (uses window). */
 export function inviteUrl(code: string): string {
-  return `${window.location.origin}/j/${normalizeCode(code)}`;
+  return `${window.location.origin}/c/${normalizeCode(code)}`;
 }

@@ -175,7 +175,7 @@ def test_standings_rank_by_wins(client, auth_headers, app, monkeypatch):
     lid, pid = d["id"], _period_id(d)
 
     u2 = str(uuid.uuid4())
-    client.post(f"/v1/gameplay/leagues/j/{code}/act", json={"action": "join"}, headers=auth_headers(u2))
+    client.post(f"/v1/gameplay/leagues/c/{code}/act", json={"action": "join"}, headers=auth_headers(u2))
 
     # U1 picks both home (wins both); U2 picks both away (loses both).
     client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",

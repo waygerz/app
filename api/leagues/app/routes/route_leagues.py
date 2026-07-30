@@ -15,12 +15,12 @@ def my_leagues():
     return ctrl.my_leagues()
 
 
-@leagues_bp.get("/j/<code>")
+@leagues_bp.get("/c/<code>")
 def resolve_code(code):
     return ctrl.resolve_code(code)
 
 
-@leagues_bp.post("/j/<code>/act")
+@leagues_bp.post("/c/<code>/act")
 def act_on_code(code):
     return ctrl.act_on_code(code)
 

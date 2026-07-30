@@ -62,7 +62,7 @@ def upgrade():
             {"code": code, "lid": lid, "cb": commish},
         )
 
-    # Old share-link storage — replaced by the unified /j/<code> route.
+    # Old share-link storage — replaced by the unified /c/<code> route.
     # Postgres drops the dependent unique constraints/indexes with the columns.
     with op.batch_alter_table('leagues', schema=None) as batch_op:
         batch_op.drop_column('invite_token')

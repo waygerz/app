@@ -41,7 +41,7 @@ export interface LeagueMember {
 export interface LeagueDetail extends LeagueCard {
   commissioner_id: string;
   description: string | null;
-  // Reusable share code for the /j/<code> deep link. Null only mid-migration.
+  // Reusable share code for the /c/<code> deep link. Null only mid-migration.
   invite_code: string | null;
   period_type: 'weekly' | 'season';
   starting_balance_cents: number | null;

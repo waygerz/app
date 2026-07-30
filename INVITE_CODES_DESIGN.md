@@ -1,7 +1,7 @@
 # Unified Invite Codes — Design
 
 Consolidate the two share-link routes (`/invite?code=` for leagues, `/add-friend?u=`
-for friends) into **one deep-linkable route `/j/<code>`** that works on web today
+for friends) into **one deep-linkable route `/c/<code>`** that works on web today
 and iOS/Android later.
 
 > **Dev-stage cleanup:** no production invite data to preserve, so we **remove all
@@ -22,13 +22,13 @@ and iOS/Android later.
 3. **Friend links are reusable** and befriend the code owner. On resolve, if the
    viewer is **already friends**, show a message + a **Dashboard** button (no action).
 4. **Universal Links / App Links now, deferred deep linking later.** Ship
-   `.well-known` association files for `/j/*` with the apps; deferred
+   `.well-known` association files for `/c/*` with the apps; deferred
    resolve-after-install is a fast-follow.
 
 ## Scope note — two different "league invite" features
 
 - **Shareable link** (reusable `join_code` + `invite_token` on the `leagues` table)
-  — **replaced** by `/j/L…`. All old code removed.
+  — **replaced** by `/c/L…`. All old code removed.
 - **Targeted invite inbox** (`league_invites` rows; a commissioner invites specific
   friends by user-id, who see them in the "Invites (N)" list on `/` and accept via
   `POST /<league_id>/join`) — **out of scope, kept as-is**. It is not a shareable
@@ -42,7 +42,7 @@ and iOS/Android later.
   - `L` → league invite  → call the **leagues** service
   - `F` → friend invite  → call the **friends** service
 - Body = 6 random chars → `32^6 ≈ 1.07 B` per type. e.g. `L4K9QX7`, `F7M2PJH`.
-- **URL carries the bare code**: `/j/L4K9QX7` (path param, not query — Universal/App
+- **URL carries the bare code**: `/c/L4K9QX7` (path param, not query — Universal/App
   Link matching is path-based). UI may render it grouped (`L4K9-QX7`) for typing;
   dashes are stripped on input.
 - No legacy-format acceptance — the old `WAYG-XXXX` codes are removed with everything
@@ -50,7 +50,7 @@ and iOS/Android later.
 
 ## Shared response contract
 
-`GET /v1/{group}/{service}/j/<code>` — resolve (JWT **optional**, so signed-out
+`GET /v1/{group}/{service}/c/<code>` — resolve (JWT **optional**, so signed-out
 users see the preview):
 
 ```json
@@ -69,7 +69,7 @@ users see the preview):
 }
 ```
 
-`POST /v1/{group}/{service}/j/<code>/act` with `{ "action": "join|accept|decline" }`
+`POST /v1/{group}/{service}/c/<code>/act` with `{ "action": "join|accept|decline" }`
 — performs the action, stamps `consumed_at` when `single_use`, and returns
 `{ "type", "target_id" }` so a **native client can navigate to its own screen**
 (web maps it to a redirect):
@@ -93,8 +93,8 @@ no lifetime control. Replace with a code:
   `expires_at`, `consumed_at`, `created_at`.
 - Each user has one **persistent reusable** personal code, generated lazily on first
   share — mirrors how a league owns its `join_code`.
-- Endpoints: `GET /j/<code>` (resolve; relationship computed from `friendships` — if
-  `friends`, return `actions: []`), `POST /j/<code>/act` (accept → create/accept
+- Endpoints: `GET /c/<code>` (resolve; relationship computed from `friendships` — if
+  `friends`, return `actions: []`), `POST /c/<code>/act` (accept → create/accept
   friendship; decline → delete pending row; consume if single_use). Reuse existing
   `service_friends` logic underneath.
 - **Remove:** the raw-uuid `GET /users/<id>/invite-preview` endpoint and any code path
@@ -106,7 +106,7 @@ no lifetime control. Replace with a code:
   `single_use`, `expires_at`, `consumed_at`, `created_at`. A league's default
   reusable code is a `single_use=false` row created at league creation; one-time
   invites are `single_use=true` rows.
-- Endpoints: `GET /j/<code>` and `POST /j/<code>/act` in the uniform contract, built
+- Endpoints: `GET /c/<code>` and `POST /c/<code>/act` in the uniform contract, built
   on the existing `preview` / `join_by_code` logic.
 - **Remove:** the `leagues.join_code` and `leagues.invite_token` columns, the old
   `GET /preview` and `POST /join` endpoints, and the `?code` / `?invite_token`
@@ -115,14 +115,14 @@ no lifetime control. Replace with a code:
 ### gateway (`api/gateway/conf.d/default.conf`)
 
 - The `/api/v1/social/friends` and `/api/v1/gameplay/leagues` prefix locations
-  already cover the new `/j/...` sub-paths — **no gateway route change** for the API.
+  already cover the new `/c/...` sub-paths — **no gateway route change** for the API.
 - **Serve the `.well-known` files** (see Mobile) — non-`/api` traffic already
   proxies to `webui:3000`, so Next serving them from `public/.well-known/` is enough;
   verify content-type `application/json` and **no redirect**.
 
 ## webui changes
 
-- **New route** `app/(public)/j/[code]/page.tsx`: read `params.code`, strip dashes,
+- **New route** `app/(public)/c/[code]/page.tsx`: read `params.code`, strip dashes,
   pick service by prefix, call resolve, render the league- or friend-preview card,
   and Accept/Decline → `act` → redirect from the returned `{type, target_id}`. The
   already-friends / already-member / expired / consumed states render a message + a
@@ -135,23 +135,23 @@ no lifetime control. Replace with a code:
   split (`lib/friends.ts` inline URL + the league URL inlined in
   `leagues/[id]/layout.tsx`). Both share buttons call this.
 - **`lib/pending-link.ts`:** collapse the stash to a single `{ code }` item and match
-  `/j/` (drop the `/invite` + `/add-friend` route strings).
-- **`proxy.ts`:** replace the `/invite` + `/add-friend` public prefixes with `/j`.
+  `/c/` (drop the `/invite` + `/add-friend` route strings).
+- **`proxy.ts`:** replace the `/invite` + `/add-friend` public prefixes with `/c`.
 - **Remove:** `friendsApi.invitePreview` / `inviteLink`, `leaguesApi.preview` / `join`
   and their callers, once migrated to `lib/invites.ts`.
 
 ## Mobile (Flutter, iOS + Android)
 
 - **iOS Universal Links:** serve `/.well-known/apple-app-site-association` (JSON, no
-  extension, `application/json`, no redirect) registering path `/j/*` for the app's
+  extension, `application/json`, no redirect) registering path `/c/*` for the app's
   Team ID + bundle ID. Add the Associated Domain in the app.
 - **Android App Links:** serve `/.well-known/assetlinks.json` with the app's package
-  name + SHA-256 signing-cert fingerprint; add the `/j/*` intent filter.
+  name + SHA-256 signing-cert fingerprint; add the `/c/*` intent filter.
   > ⚠️ **Proxy gotcha:** confirm `/.well-known/*` is NOT bounced to `/login` by
   > `proxy.ts` — the matcher currently excludes paths containing a `.` (the leading
   > dot in `.well-known` covers it), but verify with a signed-out `curl`.
 - Installed app opens the code natively → `resolveCode` → native preview → `act` →
-  native navigation. No app → the web `/j/<code>` page works, with a smart
+  native navigation. No app → the web `/c/<code>` page works, with a smart
   "Open in app / Get the app" banner.
 - **App IDs are TBD** until the Flutter apps exist — the `.well-known` files land in
   Phase 2 with real Team ID / package / fingerprint values.
@@ -162,13 +162,13 @@ no lifetime control. Replace with a code:
 - [x] `friend_invite_codes` table + resolve/act endpoints (friends); remove raw-uuid endpoint
 - [x] `league_invite_codes` table + resolve/act (leagues); drop `join_code`/`invite_token` + old `preview`/`join`
 - [x] `lib/invites.ts` (resolveCode/actOnCode/myFriendCode/inviteUrl), collapsed `pending-link.ts`
-- [x] `/j/[code]` route; delete `/invite` + `/add-friend`
-- [x] `proxy.ts` public prefix → `/j`
+- [x] `/c/[code]` route; delete `/invite` + `/add-friend`
+- [x] `proxy.ts` public prefix → `/c`
 - [x] Point both share buttons (league layout, friends page) at the new builder
 
 **Phase 2 — mobile-ready (with the apps)**
 - [ ] `.well-known/apple-app-site-association` + `assetlinks.json` (real app IDs)
-- [ ] Smart install banner on the web `/j` page
+- [ ] Smart install banner on the web `/c` page
 - [ ] Flutter deep-link handling (Associated Domains / intent filters → resolve → act)
 
 **Phase 3 — fast-follow**

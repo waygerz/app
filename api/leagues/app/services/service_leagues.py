@@ -83,7 +83,7 @@ def _add_week(start_utc, tz) -> datetime:
 
 # No ambiguous characters (no I/O/0/1).
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-# Leading marker so a client routes /j/<code> by prefix without a lookup.
+# Leading marker so a client routes /c/<code> by prefix without a lookup.
 CODE_PREFIX = "L"
 _CODE_BODY_LEN = 6
 
@@ -637,7 +637,7 @@ def create_league(me, data):
     db.session.add(league)
     db.session.flush()
 
-    # Every league gets one reusable share code (the /j/<code> link).
+    # Every league gets one reusable share code (the /c/<code> link).
     db.session.add(LeagueInviteCode(
         code=generate_league_code(), league_id=league.id, created_by=me,
         single_use=False,
@@ -771,7 +771,7 @@ def _league_relationship(league_id, me) -> str:
 
 
 def resolve_code(me, code):
-    """Unified /j/<code> resolver — the shared contract shape (see
+    """Unified /c/<code> resolver — the shared contract shape (see
     INVITE_CODES_DESIGN.md). JWT optional so signed-out users see the preview."""
     code = (code or "").strip().upper()
     rec = LeagueInviteCode.query.filter_by(code=code).first()
@@ -797,7 +797,7 @@ def resolve_code(me, code):
 
 
 def act_on_code(me, code, data):
-    """Perform a /j/<code> action (join), consuming single-use codes."""
+    """Perform a /c/<code> action (join), consuming single-use codes."""
     action = (data.get("action") or "").strip().lower()
     code = (code or "").strip().upper()
     rec = LeagueInviteCode.query.filter_by(code=code).first()

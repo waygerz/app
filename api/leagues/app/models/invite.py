@@ -13,7 +13,7 @@ REVOKED = "revoked"
 
 class LeagueInvite(db.Model):
     """A direct friend invite to a specific user (the in-app "Invites" inbox).
-    Shareable /j/<code> link joins live in LeagueInviteCode, not here."""
+    Shareable /c/<code> link joins live in LeagueInviteCode, not here."""
 
     __tablename__ = "league_invites"
 

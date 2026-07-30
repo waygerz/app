@@ -1,4 +1,4 @@
-"""Unified /j/<code> resolve + act for league invite codes."""
+"""Unified /c/<code> resolve + act for league invite codes."""
 import uuid
 from datetime import datetime
 
@@ -21,7 +21,7 @@ def _create(client, headers, **over):
 
 def test_resolve_unauthenticated_shows_preview(client, auth_headers):
     lg = _create(client, auth_headers(U1)).get_json()["league"]
-    r = client.get(f"{API_PREFIX}/j/{lg['invite_code']}")  # no auth
+    r = client.get(f"{API_PREFIX}/c/{lg['invite_code']}")  # no auth
     assert r.status_code == 200
     d = r.get_json()
     assert d["type"] == "league"
@@ -36,20 +36,20 @@ def test_resolve_unauthenticated_shows_preview(client, auth_headers):
 def test_resolve_authenticated_non_member_can_join(client, auth_headers):
     lg = _create(client, auth_headers(U1)).get_json()["league"]
     u2 = str(uuid.uuid4())
-    d = client.get(f"{API_PREFIX}/j/{lg['invite_code']}", headers=auth_headers(u2)).get_json()
+    d = client.get(f"{API_PREFIX}/c/{lg['invite_code']}", headers=auth_headers(u2)).get_json()
     assert d["viewer"]["relationship"] == "none"
     assert d["actions"] == ["join"]
 
 
 def test_resolve_member_has_no_join_action(client, auth_headers):
     lg = _create(client, auth_headers(U1)).get_json()["league"]
-    d = client.get(f"{API_PREFIX}/j/{lg['invite_code']}", headers=auth_headers(U1)).get_json()
+    d = client.get(f"{API_PREFIX}/c/{lg['invite_code']}", headers=auth_headers(U1)).get_json()
     assert d["viewer"]["relationship"] == "member"
     assert d["actions"] == []
 
 
 def test_resolve_invalid_code(client, auth_headers):
-    r = client.get(f"{API_PREFIX}/j/LZZZZZZ", headers=auth_headers(U1))
+    r = client.get(f"{API_PREFIX}/c/LZZZZZZ", headers=auth_headers(U1))
     assert r.status_code == 404
     assert r.get_json()["state"] == "invalid"
 
@@ -57,7 +57,7 @@ def test_resolve_invalid_code(client, auth_headers):
 def test_act_join(client, auth_headers):
     lg = _create(client, auth_headers(U1)).get_json()["league"]
     u2 = str(uuid.uuid4())
-    r = client.post(f"{API_PREFIX}/j/{lg['invite_code']}/act",
+    r = client.post(f"{API_PREFIX}/c/{lg['invite_code']}/act",
                     json={"action": "join"}, headers=auth_headers(u2))
     assert r.status_code == 200
     assert r.get_json() == {"type": "league", "target_id": lg["id"]}
@@ -67,7 +67,7 @@ def test_act_join(client, auth_headers):
 
 def test_act_unsupported_action(client, auth_headers):
     lg = _create(client, auth_headers(U1)).get_json()["league"]
-    r = client.post(f"{API_PREFIX}/j/{lg['invite_code']}/act",
+    r = client.post(f"{API_PREFIX}/c/{lg['invite_code']}/act",
                     json={"action": "decline"}, headers=auth_headers(str(uuid.uuid4())))
     assert r.status_code == 400
 
@@ -86,15 +86,15 @@ def test_single_use_code_consumes(client, auth_headers, app):
         db.session.commit()
 
     u2 = str(uuid.uuid4())
-    r1 = client.post(f"{API_PREFIX}/j/{code}/act", json={"action": "join"},
+    r1 = client.post(f"{API_PREFIX}/c/{code}/act", json={"action": "join"},
                      headers=auth_headers(u2))
     assert r1.status_code == 200
     # After consumption the code resolves as consumed with no actions.
-    d = client.get(f"{API_PREFIX}/j/{code}", headers=auth_headers(str(uuid.uuid4()))).get_json()
+    d = client.get(f"{API_PREFIX}/c/{code}", headers=auth_headers(str(uuid.uuid4()))).get_json()
     assert d["state"] == "consumed"
     assert d["actions"] == []
     # And a second act is rejected.
-    r2 = client.post(f"{API_PREFIX}/j/{code}/act", json={"action": "join"},
+    r2 = client.post(f"{API_PREFIX}/c/{code}/act", json={"action": "join"},
                      headers=auth_headers(str(uuid.uuid4())))
     assert r2.status_code == 409
 
@@ -113,6 +113,6 @@ def test_expired_code(client, auth_headers, app):
         ))
         db.session.commit()
 
-    d = client.get(f"{API_PREFIX}/j/{code}", headers=auth_headers(str(uuid.uuid4()))).get_json()
+    d = client.get(f"{API_PREFIX}/c/{code}", headers=auth_headers(str(uuid.uuid4()))).get_json()
     assert d["state"] == "expired"
     assert d["actions"] == []

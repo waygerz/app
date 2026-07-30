@@ -6,7 +6,7 @@ from app.extensions import db
 
 
 class LeagueInviteCode(db.Model):
-    """A shareable /j/<code> link that joins a league. A league's default,
+    """A shareable /c/<code> link that joins a league. A league's default,
     reusable code is single_use=False; targeted one-time invites are
     single_use=True and get stamped consumed_at when used."""
 

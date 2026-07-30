@@ -1,4 +1,4 @@
-// A share code (/j/<code>) stashed before login and replayed after, so the
+// A share code (/c/<code>) stashed before login and replayed after, so the
 // login-page banner can preview it. The actual post-login return rides on the
 // ?next= param; this stash only powers the banner.
 const STORAGE_KEY = 'waygerz_pending_link';
@@ -36,8 +36,8 @@ export function clearPendingLink(): void {
 }
 
 export function savePendingLinkFromLocation(pathname: string): PendingLink | null {
-  if (pathname.startsWith('/j/')) {
-    const code = pathname.slice('/j/'.length).split('/')[0].trim().toUpperCase();
+  if (pathname.startsWith('/c/')) {
+    const code = pathname.slice('/c/'.length).split('/')[0].trim().toUpperCase();
     if (!code) return null;
     const link: PendingLink = { code };
     savePendingLink(link);
