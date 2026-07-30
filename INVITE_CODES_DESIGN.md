@@ -158,7 +158,7 @@ no lifetime control. Replace with a code:
 
 ## Phasing
 
-**Phase 1 — web + backend (ship at launch)** ✅ built (2026-07-30), pending deploy
+**Phase 1 — web + backend (ship at launch)** ✅ built + deployed to prod 2026-07-30 (audited; migrations applied)
 - [x] `friend_invite_codes` table + resolve/act endpoints (friends); remove raw-uuid endpoint
 - [x] `league_invite_codes` table + resolve/act (leagues); drop `join_code`/`invite_token` + old `preview`/`join`
 - [x] `lib/invites.ts` (resolveCode/actOnCode/myFriendCode/inviteUrl), collapsed `pending-link.ts`
