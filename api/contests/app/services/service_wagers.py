@@ -199,14 +199,15 @@ def _actor(user_id) -> dict:
     }
 
 
-def _notify(user_id, template_key, title, context, *, actor=None, ref_id=None, deep_link=None, dedup_key=None):
+def _notify(user_id, template_key, title, context, *, actor_uid=None, ref_id=None, deep_link=None, dedup_key=None):
     """Fan a wager event out to one member's notifications (in-app feed + SMS).
 
     Best-effort — a notification failure must never affect the bet itself, so
-    everything is wrapped and swallowed.
+    everything (including the actor lookup) is wrapped and swallowed.
     """
     try:
         base = current_app.config["NOTIFICATIONS_URL"]
+        actor = _actor(actor_uid) if actor_uid else None
         requests.post(
             f"{base}/internal/notify",
             json={
@@ -373,7 +374,7 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
             "league": w.league or "your league",
             "link": f"https://waygerz.com/c/{code}",
         },
-        actor=_actor(proposer_id),
+        actor_uid=proposer_id,
         ref_id=w.id,
         deep_link=f"/c/{code}",
         dedup_key=f"wager_proposed:{w.id}",
@@ -482,7 +483,7 @@ def accept(wager, user_id):
             "matchup": _matchup(wager),
             "league": wager.league or "your league",
         },
-        actor=_actor(user_id),
+        actor_uid=user_id,
         ref_id=wager.id,
         deep_link=f"/leagues/{wager.league_id}/play",
         dedup_key=f"wager_accepted:{wager.id}",
