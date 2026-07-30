@@ -85,6 +85,7 @@ export function MessagesSheet() {
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const typingStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingSendRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const convsQ = useQuery({
     queryKey: ['conversations'],
@@ -170,6 +171,11 @@ export function MessagesSheet() {
       qc.invalidateQueries({ queryKey: ['conversations-unread'] });
     }).catch(() => {});
   }, [activeId, qc]);
+
+  // Keep the newest message in view when a thread opens or a message arrives.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: 'end' });
+  }, [activeId, msgsQ.data?.length, openBets.length, typingUser]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -567,6 +573,7 @@ export function MessagesSheet() {
                 </span>
               </div>
             )}
+            <div ref={bottomRef} />
           </div>
         </ScrollArea>
 
