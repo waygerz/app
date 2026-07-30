@@ -12,8 +12,8 @@ REVOKED = "revoked"
 
 
 class LeagueInvite(db.Model):
-    """A direct friend invite to a specific user. Code/link joins do NOT create
-    a row here — they resolve join_code/invite_token straight to membership."""
+    """A direct friend invite to a specific user (the in-app "Invites" inbox).
+    Shareable /j/<code> link joins live in LeagueInviteCode, not here."""
 
     __tablename__ = "league_invites"
 

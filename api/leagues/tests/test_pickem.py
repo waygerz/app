@@ -170,12 +170,12 @@ def test_standings_rank_by_wins(client, auth_headers, app, monkeypatch):
     from app.services import service_leagues as svc
 
     d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
-    code = d["join_code"]
+    code = d["invite_code"]
     d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
     lid, pid = d["id"], _period_id(d)
 
     u2 = str(uuid.uuid4())
-    client.post("/v1/gameplay/leagues/join", json={"code": code}, headers=auth_headers(u2))
+    client.post(f"/v1/gameplay/leagues/j/{code}/act", json={"action": "join"}, headers=auth_headers(u2))
 
     # U1 picks both home (wins both); U2 picks both away (loses both).
     client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",

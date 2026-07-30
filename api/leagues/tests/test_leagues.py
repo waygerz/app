@@ -22,7 +22,7 @@ def test_create_league(client, auth_headers):
     assert r.status_code == 201
     d = r.get_json()["league"]
     assert d["status"] == "draft" and d["league_type"] == "head_to_head"
-    assert d["join_code"].startswith("WAYG-")
+    assert d["invite_code"].startswith("L")
     assert d["my_role"] == "commissioner"
     assert len(d["members"]) == 1
     assert [s["sport_league_id"] for s in d["sports"]] == ["NBA"]
@@ -104,9 +104,9 @@ def test_non_member_cannot_view(client, auth_headers):
 def test_join_by_code(client, auth_headers):
     created = _create(client, auth_headers(U1)).get_json()["league"]
     u2 = str(uuid.uuid4())
-    r = client.post("/v1/gameplay/leagues/join", json={"code": created["join_code"]}, headers=auth_headers(u2))
-    assert r.status_code == 201
-    assert any(m["user_id"] == u2 for m in r.get_json()["league"]["members"])
+    r = client.post(f"/v1/gameplay/leagues/j/{created['invite_code']}/act", json={"action": "join"}, headers=auth_headers(u2))
+    assert r.status_code == 200
+    assert r.get_json()["target_id"] == created["id"]
     cards = client.get(f"{API_PREFIX}/", headers=auth_headers(u2)).get_json()["leagues"]
     assert len(cards) == 1
 
@@ -114,8 +114,8 @@ def test_join_by_code(client, auth_headers):
 def test_join_is_idempotent(client, auth_headers):
     created = _create(client, auth_headers(U1)).get_json()["league"]
     u2 = str(uuid.uuid4())
-    client.post("/v1/gameplay/leagues/join", json={"code": created["join_code"]}, headers=auth_headers(u2))
-    client.post("/v1/gameplay/leagues/join", json={"code": created["join_code"]}, headers=auth_headers(u2))
+    client.post(f"/v1/gameplay/leagues/j/{created['invite_code']}/act", json={"action": "join"}, headers=auth_headers(u2))
+    client.post(f"/v1/gameplay/leagues/j/{created['invite_code']}/act", json={"action": "join"}, headers=auth_headers(u2))
     d = client.get(f"/v1/gameplay/leagues/{created['id']}", headers=auth_headers(u2)).get_json()["league"]
     assert sum(1 for m in d["members"] if m["user_id"] == u2) == 1
 
@@ -123,7 +123,7 @@ def test_join_is_idempotent(client, auth_headers):
 def test_join_feed_records_member_joined(client, auth_headers):
     created = _create(client, auth_headers(U1)).get_json()["league"]
     u2 = str(uuid.uuid4())
-    client.post("/v1/gameplay/leagues/join", json={"code": created["join_code"]}, headers=auth_headers(u2))
+    client.post(f"/v1/gameplay/leagues/j/{created['invite_code']}/act", json={"action": "join"}, headers=auth_headers(u2))
     feed = client.get(f"/v1/gameplay/leagues/{created['id']}/feed", headers=auth_headers(u2)).get_json()["feed"]
     assert any(i["event_type"] == "member_joined" for i in feed)
 
@@ -141,9 +141,9 @@ def test_invite_and_accept(client, auth_headers):
 
 def test_member_can_leave_commish_cannot(client, auth_headers):
     created = _create(client, auth_headers(U1)).get_json()["league"]
-    lid, code = created["id"], created["join_code"]
+    lid, code = created["id"], created["invite_code"]
     u2 = str(uuid.uuid4())
-    client.post("/v1/gameplay/leagues/join", json={"code": code}, headers=auth_headers(u2))
+    client.post(f"/v1/gameplay/leagues/j/{code}/act", json={"action": "join"}, headers=auth_headers(u2))
     assert client.post(f"/v1/gameplay/leagues/{lid}/leave", headers=auth_headers(u2)).status_code == 200
     assert client.get(f"/v1/gameplay/leagues/{lid}", headers=auth_headers(u2)).status_code == 404
     assert client.post(f"/v1/gameplay/leagues/{lid}/leave", headers=auth_headers(U1)).status_code == 400

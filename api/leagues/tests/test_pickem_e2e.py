@@ -58,7 +58,7 @@ def test_weekly_pickem_end_to_end(client, auth_headers, app, monkeypatch):
         "name": "Weekly Pool", "league_type": "pickem", "period_type": "weekly",
         "starting_balance_cents": None, "sports": ["NFL"],
     }, headers=auth_headers(commish)).get_json()["league"]
-    lid, code = d["id"], d["join_code"]
+    lid, code = d["id"], d["invite_code"]
 
     d = client.post(f"{API_PREFIX}/{lid}/activate", headers=auth_headers(commish)).get_json()["league"]
     assert d["current_period"]["status"] == "open"
@@ -70,8 +70,8 @@ def test_weekly_pickem_end_to_end(client, auth_headers, app, monkeypatch):
         assert periods[0].status == "open" and periods[1].status == "upcoming"
 
     # --- 2) A second member joins ------------------------------------------
-    assert client.post(f"{API_PREFIX}/join", json={"code": code},
-                       headers=auth_headers(member)).status_code == 201
+    assert client.post(f"{API_PREFIX}/j/{code}/act", json={"action": "join"},
+                       headers=auth_headers(member)).status_code == 200
 
     # --- 3) Both submit picks (G3 carries the tiebreaker) ------------------
     # commish: G1 home ✓, G2 away ✓, G3 away ✗  -> 2 correct, tb 44 (exact)

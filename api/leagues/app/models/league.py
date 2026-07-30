@@ -36,12 +36,8 @@ class League(db.Model):
     commissioner_id = db.Column(UUID(as_uuid=False), nullable=False, index=True)
     league_type = db.Column(db.String(16), nullable=False, index=True)
     status = db.Column(db.String(16), nullable=False, default=DRAFT, index=True)
-    # Short, human-typeable code (e.g. WAYG-4F2K) for manual join.
-    join_code = db.Column(db.String(16), nullable=False, unique=True, index=True)
-    # Opaque token for share links.
-    invite_token = db.Column(
-        UUID(as_uuid=False), nullable=False, unique=True, server_default=db.text("gen_random_uuid()")
-    )
+    # Shareable join links live in the league_invite_codes table (see the
+    # LeagueInviteCode model), resolved via the unified /j/<code> route.
     period_type = db.Column(db.String(8), nullable=False, default=SEASON)
     starting_balance_cents = db.Column(db.BigInteger, nullable=True)  # null for pickem
     min_wager_cents = db.Column(db.BigInteger, nullable=True)
@@ -76,8 +72,6 @@ class League(db.Model):
             "commissioner_id": self.commissioner_id,
             "league_type": self.league_type,
             "status": self.status,
-            "join_code": self.join_code,
-            "invite_token": self.invite_token,
             "period_type": self.period_type,
             "starting_balance_cents": self.starting_balance_cents,
             "min_wager_cents": self.min_wager_cents,

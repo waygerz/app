@@ -19,11 +19,11 @@ def _league(client, auth_headers):
         headers=auth_headers(C),
     )
     d = r.get_json()["league"]
-    return d["id"], d["join_code"]
+    return d["id"], d["invite_code"]
 
 
 def _join(client, auth_headers, code, uid):
-    client.post(f"{API_PREFIX}/join", json={"code": code}, headers=auth_headers(uid))
+    client.post(f"{API_PREFIX}/j/{code}/act", json={"action": "join"}, headers=auth_headers(uid))
 
 
 def _detail(client, auth_headers, lid, uid):

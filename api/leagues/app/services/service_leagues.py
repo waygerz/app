@@ -31,6 +31,7 @@ from app.models.feed_read import LeagueFeedRead
 from app.models.invite import (
     ACCEPTED as INV_ACCEPTED, PENDING as INV_PENDING, LeagueInvite,
 )
+from app.models.invite_code import LeagueInviteCode
 
 _WEEKDAYS = {
     "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
@@ -82,6 +83,9 @@ def _add_week(start_utc, tz) -> datetime:
 
 # No ambiguous characters (no I/O/0/1).
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+# Leading marker so a client routes /j/<code> by prefix without a lookup.
+CODE_PREFIX = "L"
+_CODE_BODY_LEN = 6
 
 
 # ---- Cross-service HTTP clients -------------------------------------------
@@ -216,17 +220,37 @@ def wallet_balances(user_id, accounts) -> dict:
     return r.json().get("balances", {})
 
 
-# ---- Join codes -----------------------------------------------------------
+# ---- Invite codes ---------------------------------------------------------
 def _random_code() -> str:
-    return "WAYG-" + "".join(secrets.choice(_CODE_ALPHABET) for _ in range(4))
+    return CODE_PREFIX + "".join(
+        secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_BODY_LEN)
+    )
 
 
-def generate_join_code() -> str:
+def generate_league_code() -> str:
+    """A unique, type-prefixed invite code (e.g. L4K9QX7)."""
     for _ in range(10):
         code = _random_code()
-        if not League.query.filter_by(join_code=code).first():
+        if not LeagueInviteCode.query.filter_by(code=code).first():
             return code
     return _random_code() + secrets.choice(_CODE_ALPHABET)
+
+
+def _default_league_code(league_id):
+    """A league's reusable (single_use=False) share code."""
+    return (
+        LeagueInviteCode.query.filter_by(league_id=league_id, single_use=False)
+        .order_by(LeagueInviteCode.created_at.asc())
+        .first()
+    )
+
+
+def _code_state(rec) -> str:
+    if rec.consumed_at:
+        return "consumed"
+    if rec.expires_at and rec.expires_at < datetime.utcnow():
+        return "expired"
+    return "ok"
 
 
 # ---- Shared helpers -------------------------------------------------------
@@ -544,6 +568,8 @@ def _detail(league, me):
     d["current_period"] = period.to_dict() if period else None
     d["my_balance_cents"] = my_balance
     d["my_role"] = next((m.role for m in members if m.user_id == me), MEMBER)
+    code = _default_league_code(league.id)
+    d["invite_code"] = code.code if code else None
     return d
 
 
@@ -600,7 +626,6 @@ def create_league(me, data):
         commissioner_id=me,
         league_type=league_type,
         status=DRAFT,
-        join_code=generate_join_code(),
         period_type=period_type,
         starting_balance_cents=starting,
         min_wager_cents=data.get("min_wager_cents"),
@@ -611,6 +636,12 @@ def create_league(me, data):
     )
     db.session.add(league)
     db.session.flush()
+
+    # Every league gets one reusable share code (the /j/<code> link).
+    db.session.add(LeagueInviteCode(
+        code=generate_league_code(), league_id=league.id, created_by=me,
+        single_use=False,
+    ))
 
     # Pin joined_at to a moment captured before the commit so it is reliably
     # <= the league_created feed row's created_at (the ORM flushes LeagueFeed
@@ -703,32 +734,14 @@ def my_leagues(me):
     return {"leagues": cards}, 200
 
 
-def preview(me=None):
-    code = (request.args.get("code") or "").strip().upper()
-    token = request.args.get("invite_token")
-    league = None
-    if code:
-        league = League.query.filter_by(join_code=code).first()
-    elif token:
-        league = League.query.filter_by(invite_token=token).first()
-    if not league:
-        return {"error": "invite not found"}, 404
+def _league_preview_dict(league) -> dict:
     commissioner = resolve_users([league.commissioner_id]).get(league.commissioner_id)
     member_count = LeagueMember.query.filter_by(league_id=league.id, status=ACTIVE).count()
     sports = [
         {"sport_league_id": s.sport_league_id, "name": s.name}
         for s in LeagueSport.query.filter_by(league_id=league.id).all()
     ]
-    viewer_membership = None
-    if me:
-        row = LeagueMember.query.filter_by(league_id=league.id, user_id=me).first()
-        if row and row.status == ACTIVE:
-            viewer_membership = "member"
-        elif row and row.status == LEFT:
-            viewer_membership = "left"
-        else:
-            viewer_membership = "none"
-    return {"preview": {
+    return {
         "id": league.id,
         "name": league.name,
         "logo_url": league.logo_url,
@@ -743,9 +756,64 @@ def preview(me=None):
         "member_count": member_count,
         "sports": sports,
         "commissioner_name": commissioner,
-        "join_code": league.join_code,
-        "viewer_membership": viewer_membership,
-    }}, 200
+    }
+
+
+def _league_relationship(league_id, me) -> str:
+    if not me:
+        return "none"
+    row = LeagueMember.query.filter_by(league_id=league_id, user_id=me).first()
+    if row and row.status == ACTIVE:
+        return "member"
+    if row and row.status == LEFT:
+        return "left"
+    return "none"
+
+
+def resolve_code(me, code):
+    """Unified /j/<code> resolver — the shared contract shape (see
+    INVITE_CODES_DESIGN.md). JWT optional so signed-out users see the preview."""
+    code = (code or "").strip().upper()
+    rec = LeagueInviteCode.query.filter_by(code=code).first()
+    league = db.session.get(League, rec.league_id) if rec else None
+    if not rec or not league:
+        return {"type": "league", "code": code, "target_id": None,
+                "state": "invalid", "single_use": False,
+                "viewer": {"authenticated": bool(me), "relationship": "none"},
+                "preview": None, "actions": []}, 404
+    state = _code_state(rec)
+    relationship = _league_relationship(league.id, me)
+    actions = ["join"] if (state == "ok" and me and relationship != "member") else []
+    return {
+        "type": "league",
+        "code": code,
+        "target_id": league.id,
+        "state": state,
+        "single_use": rec.single_use,
+        "viewer": {"authenticated": bool(me), "relationship": relationship},
+        "preview": _league_preview_dict(league),
+        "actions": actions,
+    }, 200
+
+
+def act_on_code(me, code, data):
+    """Perform a /j/<code> action (join), consuming single-use codes."""
+    action = (data.get("action") or "").strip().lower()
+    code = (code or "").strip().upper()
+    rec = LeagueInviteCode.query.filter_by(code=code).first()
+    league = db.session.get(League, rec.league_id) if rec else None
+    if not rec or not league:
+        return {"error": "invite not found"}, 404
+    state = _code_state(rec)
+    if state != "ok":
+        return {"error": f"invite {state}"}, 409
+    if action != "join":
+        return {"error": "unsupported action"}, 400
+    _join(league, me)
+    if rec.single_use:
+        rec.consumed_at = datetime.utcnow()
+        db.session.commit()
+    return {"type": "league", "target_id": league.id}, 200
 
 
 def get_league(league_id, me):
@@ -1263,20 +1331,6 @@ def post_feed(league_id, me, data):
     )
     db.session.commit()
     return {"item": item.to_dict()}, 201
-
-
-def join_by_code(me, data):
-    code = (data.get("code") or "").strip().upper()
-    token = data.get("invite_token")
-    league = None
-    if code:
-        league = League.query.filter_by(join_code=code).first()
-    elif token:
-        league = League.query.filter_by(invite_token=str(token)).first()
-    if not league:
-        return {"error": "no league with that code"}, 404
-    _join(league, me)
-    return {"league": _detail(league, me)}, 201
 
 
 def accept_invite(league_id, me):

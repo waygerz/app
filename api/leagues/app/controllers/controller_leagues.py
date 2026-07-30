@@ -16,14 +16,14 @@ def my_leagues():
     return jsonify(body), status
 
 
-def preview():
+def resolve_code(code):
     me = None
     verify_jwt_in_request(optional=True, locations=["cookies", "headers"])
     try:
         me = get_jwt_identity()
     except Exception:  # noqa: BLE001
         me = None
-    body, status = service.preview(me)
+    body, status = service.resolve_code(me, str(code))
     return jsonify(body), status
 
 
@@ -108,8 +108,10 @@ def post_feed(league_id):
 
 
 @jwt_required(locations=["cookies", "headers"])
-def join_by_code():
-    body, status = service.join_by_code(get_jwt_identity(), request.get_json(silent=True) or {})
+def act_on_code(code):
+    body, status = service.act_on_code(
+        get_jwt_identity(), str(code), request.get_json(silent=True) or {}
+    )
     return jsonify(body), status
 
 

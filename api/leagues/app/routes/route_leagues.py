@@ -15,9 +15,14 @@ def my_leagues():
     return ctrl.my_leagues()
 
 
-@leagues_bp.get("/preview")
-def preview():
-    return ctrl.preview()
+@leagues_bp.get("/j/<code>")
+def resolve_code(code):
+    return ctrl.resolve_code(code)
+
+
+@leagues_bp.post("/j/<code>/act")
+def act_on_code(code):
+    return ctrl.act_on_code(code)
 
 
 @leagues_bp.get("/<uuid:league_id>")
@@ -83,11 +88,6 @@ def get_feed(league_id):
 @leagues_bp.post("/<uuid:league_id>/feed")
 def post_feed(league_id):
     return ctrl.post_feed(league_id)
-
-
-@leagues_bp.post("/join")
-def join_by_code():
-    return ctrl.join_by_code()
 
 
 @leagues_bp.post("/<uuid:league_id>/join")
