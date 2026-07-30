@@ -95,6 +95,7 @@ export function NotificationsSheet() {
       const meta = notifMeta(n);
       if (meta.action === 'bet') {
         const code = (n.deep_link || '').replace(/^\/c\//, '');
+        if (!code.startsWith('B')) throw new Error('This bet link is invalid');
         await actOnCode(code, yes ? 'accept' : 'decline');
         return yes ? 'Accepted' : 'Rejected';
       }
@@ -102,7 +103,8 @@ export function NotificationsSheet() {
         const reqs = await friendsApi.requests();
         const who = String(n.actor_id ?? n.ref_id ?? '');
         const r = reqs.incoming.find((x) => String(x.user_id) === who);
-        if (r) yes ? await friendsApi.accept(r.id) : await friendsApi.decline(r.id);
+        if (!r) throw new Error('This request is no longer pending');
+        yes ? await friendsApi.accept(r.id) : await friendsApi.decline(r.id);
         return yes ? 'Added' : 'Declined';
       }
       if (meta.action === 'league') {
