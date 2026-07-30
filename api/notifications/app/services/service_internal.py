@@ -328,11 +328,16 @@ def notify(data: dict) -> tuple[dict, int]:
         elif dedup_key and Notification.query.filter_by(dedup_key=dedup_key).first():
             result["inapp"] = "deduped"
         else:
+            actor = data.get("actor") or {}
             n = Notification(
                 user_id=user_id,
                 category=category,
+                template_key=key or None,
                 title=title or body,
                 body=body,
+                actor_id=actor.get("id"),
+                actor_name=actor.get("name"),
+                actor_avatar_key=actor.get("avatar_key"),
                 ref_type=data.get("ref_type"),
                 ref_id=data.get("ref_id"),
                 deep_link=data.get("deep_link"),

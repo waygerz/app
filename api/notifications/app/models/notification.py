@@ -20,8 +20,15 @@ class Notification(db.Model):
     )
     user_id = db.Column(UUID(as_uuid=False), nullable=False, index=True)
     category = db.Column(db.String(32), nullable=False)  # wager_alert|league_invite|...
+    # The specific event, so the client can pick an icon + inline actions
+    # (e.g. wager_proposed vs wager_settled_win). Nullable for legacy rows.
+    template_key = db.Column(db.String(64), nullable=True)
     title = db.Column(db.String(160), nullable=False)
     body = db.Column(db.Text, nullable=False)
+    # Who the notification is *from*, so the sheet can show their avatar.
+    actor_id = db.Column(db.String(64), nullable=True)
+    actor_name = db.Column(db.String(120), nullable=True)
+    actor_avatar_key = db.Column(db.Text, nullable=True)
     # What the notification is about, for deep-links + inline actions.
     ref_type = db.Column(db.String(16), nullable=True)   # wager|league|friend
     ref_id = db.Column(db.String(64), nullable=True)
@@ -36,8 +43,12 @@ class Notification(db.Model):
         return {
             "id": self.id,
             "category": self.category,
+            "template_key": self.template_key,
             "title": self.title,
             "body": self.body,
+            "actor_id": self.actor_id,
+            "actor_name": self.actor_name,
+            "actor_avatar_key": self.actor_avatar_key,
             "ref_type": self.ref_type,
             "ref_id": self.ref_id,
             "deep_link": self.deep_link,

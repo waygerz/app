@@ -189,7 +189,17 @@ def _name(user_id):
     return resolve_users([user_id]).get(str(user_id)) or "Someone"
 
 
-def _notify(user_id, template_key, title, context, *, ref_id=None, deep_link=None, dedup_key=None):
+def _actor(user_id) -> dict:
+    """The person a notification is *from* — id + name + avatar for the sheet."""
+    u = resolve_users_full([user_id]).get(str(user_id)) or {}
+    return {
+        "id": str(user_id),
+        "name": u.get("display_name") or "Someone",
+        "avatar_key": u.get("avatar_key"),
+    }
+
+
+def _notify(user_id, template_key, title, context, *, actor=None, ref_id=None, deep_link=None, dedup_key=None):
     """Fan a wager event out to one member's notifications (in-app feed + SMS).
 
     Best-effort — a notification failure must never affect the bet itself, so
@@ -205,6 +215,7 @@ def _notify(user_id, template_key, title, context, *, ref_id=None, deep_link=Non
                 "template_key": template_key,
                 "title": title,
                 "context": context,
+                "actor": actor,
                 "ref_type": "wager",
                 "ref_id": ref_id,
                 "deep_link": deep_link,
@@ -362,6 +373,7 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
             "league": w.league or "your league",
             "link": f"https://waygerz.com/c/{code}",
         },
+        actor=_actor(proposer_id),
         ref_id=w.id,
         deep_link=f"/c/{code}",
         dedup_key=f"wager_proposed:{w.id}",
@@ -470,6 +482,7 @@ def accept(wager, user_id):
             "matchup": _matchup(wager),
             "league": wager.league or "your league",
         },
+        actor=_actor(user_id),
         ref_id=wager.id,
         deep_link=f"/leagues/{wager.league_id}/play",
         dedup_key=f"wager_accepted:{wager.id}",

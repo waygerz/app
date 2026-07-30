@@ -59,6 +59,12 @@ def _notify_friend(user_id, template_key, from_name, *, ref_id=None, dedup_key=N
     Best-effort — a notification failure must never affect the friendship action."""
     try:
         base = current_app.config["NOTIFICATIONS_URL"]
+        # ref_id is the sender's user_id and from_name is their name — attach
+        # them (plus avatar) as the actor so the sheet shows their face.
+        actor = None
+        if ref_id:
+            u = resolve_users_full([ref_id]).get(str(ref_id)) or {}
+            actor = {"id": str(ref_id), "name": from_name, "avatar_key": u.get("avatar_key")}
         requests.post(
             f"{base}/internal/notify",
             json={
@@ -67,6 +73,7 @@ def _notify_friend(user_id, template_key, from_name, *, ref_id=None, dedup_key=N
                 "template_key": template_key,
                 "title": from_name,
                 "context": {"from_name": from_name},
+                "actor": actor,
                 "ref_type": "friend",
                 "ref_id": ref_id,
                 "deep_link": "/friends",

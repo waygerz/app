@@ -9,8 +9,15 @@ export type NotificationRefType = 'wager' | 'league' | 'friend' | null;
 export interface FeedNotification {
   id: string;
   category: string;
+  // The specific event (wager_proposed, wager_settled_win, friend_request, …) —
+  // drives the icon and which inline action to offer. Null on legacy rows.
+  template_key: string | null;
   title: string;
   body: string;
+  // Who it's from, when applicable — lets the sheet show their avatar.
+  actor_id: string | null;
+  actor_name: string | null;
+  actor_avatar_key: string | null;
   ref_type: NotificationRefType;
   ref_id: string | null;
   deep_link: string | null;
