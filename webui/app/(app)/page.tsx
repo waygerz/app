@@ -170,7 +170,9 @@ export default function HomePage() {
         <div className="flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4">
           {data.map((c) => {
             const a = accentFor(c.league_type);
-            const extra = c.member_count - (c.top_members?.length ?? 0);
+            // Cap the avatar stack so it never spans the whole card on mobile.
+            const shownMembers = c.top_members?.slice(0, 3) ?? [];
+            const extra = c.member_count - shownMembers.length;
             return (
               <Link key={c.id} href={`/leagues/${c.id}`} className="group">
                 <Card className="flex-row items-center gap-4 border border-border p-4 shadow-sm transition-all group-hover:border-primary/40 group-hover:shadow-md">
@@ -184,14 +186,16 @@ export default function HomePage() {
                     </div>
                     <div className="mt-2 flex items-center gap-2.5">
                       <span
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${a.chip}`}
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium sm:px-2 ${a.chip}`}
+                        title={leagueTypeLabel(c.league_type)}
+                        aria-label={leagueTypeLabel(c.league_type)}
                       >
                         <a.icon className="size-3.5" />
-                        {leagueTypeLabel(c.league_type)}
+                        <span className="hidden sm:inline">{leagueTypeLabel(c.league_type)}</span>
                       </span>
-                      {(c.top_members?.length ?? 0) > 0 && (
+                      {shownMembers.length > 0 && (
                         <div className="flex -space-x-2.5">
-                          {c.top_members!.map((m) => (
+                          {shownMembers.map((m) => (
                             <UserAvatar
                               key={m.user_id}
                               userId={m.user_id}
