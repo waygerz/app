@@ -29,7 +29,7 @@ class NotificationTemplate(db.Model):
 STARTER_TEMPLATES = [
     ("otp_code", "otp", "Waygerz: your code is {{code}}. Expires in 5 min."),
     ("wager_proposed", "wager_alert",
-     "{{from_name}} bet you {{amount}} on {{matchup}} in {{league}}. Open the app to accept."),
+     "{{from_name}} bet you {{amount}} on {{matchup}} in {{league}}. Accept or reject: {{link}}"),
     ("wager_accepted", "wager_alert",
      "{{other_name}} accepted your bet on {{matchup}} ({{league}})."),
     ("wager_settled_win", "wager_alert",

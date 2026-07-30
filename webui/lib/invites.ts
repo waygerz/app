@@ -4,10 +4,11 @@
 import { API } from './api-paths';
 import { apiFetch, apiJson } from './http';
 import type { LeagueType } from './leagues';
+import type { Wager } from './wagers';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
-export type InviteType = 'league' | 'friend';
+export type InviteType = 'league' | 'friend' | 'bet';
 export type CodeState = 'ok' | 'invalid' | 'expired' | 'consumed';
 export type InviteAction = 'join' | 'add' | 'accept' | 'decline';
 
@@ -32,6 +33,10 @@ export interface FriendCodePreview {
   user: { id: string; display_name: string; avatar_key: string | null };
 }
 
+export interface BetCodePreview {
+  wager: Wager;
+}
+
 export interface ResolvedCode {
   type: InviteType;
   code: string;
@@ -39,7 +44,7 @@ export interface ResolvedCode {
   state: CodeState;
   single_use: boolean;
   viewer: { authenticated: boolean; relationship: string; request_id?: string | null };
-  preview: LeagueCodePreview | FriendCodePreview | null;
+  preview: LeagueCodePreview | FriendCodePreview | BetCodePreview | null;
   actions: InviteAction[];
 }
 
@@ -54,7 +59,9 @@ export function normalizeCode(raw: string): string {
 }
 
 function serviceFor(code: string): string {
-  return code.startsWith('F') ? API.friends : API.leagues;
+  if (code.startsWith('F')) return API.friends;
+  if (code.startsWith('B')) return API.contests;
+  return API.leagues;
 }
 
 /** Resolve a code to its preview + allowed actions. Reads the body even on a
@@ -67,7 +74,7 @@ export async function resolveCode(code: string): Promise<ResolvedCode> {
     return data as ResolvedCode;
   }
   return {
-    type: c.startsWith('F') ? 'friend' : 'league',
+    type: c.startsWith('F') ? 'friend' : c.startsWith('B') ? 'bet' : 'league',
     code: c,
     target_id: null,
     state: 'invalid',

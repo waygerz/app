@@ -4,6 +4,7 @@ Every wager belongs to a league; money moves through the wallet on that league's
 account (``league:{league_id}``). Validation is delegated to the leagues service
 (``league_context`` + ``are_comembers``) — friendship is no longer required.
 """
+import secrets
 import zlib
 from datetime import datetime, timedelta
 
@@ -25,6 +26,23 @@ from app.models.wager import (
     TOTAL,
     Wager,
 )
+from app.models.wager_invite_code import WagerInviteCode
+
+# ---- Bet invite codes -----------------------------------------------------
+# No ambiguous characters (no I/O/0/1). Leading "B" marks a bet code so a
+# client routes /c/<code> by prefix without a lookup.
+_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+CODE_PREFIX = "B"
+_CODE_BODY_LEN = 6
+
+
+def generate_wager_code() -> str:
+    """A unique, type-prefixed bet code (e.g. B7M2PJH)."""
+    for _ in range(10):
+        code = CODE_PREFIX + "".join(secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_BODY_LEN))
+        if not WagerInviteCode.query.filter_by(code=code).first():
+            return code
+    return CODE_PREFIX + "".join(secrets.choice(_CODE_ALPHABET) for _ in range(_CODE_BODY_LEN + 1))
 
 # Once an event's start time is this far in the past we treat it as over, so a
 # wager can move to `completed` (awaiting the winner's confirmation) even when
@@ -326,6 +344,12 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
         raise
     db.session.commit()
 
+    # Mint a short /c/<code> deep link to this specific wager so the acceptor
+    # can Accept/Reject it straight from the notification (incl. SMS).
+    code = generate_wager_code()
+    db.session.add(WagerInviteCode(code=code, wager_id=w.id, created_by=proposer_id))
+    db.session.commit()
+
     _notify(
         acceptor_id,
         "wager_proposed",
@@ -335,9 +359,10 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
             "amount": _format_stake(amount),
             "matchup": _matchup(w),
             "league": w.league or "your league",
+            "link": f"https://waygerz.com/c/{code}",
         },
         ref_id=w.id,
-        deep_link="/bets/pending",
+        deep_link=f"/c/{code}",
         dedup_key=f"wager_proposed:{w.id}",
     )
     return w
@@ -999,6 +1024,61 @@ def accept_wager(wager_id, me):
 
 def decline_wager(wager_id, me):
     return _act(wager_id, me, decline)
+
+
+# ---- Unified /c/<code> deep link (bet type) -------------------------------
+def resolve_code(me, code):
+    """Resolve a /c/B<code> bet link to the shared contract shape (see
+    INVITE_CODES_DESIGN.md). JWT optional so a signed-out tap still previews.
+    The wager's own status is authoritative for `state`."""
+    code = (code or "").strip().upper()
+    rec = WagerInviteCode.query.filter_by(code=code).first()
+    w = db.session.get(Wager, rec.wager_id) if rec else None
+    if not rec or not w:
+        return {"type": "bet", "code": code, "target_id": None,
+                "state": "invalid", "single_use": True,
+                "viewer": {"authenticated": bool(me), "relationship": "other"},
+                "preview": None, "actions": []}, 404
+    state = "ok" if w.status == OPEN else "consumed"
+    if me and me == w.acceptor_id:
+        rel = "acceptor"
+    elif me and me == w.proposer_id:
+        rel = "proposer"
+    else:
+        rel = "other"
+    # Only the addressed acceptor can act, and only while the wager is open.
+    actions = ["accept", "decline"] if (state == "ok" and rel == "acceptor") else []
+    return {
+        "type": "bet",
+        "code": code,
+        "target_id": w.id,
+        "state": state,
+        "single_use": True,
+        "viewer": {"authenticated": bool(me), "relationship": rel},
+        "preview": {"wager": _enrich([w])[0]},
+        "actions": actions,
+    }, 200
+
+
+def act_on_code(me, code, data):
+    """Accept/reject a wager via its /c/<code> link. accept()/decline() already
+    enforce the acceptor identity and the open-status requirement."""
+    action = (data.get("action") or "").strip().lower()
+    code = (code or "").strip().upper()
+    rec = WagerInviteCode.query.filter_by(code=code).first()
+    w = db.session.get(Wager, rec.wager_id) if rec else None
+    if not rec or not w:
+        return {"error": "bet not found"}, 404
+    if action not in ("accept", "decline"):
+        return {"error": "unsupported action"}, 400
+    fn = accept if action == "accept" else decline
+    try:
+        fn(w, me)
+    except WagerError as e:
+        return {"error": str(e)}, 400
+    except InsufficientFunds:
+        return {"error": "insufficient balance to cover the stake"}, 402
+    return {"type": "bet", "target_id": w.id}, 200
 
 
 def cancel_wager(wager_id, me):

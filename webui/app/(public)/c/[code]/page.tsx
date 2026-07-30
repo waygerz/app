@@ -12,8 +12,10 @@ import {
   type InviteAction,
   type LeagueCodePreview,
   type FriendCodePreview,
+  type BetCodePreview,
 } from '@/lib/invites';
 import { leagueTypeLabel } from '@/lib/leagues';
+import { wagerPick } from '@/lib/wagers';
 import { formatCredits } from '@/lib/wallet';
 import { clearPendingLink } from '@/lib/pending-link';
 import { AuthRedirectIfGuest } from '@/auth/AuthRedirectIfGuest';
@@ -68,9 +70,14 @@ function CodeContent({ code }: { code: string }) {
       qc.invalidateQueries({ queryKey: ['leagues'] });
       qc.invalidateQueries({ queryKey: ['friends'] });
       qc.invalidateQueries({ queryKey: ['friend-requests'] });
+      qc.invalidateQueries({ queryKey: ['wagers-all'] });
+      qc.invalidateQueries({ queryKey: ['wagers'] });
       if (res.type === 'league') {
         toast.success('Joined');
         router.push(`/leagues/${res.target_id}`);
+      } else if (res.type === 'bet') {
+        toast.success(action === 'accept' ? 'Bet accepted' : 'Bet rejected');
+        router.push('/bets/all');
       } else if (action === 'decline') {
         toast.success('Declined');
         router.push('/');
@@ -225,6 +232,59 @@ function CodeContent({ code }: { code: string }) {
             <Button variant="outline" onClick={() => router.push('/')} disabled={busy}>
               Decline
             </Button>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // ---- Bet challenge -------------------------------------------------------
+  if (data.type === 'bet' && data.preview) {
+    const w = (data.preview as BetCodePreview).wager;
+    const rel = data.viewer.relationship;
+    const busy = act.isPending;
+    const canAct = rel === 'acceptor' && data.actions.includes('accept');
+    return (
+      <>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <UserAvatar
+            userId={w.proposer_id}
+            name={w.proposer_name}
+            imageUrl={w.proposer_avatar_key}
+            className="size-20"
+            fallbackClassName="text-xl"
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">
+              {w.proposer_name} sent you a bet
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">{w.league || 'Head-to-head'}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col">
+          <Row label="Matchup" value={w.event_name || `${w.away_team} @ ${w.home_team}`} />
+          <Row label="Your pick" value={wagerPick(w, w.acceptor_side)} />
+          <Row label="Stake" value={formatCredits(w.amount_cents)} />
+        </div>
+
+        {canAct ? (
+          <div className="flex flex-col gap-2">
+            <Button onClick={() => act.mutate('accept')} disabled={busy}>
+              {act.isPending ? 'Working…' : `Accept — ${formatCredits(w.amount_cents)}`}
+            </Button>
+            <Button variant="outline" onClick={() => act.mutate('decline')} disabled={busy}>
+              Reject
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="text-center text-sm text-muted-foreground">
+              {rel === 'proposer'
+                ? 'You sent this bet — waiting on your opponent.'
+                : "This bet isn't addressed to you."}
+            </p>
+            <Button variant="outline" onClick={() => router.push('/bets/all')}>View bets</Button>
           </div>
         )}
       </>

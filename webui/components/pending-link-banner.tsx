@@ -7,7 +7,12 @@ import {
   savePendingLinkFromReturnPath,
   type PendingLink,
 } from '@/lib/pending-link';
-import { resolveCode, type LeagueCodePreview, type FriendCodePreview } from '@/lib/invites';
+import {
+  resolveCode,
+  type LeagueCodePreview,
+  type FriendCodePreview,
+  type BetCodePreview,
+} from '@/lib/invites';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
 
@@ -49,6 +54,26 @@ export function PendingLinkBanner({ returnPath }: { returnPath?: string }) {
         <div className="min-w-0 text-left">
           <p className="text-xs text-muted-foreground">Log in to join</p>
           <p className="truncate text-sm font-semibold text-foreground">{lg.name}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (data.type === 'bet') {
+    const w = (data.preview as BetCodePreview).wager;
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-3">
+        <UserAvatar
+          userId={w.proposer_id}
+          name={w.proposer_name}
+          imageUrl={w.proposer_avatar_key}
+          className="size-10 shrink-0"
+        />
+        <div className="min-w-0 text-left">
+          <p className="text-xs text-muted-foreground">Log in to answer your bet</p>
+          <p className="truncate text-sm font-semibold text-foreground">
+            {w.proposer_name} · {w.event_name || `${w.away_team} @ ${w.home_team}`}
+          </p>
         </div>
       </div>
     );

@@ -7,6 +7,18 @@ from app.utils.guards import internal_only
 wagers_bp = Blueprint("wagers", __name__)
 
 
+# Unified /c/<code> deep link (bet type). Resolve is JWT-optional (preview for a
+# signed-out tap); acting requires auth (the controller enforces it).
+@wagers_bp.get("/c/<code>")
+def resolve_code(code):
+    return ctrl.resolve_code(code)
+
+
+@wagers_bp.post("/c/<code>/act")
+def act_on_code(code):
+    return ctrl.act_on_code(code)
+
+
 @wagers_bp.post("/wagers")
 @jwt_required(locations=["cookies", "headers"])
 def propose():
