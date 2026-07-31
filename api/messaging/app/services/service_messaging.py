@@ -6,6 +6,7 @@ from datetime import datetime
 import requests
 from flask import Response, current_app, request, stream_with_context
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, get_redis
 from app.models.chat_message import ChatMessage
@@ -331,7 +332,12 @@ def post_direct_message(data):
     if not conv:
         conv = Conversation(type=DIRECT, direct_key=key)
         db.session.add(conv)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Concurrent create for the same pair — direct_key is unique; reuse it.
+            db.session.rollback()
+            conv = Conversation.query.filter_by(type=DIRECT, direct_key=key).first()
 
     msg = ChatMessage(conversation_id=conv.id, author_id=author, body=body, kind=kind, meta=meta)
     db.session.add(msg)
