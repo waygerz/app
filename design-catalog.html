@@ -6,9 +6,9 @@
 <title>Waygerz — Card &amp; Table Catalog</title>
 <style>
   :root{
-    --bg:#0b0910;--bg2:#0f0c16;--panel:#15111f;--panel2:#1b1626;--line:#2a2336;--line2:#352c46;
-    --txt:#efeaf6;--mut:#a79fb8;--mut2:#7d7590;--faint:#5c556e;
-    --pri:#8b5cf6;--pri2:#a78bfa;--brand:#10b981;--dest:#f43f5e;--amber:#f59e0b;--violet:#8b5cf6;--sky:#38bdf8;--fuchsia:#e879f9;--online:#34d399;
+    --bg:#0e0f14;--bg2:#14151c;--panel:#191b24;--panel2:#22242e;--line:#2e3040;--line2:#3a3d4d;
+    --txt:#fafafa;--mut:#a1a1aa;--mut2:#71717a;--faint:#52525b;
+    --pri:#8b5cf6;--pri2:#a78bfa;--brand:#00c23a;--dest:#ef4444;--amber:#f59e0b;--violet:#8b5cf6;--sky:#38bdf8;--fuchsia:#e879f9;--online:#22c55e;
     --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   }
@@ -44,7 +44,7 @@
   .a-m{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}.a-p{background:linear-gradient(135deg,#f472b6,#db2777)}
   .a-j{background:linear-gradient(135deg,#2dd4bf,#0d9488)}.a-a{background:linear-gradient(135deg,#fbbf24,#d97706)}
   .a-t{background:linear-gradient(135deg,#60a5fa,#2563eb)}.a-s{background:linear-gradient(135deg,#f87171,#dc2626)}
-  .l-on{background:linear-gradient(135deg,#fb923c,#ea580c)}.l-sp{background:linear-gradient(135deg,#34d399,#059669)}.l-td{background:linear-gradient(135deg,#60a5fa,#1d4ed8)}
+  .l-on{background:linear-gradient(135deg,#fb923c,#ea580c)}.l-sp{background:linear-gradient(135deg,#22c55e,#059669)}.l-td{background:linear-gradient(135deg,#60a5fa,#1d4ed8)}
   .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:8px;padding:3px 9px}
   .chip svg{width:13px;height:13px}
   .c-h2h{color:var(--violet);background:rgba(139,92,246,.15)}.c-pick{color:var(--amber);background:rgba(245,158,11,.15)}
@@ -61,8 +61,8 @@
   /* icon chip */
   .ic{display:grid;place-items:center;border-radius:12px;flex:none}
   .ic svg{width:17px;height:17px}
-  .ic-bet{color:var(--pri2);background:rgba(139,92,246,.14)}.ic-win{color:var(--brand);background:rgba(16,185,129,.14)}
-  .ic-loss{color:var(--dest);background:rgba(244,63,94,.14)}.ic-friend{color:var(--sky);background:rgba(56,189,248,.14)}
+  .ic-bet{color:var(--pri2);background:rgba(139,92,246,.14)}.ic-win{color:var(--brand);background:rgba(0,194,58,.14)}
+  .ic-loss{color:var(--dest);background:rgba(239,68,68,.14)}.ic-friend{color:var(--sky);background:rgba(56,189,248,.14)}
   .ic-invite{color:var(--fuchsia);background:rgba(232,121,249,.14)}.ic-digest{color:var(--amber);background:rgba(245,158,11,.14)}
 
   table{width:100%;border-collapse:collapse;font-size:13px}
@@ -71,7 +71,7 @@
   tr:last-child td{border-bottom:0}
   .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
 
-  .skel{background:linear-gradient(90deg,var(--panel2) 25%,#241d33 37%,var(--panel2) 63%);background-size:400% 100%;animation:sh 1.4s infinite;border-radius:8px}
+  .skel{background:linear-gradient(90deg,var(--panel2) 25%,#1e2130 37%,var(--panel2) 63%);background-size:400% 100%;animation:sh 1.4s infinite;border-radius:8px}
   @keyframes sh{0%{background-position:100% 0}100%{background-position:0 0}}
   /* form controls */
   .field{display:flex;flex-direction:column;gap:6px}
@@ -542,7 +542,7 @@
           <span class="swatch on" style="background:#ef4444"></span><span class="swatch" style="background:#f59e0b"></span><span class="swatch" style="background:#eab308"></span><span class="swatch" style="background:#22c55e"></span><span class="swatch" style="background:#3b82f6"></span><span class="swatch" style="background:#8b5cf6"></span><span class="swatch" style="background:#ec4899"></span>
         </div></div>
         <div class="field"><label>Surface / dark shade</label><div style="display:flex;gap:8px">
-          <span class="swatch on" style="background:#0b0910"></span><span class="swatch" style="background:#15111f"></span><span class="swatch" style="background:#1b1626"></span>
+          <span class="swatch on" style="background:#0e0f14"></span><span class="swatch" style="background:#191b24"></span><span class="swatch" style="background:#22242e"></span>
         </div></div>
       </div>
     </div>
@@ -601,10 +601,10 @@
     <div class="spec">
       <div class="lbl"><b>Danger zone</b> — archive league</div>
       <div class="where">LeagueManage</div>
-      <div class="card pad" style="border-color:rgba(244,63,94,.35)">
+      <div class="card pad" style="border-color:rgba(239,68,68,.35)">
         <div style="font-size:13.5px;font-weight:600;color:var(--dest)">Archive league</div>
         <div class="muted" style="font-size:12px;margin:5px 0 12px">Hides the league for everyone and stops all play. This can't be undone.</div>
-        <button class="btn" style="background:rgba(244,63,94,.15);color:var(--dest);border:1px solid rgba(244,63,94,.4)">Archive Office NBA</button>
+        <button class="btn" style="background:rgba(239,68,68,.15);color:var(--dest);border:1px solid rgba(239,68,68,.4)">Archive Office NBA</button>
       </div>
     </div>
   </div>
