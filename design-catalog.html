@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waygerz — Card &amp; Table Catalog</title>
+<style>
+  :root{
+    --bg:#0b0910;--bg2:#0f0c16;--panel:#15111f;--panel2:#1b1626;--line:#2a2336;--line2:#352c46;
+    --txt:#efeaf6;--mut:#a79fb8;--mut2:#7d7590;--faint:#5c556e;
+    --pri:#8b5cf6;--pri2:#a78bfa;--brand:#10b981;--dest:#f43f5e;--amber:#f59e0b;--violet:#8b5cf6;--sky:#38bdf8;--fuchsia:#e879f9;--online:#34d399;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--sans);color:var(--txt);
+    background:radial-gradient(1100px 550px at 12% -8%,rgba(139,92,246,.14),transparent 60%),var(--bg);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:0 auto;padding:44px 22px 90px}
+  header .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--pri2);margin:0 0 12px}
+  header h1{font-size:clamp(30px,4.5vw,46px);line-height:1.03;letter-spacing:-.02em;margin:0 0 12px;font-weight:750}
+  header p{max-width:64ch;color:var(--mut);font-size:15px;line-height:1.6;margin:0}
+  .toc{display:flex;flex-wrap:wrap;gap:8px;margin:26px 0 8px}
+  .toc a{font-size:12.5px;color:var(--mut);text-decoration:none;border:1px solid var(--line2);border-radius:99px;padding:5px 12px;transition:.12s}
+  .toc a:hover{color:#fff;background:rgba(139,92,246,.14);border-color:transparent}
+
+  section{margin-top:52px;scroll-margin-top:20px}
+  .sh{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:22px}
+  .sh h2{font-size:22px;letter-spacing:-.01em;margin:0;font-weight:680}
+  .sh .num{font-family:var(--mono);font-size:12px;color:var(--faint)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:20px;align-items:start}
+  .grid.wide{grid-template-columns:repeat(auto-fill,minmax(440px,1fr))}
+
+  .spec{display:flex;flex-direction:column;gap:9px}
+  .spec .lbl{font-size:12px;color:var(--mut2)}
+  .spec .lbl b{color:var(--txt);font-weight:650;font-size:13px}
+  .spec .where{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.02em}
+
+  /* shared app-like primitives */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px}
+  .pad{padding:16px}
+  .av{border-radius:99px;display:grid;place-items:center;font-weight:650;color:#fff;flex:none}
+  .lg{border-radius:14px;display:grid;place-items:center;font-weight:700;color:#fff;flex:none}
+  .a-m{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}.a-p{background:linear-gradient(135deg,#f472b6,#db2777)}
+  .a-j{background:linear-gradient(135deg,#2dd4bf,#0d9488)}.a-a{background:linear-gradient(135deg,#fbbf24,#d97706)}
+  .a-t{background:linear-gradient(135deg,#60a5fa,#2563eb)}.a-s{background:linear-gradient(135deg,#f87171,#dc2626)}
+  .l-on{background:linear-gradient(135deg,#fb923c,#ea580c)}.l-sp{background:linear-gradient(135deg,#34d399,#059669)}.l-td{background:linear-gradient(135deg,#60a5fa,#1d4ed8)}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:8px;padding:3px 9px}
+  .chip svg{width:13px;height:13px}
+  .c-h2h{color:var(--violet);background:rgba(139,92,246,.15)}.c-pick{color:var(--amber);background:rgba(245,158,11,.15)}
+  .badge{font-size:10.5px;font-weight:700;border-radius:99px;padding:2px 8px}
+  .b-warn{color:#fde68a;background:rgba(245,158,11,.18)}
+  .btn{font-family:var(--sans);font-size:12.5px;font-weight:600;border-radius:9px;padding:7px 13px;cursor:pointer;border:1px solid transparent}
+  .btn.pri{background:linear-gradient(180deg,var(--pri2),var(--pri));color:#fff}
+  .btn.gho{background:transparent;border-color:var(--line2);color:var(--mut)}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .pos{color:var(--brand)}.neg{color:var(--dest)}
+  .muted{color:var(--mut2)}.faint{color:var(--faint)}
+  .stack{display:flex}.stack .mini{border-radius:99px;border:2px solid var(--panel);margin-left:-8px;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff}.stack .mini:first-child{margin-left:0}
+
+  /* icon chip */
+  .ic{display:grid;place-items:center;border-radius:12px;flex:none}
+  .ic svg{width:17px;height:17px}
+  .ic-bet{color:var(--pri2);background:rgba(139,92,246,.14)}.ic-win{color:var(--brand);background:rgba(16,185,129,.14)}
+  .ic-loss{color:var(--dest);background:rgba(244,63,94,.14)}.ic-friend{color:var(--sky);background:rgba(56,189,248,.14)}
+  .ic-invite{color:var(--fuchsia);background:rgba(232,121,249,.14)}.ic-digest{color:var(--amber);background:rgba(245,158,11,.14)}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);text-align:left;font-weight:600;padding:8px 12px;border-bottom:1px solid var(--line)}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--mut)}
+  tr:last-child td{border-bottom:0}
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+
+  .skel{background:linear-gradient(90deg,var(--panel2) 25%,#241d33 37%,var(--panel2) 63%);background-size:400% 100%;animation:sh 1.4s infinite;border-radius:8px}
+  @keyframes sh{0%{background-position:100% 0}100%{background-position:0 0}}
+  .note{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:var(--mut2);font-size:13px;line-height:1.6}
+  .k{font-family:var(--mono);font-size:12px;color:var(--pri2);background:rgba(139,92,246,.1);border:1px solid var(--line2);border-radius:6px;padding:1px 6px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-bet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/></symbol>
+<symbol id="i-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7 7 17"/><path d="M17 17H7V7"/></symbol>
+<symbol id="i-friend" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></symbol>
+<symbol id="i-usercheck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></symbol>
+<symbol id="i-ticket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v14"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="1"/><rect x="12" y="8" width="3" height="10" rx="1"/><rect x="17" y="5" width="3" height="13" rx="1"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-swords" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="i-ban" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+<symbol id="i-check2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m2 12 4.5 4.5L11 12"/><path d="m11 16.5 2 2L22 9"/><path d="M16 7 12.5 10.5"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+<symbol id="i-msg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+</svg>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Waygerz · Design system</p>
+  <h1>Card &amp; Table catalog</h1>
+  <p>Every card and table pattern in the app, rendered with real content and labelled with where it's used and its key parts. This is a static reference of the current dark UI — a place to see the whole language at a glance and spot inconsistencies.</p>
+  <nav class="toc">
+    <a href="#leagues">Leagues &amp; home</a>
+    <a href="#bets">Betting</a>
+    <a href="#standings">Standings &amp; pick'em</a>
+    <a href="#social">Social</a>
+    <a href="#sports">Sports</a>
+    <a href="#invite">Invite previews</a>
+    <a href="#tables">Tables</a>
+    <a href="#states">States</a>
+  </nav>
+</header>
+
+<!-- ============ LEAGUES ============ -->
+<section id="leagues">
+  <div class="sh"><span class="num">01</span><h2>Leagues &amp; home</h2></div>
+  <div class="grid">
+    <div class="spec">
+      <div class="lbl"><b>League row</b> — My Leagues (home)</div>
+      <div class="where">app/(app)/page.tsx</div>
+      <a class="card pad" style="display:flex;gap:16px;align-items:center;text-decoration:none">
+        <div class="lg l-on" style="width:72px;height:72px;font-size:20px">ON</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:19px;font-weight:700;letter-spacing:-.01em">Office NBA</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:9px">
+            <span class="chip c-h2h"><svg><use href="#i-swords"/></svg>Head-to-head</span>
+            <span class="stack">
+              <span class="mini a-p" style="width:34px;height:34px">P</span><span class="mini a-j" style="width:34px;height:34px">J</span><span class="mini a-t" style="width:34px;height:34px">T</span>
+              <span class="mini" style="width:34px;height:34px;background:var(--panel2);color:var(--mut)">+5</span>
+            </span>
+          </div>
+        </div>
+        <span style="width:22px;height:22px;border-radius:99px;background:var(--dest);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center" class="mono">5</span>
+      </a>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Pending invite</b> — accent rail + Accept</div>
+      <div class="where">app/(app)/page.tsx</div>
+      <div class="card pad" style="display:flex;align-items:center;gap:12px;position:relative;overflow:hidden">
+        <span style="position:absolute;inset:0 auto 0 0;width:5px;background:linear-gradient(var(--pri),var(--fuchsia))"></span>
+        <div class="lg l-sp" style="width:40px;height:40px;font-size:13px">SP</div>
+        <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">Sunday Pool</div><div class="muted" style="font-size:12px">Pick'em · invited by Sam</div></div>
+        <button class="btn pri">Accept</button>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Pick'em variant</b> — amber type accent</div>
+      <div class="where">app/(app)/page.tsx</div>
+      <a class="card pad" style="display:flex;gap:16px;align-items:center;text-decoration:none">
+        <div class="lg l-sp" style="width:72px;height:72px;font-size:20px">SP</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:19px;font-weight:700;letter-spacing:-.01em">Sunday Pool</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:9px">
+            <span class="chip c-pick"><svg><use href="#i-trophy"/></svg>Pick'em</span>
+            <span class="badge b-warn">Draft</span>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BETTING ============ -->
+<section id="bets">
+  <div class="sh"><span class="num">02</span><h2>Betting cards</h2></div>
+  <div class="grid wide">
+    <div class="spec">
+      <div class="lbl"><b>Wager bet card</b> — incoming challenge (Accept/Decline)</div>
+      <div class="where">leagues/[id]/sections.tsx · /bets · /play · /results</div>
+      <div class="card" style="overflow:hidden;display:flex;border-left:3px solid var(--pri)">
+        <div class="pad" style="flex:1;display:flex;align-items:center;gap:12px">
+          <div class="av a-m" style="width:34px;height:34px;font-size:13px">M</div>
+          <div style="min-width:0;flex:1">
+            <div style="font-size:14px;font-weight:600">Lakers <span class="muted">@</span> Celtics</div>
+            <div class="muted" style="font-size:12px;margin-top:2px">vs Marcus · Office NBA</div>
+          </div>
+          <span class="chip" style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.4);color:var(--pri2)">Lakers +3.5</span>
+          <div style="display:flex;gap:6px">
+            <button class="btn pri">Accept</button><button class="btn gho">Decline</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Wager bet card</b> — accepted &amp; locked (icon-only status)</div>
+      <div class="where">StatusIcon (lock) · color-only outcome</div>
+      <div class="card" style="overflow:hidden;display:flex;border-left:3px solid var(--sky)">
+        <div class="pad" style="flex:1;display:flex;align-items:center;gap:12px">
+          <div class="av a-p" style="width:34px;height:34px;font-size:13px">P</div>
+          <div style="min-width:0;flex:1">
+            <div style="font-size:14px;font-weight:600">Chiefs <span class="muted">@</span> Bills <span class="faint mono" style="font-size:11px">· LIVE 14-10</span></div>
+            <div class="muted" style="font-size:12px;margin-top:2px">vs Priya · Sunday Pool</div>
+          </div>
+          <span class="muted" title="Locked" style="display:grid;place-items:center"><svg style="width:18px;height:18px" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-lock"/></svg></span>
+          <span class="mono" style="font-weight:700">25</span>
+        </div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Wager bet card</b> — settled (won / lost, color-only)</div>
+      <div class="where">outcome via text color: brand / destructive</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="card" style="overflow:hidden;display:flex;border-left:3px solid var(--brand)">
+          <div class="pad" style="flex:1;display:flex;align-items:center;gap:12px">
+            <div class="ic ic-win" style="width:34px;height:34px"><svg><use href="#i-trophy"/></svg></div>
+            <div style="min-width:0;flex:1"><div style="font-size:14px;font-weight:600">Yankees <span class="muted">@</span> Red Sox</div><div class="muted" style="font-size:12px">vs Theo · The Dugout · Final</div></div>
+            <button class="mono pos" style="font-size:16px;font-weight:800;background:none;border:0;cursor:pointer">+40</button>
+          </div>
+        </div>
+        <div class="card" style="overflow:hidden;display:flex;border-left:3px solid var(--dest)">
+          <div class="pad" style="flex:1;display:flex;align-items:center;gap:12px">
+            <div class="ic ic-loss" style="width:34px;height:34px"><svg><use href="#i-down"/></svg></div>
+            <div style="min-width:0;flex:1"><div style="font-size:14px;font-weight:600">Warriors <span class="muted">@</span> Nuggets</div><div class="muted" style="font-size:12px">vs Alex · Hoops Money · Final</div></div>
+            <span class="mono neg" style="font-size:16px;font-weight:800">−25</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>In-thread bet card</b> — native message in a DM</div>
+      <div class="where">messages-sheet.tsx · kind:'bet'</div>
+      <div style="max-width:86%;border:1px solid rgba(139,92,246,.4);box-shadow:inset 0 0 0 1px rgba(139,92,246,.2);border-radius:16px 16px 16px 5px;background:var(--panel2);padding:12px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);margin-bottom:9px"><span class="ic ic-bet" style="width:22px;height:22px"><svg style="width:13px;height:13px"><use href="#i-swords"/></svg></span>Marcus challenged you</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:9px 11px">
+          <span style="font-size:13.5px;font-weight:600">Lakers <span class="muted">@</span> Celtics</span>
+          <span class="mono chip" style="font-size:10px;color:var(--pri2);border:1px solid rgba(139,92,246,.4);background:rgba(139,92,246,.1)">Lakers +3.5</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+          <span class="muted" style="font-size:11px">Stake <b class="mono" style="color:var(--txt)">25</b></span>
+          <span style="display:flex;gap:6px"><button class="btn gho">Reject</button><button class="btn pri">Accept</button></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STANDINGS & PICKEM ============ -->
+<section id="standings">
+  <div class="sh"><span class="num">03</span><h2>Standings &amp; pick'em</h2></div>
+  <div class="grid">
+    <div class="spec">
+      <div class="lbl"><b>Standings row</b> — money league (rank medal, record, net)</div>
+      <div class="where">leagues/[id]/standings</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="card pad" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-color:rgba(245,158,11,.35)">
+          <span style="font-size:18px">🥇</span><div class="av a-p" style="width:34px;height:34px;font-size:13px">P</div>
+          <div style="flex:1"><div style="font-size:14px;font-weight:600">Priya</div><div class="muted mono" style="font-size:11px">8–2–1</div></div>
+          <div style="text-align:right"><div class="mono" style="font-weight:700">1,240</div><div class="mono pos" style="font-size:11px">+240</div></div>
+        </div>
+        <div class="card pad" style="display:flex;align-items:center;gap:12px;padding:12px 14px">
+          <span class="mono muted" style="width:22px;text-align:center">2</span><div class="av a-m" style="width:34px;height:34px;font-size:13px">Y</div>
+          <div style="flex:1"><div style="font-size:14px;font-weight:600">You</div><div class="muted mono" style="font-size:11px">6–4</div></div>
+          <div style="text-align:right"><div class="mono" style="font-weight:700">980</div><div class="mono neg" style="font-size:11px">−20</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Pick'em pick card</b> — two team-select buttons + grade</div>
+      <div class="where">PickemPlay (leagues/[id]/play)</div>
+      <div class="card pad">
+        <div class="muted" style="font-size:11px;margin-bottom:9px">Sun 1:00 · <span class="pos">✓ correct</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" style="flex:1;border:2px solid var(--pri);background:rgba(139,92,246,.12);color:#fff;padding:11px">Chiefs</button>
+          <button class="btn gho" style="flex:1;padding:11px">Bills</button>
+        </div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Ranked member card</b> — pick'em results (correct/total)</div>
+      <div class="where">PickemResults</div>
+      <div class="card pad" style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:18px">🥈</span><div class="av a-t" style="width:34px;height:34px;font-size:13px">T</div>
+        <div style="flex:1"><div style="font-size:14px;font-weight:600">Theo</div><div class="muted" style="font-size:11px">tie-breaker 47</div></div>
+        <div class="mono" style="font-weight:700">11<span class="muted">/13</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SOCIAL ============ -->
+<section id="social">
+  <div class="sh"><span class="num">04</span><h2>Social — feed, friends, notifications, messages</h2></div>
+  <div class="grid wide">
+    <div class="spec">
+      <div class="lbl"><b>Feed post card</b> — announcement + engagement</div>
+      <div class="where">leagues/[id]/feed-post.tsx</div>
+      <div class="card pad">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px"><div class="av a-m" style="width:32px;height:32px;font-size:12px">M</div><div><div style="font-size:13px;font-weight:600">Marcus <span class="muted" style="font-weight:400">· commissioner</span></div><div class="faint mono" style="font-size:10px">2h ago</div></div></div>
+        <div style="font-size:14px;line-height:1.5">Week 6 is locked 🔒 — good luck everyone, tiebreaker is the MNF total.</div>
+        <div style="display:flex;gap:16px;margin-top:11px;color:var(--mut)"><span style="display:inline-flex;gap:6px;align-items:center;font-size:12px"><svg style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-heart"/></svg>4</span><span style="display:inline-flex;gap:6px;align-items:center;font-size:12px"><svg style="width:15px;height:15px" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-msg"/></svg>2</span></div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>User mini card</b> — friends / members roster</div>
+      <div class="where">components/user-mini-card.tsx</div>
+      <div class="card pad" style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:9px">
+        <div class="av a-j" style="width:56px;height:56px;font-size:20px">J</div>
+        <div><div style="font-size:14px;font-weight:600">Jordan</div><div class="muted" style="font-size:11px">Moderator · You</div></div>
+        <div style="display:flex;gap:6px"><button class="btn pri" style="font-size:11px">Message</button><button class="btn gho" style="font-size:11px">Add friend</button></div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Notification rows</b> — Direction 1 (avatar/icon + inline actions)</div>
+      <div class="where">components/notifications-sheet.tsx</div>
+      <div class="card" style="overflow:hidden">
+        <div class="pad" style="display:flex;gap:11px;position:relative;background:rgba(139,92,246,.05);border-bottom:1px solid var(--line)">
+          <span style="position:absolute;inset:0 auto 0 0;width:2px;background:var(--pri)"></span>
+          <div style="position:relative"><div class="av a-m" style="width:36px;height:36px;font-size:13px">M</div><span class="ic ic-bet" style="width:16px;height:16px;position:absolute;right:-4px;bottom:-4px;border:2px solid var(--panel)"><svg style="width:10px;height:10px"><use href="#i-swords"/></svg></span></div>
+          <div style="flex:1;min-width:0"><div style="font-size:13.5px"><b>Marcus</b> bet you <span class="mono">25</span> on Lakers @ Celtics</div><div style="display:flex;gap:7px;margin-top:9px"><button class="btn pri">Accept</button><button class="btn gho">Reject</button></div><div class="faint mono" style="font-size:11px;margin-top:6px">2m ago</div></div>
+        </div>
+        <div class="pad" style="display:flex;gap:11px;border-bottom:1px solid var(--line)">
+          <div class="ic ic-win" style="width:36px;height:36px"><svg><use href="#i-trophy"/></svg></div>
+          <div style="flex:1"><div class="pos" style="font-size:13.5px;font-weight:500">You won +40 on Yankees @ Red Sox 🎉</div><div class="faint mono" style="font-size:11px;margin-top:4px">3h ago</div></div>
+        </div>
+        <div class="pad" style="display:flex;gap:11px">
+          <div style="position:relative"><div class="lg l-sp" style="width:36px;height:36px;font-size:12px;border-radius:99px">SP</div><span class="ic ic-invite" style="width:16px;height:16px;position:absolute;right:-4px;bottom:-4px;border:2px solid var(--panel)"><svg style="width:10px;height:10px"><use href="#i-ticket"/></svg></span></div>
+          <div style="flex:1"><div style="font-size:13.5px"><b>Sam</b> invited you to Sunday Pool</div><div class="faint mono" style="font-size:11px;margin-top:4px">5h ago</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Conversation rows</b> — unread-first inbox</div>
+      <div class="where">components/messages-sheet.tsx</div>
+      <div class="card" style="overflow:hidden">
+        <div style="padding:8px 15px 4px;font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)">Unread · 2</div>
+        <div style="display:flex;gap:12px;align-items:center;padding:11px 15px;position:relative;background:rgba(139,92,246,.05)">
+          <span style="position:absolute;inset:0 auto 0 0;width:2px;background:var(--pri)"></span>
+          <div class="av a-m" style="width:46px;height:46px;font-size:15px">M</div>
+          <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between"><span style="font-size:14.5px;font-weight:700">Marcus</span><span class="mono pri2" style="font-size:11px;color:var(--pri2)">2m</span></div><div style="display:flex;justify-content:space-between;gap:8px;margin-top:2px"><span class="muted" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">You still on for the Lakers bet? 🏀</span><span style="min-width:20px;height:20px;border-radius:99px;background:var(--pri);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center" class="mono">2</span></div></div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;padding:11px 15px;border-top:1px solid var(--line)">
+          <div style="position:relative"><div class="lg l-on" style="width:46px;height:46px;font-size:13px">ON</div><span style="position:absolute;right:-4px;bottom:-4px;width:19px;height:19px;border-radius:99px;background:var(--panel2);border:2px solid var(--panel);display:grid;place-items:center;color:var(--mut)"><svg style="width:11px;height:11px" fill="none" stroke="currentColor" stroke-width="2.2"><use href="#i-users"/></svg></span></div>
+          <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between"><span style="font-size:14.5px;font-weight:600">Office NBA</span><span class="faint mono" style="font-size:11px">12m</span></div><div class="muted" style="font-size:13px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="faint">Priya:</span> gg everyone, week's locked</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Chat bubbles</b> — DM (them / me + read receipt)</div>
+      <div class="where">messages-sheet.tsx (chat)</div>
+      <div class="card pad" style="display:flex;flex-direction:column;gap:7px">
+        <div style="align-self:flex-start;max-width:80%;background:var(--panel2);border:1px solid var(--line);border-radius:16px 16px 16px 5px;padding:8px 12px;font-size:14px">You still on for the Lakers bet? 🏀</div>
+        <span class="faint mono" style="font-size:10px;align-self:flex-start">2:14</span>
+        <div style="align-self:flex-end;max-width:80%;background:linear-gradient(180deg,var(--pri2),var(--pri));color:#fff;border-radius:16px 16px 5px 16px;padding:8px 12px;font-size:14px">yeah — +3.5 right?</div>
+        <span class="faint mono" style="font-size:10px;align-self:flex-end;display:inline-flex;gap:4px;align-items:center">2:15 <svg style="width:13px;height:13px;color:var(--pri2)" fill="none" stroke="currentColor" stroke-width="2.4"><use href="#i-check2"/></svg></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SPORTS ============ -->
+<section id="sports">
+  <div class="sh"><span class="num">05</span><h2>Sports</h2></div>
+  <div class="grid">
+    <div class="spec">
+      <div class="lbl"><b>Sport picker card</b> — emoji + name</div>
+      <div class="where">app/(app)/sports</div>
+      <a class="card pad" style="display:flex;align-items:center;gap:12px;text-decoration:none"><span style="font-size:28px">🏀</span><span style="font-size:15px;font-weight:600">Basketball</span></a>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Event card</b> — bettable game</div>
+      <div class="where">components/espn/event-card · EventCard</div>
+      <a class="card pad" style="display:block;text-decoration:none">
+        <div class="faint mono" style="font-size:10px">Sun · 1:00 PM</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span style="font-weight:600">Lakers</span><span class="mono muted">—</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px"><span style="font-weight:600">Celtics</span><span class="mono muted">—</span></div>
+        <div class="chip c-h2h" style="margin-top:10px">NBA · Regular Season</div>
+      </a>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>League tile</b> — sport → league grid</div>
+      <div class="where">sports/[slug]</div>
+      <a class="card pad" style="display:flex;align-items:center;gap:12px;text-decoration:none">
+        <div class="lg" style="width:40px;height:40px;background:var(--panel2);color:var(--mut);font-size:12px">NBA</div>
+        <div style="flex:1"><div style="font-weight:600;font-size:14px">NBA</div><div class="muted" style="font-size:11px">2025-26 season</div></div>
+        <svg style="width:18px;height:18px;color:var(--amber)" fill="currentColor" viewBox="0 0 24 24"><path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ INVITE PREVIEWS ============ -->
+<section id="invite">
+  <div class="sh"><span class="num">06</span><h2>Invite previews — /c/&lt;code&gt;</h2></div>
+  <div class="grid">
+    <div class="spec">
+      <div class="lbl"><b>League invite</b> — join preview</div>
+      <div class="where">app/(public)/c/[code] · type league</div>
+      <div class="card pad" style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px">
+        <div class="lg l-on" style="width:80px;height:80px;font-size:24px">ON</div>
+        <div><div style="font-size:20px;font-weight:700">Office NBA</div><div class="muted" style="font-size:12px;margin-top:3px"><span class="chip c-h2h" style="font-size:10px">Head-to-head</span> · 8 members</div></div>
+        <button class="btn pri" style="width:100%;padding:10px">Join Office NBA</button>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Friend invite</b> — add preview</div>
+      <div class="where">app/(public)/c/[code] · type friend</div>
+      <div class="card pad" style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px">
+        <div class="av a-j" style="width:76px;height:76px;font-size:24px">J</div>
+        <div><div style="font-size:20px;font-weight:700">Jordan</div><div class="muted" style="font-size:12px">on Waygerz</div></div>
+        <button class="btn pri" style="width:100%;padding:10px">Add friend</button>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Bet invite</b> — accept a wager (type bet)</div>
+      <div class="where">app/(public)/c/[code] · type bet</div>
+      <div class="card pad" style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px">
+        <div class="av a-m" style="width:76px;height:76px;font-size:24px">M</div>
+        <div><div style="font-size:20px;font-weight:700">Marcus sent you a bet</div><div class="muted" style="font-size:12px">Lakers @ Celtics · Lakers +3.5 · 25</div></div>
+        <button class="btn pri" style="width:100%;padding:10px">Accept — 25</button>
+        <button class="btn gho" style="width:100%">Reject</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TABLES ============ -->
+<section id="tables">
+  <div class="sh"><span class="num">07</span><h2>Tables</h2></div>
+  <div class="grid wide">
+    <div class="spec">
+      <div class="lbl"><b>Wallet ledger</b> — league transaction history</div>
+      <div class="where">leagues/[id]/activity (money leagues)</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Type</th><th>Amount</th><th>Balance</th><th>Date</th></tr></thead>
+          <tbody>
+            <tr><td>Bet won</td><td class="mono pos">+40</td><td class="mono">1,040</td><td class="faint mono">Jul 30</td></tr>
+            <tr><td>Bet stake</td><td class="mono neg">−25</td><td class="mono">1,000</td><td class="faint mono">Jul 29</td></tr>
+            <tr><td>Bet refund</td><td class="mono pos">+25</td><td class="mono">1,025</td><td class="faint mono">Jul 28</td></tr>
+            <tr><td>Starting balance</td><td class="mono">1,000</td><td class="mono">1,000</td><td class="faint mono">Jul 20</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Schedule board</b> — tap-to-bet (spread / total / winner)</div>
+      <div class="where">LeagueSports · ScheduleBoard</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Sun 1:00</th><th style="text-align:center">Spread</th><th style="text-align:center">Total</th><th style="text-align:center">Winner</th></tr></thead>
+          <tbody>
+            <tr><td style="font-weight:600">Lakers</td><td style="text-align:center"><span class="chip" style="background:var(--panel2);color:var(--pri2)">−3.5</span></td><td rowspan="2" style="text-align:center;vertical-align:middle"><span class="chip" style="background:var(--panel2);color:var(--pri2)">O 224.5</span></td><td style="text-align:center"><span class="chip" style="background:var(--panel2);color:var(--pri2)">−150</span></td></tr>
+            <tr><td style="font-weight:600">Celtics</td><td style="text-align:center"><span class="chip" style="background:var(--panel2);color:var(--pri2)">+3.5</span></td><td style="text-align:center"><span class="chip" style="background:var(--panel2);color:var(--pri2)">+130</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STATES ============ -->
+<section id="states">
+  <div class="sh"><span class="num">08</span><h2>States</h2></div>
+  <div class="grid">
+    <div class="spec">
+      <div class="lbl"><b>Skeleton</b> — loading placeholder (mirrors card geometry)</div>
+      <div class="where">components/ui/skeleton</div>
+      <div class="card pad" style="display:flex;gap:16px;align-items:center">
+        <div class="skel" style="width:72px;height:72px;border-radius:14px"></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px"><div class="skel" style="height:22px;width:66%"></div><div style="display:flex;gap:10px"><div class="skel" style="height:24px;width:96px;border-radius:8px"></div><div class="skel" style="height:34px;width:96px;border-radius:99px"></div></div></div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Empty state</b> — no data + CTA</div>
+      <div class="where">home / bets / friends</div>
+      <div class="card" style="padding:34px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px">
+        <div class="ic" style="width:60px;height:60px;background:linear-gradient(135deg,var(--pri),var(--fuchsia));color:#fff;border-radius:18px"><svg style="width:26px;height:26px"><use href="#i-trophy"/></svg></div>
+        <div><div style="font-weight:650">No leagues yet</div><div class="muted" style="font-size:13px">Create a league or join with a code to start.</div></div>
+        <button class="btn pri" style="padding:9px 16px">＋ Create your first league</button>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Cancelled / status icons</b> — terse states</div>
+      <div class="where">StatusIcon (lock / ban)</div>
+      <div class="card pad" style="display:flex;gap:20px;align-items:center;justify-content:center;color:var(--mut)">
+        <span style="display:flex;flex-direction:column;align-items:center;gap:6px"><svg style="width:22px;height:22px" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-lock"/></svg><span class="faint" style="font-size:11px">Locked</span></span>
+        <span style="display:flex;flex-direction:column;align-items:center;gap:6px"><svg style="width:22px;height:22px" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-ban"/></svg><span class="faint" style="font-size:11px">Cancelled</span></span>
+        <span style="display:flex;flex-direction:column;align-items:center;gap:6px"><svg style="width:22px;height:22px;color:var(--pri2)" fill="none" stroke="currentColor" stroke-width="2.4"><use href="#i-check2"/></svg><span class="faint" style="font-size:11px">Read</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="note">
+  <p>Representative renders of the live components — content is illustrative, structure and palette match the app's dark theme. Accent language: <span class="k">primary</span> violet (actions, H2H), <span class="k">brand</span> green (wins), <span class="k">destructive</span> red (losses), <span class="k">amber</span> (pick'em / digest), <span class="k">sky</span> (friends), <span class="k">fuchsia</span> (invites). The two real <code>&lt;table&gt;</code>s are the wallet ledger and the schedule board; everything labelled "standings/leaderboard" is a card list. Open this file in a browser to browse.</p>
+</div>
+</div>
+</body>
+</html>
