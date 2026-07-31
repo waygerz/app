@@ -13,7 +13,7 @@ import {
   Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
-import { messagingApi, type ChatMessage, type Conversation } from '@/lib/messaging';
+import { messagingApi, type ChatMessage, type Conversation, type BetMessageMeta } from '@/lib/messaging';
 import { leaguesApi } from '@/lib/leagues';
 import { wagersApi, wagerPick, type Wager } from '@/lib/wagers';
 import { formatCredits } from '@/lib/wallet';
@@ -132,15 +132,12 @@ export function MessagesSheet() {
     enabled: !!activeId && activeConv?.type === 'direct' && !!otherId,
     staleTime: 15_000,
   });
-  const openBets: Wager[] = useMemo(() => {
-    if (!otherId) return [];
-    return (chatWagersQ.data ?? []).filter(
-      (w) =>
-        w.status === 'open' &&
-        ((w.proposer_id === me && w.acceptor_id === otherId) ||
-          (w.proposer_id === otherId && w.acceptor_id === me)),
-    );
-  }, [chatWagersQ.data, me, otherId]);
+  // Live wager status for the bet cards in this thread, keyed by wager id.
+  const wagersById = useMemo(() => {
+    const m = new Map<string, Wager>();
+    for (const w of chatWagersQ.data ?? []) m.set(w.id, w);
+    return m;
+  }, [chatWagersQ.data]);
 
   // Unified inbox groups: what needs a reply floats to the top (Direction 2).
   const groups = useMemo(() => {
@@ -175,7 +172,7 @@ export function MessagesSheet() {
   // Keep the newest message in view when a thread opens or a message arrives.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [activeId, msgsQ.data?.length, openBets.length, typingUser]);
+  }, [activeId, msgsQ.data?.length, typingUser]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -405,39 +402,62 @@ export function MessagesSheet() {
     );
   }
 
-  // ---- Chat: bet slip (in-thread) -----------------------------------------
-  function BetSlip({ w }: { w: Wager }) {
-    const iAmAcceptor = w.acceptor_id === me;
+  // ---- Chat: native in-thread bet card ------------------------------------
+  // Display comes from the message's own `meta` snapshot; the live wager (by id)
+  // supplies the current status + whether Accept/Reject is still available.
+  function BetSlip({ meta, live }: { meta: BetMessageMeta; live?: Wager }) {
+    const status = live?.status ?? meta.status;
+    const iAmAcceptor = String(live?.acceptor_id ?? meta.acceptor_id) === me;
+    const canAct = status === 'open' && iAmAcceptor;
+    const pick = wagerPick(
+      { bet_type: meta.bet_type, line: meta.line, home_team: meta.home_team, away_team: meta.away_team, proposer_side: meta.proposer_side },
+      iAmAcceptor ? meta.acceptor_side : meta.proposer_side,
+    );
+    const won = live?.winner_user_id ? String(live.winner_user_id) === me : null;
+
+    let action: ReactNode;
+    if (canAct) {
+      action = (
+        <span className="flex gap-1.5">
+          <Button size="sm" variant="outline" disabled={betAct.isPending}
+            onClick={() => betAct.mutate({ id: meta.wager_id, yes: false })}>Reject</Button>
+          <Button size="sm" disabled={betAct.isPending}
+            onClick={() => betAct.mutate({ id: meta.wager_id, yes: true })}>Accept</Button>
+        </span>
+      );
+    } else if (status === 'open') {
+      action = <span className="text-[11px] text-muted-foreground">Waiting on {meta.acceptor_name}…</span>;
+    } else if (status === 'accepted') {
+      action = <span className="text-[11px] font-medium text-brand">Accepted ✓</span>;
+    } else if (status === 'completed' || status === 'settled') {
+      action = <span className={cn('text-[11px] font-semibold', won ? 'text-brand' : won === false ? 'text-destructive' : 'text-muted-foreground')}>
+        {won ? 'Won' : won === false ? 'Lost' : 'Settled'}
+      </span>;
+    } else {
+      action = <span className="text-[11px] capitalize text-muted-foreground">{status}</span>;
+    }
+
     return (
       <div className="max-w-[86%] self-start rounded-2xl rounded-bl-md border border-primary/40 bg-muted/40 p-3 ring-1 ring-inset ring-primary/20">
         <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="flex size-5 items-center justify-center rounded-md bg-primary/15 text-primary">
             <Swords className="size-3" />
           </span>
-          {iAmAcceptor ? `${w.proposer_name} challenged you` : 'Your bet'}
+          {iAmAcceptor ? `${meta.proposer_name} challenged you` : 'Your bet'}
         </div>
         <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2">
           <span className="text-[13px] font-semibold">
-            {w.away_team} <span className="font-medium text-muted-foreground">@</span> {w.home_team}
+            {meta.away_team} <span className="font-medium text-muted-foreground">@</span> {meta.home_team}
           </span>
           <span className="whitespace-nowrap rounded-md border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">
-            {wagerPick(w, iAmAcceptor ? w.acceptor_side : w.proposer_side)}
+            {pick}
           </span>
         </div>
         <div className="mt-2 flex items-center justify-between gap-2">
           <span className="text-[11px] text-muted-foreground">
-            Stake <b className="font-mono text-foreground">{formatCredits(w.amount_cents)}</b>
+            Stake <b className="font-mono text-foreground">{formatCredits(meta.amount_cents)}</b>
           </span>
-          {iAmAcceptor ? (
-            <span className="flex gap-1.5">
-              <Button size="sm" variant="outline" disabled={betAct.isPending}
-                onClick={() => betAct.mutate({ id: w.id, yes: false })}>Reject</Button>
-              <Button size="sm" disabled={betAct.isPending}
-                onClick={() => betAct.mutate({ id: w.id, yes: true })}>Accept</Button>
-            </span>
-          ) : (
-            <span className="text-[11px] text-muted-foreground">Waiting on {w.acceptor_name}…</span>
-          )}
+          {action}
         </div>
       </div>
     );
@@ -472,6 +492,19 @@ export function MessagesSheet() {
 
     for (const m of messages) {
       pushDivider(m.created_at);
+
+      // Native in-thread bet card (rendered from the message's own meta).
+      if (m.kind === 'bet' && m.meta) {
+        lastAuthor = '';
+        const meta = m.meta;
+        items.push({
+          at: new Date(m.created_at).getTime(),
+          key: m.id,
+          node: <div key={m.id} className="flex flex-col"><BetSlip meta={meta} live={wagersById.get(meta.wager_id)} /></div>,
+        });
+        continue;
+      }
+
       const mine = String(m.author_id) === me;
       const showSender = isLeague && !mine && m.author_id !== lastAuthor;
       lastAuthor = mine ? me : m.author_id;
@@ -528,12 +561,6 @@ export function MessagesSheet() {
           ),
         });
       }
-    }
-
-    // Open bets between us, interleaved (direct chats only).
-    for (const w of openBets) {
-      const at = new Date(w.created_at).getTime();
-      items.push({ at, key: `bet-${w.id}`, node: <div key={`bet-${w.id}`} className="flex flex-col"><BetSlip w={w} /></div> });
     }
 
     items.sort((a, b) => a.at - b.at);

@@ -56,6 +56,9 @@ class Config:
     LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000")
     # Notifications fan-out (in-app feed + SMS). Base incl. the /v1/... prefix;
     # the /internal/notify path is appended.
+    MESSAGING_URL = os.environ.get(
+        "INTERNAL_MESSAGING_URL", "http://messaging:8000/v1/social/messaging"
+    )
     NOTIFICATIONS_URL = os.environ.get(
         "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
     )

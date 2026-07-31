@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.extensions import db
 
@@ -21,6 +21,9 @@ class ChatMessage(db.Model):
     )
     author_id = db.Column(UUID(as_uuid=False), nullable=False, index=True)
     body = db.Column(db.Text, nullable=False)
+    # "text" (default) or "bet" — a native in-thread bet card rendered from meta.
+    kind = db.Column(db.String(16), nullable=False, default="text", server_default="text")
+    meta = db.Column(JSONB, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     read_at = db.Column(db.DateTime, nullable=True)
     edited_at = db.Column(db.DateTime, nullable=True)
@@ -33,9 +36,12 @@ class ChatMessage(db.Model):
             "conversation_id": self.conversation_id,
             "author_id": self.author_id,
             "body": "" if self.deleted else self.body,
+            "kind": self.kind or "text",
             "created_at": self.created_at.isoformat() + "Z",
             "deleted": bool(self.deleted),
         }
+        if self.meta is not None and not self.deleted:
+            out["meta"] = self.meta
         if self.read_at is not None:
             out["read_at"] = self.read_at.isoformat() + "Z"
         if self.edited_at is not None:

@@ -312,6 +312,40 @@ def send_message(conversation_id, me, data):
     return {"message": payload}, 201
 
 
+def post_direct_message(data):
+    """Internal: post a message (e.g. a `bet` card) into the direct conversation
+    between two users, get-or-creating that conversation. Used by contests to
+    drop a native bet into the two players' DM. No permission gate — the caller
+    (X-Internal-Token) already authorized the action."""
+    a = str(data.get("user_a") or "")
+    b = str(data.get("user_b") or "")
+    author = str(data.get("author_id") or a)
+    body = (data.get("body") or "").strip()
+    kind = (data.get("kind") or "text").strip()
+    meta = data.get("meta")
+    if not a or not b or a == b or not body:
+        return {"error": "user_a, user_b (distinct) and body are required"}, 400
+
+    key = _direct_key(a, b)
+    conv = Conversation.query.filter_by(type=DIRECT, direct_key=key).first()
+    if not conv:
+        conv = Conversation(type=DIRECT, direct_key=key)
+        db.session.add(conv)
+        db.session.commit()
+
+    msg = ChatMessage(conversation_id=conv.id, author_id=author, body=body, kind=kind, meta=meta)
+    db.session.add(msg)
+    db.session.commit()
+
+    try:
+        author_name = resolve_users([author]).get(author)
+    except Exception:  # noqa: BLE001
+        author_name = None
+    payload = msg.to_dict(author_name=author_name)
+    _publish(conv.id, {"event": "message", "message": payload})
+    return {"message": payload, "conversation_id": conv.id}, 201
+
+
 def edit_message(message_id, me, data):
     msg = db.session.get(ChatMessage, str(message_id))
     if not msg or msg.deleted:
