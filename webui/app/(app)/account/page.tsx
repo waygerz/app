@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ImagePlus, Trash2, Check } from 'lucide-react';
+import { ImagePlus, Check, User, X } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { imageToWebp } from '@/lib/imageToWebp';
 import { mediaApi } from '@/lib/media';
@@ -22,6 +22,7 @@ export default function AccountPage() {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [name, setName] = useState(user?.display_name ?? '');
   const [savingName, setSavingName] = useState(false);
 
@@ -34,10 +35,11 @@ export default function AccountPage() {
 
   if (!user) return null; // the (app) layout already guards auth
 
-  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
+  async function processFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file (PNG or JPG)');
+      return;
+    }
     setBusy(true);
     try {
       const webp = await imageToWebp(file, { size: 256, square: true });
@@ -50,6 +52,20 @@ export default function AccountPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) processFile(file);
+  }
+
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    if (busy) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
   }
 
   async function selectAvatar(key: string) {
@@ -100,26 +116,76 @@ export default function AccountPage() {
         <Card className="gap-4 p-5">
           <h2 className="text-base font-semibold text-foreground">Avatar</h2>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPick} />
-          <div className="flex items-center gap-4">
-            <UserAvatar
-              userId={user.id}
-              name={user.display_name}
-              imageUrl={user.avatar_key}
-              className="size-20"
-              fallbackClassName="text-2xl"
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
-                <ImagePlus className="size-4" />
-                {busy ? 'Uploading…' : 'Upload new'}
-              </Button>
+
+          <div className="flex flex-col items-center gap-4">
+            {/* Drop zone — click or drag an image onto the circle */}
+            <div className="relative">
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Upload avatar"
+                onClick={() => !busy && fileRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (!busy) fileRef.current?.click();
+                  }
+                }}
+                onDragEnter={(e) => { e.preventDefault(); if (!busy) setIsDragging(true); }}
+                onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={onDrop}
+                className={cn(
+                  'group relative flex size-24 cursor-pointer items-center justify-center overflow-hidden rounded-full border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  isDragging
+                    ? 'border-primary bg-primary/5'
+                    : 'border-dashed border-muted-foreground/25 hover:border-muted-foreground/40',
+                  user.avatar_key && !isDragging && 'border-solid',
+                  busy && 'pointer-events-none opacity-70',
+                )}
+              >
+                {user.avatar_key ? (
+                  <UserAvatar
+                    userId={user.id}
+                    name={user.display_name}
+                    imageUrl={user.avatar_key}
+                    className="size-24"
+                    fallbackClassName="text-2xl"
+                    clickable={false}
+                  />
+                ) : (
+                  <User className="size-6 text-muted-foreground" />
+                )}
+              </div>
+
+              {/* Remove — clears the current avatar */}
               {user.avatar_key && (
-                <Button size="sm" variant="outline" disabled={busy} onClick={removeAvatar}>
-                  <Trash2 className="size-4" />
-                  Remove
+                <Button
+                  size="icon"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={removeAvatar}
+                  aria-label="Remove avatar"
+                  className="absolute end-0 top-0 size-6 rounded-full"
+                >
+                  <X className="size-3.5" />
                 </Button>
               )}
             </div>
+
+            {/* Instructions */}
+            <div className="space-y-0.5 text-center">
+              <p className="text-sm font-medium text-foreground">
+                {user.avatar_key ? 'Avatar set' : 'Upload avatar'}
+              </p>
+              <p className="text-xs text-muted-foreground">PNG or JPG — square images look best</p>
+            </div>
+
+            {/* Button underneath */}
+            <Button size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+              <ImagePlus className="size-4" />
+              {busy ? 'Uploading…' : user.avatar_key ? 'Upload new' : 'Choose image'}
+            </Button>
           </div>
 
           {(recent.data?.length ?? 0) > 0 && (
