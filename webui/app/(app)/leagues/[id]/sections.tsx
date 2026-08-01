@@ -1155,12 +1155,20 @@ export function LeagueSports() {
       ) : (
         <div className="flex flex-col gap-4">
           {teamEvs.length > 0 && (
-            // Matchup cards fill the width (two/three across on wider screens),
-            // stacking to one column on mobile.
-            <ScheduleBoard
-              events={teamEvs}
-              onSelect={canBet ? (ev) => setSelected(ev) : undefined}
-            />
+            // Two side-by-side boards on desktop so games fill the width instead
+            // of one narrow column; single column (stacked) on mobile.
+            <div className="grid grid-cols-1 gap-x-8 gap-y-2 lg:grid-cols-2">
+              <ScheduleBoard
+                events={teamEvs.slice(0, Math.ceil(teamEvs.length / 2))}
+                onSelect={canBet ? (ev) => setSelected(ev) : undefined}
+              />
+              {teamEvs.length > 1 && (
+                <ScheduleBoard
+                  events={teamEvs.slice(Math.ceil(teamEvs.length / 2))}
+                  onSelect={canBet ? (ev) => setSelected(ev) : undefined}
+                />
+              )}
+            </div>
           )}
           {fieldEvs.length > 0 && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1228,8 +1236,11 @@ export function LeagueUpcomingGames() {
       ) : (
         <div className="flex flex-col gap-4">
           {teamEvs.length > 0 && (
-            // Matchup cards, one-up in the narrow aside.
-            <ScheduleBoard events={teamEvs} onSelect={canBet ? (ev) => setSelected(ev) : undefined} compact />
+            // Sportsbook table (Spread/Total/Winner). overflow-x-auto guards the
+            // narrow 1/3 aside from breaking layout if the columns don't fit.
+            <div className="overflow-x-auto">
+              <ScheduleBoard events={teamEvs} onSelect={canBet ? (ev) => setSelected(ev) : undefined} />
+            </div>
           )}
           {fieldEvs.map((ev) => (
             <EventCard
@@ -1351,7 +1362,7 @@ export function LeagueSportSchedule() {
                 ))}
               </div>
             ) : (
-              // Team sports: matchup cards with the Spread / Total lines.
+              // Team sports: the sportsbook-style Spread / Total / Winner board.
               <ScheduleBoard events={ready} onSelect={canBet ? (ev) => setSelected(ev) : undefined} />
             )
           )}
