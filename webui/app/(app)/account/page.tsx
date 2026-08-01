@@ -10,7 +10,7 @@ import { mediaApi } from '@/lib/media';
 import { UserAvatar } from '@/components/user-avatar';
 import { ColorPicker } from '@/components/theme/color-picker';
 import { SurfacePicker } from '@/components/theme/surface-picker';
-import { NotificationsCard } from '@/components/account/notifications-card';
+import { NotificationsCard, PromotionsCard } from '@/components/account/notifications-card';
 import { LegalLink } from '@/components/legal/legal-dialog';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -267,8 +267,9 @@ export default function AccountPage() {
           </div>
         </Card>
 
-        {/* Notifications — SMS opt-in + global pause */}
+        {/* Notifications + Promotions — two independent SMS consent cards */}
         <NotificationsCard />
+        <PromotionsCard />
 
         {/* Phone (read-only — it's the sign-in identity) */}
         <Card className="gap-2 p-5">
