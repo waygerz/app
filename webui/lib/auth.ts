@@ -20,6 +20,16 @@ export interface OtpVerifyResult {
   ticket?: string;
 }
 
+/** Consent captured on the create-account step and recorded server-side.
+ *  `tos_accepted` (Terms + Privacy) and `sms_transactional` are required;
+ *  `sms_marketing` is optional (TCPA — marketing can't be required for service). */
+export interface SignupConsent {
+  tos_version: string;
+  tos_accepted: boolean;
+  sms_transactional: boolean;
+  sms_marketing: boolean;
+}
+
 export const authApi = {
   otpStart: (phone: string) =>
     apiJson<{ message: string; phone: string; dev_otp?: string }>(`${AUTH_URL}${API.auth}/otp/start`, {
@@ -36,10 +46,10 @@ export const authApi = {
       skipAuthRetry: true,
     }),
 
-  otpComplete: (ticket: string, display_name: string) =>
+  otpComplete: (ticket: string, display_name: string, consent?: SignupConsent) =>
     apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/otp/complete`, {
       method: 'POST',
-      body: JSON.stringify({ ticket, display_name, device_uuid: getDeviceUuid() }),
+      body: JSON.stringify({ ticket, display_name, device_uuid: getDeviceUuid(), ...consent }),
       device: true,
       skipAuthRetry: true,
     }),

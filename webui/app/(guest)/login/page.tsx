@@ -10,6 +10,9 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { LegalLink } from '@/components/legal/legal-dialog';
+import { LEGAL_VERSION, SMS_TRANSACTIONAL_CONSENT, SMS_MARKETING_CONSENT } from '@/components/legal/legal-content';
 
 type Step = 'phone' | 'code' | 'profile';
 
@@ -23,6 +26,9 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [agreeTos, setAgreeTos] = useState(false);
+  const [smsTx, setSmsTx] = useState(false);
+  const [smsMkt, setSmsMkt] = useState(false);
   const [ticket, setTicket] = useState('');
   const [devOtp, setDevOtp] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +72,12 @@ export default function LoginPage() {
   const onCreate = (e: React.FormEvent) => {
     e.preventDefault();
     run(async () => {
-      await completeProfile(ticket, displayName);
+      await completeProfile(ticket, displayName, {
+        tos_version: LEGAL_VERSION,
+        tos_accepted: agreeTos,
+        sms_transactional: smsTx,
+        sms_marketing: smsMkt,
+      });
       router.push(next);
     });
   };
@@ -147,8 +158,52 @@ export default function LoginPage() {
                 This is a new number — pick a name to finish setting up.
               </span>
             </div>
+
+            <div className="flex flex-col gap-3 rounded-lg border border-input p-3">
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  id="consent-tos"
+                  size="sm"
+                  checked={agreeTos}
+                  onCheckedChange={(v) => setAgreeTos(v === true)}
+                  className="mt-0.5"
+                  aria-label="I agree to the Terms of Service and Privacy Policy"
+                />
+                <span className="text-xs leading-relaxed text-muted-foreground">
+                  I agree to the <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
+                  <LegalLink doc="privacy">Privacy Policy</LegalLink>.
+                </span>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  id="consent-sms-tx"
+                  size="sm"
+                  checked={smsTx}
+                  onCheckedChange={(v) => setSmsTx(v === true)}
+                  className="mt-0.5"
+                />
+                <label htmlFor="consent-sms-tx" className="text-xs leading-relaxed text-muted-foreground">
+                  {SMS_TRANSACTIONAL_CONSENT}
+                </label>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  id="consent-sms-mkt"
+                  size="sm"
+                  checked={smsMkt}
+                  onCheckedChange={(v) => setSmsMkt(v === true)}
+                  className="mt-0.5"
+                />
+                <label htmlFor="consent-sms-mkt" className="text-xs leading-relaxed text-muted-foreground">
+                  {SMS_MARKETING_CONSENT} <span className="text-muted-foreground/60">(optional)</span>
+                </label>
+              </div>
+            </div>
+
             {error && <div className="text-sm text-destructive">{error}</div>}
-            <Button type="submit" disabled={busy || !displayName.trim()}>
+            <Button type="submit" disabled={busy || !displayName.trim() || !agreeTos || !smsTx}>
               {busy ? 'Creating…' : 'Create account'}
             </Button>
           </form>

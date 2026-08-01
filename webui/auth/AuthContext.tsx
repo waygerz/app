@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { authApi, tryRefreshSession, type AuthUser } from '@/lib/auth';
+import { authApi, tryRefreshSession, type AuthUser, type SignupConsent } from '@/lib/auth';
 import { hasSessionMarker } from '@/lib/session';
 
 interface VerifyResult {
@@ -22,8 +22,8 @@ interface AuthState {
   startOtp: (phone: string) => Promise<string | undefined>;
   /** Verify the OTP. Existing user → logged in; new user → needsProfile + ticket. */
   verifyOtp: (phone: string, otp: string) => Promise<VerifyResult>;
-  /** Finish a new signup with the ticket + display name. */
-  completeProfile: (ticket: string, displayName: string) => Promise<void>;
+  /** Finish a new signup with the ticket + display name + consent record. */
+  completeProfile: (ticket: string, displayName: string, consent: SignupConsent) => Promise<void>;
   /** Set (or clear) the current user's avatar to an uploaded S3 key. */
   setAvatar: (avatarKey: string | null) => Promise<void>;
   /** Update editable profile fields (currently display name). */
@@ -81,8 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { needsProfile: true, ticket: res.ticket };
   }
 
-  async function completeProfile(ticket: string, displayName: string) {
-    const { user: u } = await authApi.otpComplete(ticket, displayName);
+  async function completeProfile(ticket: string, displayName: string, consent: SignupConsent) {
+    const { user: u } = await authApi.otpComplete(ticket, displayName, consent);
     setUser(u);
   }
 
