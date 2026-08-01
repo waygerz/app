@@ -264,11 +264,6 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
           options={periods.map((p) => ({ value: p.id, label: p.label }))}
           searchPlaceholder="Search week…"
         />
-        {isCommish && (
-          <Button size="sm" variant="outline" disabled={regen.isPending} onClick={() => regen.mutate()}>
-            {regen.isPending ? 'Syncing…' : 'Sync schedule'}
-          </Button>
-        )}
       </div>
 
       <div className="flex flex-col gap-1">
