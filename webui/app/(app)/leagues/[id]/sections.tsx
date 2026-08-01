@@ -917,9 +917,8 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
     const w = g.rep;
     const ids = g.wagers.map((x) => x.id);
     if (w.proposer_id !== me && w.acceptor_id !== me) return null;
-    if (cancelLocked(w)) {
-      return <StatusIcon icon={Lock} label="Locked" />;
-    }
+    // Game started — cancelling is closed, so show no action (the status carries it).
+    if (cancelLocked(w)) return null;
     if (!w.cancel_requested_by) {
       return (
         <Button size="sm" variant="outline" className="w-full" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(ids)}>
@@ -996,14 +995,10 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
               <Button size="sm" className="w-full" disabled={acceptM.isPending} onClick={() => acceptM.mutate(ids)}>Accept</Button>
               <Button size="sm" variant="outline" className="w-full" disabled={declineM.isPending} onClick={() => declineM.mutate(ids)}>Decline</Button>
             </>
-          ) : w.proposer_id === me ? (
-            cancelLocked(w) ? (
-              <StatusIcon icon={Lock} label="Locked" />
-            ) : (
-              <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>
-                Cancel
-              </Button>
-            )
+          ) : w.proposer_id === me && !cancelLocked(w) ? (
+            <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>
+              Cancel
+            </Button>
           ) : null;
         }}
       />
