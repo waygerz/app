@@ -769,7 +769,7 @@ export function WagerBetCard({
                 <button
                   type="button"
                   onClick={() => setDetailsOpen(true)}
-                  className={cn('flex h-6 shrink-0 items-center justify-center rounded-md border px-2 text-[11px] font-extrabold tabular-nums transition hover:brightness-110', pickCell)}
+                  className={cn('flex h-6 shrink-0 items-center justify-center rounded-full border px-2.5 text-[11px] font-extrabold tabular-nums transition hover:brightness-110', pickCell)}
                 >
                   <span className="max-w-[96px] truncate">{shortPick()}</span>
                 </button>
