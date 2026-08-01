@@ -774,13 +774,16 @@ def settle_one(wager):
             db.session.commit()
             _post_settled_activity(wager, "A bet pushed — stakes returned")
             return wager
-        # Only move to `completed` once we actually know who won — that's the one
-        # who confirms. If the score isn't readable yet, leave it accepted and
-        # try again next tick (the pair can still mutually cancel).
+        # Auto-settle: once the score gives a winner, pay them the pot and mark
+        # settled. There is no confirmation gate — settlement runs off the game
+        # result alone (Confirm is a separate system). If the score isn't
+        # readable yet, leave it accepted and retry next tick. Payout is
+        # idempotent on the wager ref, so a retry can't double-pay.
         if outcome in ("proposer", "acceptor"):
-            wager.status = COMPLETED
-            wager.completed_at = datetime.utcnow()
             wager.winner_user_id = _outcome_winner_id(wager, outcome)
+            payout(account, wager.winner_user_id, wager.amount_cents * 2, _ref(wager.id))
+            wager.status = SETTLED
+            wager.settled_at = datetime.utcnow()
             db.session.commit()
             _post_completed_activity(wager)
             _notify_settled(wager)
@@ -957,30 +960,36 @@ def settle_due(refresh=True) -> int:
         if wager.status != before:
             moved += 1
 
-    # Self-heal: completed wagers whose winner was never stamped (e.g. a
-    # moneyline settled before we read the winner off the score) can now be
-    # resolved. Stamp the winner so the winner-claims-payout path applies
-    # instead of the manual concede fallback; a push refunds both.
-    stuck = Wager.query.filter(
-        Wager.status == COMPLETED, Wager.winner_user_id.is_(None)
-    ).all()
-    for wager in stuck:
+    # Auto-settle any `completed` wagers — the legacy state that used to wait on
+    # the winner's confirmation. Confirmation no longer gates the payout, so pay
+    # the winner (or refund a push) here too. Payout is idempotent on the wager
+    # ref. A score that still can't be read is left for the separate manual path.
+    pending = Wager.query.filter(Wager.status == COMPLETED).all()
+    for wager in pending:
         try:
-            outcome = _resolve_outcome(wager, get_event(wager.event_id))
-            if outcome == "push":
-                account = _account(wager.league_id)
-                refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
-                refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
-                wager.status = REFUNDED
-                wager.settled_at = datetime.utcnow()
-                db.session.commit()
-                _post_settled_activity(wager, "A bet pushed — stakes returned")
-                moved += 1
-            elif outcome in ("proposer", "acceptor"):
-                wager.winner_user_id = _outcome_winner_id(wager, outcome)
-                db.session.commit()
-                _post_completed_activity(wager)
-                moved += 1
+            account = _account(wager.league_id)
+            winner = wager.winner_user_id
+            if not winner:
+                outcome = _resolve_outcome(wager, get_event(wager.event_id))
+                if outcome == "push":
+                    refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
+                    refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
+                    wager.status = REFUNDED
+                    wager.settled_at = datetime.utcnow()
+                    db.session.commit()
+                    _post_settled_activity(wager, "A bet pushed — stakes returned")
+                    moved += 1
+                    continue
+                winner = _outcome_winner_id(wager, outcome)
+            if not winner:
+                continue  # score still unreadable — leave for the manual fallback
+            wager.winner_user_id = winner
+            payout(account, winner, wager.amount_cents * 2, _ref(wager.id))
+            wager.status = SETTLED
+            wager.settled_at = datetime.utcnow()
+            db.session.commit()
+            _notify_settled(wager)
+            moved += 1
         except Exception:  # noqa: BLE001
             db.session.rollback()
             continue

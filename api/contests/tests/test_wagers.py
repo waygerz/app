@@ -2,7 +2,7 @@ import pytest
 
 from app.services import service_wagers as svc
 from app.models.wager import (
-    ACCEPTED, CANCELLED, COMPLETED, DECLINED, OPEN, REFUNDED, SETTLED,
+    ACCEPTED, CANCELLED, DECLINED, OPEN, REFUNDED, SETTLED,
 )
 
 # User + league ids are UUIDs now.
@@ -158,17 +158,16 @@ def test_cancel_refunds_proposer(app, calls):
     assert ("refund", U1, 5000) in calls
 
 
-def test_settle_marks_completed_on_final(app, calls, monkeypatch):
-    # A final event no longer auto-pays — it moves to `completed` with the
-    # score-decided winner stamped, awaiting that winner's confirmation. No
-    # money moves at this step.
+def test_settle_auto_pays_winner_on_final(app, calls, monkeypatch):
+    # A final event auto-settles: the score-decided winner is paid the pot and
+    # the wager moves straight to `settled` — no confirmation step.
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
     monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))  # U1 (home) wins
     svc.settle_one(w)
-    assert w.status == COMPLETED and w.completed_at is not None
+    assert w.status == SETTLED and w.settled_at is not None
     assert w.winner_user_id == U1
-    assert not any(op == "payout" for op, *_ in calls)
+    assert ("payout", U1, 10000) in calls  # both 5000 stakes
 
 
 def test_settle_stays_accepted_when_unresolvable(app, calls, monkeypatch):
@@ -198,12 +197,16 @@ def test_settle_noop_when_event_not_final(app, calls):
 
 
 def test_only_winner_can_confirm(app, calls, monkeypatch):
-    # Home wins -> U1 is the winner. The loser (U2) can't confirm; the winner
-    # can, which pays them and marks the bet confirmed + settled.
+    # Confirm is the separate manual settle path: from an accepted bet whose
+    # game is final, only the score-decided winner (U1, home) may confirm —
+    # which pays them and settles. The loser (U2) can't.
+    from app.extensions import db
+
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
+    w.start_time = "2020-01-01T00:00:00Z"
+    db.session.commit()
     monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))
-    svc.settle_one(w)  # -> COMPLETED, winner U1
     with pytest.raises(svc.WagerError):
         svc.confirm(w, U2)
     assert not any(op == "payout" for op, *_ in calls)
@@ -212,11 +215,10 @@ def test_only_winner_can_confirm(app, calls, monkeypatch):
     assert ("payout", U1, 10000) in calls
 
 
-def test_confirm_rejects_unrelated_user(app, calls, monkeypatch):
+def test_confirm_rejects_unrelated_user(app, calls):
+    # A non-participant is rejected before any settle logic runs.
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
-    monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))
-    svc.settle_one(w)
     with pytest.raises(svc.WagerError):
         svc.confirm(w, U99)
 
@@ -225,10 +227,10 @@ def test_confirm_rejects_after_settled(app, calls, monkeypatch):
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
     monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))
-    svc.settle_one(w)
-    svc.confirm(w, U1)  # winner claims the pot
+    svc.settle_one(w)  # auto-settles → SETTLED, U1 paid
+    assert w.status == SETTLED
     with pytest.raises(svc.WagerError):
-        svc.confirm(w, U1)
+        svc.confirm(w, U1)  # already settled
 
 
 def test_confirm_blocked_before_known_kickoff(app, calls):
@@ -455,20 +457,15 @@ def _final(hs, aw, ws=None):
     return {"status": "final", "home_score": hs, "away_score": aw, "winner_side": ws}
 
 
-def test_moneyline_winner_is_computed_and_claims(app, calls, monkeypatch):
-    # U1 backs home; home wins. settle_one stamps U1 as winner (no payout yet).
+def test_moneyline_winner_is_computed_and_paid(app, calls, monkeypatch):
+    # U1 backs home; home wins. settle_one auto-settles: U1 is the winner and is
+    # paid the pot immediately.
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
     monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3, ws="home"))
     svc.settle_one(w)
-    assert w.status == COMPLETED and w.winner_user_id == U1
-    assert not any(op == "payout" for op, *_ in calls)  # not paid until claimed
-    # The loser cannot confirm.
-    with pytest.raises(svc.WagerError):
-        svc.confirm(w, U2)
-    # The winner claims -> paid.
-    svc.confirm(w, U1)
-    assert w.status == SETTLED and ("payout", U1, 10000) in calls
+    assert w.status == SETTLED and w.winner_user_id == U1
+    assert ("payout", U1, 10000) in calls
 
 
 def test_moneyline_resolves_from_score_without_winner_side(app, calls, monkeypatch):
@@ -479,7 +476,7 @@ def test_moneyline_resolves_from_score_without_winner_side(app, calls, monkeypat
     svc.accept(w, U2)
     monkeypatch.setattr(svc, "get_event", lambda eid: _final(5, 3))  # ws=None
     svc.settle_one(w)
-    assert w.status == COMPLETED and w.winner_user_id == U1
+    assert w.status == SETTLED and w.winner_user_id == U1
 
 
 def test_moneyline_equal_score_without_winner_side_is_push(app, calls, monkeypatch):
