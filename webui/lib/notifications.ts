@@ -29,7 +29,8 @@ export type NotificationCategory =
   | 'wager_alert'
   | 'league_invite'
   | 'friend_request'
-  | 'weekly_digest';
+  | 'weekly_digest'
+  | 'marketing';
 export type NotificationChannel = 'sms' | 'inapp';
 
 export type ChannelToggles = Record<NotificationChannel, boolean>;

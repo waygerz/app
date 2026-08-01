@@ -38,4 +38,8 @@ class User(db.Model):
             "display_name": self.display_name,
             "avatar_key": self.avatar_key,
             "created_at": self.created_at.isoformat() + "Z",
+            # Read-only consent record surfaced on the account page. The live SMS
+            # opt-ins are managed in the notifications service, not from these.
+            "tos_accepted_at": (self.tos_accepted_at.isoformat() + "Z") if self.tos_accepted_at else None,
+            "tos_version": self.tos_version,
         }

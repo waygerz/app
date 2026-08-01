@@ -18,15 +18,18 @@ _VAR = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 logger = logging.getLogger(__name__)
 
 # The user-configurable notification types and their default per-channel opt-in.
-# `weekly_digest` is promotional → opt-in (off); everything else is
-# transactional-ish and on by default. A category absent here is treated as
-# on for both channels (so a newly added event type still notifies).
+# `weekly_digest` and `marketing` are promotional → opt-in (off); everything
+# else is transactional-ish and on by default. A category absent here is treated
+# as on for both channels (so a newly added event type still notifies).
 CHANNELS = ("sms", "inapp", "push")
 CHANNEL_DEFAULTS = {
     "wager_alert": {"sms": True, "inapp": True, "push": True},
     "league_invite": {"sms": True, "inapp": True, "push": True},
     "friend_request": {"sms": True, "inapp": True, "push": True},
     "weekly_digest": {"sms": False, "inapp": False, "push": False},
+    # Promotional / marketing. Off by default — express opt-in only (TCPA), and
+    # the toggle on /account is where users grant or withdraw that consent.
+    "marketing": {"sms": False, "inapp": False, "push": False},
 }
 
 

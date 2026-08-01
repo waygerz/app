@@ -17,12 +17,21 @@ import { cn } from '@/lib/utils';
 
 const PREFS_KEY = ['notification-prefs'] as const;
 
+// Transactional / account categories — on by default (except the digest).
 const CATEGORIES: { key: NotificationCategory; title: string; desc: string }[] = [
   { key: 'wager_alert', title: 'Wager alerts', desc: 'Bets proposed, accepted, or settled.' },
   { key: 'league_invite', title: 'League invites', desc: 'When someone invites you to a league.' },
   { key: 'friend_request', title: 'Friend requests', desc: 'New and accepted friend requests.' },
   { key: 'weekly_digest', title: 'Weekly digest', desc: 'A weekly recap of your leagues.' },
 ];
+
+// Marketing is a separate, optional consent — kept apart from the transactional
+// categories above so it's never bundled with account texts.
+const MARKETING: { key: NotificationCategory; title: string; desc: string } = {
+  key: 'marketing',
+  title: 'Promotions & offers',
+  desc: 'Occasional promos, news, and special offers.',
+};
 
 const CHANNELS: { key: NotificationChannel; label: string }[] = [
   { key: 'sms', label: 'SMS' },
@@ -127,6 +136,32 @@ export function NotificationsCard() {
                 ))}
               </div>
             ))}
+          </div>
+
+          {/* Marketing — a distinct, opt-in promotional consent kept separate
+              from the transactional categories above so the two are never
+              bundled. */}
+          <div className="mt-1 flex flex-col gap-2 border-t border-border pt-3">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Promotional · optional
+            </span>
+            <div className={cn(GRID, paused && 'opacity-50')}>
+              <div className="flex flex-col gap-0.5 pr-2">
+                <span className="text-sm font-medium text-foreground">{MARKETING.title}</span>
+                <span className="text-xs text-muted-foreground">{MARKETING.desc}</span>
+              </div>
+              {CHANNELS.map((ch) => (
+                <div key={ch.key} className="justify-self-center">
+                  <Switch
+                    size="sm"
+                    aria-label={`${MARKETING.title} — ${ch.label}`}
+                    checked={!!data?.channels?.[MARKETING.key]?.[ch.key]}
+                    disabled={isPending || paused}
+                    onCheckedChange={(v) => toggleChannel(MARKETING.key, ch.key, v)}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* SMS disclosures — required for carrier/toll-free verification. Kept

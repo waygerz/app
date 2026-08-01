@@ -11,6 +11,9 @@ export interface AuthUser {
   display_name: string;
   avatar_key: string | null;
   created_at: string;
+  /** Read-only consent record from signup (null for pre-consent accounts). */
+  tos_accepted_at?: string | null;
+  tos_version?: string | null;
 }
 
 /** otp/verify: existing user → {user}; new user → {needs_profile, ticket}. */

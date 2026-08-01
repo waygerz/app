@@ -11,6 +11,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { ColorPicker } from '@/components/theme/color-picker';
 import { SurfacePicker } from '@/components/theme/surface-picker';
 import { NotificationsCard } from '@/components/account/notifications-card';
+import { LegalLink } from '@/components/legal/legal-dialog';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +35,16 @@ export default function AccountPage() {
   });
 
   if (!user) return null; // the (app) layout already guards auth
+
+  // Read-only signup consent record (null for accounts created before consent).
+  const consentDate =
+    user.tos_accepted_at && !Number.isNaN(new Date(user.tos_accepted_at).getTime())
+      ? new Date(user.tos_accepted_at).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : null;
 
   async function processFile(file: File) {
     if (!file.type.startsWith('image/')) {
@@ -268,6 +279,22 @@ export default function AccountPage() {
           <p className="text-xs text-muted-foreground">
             Your phone number is how you sign in and can’t be changed here yet.
           </p>
+        </Card>
+
+        {/* Agreements — read-only consent record */}
+        <Card className="gap-2 p-5">
+          <h2 className="text-base font-semibold text-foreground">Agreements</h2>
+          {consentDate ? (
+            <p className="text-xs text-muted-foreground">
+              You agreed to the <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
+              <LegalLink doc="privacy">Privacy Policy</LegalLink> on {consentDate}.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Review our <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
+              <LegalLink doc="privacy">Privacy Policy</LegalLink>.
+            </p>
+          )}
         </Card>
       </div>
     </div>
