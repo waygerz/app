@@ -9,7 +9,7 @@ from flask_jwt_extended import create_access_token, create_refresh_token
 
 from app.extensions import db, get_redis
 from app.models.user import User
-from app.services import _sessions, service_sms
+from app.services import _sessions, service_notifications, service_sms
 from app.utils.config import Config
 from app.utils.cookies import attach_auth_cookies
 from werkzeug.security import generate_password_hash
@@ -240,6 +240,12 @@ def otp_complete(data: dict):
     )
     db.session.add(user)
     db.session.commit()
+
+    # Reflect a marketing opt-in in the notifications service so /account shows it
+    # (and the user can later turn it off). Best-effort; never fails signup.
+    if bool(data.get("sms_marketing")):
+        service_notifications.set_marketing_optin(user.id, True)
+
     return _issue_auth_response(user, device_uuid=device_uuid, status=201)
 
 

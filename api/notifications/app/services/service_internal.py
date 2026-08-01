@@ -33,14 +33,28 @@ CHANNEL_DEFAULTS = {
 }
 
 
+# Transactional "app notifications". `marketing` is intentionally NOT here — it's
+# a separate promotional opt-in, governed only by its own toggle, never by the
+# app-notifications master.
+APP_NOTIFICATION_CATEGORIES = {"wager_alert", "league_invite", "friend_request", "weekly_digest"}
+
+
 def channel_default(category: str, channel: str) -> bool:
     return CHANNEL_DEFAULTS.get(category, {}).get(channel, True)
 
 
 def channel_enabled(user_id: str, category: str, channel: str) -> bool:
-    """Is (category, channel) on for this user? Global opt-out wins; otherwise a
+    """Is (category, channel) on for this user?
+
+    `opted_out` is the "text me app notifications" master: when set it pauses
+    SMS for the transactional categories only — it does NOT silence the in-app
+    bell, and it never touches `marketing` (a separate opt-in). Otherwise a
     stored override wins; otherwise the code default."""
-    if _prefs(user_id).opted_out:
+    if (
+        channel == "sms"
+        and category in APP_NOTIFICATION_CATEGORIES
+        and _prefs(user_id).opted_out
+    ):
         return False
     row = db.session.get(NotificationChannelPref, (str(user_id), category, channel))
     return row.enabled if row is not None else channel_default(category, channel)
@@ -408,9 +422,10 @@ def get_preferences_matrix(user_id: str) -> dict:
 
 
 def set_preferences_matrix(user_id: str, data: dict) -> dict:
-    """Apply a partial preference patch. `opted_out` sets the global stop;
-    `channels` is {category: {channel: bool}} and upserts only the pairs given.
-    Unknown categories/channels are ignored."""
+    """Apply a partial preference patch. `opted_out` sets the app-notifications
+    SMS master (true = pause transactional SMS); `channels` is
+    {category: {channel: bool}} and upserts only the pairs given. Unknown
+    categories/channels are ignored."""
     user_id = str(user_id)
     p = _prefs(user_id)
     if "opted_out" in data:

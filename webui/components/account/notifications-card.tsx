@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { BellOff } from 'lucide-react';
 import {
   notificationsApi,
   type NotificationCategory,
@@ -86,7 +85,9 @@ export function NotificationsCard() {
     const channels = { [cat]: { [ch]: v } } as NonNullable<NotificationPreferencesPatch['channels']>;
     set({ channels });
   };
-  const paused = data?.opted_out ?? false;
+  // `opted_out` is the App-notifications SMS master: when true, transactional
+  // SMS is paused. It does NOT touch the in-app bell or marketing.
+  const smsMuted = data?.opted_out ?? false;
 
   return (
     <Card className="gap-4 p-5">
@@ -102,50 +103,73 @@ export function NotificationsCard() {
       {isError ? (
         <p className="text-sm text-muted-foreground">Couldn’t load your preferences.</p>
       ) : (
-        <div className="flex flex-col gap-1">
-          {/* Column headers */}
-          <div className={cn(GRID, 'pb-1')}>
-            <span />
-            {CHANNELS.map((c) => (
-              <span
-                key={c.key}
-                className="justify-self-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
-              >
-                {c.label}
-              </span>
-            ))}
-          </div>
+        <div className="flex flex-col gap-5">
+          {/* ===== App notifications (transactional) ===== */}
+          <div className="flex flex-col gap-1">
+            {/* Master: opting out pauses ALL app SMS (in-app bell stays on). */}
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/20 p-3">
+              <div className="flex flex-col gap-0.5 pr-2">
+                <span className="text-sm font-medium text-foreground">Text me app notifications</span>
+                <span className="text-xs text-muted-foreground">
+                  Account &amp; bet texts. Turn off to stop all app text messages — the in-app bell still
+                  works, and sign-in codes are always sent.
+                </span>
+              </div>
+              <Switch
+                aria-label="Text me app notifications"
+                checked={!smsMuted}
+                disabled={isPending}
+                onCheckedChange={(v) => set({ opted_out: !v })}
+              />
+            </div>
 
-          <div className="flex flex-col divide-y divide-border">
-            {CATEGORIES.map((cat) => (
-              <div key={cat.key} className={cn(GRID, 'py-3', paused && 'opacity-50')}>
-                <div className="flex flex-col gap-0.5 pr-2">
-                  <span className="text-sm font-medium text-foreground">{cat.title}</span>
-                  <span className="text-xs text-muted-foreground">{cat.desc}</span>
-                </div>
-                {CHANNELS.map((ch) => (
-                  <div key={ch.key} className="justify-self-center">
-                    <Switch
-                      size="sm"
-                      aria-label={`${cat.title} — ${ch.label}`}
-                      checked={!!data?.channels?.[cat.key]?.[ch.key]}
-                      disabled={isPending || paused}
-                      onCheckedChange={(v) => toggleChannel(cat.key, ch.key, v)}
-                    />
+            <div className="mt-2">
+              <div className={cn(GRID, 'pb-1')}>
+                <span />
+                {CHANNELS.map((c) => (
+                  <span
+                    key={c.key}
+                    className="justify-self-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                  >
+                    {c.label}
+                  </span>
+                ))}
+              </div>
+              <div className="flex flex-col divide-y divide-border">
+                {CATEGORIES.map((cat) => (
+                  <div key={cat.key} className={cn(GRID, 'py-3')}>
+                    <div className="flex flex-col gap-0.5 pr-2">
+                      <span className="text-sm font-medium text-foreground">{cat.title}</span>
+                      <span className="text-xs text-muted-foreground">{cat.desc}</span>
+                    </div>
+                    {CHANNELS.map((ch) => {
+                      // The master pauses the SMS column only; in-app stays live.
+                      const smsOff = ch.key === 'sms' && smsMuted;
+                      return (
+                        <div key={ch.key} className="justify-self-center">
+                          <Switch
+                            size="sm"
+                            aria-label={`${cat.title} — ${ch.label}`}
+                            checked={smsOff ? false : !!data?.channels?.[cat.key]?.[ch.key]}
+                            disabled={isPending || smsOff}
+                            onCheckedChange={(v) => toggleChannel(cat.key, ch.key, v)}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 ))}
               </div>
-            ))}
+            </div>
           </div>
 
-          {/* Marketing — a distinct, opt-in promotional consent kept separate
-              from the transactional categories above so the two are never
-              bundled. */}
-          <div className="mt-1 flex flex-col gap-2 border-t border-border pt-3">
+          {/* ===== Promotions (marketing) — a SEPARATE opt-in, never affected by
+              the app-notifications master above. ===== */}
+          <div className="flex flex-col gap-2 border-t border-border pt-4">
             <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Promotional · optional
+              Promotional · optional · separate from app notifications
             </span>
-            <div className={cn(GRID, paused && 'opacity-50')}>
+            <div className={cn(GRID, 'py-1')}>
               <div className="flex flex-col gap-0.5 pr-2">
                 <span className="text-sm font-medium text-foreground">{MARKETING.title}</span>
                 <span className="text-xs text-muted-foreground">{MARKETING.desc}</span>
@@ -156,7 +180,7 @@ export function NotificationsCard() {
                     size="sm"
                     aria-label={`${MARKETING.title} — ${ch.label}`}
                     checked={!!data?.channels?.[MARKETING.key]?.[ch.key]}
-                    disabled={isPending || paused}
+                    disabled={isPending}
                     onCheckedChange={(v) => toggleChannel(MARKETING.key, ch.key, v)}
                   />
                 </div>
@@ -164,14 +188,12 @@ export function NotificationsCard() {
             </div>
           </div>
 
-          {/* SMS disclosures — required for carrier/toll-free verification. Kept
-              directly beneath the SMS toggles so consent + terms sit next to the
-              control. */}
-          <div className="mt-2 rounded-lg border border-border bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground">
+          {/* SMS disclosures — required for carrier/toll-free verification. */}
+          <div className="rounded-lg border border-border bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground">
             <p>
               <span className="font-medium text-foreground">Waygerz text messages.</span> You’ll only receive
-              SMS for the categories you switch on above — each sends the messages described next to it.
-              Message frequency varies by your activity. Msg &amp; data rates may apply. Reply{' '}
+              SMS for the options you switch on above — each sends the messages described next to it. Message
+              frequency varies by your activity. Msg &amp; data rates may apply. Reply{' '}
               <span className="font-medium text-foreground">STOP</span> to opt out or{' '}
               <span className="font-medium text-foreground">HELP</span> for help. See our{' '}
               <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
@@ -181,25 +203,6 @@ export function NotificationsCard() {
               Account security texts (one-time sign-in codes) are always sent to verify it’s you and aren’t
               controlled here.
             </p>
-          </div>
-
-          {/* Global pause */}
-          <div className="mt-2 flex items-center justify-between gap-4 border-t border-border pt-4">
-            <div className="flex flex-col gap-0.5">
-              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground">
-                <BellOff className="size-4 text-muted-foreground" />
-                Pause all notifications
-              </span>
-              <span className="text-xs text-muted-foreground">
-                Silences every text and the in-app bell until you turn it back on.
-              </span>
-            </div>
-            <Switch
-              aria-label="Pause all notifications"
-              checked={paused}
-              disabled={isPending}
-              onCheckedChange={(v) => set({ opted_out: v })}
-            />
           </div>
         </div>
       )}
