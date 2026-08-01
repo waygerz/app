@@ -218,11 +218,11 @@ export default function BetsView() {
           );
           const showHeaders = groups.length > 1;
           return (
-            <div className="overflow-hidden rounded-xl border border-border">
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
               {groups.map((b, i) => (
                 <div key={b.key} className={cn(showHeaders && i > 0 && 'border-t border-border')}>
                   {showHeaders && (
-                    <div className="flex items-center justify-between bg-muted/20 px-4 pb-1.5 pt-2.5">
+                    <div className="flex items-center justify-between border-b border-border bg-background/50 px-4 pb-1.5 pt-2.5">
                       <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
                         {b.label}
                       </span>
