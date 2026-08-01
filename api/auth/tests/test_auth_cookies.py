@@ -52,7 +52,15 @@ def test_signup_new_user_flow(client, device_uuid):
 
     done = client.post(
         "/v1/platform/auth/otp/complete",
-        json={"ticket": ticket, "display_name": "Newbie", "device_uuid": device_uuid},
+        json={
+            "ticket": ticket,
+            "display_name": "Newbie",
+            "device_uuid": device_uuid,
+            "tos_accepted": True,
+            "tos_version": "2026-08-01",
+            "sms_transactional": True,
+            "sms_marketing": False,
+        },
     )
     assert done.status_code == 201
     assert done.get_json()["user"]["display_name"] == "Newbie"
@@ -72,7 +80,30 @@ def test_verify_rejects_wrong_code(client, user, device_uuid):
 def test_complete_rejects_bad_ticket(client, device_uuid):
     res = client.post(
         "/v1/platform/auth/otp/complete",
-        json={"ticket": "not-a-real-ticket", "display_name": "X", "device_uuid": device_uuid},
+        json={
+            "ticket": "not-a-real-ticket",
+            "display_name": "X",
+            "device_uuid": device_uuid,
+            "tos_accepted": True,
+        },
+    )
+    assert res.status_code == 400
+
+
+def test_complete_requires_consent(client, device_uuid):
+    """Signing up without agreeing to the Terms/Privacy is rejected."""
+    phone_raw = "9042398486"  # distinct unregistered number
+    start = client.post("/v1/platform/auth/otp/start", json={"phone": phone_raw})
+    code = start.get_json()["dev_otp"]
+    verify = client.post(
+        "/v1/platform/auth/otp/verify",
+        json={"phone": phone_raw, "otp": code, "device_uuid": device_uuid},
+    )
+    ticket = verify.get_json()["ticket"]
+
+    res = client.post(
+        "/v1/platform/auth/otp/complete",
+        json={"ticket": ticket, "display_name": "NoConsent", "device_uuid": device_uuid},
     )
     assert res.status_code == 400
 

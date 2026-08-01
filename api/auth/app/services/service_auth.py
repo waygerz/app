@@ -1,6 +1,7 @@
 """Auth domain: passwordless phone + OTP login/signup, session."""
 import random
 import secrets
+from datetime import datetime
 
 import phonenumbers
 from flask import current_app, jsonify, make_response, request
@@ -215,13 +216,28 @@ def otp_complete(data: dict):
     if not display_name:
         return {"error": "display_name is required"}, 400
 
+    # Consent is captured at signup and recorded here. Agreeing to the Terms of
+    # Service + Privacy Policy is required; transactional SMS consent is required
+    # by the client, marketing SMS is optional. We enforce the legal agreement
+    # server-side so an account can't be created without it.
+    if not bool(data.get("tos_accepted")):
+        return {"error": "You must agree to the Terms of Service and Privacy Policy"}, 400
+    tos_version = (str(data.get("tos_version") or "")).strip()[:32] or None
+
     phone = _consume_reg_ticket(token)
     if not phone:
         return {"error": "registration session expired — start again"}, 400
     if User.query.filter_by(phone=phone).first():
         return {"error": "phone already registered"}, 409
 
-    user = User(phone=phone, display_name=display_name)
+    user = User(
+        phone=phone,
+        display_name=display_name,
+        tos_accepted_at=datetime.utcnow(),
+        tos_version=tos_version,
+        sms_transactional_consent=bool(data.get("sms_transactional")),
+        sms_marketing_consent=bool(data.get("sms_marketing")),
+    )
     db.session.add(user)
     db.session.commit()
     return _issue_auth_response(user, device_uuid=device_uuid, status=201)

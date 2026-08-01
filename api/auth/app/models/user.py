@@ -21,6 +21,16 @@ class User(db.Model):
     avatar_key = db.Column(db.String(512), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
+    # Consent captured on the create-account step (see service_auth.otp_complete).
+    # tos_* records agreement to the Terms of Service + Privacy Policy and which
+    # version was shown; sms_* record SMS opt-in (transactional required at
+    # signup, marketing optional). Rows created before consent existed have a
+    # null tos and default-false SMS flags.
+    tos_accepted_at = db.Column(db.DateTime, nullable=True)
+    tos_version = db.Column(db.String(32), nullable=True)
+    sms_transactional_consent = db.Column(db.Boolean, nullable=False, server_default=db.text("false"))
+    sms_marketing_consent = db.Column(db.Boolean, nullable=False, server_default=db.text("false"))
+
     def to_dict(self):
         return {
             "id": self.id,
