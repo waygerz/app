@@ -132,7 +132,7 @@
 <header>
   <p class="eyebrow">Waygerz · design</p>
   <h1>Wallet ledger &amp; schedule board — card redesigns</h1>
-  <p>The two surfaces that still felt like tables. Each shows a couple of fresh directions built from the app's own tokens — <code>--panel #191b24</code>, <code>--line #2e3040</code>, <code>--brand #00c23a</code>, <code>--pri #8b5cf6</code> — so they read as native cards. The <b style="color:var(--brand)">SHIPPED</b> option is what's on <code>main</code> now; pick a direction to swap in, per surface.</p>
+  <p>The two surfaces that still felt like tables. Each shows a couple of fresh directions built from the app's own tokens — <code>--panel #191b24</code>, <code>--line #2e3040</code>, <code>--brand #00c23a</code>, <code>--pri #8b5cf6</code> — so they read as native cards. The <b style="color:var(--brand)">green pill</b> marks the chosen direction per surface: <b>Wallet W2</b> (statement strip + flat feed) and <b>Schedule S1</b> (matchup card grid, already live). The rest are kept as alternates.</p>
 </header>
 
 <!-- ============ WALLET LEDGER ============ -->
@@ -143,7 +143,7 @@
 
     <!-- W1: SHIPPED — balance hero + day timeline -->
     <div class="opt">
-      <div class="tag"><b>Balance hero + day timeline</b><span class="pill ship">Shipped</span></div>
+      <div class="tag"><b>Balance hero + day timeline</b><span class="pill">Option W1</span></div>
       <div class="card" style="overflow:hidden;padding:0">
         <div class="hero" style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line)">
           <div>
@@ -162,7 +162,7 @@
           </div>
           <div class="dayhdr"><span class="d">Yesterday</span><span class="n neg">−$25</span></div>
           <div class="divide">
-            <div class="row"><span class="ic ic-hold"><svg><use href="#i-dn"/></svg></span><div class="grow"><div class="t">Bet placed</div><div class="s">6:03 PM · Celtics ML</div></div><div><div class="amt neg">−$25</div><div class="bal">$1,000</div></div></div>
+            <div class="row"><span class="ic ic-hold"><svg><use href="#i-dn"/></svg></span><div class="grow"><div class="t">Bet placed</div><div class="s">6:03 PM · Celtics +3.5</div></div><div><div class="amt neg">−$25</div><div class="bal">$1,000</div></div></div>
             <div class="row"><span class="ic ic-refund"><svg><use href="#i-refund"/></svg></span><div class="grow"><div class="t">Bet refunded</div><div class="s">11:20 AM · Game postponed</div></div><div><div class="amt pos">+$25</div><div class="bal">$1,025</div></div></div>
           </div>
         </div>
@@ -172,7 +172,7 @@
 
     <!-- W2: Statement — quiet header strip + flat feed -->
     <div class="opt">
-      <div class="tag"><b>Statement strip + flat feed</b><span class="pill">Option W2</span></div>
+      <div class="tag"><b>Statement strip + flat feed</b><span class="pill ship">Selected</span></div>
       <div class="card" style="overflow:hidden;padding:0">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:var(--bg2);border-bottom:1px solid var(--line)">
           <div><div class="lab">Balance</div><div style="font-size:20px;font-weight:700" class="tnum">$1,040</div></div>
@@ -180,7 +180,7 @@
         </div>
         <div class="pad divide" style="padding-top:2px;padding-bottom:2px">
           <div class="row"><span class="ic ic-win"><svg><use href="#i-up"/></svg></span><div class="grow"><div class="t">Bet won</div><div class="s">Today · Lakers −3.5</div></div><div><div class="amt pos">+$40</div><div class="bal">$1,040</div></div></div>
-          <div class="row"><span class="ic ic-hold"><svg><use href="#i-dn"/></svg></span><div class="grow"><div class="t">Bet placed</div><div class="s">Yesterday · Celtics ML</div></div><div><div class="amt neg">−$25</div><div class="bal">$1,000</div></div></div>
+          <div class="row"><span class="ic ic-hold"><svg><use href="#i-dn"/></svg></span><div class="grow"><div class="t">Bet placed</div><div class="s">Yesterday · Celtics +3.5</div></div><div><div class="amt neg">−$25</div><div class="bal">$1,000</div></div></div>
           <div class="row"><span class="ic ic-refund"><svg><use href="#i-refund"/></svg></span><div class="grow"><div class="t">Bet refunded</div><div class="s">Tue · Game postponed</div></div><div><div class="amt pos">+$25</div><div class="bal">$1,025</div></div></div>
           <div class="row"><span class="ic ic-grant"><svg><use href="#i-flag"/></svg></span><div class="grow"><div class="t">Starting balance</div><div class="s">Jul 20 · League grant</div></div><div><div class="amt">$1,000</div><div class="bal">$1,000</div></div></div>
         </div>
@@ -269,8 +269,8 @@
 </section>
 
 <div class="note">
-  <p><b>How to read this.</b> Two surfaces, a few directions each. <span class="k">SHIPPED</span> is live on <code>main</code> — the others are swap-ins. Wallet options differ only in the header treatment and whether rows group by day; all use the same colour-coded icon rows. Schedule options trade off card richness vs. list density; the shipped card and the compact list can coexist (card grid in the Sports hub, list in the aside).</p>
-  <p style="margin-top:10px"><b>Tell me one per surface</b> (e.g. "Wallet W2, Schedule S2") and I'll wire it into <code>LeagueActivity</code> / <code>ScheduleBoard</code> and push. Sample teams/amounts are illustrative; every value shown maps to a real field.</p>
+  <p><b>How to read this.</b> Two surfaces, a few directions each. The <span class="k">Selected</span> / <span class="k">Shipped</span> green pill is the chosen direction — the others are alternates. Wallet options differ only in the header treatment and whether rows group by day; all use the same colour-coded icon rows. Schedule options trade off card richness vs. list density; the shipped card and the compact list can coexist (card grid in the Sports hub, list in the aside).</p>
+  <p style="margin-top:10px"><b>Decided: Wallet W2 + Schedule S1.</b> The schedule board already ships S1. <code>design-catalog.html</code> now shows the wallet ledger as the W2 card; wiring W2 into <code>LeagueActivity</code> is the remaining step. Sample teams/amounts are illustrative; every value shown maps to a real field.</p>
 </div>
 </div>
 </body>

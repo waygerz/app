@@ -64,6 +64,22 @@
   .ic-bet{color:var(--pri2);background:rgba(139,92,246,.14)}.ic-win{color:var(--brand);background:rgba(0,194,58,.14)}
   .ic-loss{color:var(--dest);background:rgba(239,68,68,.14)}.ic-friend{color:var(--sky);background:rgba(56,189,248,.14)}
   .ic-invite{color:var(--fuchsia);background:rgba(232,121,249,.14)}.ic-digest{color:var(--amber);background:rgba(245,158,11,.14)}
+  .ic-hold{color:var(--dest);background:rgba(239,68,68,.14)}.ic-refund{color:var(--sky);background:rgba(56,189,248,.14)}.ic-grant{color:var(--amber);background:rgba(245,158,11,.14)}
+
+  /* wallet ledger card (W2 — statement strip + flat feed) */
+  .tnum{font-variant-numeric:tabular-nums}
+  .lab{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut2)}
+  .delta{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+  .delta svg{width:13px;height:13px}
+  .divide > * + *{border-top:1px solid var(--line)}
+  .wledger .ic{width:34px;height:34px;border-radius:11px}
+  .wledger .ic svg{width:16px;height:16px}
+  .wledger .row{display:flex;align-items:center;gap:12px;padding:11px 0}
+  .wledger .row .grow{min-width:0;flex:1}
+  .wledger .row .t{font-size:13.5px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wledger .row .s{font-size:11.5px;color:var(--mut2);margin-top:1px}
+  .wledger .row .amt{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13.5px;font-weight:600;text-align:right}
+  .wledger .row .bal{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:right;margin-top:1px}
 
   table{width:100%;border-collapse:collapse;font-size:13px}
   th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);text-align:left;font-weight:600;padding:8px 12px;border-bottom:1px solid var(--line)}
@@ -114,6 +130,10 @@
 <symbol id="i-check2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m2 12 4.5 4.5L11 12"/><path d="m11 16.5 2 2L22 9"/><path d="M16 7 12.5 10.5"/></symbol>
 <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
 <symbol id="i-msg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></symbol>
+<symbol id="i-dn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7 17 17"/><path d="M17 7v10H7"/></symbol>
+<symbol id="i-refund" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1Z"/><path d="M4 22v-7"/></symbol>
 </svg>
 
 <div class="wrap">
@@ -128,7 +148,7 @@
     <a href="#social">Social</a>
     <a href="#sports">Sports</a>
     <a href="#invite">Invite previews</a>
-    <a href="#tables">Tables</a>
+    <a href="#tables">Ledger &amp; schedule</a>
     <a href="#states">States</a>
     <a href="#account">Account</a>
     <a href="#manage">Manage</a>
@@ -440,21 +460,22 @@
 
 <!-- ============ TABLES ============ -->
 <section id="tables">
-  <div class="sh"><span class="num">07</span><h2>Tables</h2></div>
+  <div class="sh"><span class="num">07</span><h2>Ledger &amp; schedule</h2></div>
   <div class="grid wide">
     <div class="spec">
-      <div class="lbl"><b>Wallet ledger</b> — league transaction history</div>
-      <div class="where">leagues/[id]/activity (money leagues)</div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>Type</th><th>Amount</th><th>Balance</th><th>Date</th></tr></thead>
-          <tbody>
-            <tr><td>Bet won</td><td class="mono pos">+40</td><td class="mono">1,040</td><td class="faint mono">Jul 30</td></tr>
-            <tr><td>Bet stake</td><td class="mono neg">−25</td><td class="mono">1,000</td><td class="faint mono">Jul 29</td></tr>
-            <tr><td>Bet refund</td><td class="mono pos">+25</td><td class="mono">1,025</td><td class="faint mono">Jul 28</td></tr>
-            <tr><td>Starting balance</td><td class="mono">1,000</td><td class="mono">1,000</td><td class="faint mono">Jul 20</td></tr>
-          </tbody>
-        </table>
+      <div class="lbl"><b>Wallet ledger</b> — statement strip + colour-coded feed (card, not a table)</div>
+      <div class="where">LeagueActivity · leagues/[id]/activity</div>
+      <div class="card wledger" style="overflow:hidden;padding:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:var(--bg2);border-bottom:1px solid var(--line)">
+          <div><div class="lab">Balance</div><div style="font-size:20px;font-weight:700" class="tnum">$1,040</div></div>
+          <div style="text-align:right"><div class="lab">This week</div><div class="delta pos" style="font-size:14px"><svg><use href="#i-up"/></svg>+$40</div></div>
+        </div>
+        <div class="pad divide" style="padding-top:2px;padding-bottom:2px">
+          <div class="row"><span class="ic ic-win"><svg><use href="#i-up"/></svg></span><div class="grow"><div class="t">Bet won</div><div class="s">Today · Lakers −3.5</div></div><div><div class="amt pos">+$40</div><div class="bal">$1,040</div></div></div>
+          <div class="row"><span class="ic ic-hold"><svg><use href="#i-dn"/></svg></span><div class="grow"><div class="t">Bet placed</div><div class="s">Yesterday · Celtics +3.5</div></div><div><div class="amt neg">−$25</div><div class="bal">$1,000</div></div></div>
+          <div class="row"><span class="ic ic-refund"><svg><use href="#i-refund"/></svg></span><div class="grow"><div class="t">Bet refunded</div><div class="s">Tue · Game postponed</div></div><div><div class="amt pos">+$25</div><div class="bal">$1,025</div></div></div>
+          <div class="row"><span class="ic ic-grant"><svg><use href="#i-flag"/></svg></span><div class="grow"><div class="t">Starting balance</div><div class="s">Jul 20 · League grant</div></div><div><div class="amt">$1,000</div><div class="bal">$1,000</div></div></div>
+        </div>
       </div>
     </div>
     <div class="spec">
@@ -654,7 +675,7 @@
 </section>
 
 <div class="note">
-  <p>Representative renders of the live components — content is illustrative, structure and palette match the app's dark theme. Accent language: <span class="k">primary</span> violet (actions, H2H), <span class="k">brand</span> green (wins), <span class="k">destructive</span> red (losses), <span class="k">amber</span> (pick'em / digest), <span class="k">sky</span> (friends), <span class="k">fuchsia</span> (invites). The two real <code>&lt;table&gt;</code>s are the wallet ledger and the schedule board; everything labelled "standings/leaderboard" is a card list. Open this file in a browser to browse.</p>
+  <p>Representative renders of the live components — content is illustrative, structure and palette match the app's dark theme. Accent language: <span class="k">primary</span> violet (actions, H2H), <span class="k">brand</span> green (wins), <span class="k">destructive</span> red (losses), <span class="k">amber</span> (pick'em / digest), <span class="k">sky</span> (friends), <span class="k">fuchsia</span> (invites). The wallet ledger is now a card (statement strip + colour-coded feed); the schedule board is the last real <code>&lt;table&gt;</code> shown here; everything labelled "standings/leaderboard" is a card list. Open this file in a browser to browse.</p>
 </div>
 </div>
 </body>
