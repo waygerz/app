@@ -18,9 +18,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 // session ping-pong between / and /login.
 const SESSION_COOKIES = ['waygerz_access', 'waygerz_refresh'];
 
-// No auth required (shareable deep links). `/c/<code>` is the unified invite
-// route; the page itself resolves the code and bounces guests to login.
-const PUBLIC_PREFIXES = ['/c'];
+// No auth required (shareable deep links + legal pages). `/c/<code>` is the
+// unified invite route; the page itself resolves the code and bounces guests to
+// login. `/terms` and `/privacy` must be reachable by anyone, signed in or out.
+const PUBLIC_PREFIXES = ['/c', '/terms', '/privacy'];
 // Only for signed-OUT users; signed-in users get bounced home.
 const GUEST_PREFIXES = ['/login', '/signup', '/welcome'];
 
