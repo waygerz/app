@@ -1962,16 +1962,18 @@ function ScheduleBetDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{event.away_team} @ {event.home_team}</DialogTitle>
+          {/* Title is screen-reader-only: the team names already show in the
+              selection rows below (away on top, home on the bottom), so the
+              visible title is redundant. Kept for dialog accessibility. */}
+          <DialogTitle className="sr-only">{event.away_team} @ {event.home_team}</DialogTitle>
           <DialogDescription className="sr-only">
-            Configure and send a head-to-head bet to league members.
+            Configure and send a head-to-head bet to league members. Tap the market and side you want to
+            back.
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4 py-2">
           {step === 'config' ? (
             <>
-              <p className="text-sm text-muted-foreground">Tap the market and side you want to back.</p>
-
               {/* Sportsbook-style selectable rows: Spread | Total | Winner. Total
                   is over on the away row, under on the home row. */}
               <div>
