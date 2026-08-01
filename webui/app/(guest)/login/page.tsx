@@ -106,7 +106,9 @@ export default function LoginPage() {
               {busy ? 'Sending…' : 'Send code'}
             </Button>
             <span className="text-center text-xs text-muted-foreground">
-              We’ll text you a one-time code to sign in or create your account.
+              We’ll text you a one-time code to sign in or create your account. Message and data rates may
+              apply. See our <LegalLink doc="terms">Terms</LegalLink> and{' '}
+              <LegalLink doc="privacy">Privacy Policy</LegalLink>.
             </span>
           </form>
         )}

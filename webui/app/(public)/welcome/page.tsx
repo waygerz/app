@@ -305,12 +305,24 @@ export default function WelcomePage() {
 
       {/* Footer */}
       <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-3 px-4 py-8 text-xs text-muted-foreground sm:flex-row sm:px-6">
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="" className="h-5 w-auto" />
-            <span>© {new Date().getFullYear()} Waygerz</span>
+        <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-4 px-4 py-8 text-xs text-muted-foreground sm:px-6">
+          <div className="flex w-full flex-col items-center justify-between gap-3 sm:flex-row">
+            <div className="flex items-center gap-2">
+              <img src="/logo.png" alt="" className="h-5 w-auto" />
+              <span>© {new Date().getFullYear()} Waygerz</span>
+            </div>
+            <nav className="flex items-center gap-5">
+              <Link href="/terms" className="transition-colors hover:text-foreground">
+                Terms of Service
+              </Link>
+              <Link href="/privacy" className="transition-colors hover:text-foreground">
+                Privacy Policy
+              </Link>
+            </nav>
           </div>
-          <p>Play money only. No real-money wagering. For entertainment among friends.</p>
+          <p className="text-center">
+            Play money only. No real-money wagering. For entertainment among friends.
+          </p>
         </div>
       </footer>
     </div>
