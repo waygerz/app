@@ -3,9 +3,9 @@ import type { ReactNode } from 'react';
 // ─────────────────────────────────────────────────────────────────────────────
 // DRAFT LEGAL COPY — starting point, NOT reviewed by counsel.
 //
-// Before launch, a lawyer should review this and every [PLACEHOLDER] must be
-// filled in (operating entity, mailing address, governing law, support inbox).
-// Placeholders are visually highlighted so they're easy to find.
+// Before launch, a lawyer should review this. Entity (Wagerz, Inc.), governing
+// law (Florida), and contact (support@waygerz.com) are filled in; the only
+// remaining placeholder is the liability cap in the Terms, still highlighted.
 //
 // This is the single source of truth for the Terms of Service and Privacy
 // Policy. It renders both on the public /terms and /privacy pages and inside
@@ -16,7 +16,7 @@ import type { ReactNode } from 'react';
 // user's acceptance so we know which version they agreed to.
 export const LEGAL_VERSION = '2026-08-01';
 export const LEGAL_EFFECTIVE = 'August 1, 2026';
-export const LEGAL_CONTACT = 'support@waygerz.com'; // [PLACEHOLDER] real support inbox
+export const LEGAL_CONTACT = 'support@waygerz.com';
 
 // Consent copy shown at sign-up. Kept here so the wording stays in sync with the
 // SMS terms in the documents below and with what we record server-side.
@@ -83,7 +83,7 @@ export function TermsContent() {
     <LegalDoc>
       <P>
         These Terms of Service (“Terms”) are a binding agreement between you and{' '}
-        <PH>[Waygerz operating entity, e.g. Waygerz, LLC]</PH> (“Waygerz”, “we”, “us”), governing your use
+        Wagerz, Inc. (“Waygerz”, “we”, “us”), governing your use
         of the Waygerz apps and website (the “Service”). By creating an account or using the Service, you
         agree to these Terms and to our{' '}
         <a href="/privacy" className="text-primary underline">
@@ -212,17 +212,15 @@ export function TermsContent() {
 
       <Sec n={13} title="Governing law">
         <P>
-          These Terms are governed by the laws of <PH>[State]</PH>, United States, without regard to its
-          conflict-of-laws rules. Disputes will be resolved in the courts located in{' '}
-          <PH>[county / venue]</PH>, unless applicable law requires otherwise.
+          These Terms are governed by the laws of the State of Florida, United States, without regard to
+          its conflict-of-laws rules. Disputes will be resolved in the state or federal courts located in
+          Florida, unless applicable law requires otherwise.
         </P>
       </Sec>
 
       <Sec n={14} title="Contact">
         <P>
-          Questions about these Terms? Contact us at <PH>{LEGAL_CONTACT}</PH>
-          {' · '}
-          <PH>[mailing address]</PH>.
+          Questions about these Terms? Contact us at {LEGAL_CONTACT}.
         </P>
       </Sec>
     </LegalDoc>
@@ -235,7 +233,7 @@ export function PrivacyContent() {
   return (
     <LegalDoc>
       <P>
-        This Privacy Policy explains how <PH>[Waygerz operating entity]</PH> (“Waygerz”, “we”, “us”)
+        This Privacy Policy explains how Wagerz, Inc. (“Waygerz”, “we”, “us”)
         collects, uses, and shares information when you use the Waygerz apps and website (the “Service”).
       </P>
 
@@ -292,8 +290,8 @@ export function PrivacyContent() {
             </>,
             <>
               <strong className="text-foreground">Service providers</strong> — vendors that help us operate
-              Waygerz, such as our SMS provider (<PH>[Twilio]</PH>) and cloud hosting (
-              <PH>[Amazon Web Services]</PH>), who may process data on our behalf.
+              Waygerz, such as our SMS provider (Twilio) and cloud hosting (Amazon Web Services), who may
+              process data on our behalf.
             </>,
             <>
               <strong className="text-foreground">Legal &amp; safety</strong> — when required by law or to
@@ -329,7 +327,7 @@ export function PrivacyContent() {
             'Update your display name and photo in Account settings.',
             'Manage which text messages you receive in Account settings, or reply STOP.',
             <>
-              Request access to or deletion of your account by contacting <PH>{LEGAL_CONTACT}</PH>.
+              Request access to or deletion of your account by contacting {LEGAL_CONTACT}.
             </>,
           ]}
         />
@@ -351,9 +349,7 @@ export function PrivacyContent() {
 
       <Sec n={10} title="Contact">
         <P>
-          Questions about your privacy? Contact us at <PH>{LEGAL_CONTACT}</PH>
-          {' · '}
-          <PH>[mailing address]</PH>.
+          Questions about your privacy? Contact us at {LEGAL_CONTACT}.
         </P>
       </Sec>
     </LegalDoc>
