@@ -13,7 +13,16 @@ import { fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
+
+// Status groups for the list. On the "All" tab these partition the bets;
+// on a single-status tab only one is non-empty (so no header is shown).
+const BUCKETS: { key: 'pending' | 'active' | 'closed'; label: string }[] = [
+  { key: 'pending', label: 'Pending' },
+  { key: 'active', label: 'Active' },
+  { key: 'closed', label: 'Closed' },
+];
 import { WagerBetCard, StatusIcon } from '@/app/(app)/leagues/[id]/sections';
 
 export default function BetsView() {
@@ -198,18 +207,41 @@ export default function BetsView() {
         </Card>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-border">
-        {groupWagers(rows, me).map((g) => (
-          <WagerBetCard
-            key={g.key}
-            group={g}
-            me={me}
-            leagueName={leagueNames.get(g.rep.league_id)}
-            ev={eventMap[g.rep.event_id]}
-            actions={actionsFor(g)}
-          />
-        ))}
-      </div>
+      {rows.length > 0 &&
+        (() => {
+          // Bucket the (already filter-scoped) rows by status. Headers show only
+          // when more than one group is present — i.e. on the "All" tab.
+          const groups = BUCKETS.map((b) => ({ ...b, wagers: filterWagers(rows, b.key) })).filter(
+            (b) => b.wagers.length > 0,
+          );
+          const showHeaders = groups.length > 1;
+          return (
+            <div className="overflow-hidden rounded-xl border border-border">
+              {groups.map((b, i) => (
+                <div key={b.key} className={cn(showHeaders && i > 0 && 'border-t border-border')}>
+                  {showHeaders && (
+                    <div className="flex items-center justify-between bg-muted/20 px-4 pb-1.5 pt-2.5">
+                      <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {b.label}
+                      </span>
+                      <span className="font-mono text-[11px] text-muted-foreground/60">{b.wagers.length}</span>
+                    </div>
+                  )}
+                  {groupWagers(b.wagers, me).map((g) => (
+                    <WagerBetCard
+                      key={g.key}
+                      group={g}
+                      me={me}
+                      leagueName={leagueNames.get(g.rep.league_id)}
+                      ev={eventMap[g.rep.event_id]}
+                      actions={actionsFor(g)}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          );
+        })()}
     </div>
   );
 }

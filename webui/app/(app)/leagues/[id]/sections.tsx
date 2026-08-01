@@ -744,21 +744,35 @@ export function WagerBetCard({
 
   return (
     <>
-      <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3.5 border-b border-border px-4 py-2.5 last:border-b-0 hover:bg-muted/30">
-        {/* state rail */}
-        <span className={cn('h-8 w-[3px] shrink-0 rounded-full', railTone)} />
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-border px-4 py-3 last:border-b-0 hover:bg-muted/30">
+        {/* state dot — quiet status marker (was a rail) */}
+        <span className={cn('size-2.5 shrink-0 rounded-full', railTone)} />
 
-        {/* matchup + context */}
+        {/* matchup + inline pick + context */}
         <div className="min-w-0">
-          <div className="flex items-center gap-2 truncate text-[15px] font-bold tracking-tight">
+          <div className="flex items-center gap-2 text-[15px] font-bold tracking-tight">
             {field ? (
-              <span className="truncate text-foreground">{wagerPick(w, side)}</span>
+              // Field sports have no matchup line — the pick is the headline, so
+              // colour it by outcome in place of a chip.
+              <span className={cn('min-w-0 truncate', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-foreground')}>
+                {wagerPick(w, side)}
+              </span>
             ) : (
               <>
-                <TeamLogo src={rows[0].logo} name={rows[0].abbr} className={logoCls} />
-                <span className={cn('tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[0])}</span>
-                <span className="font-medium text-muted-foreground/60">·</span>
-                <span className={cn('tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[1])}</span>
+                <span className="flex min-w-0 shrink items-center gap-2 truncate">
+                  <TeamLogo src={rows[0].logo} name={rows[0].abbr} className={logoCls} />
+                  <span className={cn('tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[0])}</span>
+                  <span className="font-medium text-muted-foreground/60">·</span>
+                  <span className={cn('tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[1])}</span>
+                </span>
+                {/* the viewer's pick — inline with the matchup, opens read-only details */}
+                <button
+                  type="button"
+                  onClick={() => setDetailsOpen(true)}
+                  className={cn('flex h-6 shrink-0 items-center justify-center rounded-md border px-2 text-[11px] font-extrabold tabular-nums transition hover:brightness-110', pickCell)}
+                >
+                  <span className="max-w-[96px] truncate">{shortPick()}</span>
+                </button>
               </>
             )}
           </div>
@@ -781,7 +795,7 @@ export function WagerBetCard({
           </div>
         </div>
 
-        {/* status: actions when interactive, else settled outcome (opens details), else live status — sits to the left of the pick */}
+        {/* trail: actions when interactive, else settled outcome (opens details), else live/pending status */}
         <div className="flex min-w-[64px] items-center justify-end text-right">
           {actions ? (
             <div className="flex w-[84px] flex-col items-stretch gap-1">{actions}</div>
@@ -802,15 +816,6 @@ export function WagerBetCard({
             wagerStatusBadge(w, me)
           )}
         </div>
-
-        {/* the viewer's pick — far right, opens read-only details */}
-        <button
-          type="button"
-          onClick={() => setDetailsOpen(true)}
-          className={cn('flex h-8 items-center justify-center rounded-lg border px-2.5 text-[13px] font-extrabold tabular-nums transition hover:brightness-110', pickCell)}
-        >
-          <span className="max-w-[104px] truncate">{shortPick()}</span>
-        </button>
       </div>
 
       <BetDetailsDialog group={group} me={me} ev={ev} open={detailsOpen} onOpenChange={setDetailsOpen} />
