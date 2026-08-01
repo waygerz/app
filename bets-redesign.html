@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waygerz — My Bets · 3 redesigns</title>
+<style>
+  :root{
+    --bg:#0e0f14;--bg2:#14151c;--panel:#191b24;--panel2:#22242e;--line:#2e3040;--line2:#3a3d4d;
+    --txt:#fafafa;--mut:#a1a1aa;--mut2:#71717a;--faint:#52525b;
+    --pri:#8b5cf6;--pri2:#a78bfa;--brand:#00c23a;--dest:#ef4444;--amber:#f59e0b;--sky:#38bdf8;--fuchsia:#e879f9;--blue:#3b82f6;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--sans);color:var(--txt);
+    background:radial-gradient(1100px 550px at 12% -8%,rgba(139,92,246,.12),transparent 60%),var(--bg);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1200px;margin:0 auto;padding:44px 22px 90px}
+  header .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--pri2);margin:0 0 12px}
+  header h1{font-size:clamp(28px,4.2vw,40px);line-height:1.05;letter-spacing:-.02em;margin:0 0 12px;font-weight:750}
+  header p{max-width:70ch;color:var(--mut);font-size:15px;line-height:1.6;margin:0}
+  header p b{color:var(--txt)}
+  header code{font-family:var(--mono);font-size:12.5px;color:var(--pri2)}
+
+  /* filter pills (shared page chrome, shown once) */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin:24px 0 0}
+  .pill{font-size:13px;font-weight:600;color:var(--mut);border:1px solid var(--line2);border-radius:99px;padding:6px 14px}
+  .pill.on{color:#fff;background:var(--pri);border-color:transparent}
+  .pill .n{font-family:var(--mono);font-size:11px;opacity:.8;margin-left:5px}
+
+  section{margin-top:44px}
+  .sh{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:6px}
+  .sh h2{font-size:20px;letter-spacing:-.01em;margin:0;font-weight:700}
+  .sh .tag{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .sub{color:var(--mut);font-size:13.5px;line-height:1.55;margin:10px 0 20px;max-width:74ch}
+  .sub b{color:var(--txt)}
+  .stage{max-width:560px}
+
+  /* ---- shared bits ---- */
+  .logo{border-radius:99px;display:grid;place-items:center;font-weight:700;color:#fff;flex:none;font-size:9px}
+  .av{border-radius:99px;display:grid;place-items:center;font-weight:650;color:#fff;flex:none;font-size:10px}
+  .lal{background:linear-gradient(135deg,#7c3aed,#f59e0b)}.bos{background:linear-gradient(135deg,#059669,#065f46)}
+  .kc{background:linear-gradient(135deg,#dc2626,#b91c1c)}.buf{background:linear-gradient(135deg,#1d4ed8,#93c5fd)}
+  .gsw{background:linear-gradient(135deg,#2563eb,#f59e0b)}.den{background:linear-gradient(135deg,#1e3a8a,#f59e0b)}
+  .nyy{background:linear-gradient(135deg,#334155,#0f172a)}.rsx{background:linear-gradient(135deg,#dc2626,#7f1d1d)}
+  .mia{background:linear-gradient(135deg,#dc2626,#f97316)}.nyk{background:linear-gradient(135deg,#2563eb,#f97316)}
+  .stl{background:linear-gradient(135deg,#dc2626,#7f1d1d)}.tor{background:linear-gradient(135deg,#1d4ed8,#93c5fd)}
+  .a-m{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}.a-d{background:linear-gradient(135deg,#f472b6,#db2777)}
+  .a-a{background:linear-gradient(135deg,#fbbf24,#d97706)}.a-t{background:linear-gradient(135deg,#2dd4bf,#0d9488)}
+  .a-c{background:linear-gradient(135deg,#60a5fa,#2563eb)}.a-s{background:linear-gradient(135deg,#f87171,#dc2626)}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .pos{color:var(--brand)}.neg{color:var(--dest)}.mut{color:var(--mut)}.mut2{color:var(--mut2)}.faint{color:var(--faint)}
+  .beer{font-size:13px}
+
+  .badge{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:99px;padding:3px 9px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .b-pend{color:var(--amber);background:rgba(245,158,11,.15)}
+  .b-live{color:#fff;background:var(--blue)}
+  .b-acc{color:var(--pri2);background:rgba(139,92,246,.16)}
+  .b-won{color:var(--brand);background:rgba(0,194,58,.14)}
+  .b-lost{color:var(--dest);background:rgba(239,68,68,.14)}
+  .b-void{color:var(--mut);background:var(--panel2)}
+
+  /* pick chip (viewer's pick, outcome-coloured) */
+  .pick{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:700;border-radius:9px;padding:6px 11px;border:1px solid;white-space:nowrap;text-align:center}
+  .p-live{border-color:var(--pri);background:rgba(139,92,246,.12);color:var(--txt)}
+  .p-won{border-color:var(--brand);background:rgba(0,194,58,.12);color:var(--txt)}
+  .p-lost{border-color:var(--dest);background:rgba(239,68,68,.12);color:var(--txt)}
+  .p-void{border-color:var(--line2);background:var(--panel2);color:var(--mut)}
+
+  .btn{font-size:12px;font-weight:600;border-radius:8px;padding:6px 12px;border:1px solid transparent;white-space:nowrap;cursor:pointer}
+  .btn.pri{background:var(--pri);color:#fff}.btn.gho{background:transparent;border-color:var(--line2);color:var(--mut)}
+  .lockrow{display:inline-flex;align-items:center;gap:5px;color:var(--mut2);font-size:12px}
+  .lockrow svg{width:14px;height:14px}
+
+  /* ============ OPTION 1 — CARDS ============ */
+  .c1{display:flex;flex-direction:column;gap:12px}
+  .bcard{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px 14px 18px;overflow:hidden}
+  .bcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+  .bcard.s-pend{--c:var(--amber)}.bcard.s-live{--c:var(--blue)}.bcard.s-acc{--c:var(--pri)}
+  .bcard.s-won{--c:var(--brand)}.bcard.s-lost{--c:var(--dest)}.bcard.s-void{--c:var(--line2)}
+  .bcard .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}
+  .bcard .lg{font-size:11.5px;color:var(--mut2)}.bcard .lg b{color:var(--txt);font-weight:600}
+  .bcard .mid{display:flex;align-items:center;gap:12px}
+  .bcard .match{flex:1;min-width:0}
+  .bcard .match .line{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;letter-spacing:-.01em}
+  .bcard .match .line .logo{width:20px;height:20px}
+  .bcard .match .sub{font-size:12px;color:var(--mut2);margin-top:4px;display:flex;align-items:center;gap:6px}
+  .bcard .sub .av{width:18px;height:18px}
+  .bcard .foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+  .bcard .result{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:16px;font-weight:800}
+
+  /* ============ OPTION 2 — GROUPED QUIET LEDGER ============ */
+  .c2{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .c2 .ghead{display:flex;align-items:center;justify-content:space-between;padding:11px 16px 8px;background:var(--bg2)}
+  .c2 .ghead .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut2)}
+  .c2 .ghead .n{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .c2 .row{display:flex;align-items:center;gap:12px;padding:12px 16px}
+  .c2 .row + .row{border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent)}
+  .c2 .dot{width:8px;height:8px;border-radius:99px;flex:none}
+  .d-pend{background:var(--amber)}.d-live{background:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.2)}
+  .d-acc{background:var(--pri)}.d-won{background:var(--brand)}.d-lost{background:var(--dest)}.d-void{background:var(--mut2)}
+  .c2 .body{flex:1;min-width:0}
+  .c2 .body .l1{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:650;letter-spacing:-.01em}
+  .c2 .body .l1 .logo{width:17px;height:17px}
+  .c2 .body .l2{font-size:11.5px;color:var(--mut2);margin-top:2px}
+  .c2 .trail{display:flex;align-items:center;gap:12px;flex:none}
+  .c2 .amt{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;text-align:right}
+  .c2 .grp + .grp{border-top:1px solid var(--line)}
+
+  /* ============ OPTION 3 — DATA GRID ============ */
+  .c3{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .c3 .ghead,.c3 .grow{display:grid;grid-template-columns:14px minmax(0,1.5fr) 88px minmax(0,1.1fr) 96px;gap:12px;align-items:center}
+  .c3 .ghead{padding:8px 16px;background:var(--bg2);border-bottom:1px solid var(--line)}
+  .c3 .ghead span{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .c3 .ghead .r{text-align:right}
+  .c3 .grow{padding:11px 16px}
+  .c3 .grow + .grow{border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+  .c3 .tick{width:4px;height:26px;border-radius:2px;background:var(--c)}
+  .c3 .s-pend{--c:var(--amber)}.c3 .s-live{--c:var(--blue)}.c3 .s-acc{--c:var(--pri)}
+  .c3 .s-won{--c:var(--brand)}.c3 .s-lost{--c:var(--dest)}.c3 .s-void{--c:var(--line2)}
+  .c3 .match{min-width:0}
+  .c3 .match .l1{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:650}
+  .c3 .match .l1 .logo{width:17px;height:17px}
+  .c3 .match .l2{font-size:11px;color:var(--mut2);margin-top:1px}
+  .c3 .opp{font-size:12.5px;color:var(--mut);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .c3 .opp b{color:var(--txt);font-weight:600}
+  .c3 .money{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;text-align:right}
+  .c3 .act{text-align:right}
+  .c3 .grow:hover{background:rgba(255,255,255,.02)}
+
+  .note{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);color:var(--mut2);font-size:13px;line-height:1.65}
+  .note b{color:var(--txt)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+</svg>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Waygerz · design</p>
+  <h1>My Bets — 3 redesigns</h1>
+  <p>The <code>/bets/all</code> list, restyled to the app's newer card standards. Same real fields — matchup + live/final score, your outcome-coloured pick, opponent, league, stake, status, and the contextual action. One sample set across all three (incoming, live, accepted, won, lost, a $0 "beer" bet, and a refunded one) so you can compare. <b>Pick one.</b></p>
+  <div class="filters">
+    <span class="pill on">All <span class="n">6</span></span>
+    <span class="pill">Active <span class="n">3</span></span>
+    <span class="pill">Pending <span class="n">1</span></span>
+    <span class="pill">Closed <span class="n">2</span></span>
+  </div>
+</header>
+
+<!-- ============ OPTION 1 ============ -->
+<section>
+  <div class="sh"><h2>Option 1 — Cards</h2><span class="tag">spacious · one card per bet</span></div>
+  <p class="sub"><b>Each bet is its own card</b> with a status badge + league up top, the matchup with score, your pick chip, then opponent and the action on a footer row. Roomiest and most tappable — matches the account/settings card language. Best on mobile; longest scroll for heavy bettors.</p>
+  <div class="stage c1">
+
+    <div class="bcard s-pend">
+      <div class="top"><span class="badge b-pend">Pending</span><span class="lg"><b>Office NBA</b> · Sun 1:00 PM</span></div>
+      <div class="mid">
+        <div class="match">
+          <div class="line"><span class="logo lal">LAL</span>Lakers <span class="faint">@</span> Celtics</div>
+          <div class="sub"><span class="av a-m">M</span>Marcus challenged you · <span class="mono">$25</span></div>
+        </div>
+        <span class="pick p-live">LAL +3.5</span>
+      </div>
+      <div class="foot"><button class="btn gho">Decline</button><button class="btn pri">Accept</button></div>
+    </div>
+
+    <div class="bcard s-live">
+      <div class="top"><span class="badge b-live">● Live · 14–10</span><span class="lg"><b>Sunday Pool</b></span></div>
+      <div class="mid">
+        <div class="match">
+          <div class="line"><span class="logo kc">KC</span><span class="mono">Chiefs 14</span> <span class="faint">·</span> <span class="mono mut">Bills 10</span></div>
+          <div class="sub"><span class="av a-d">D</span>vs Dana · <span class="mono">$25</span></div>
+        </div>
+        <span class="pick p-live">Chiefs</span>
+      </div>
+      <div class="foot"><span class="lockrow"><svg><use href="#i-lock"/></svg>Locked</span></div>
+    </div>
+
+    <div class="bcard s-acc">
+      <div class="top"><span class="badge b-acc">Accepted</span><span class="lg"><b>Hoops Money</b> · Sun 3:30 PM</span></div>
+      <div class="mid">
+        <div class="match">
+          <div class="line"><span class="logo gsw">GSW</span>Warriors <span class="faint">@</span> Nuggets</div>
+          <div class="sub"><span class="av a-a">A</span>vs Alex · <span class="mono">$10</span></div>
+        </div>
+        <span class="pick p-live">Over 231</span>
+      </div>
+      <div class="foot"><button class="btn gho">Cancel</button></div>
+    </div>
+
+    <div class="bcard s-won">
+      <div class="top"><span class="badge b-won">✓ Won</span><span class="lg"><b>The Dugout</b> · Final</span></div>
+      <div class="mid">
+        <div class="match">
+          <div class="line"><span class="logo nyy">NYY</span><span class="mono">Yankees 6</span> <span class="faint">·</span> <span class="mono mut">Red Sox 3</span></div>
+          <div class="sub"><span class="av a-t">T</span>beat Theo · <span class="mono">$40</span></div>
+        </div>
+        <span class="pick p-won">NYY −1.5</span>
+      </div>
+      <div class="foot"><span class="result pos">+$40</span><button class="btn pri">Confirm</button></div>
+    </div>
+
+    <div class="bcard s-lost">
+      <div class="top"><span class="badge b-lost">✗ Lost</span><span class="lg"><b>Office NBA</b> · Final</span></div>
+      <div class="mid">
+        <div class="match">
+          <div class="line"><span class="logo mia">MIA</span><span class="mono mut">Heat 98</span> <span class="faint">·</span> <span class="mono">Knicks 105</span></div>
+          <div class="sub"><span class="av a-c">C</span>lost to Casey · <span class="mono">$25</span></div>
+        </div>
+        <span class="pick p-lost">Heat</span>
+      </div>
+      <div class="foot"><span class="result neg">−$25</span></div>
+    </div>
+
+    <div class="bcard s-void">
+      <div class="top"><span class="badge b-void">Refunded</span><span class="lg"><b>Beer League</b> · postponed</span></div>
+      <div class="mid">
+        <div class="match">
+          <div class="line"><span class="logo stl">STL</span>Cardinals <span class="faint">@</span> Blue Jays</div>
+          <div class="sub"><span class="av a-s">S</span>vs Sam · <span class="beer">🍺</span> bragging rights</div>
+        </div>
+        <span class="pick p-void">U 8.5</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ OPTION 2 ============ -->
+<section>
+  <div class="sh"><h2>Option 2 — Grouped quiet ledger</h2><span class="tag">dense · grouped by status</span></div>
+  <p class="sub"><b>One calm panel, rows grouped by status</b> (Pending / Active / Closed). State is a dot; your pick sits inline; the amount colours the outcome. No per-row chrome — the quietest, most scannable when you have lots of bets. The action stays compact on the right.</p>
+  <div class="stage c2">
+
+    <div class="grp">
+      <div class="ghead"><span class="t">Pending</span><span class="n">1</span></div>
+      <div class="row">
+        <span class="dot d-pend"></span>
+        <div class="body">
+          <div class="l1"><span class="logo lal">LAL</span>Lakers <span class="faint">@</span> Celtics <span class="pick p-live" style="padding:2px 7px;font-size:11px">LAL +3.5</span></div>
+          <div class="l2"><b class="mut" style="color:var(--txt)">Office NBA</b> · Marcus challenged you · $25</div>
+        </div>
+        <div class="trail"><button class="btn gho">Decline</button><button class="btn pri">Accept</button></div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="ghead"><span class="t">Active</span><span class="n">2</span></div>
+      <div class="row">
+        <span class="dot d-live"></span>
+        <div class="body">
+          <div class="l1"><span class="logo kc">KC</span><span class="mono">Chiefs 14</span> <span class="faint">·</span> <span class="mono mut">Bills 10</span> <span class="pick p-live" style="padding:2px 7px;font-size:11px">Chiefs</span></div>
+          <div class="l2"><b style="color:var(--txt)">Sunday Pool</b> · vs Dana · $25 · <span style="color:var(--blue)">● live</span></div>
+        </div>
+        <div class="trail"><span class="lockrow"><svg><use href="#i-lock"/></svg></span></div>
+      </div>
+      <div class="row">
+        <span class="dot d-acc"></span>
+        <div class="body">
+          <div class="l1"><span class="logo gsw">GSW</span>Warriors <span class="faint">@</span> Nuggets <span class="pick p-live" style="padding:2px 7px;font-size:11px">Over 231</span></div>
+          <div class="l2"><b style="color:var(--txt)">Hoops Money</b> · vs Alex · $10 · accepted</div>
+        </div>
+        <div class="trail"><button class="btn gho">Cancel</button></div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="ghead"><span class="t">Closed</span><span class="n">3</span></div>
+      <div class="row">
+        <span class="dot d-won"></span>
+        <div class="body">
+          <div class="l1"><span class="logo nyy">NYY</span><span class="mono">Yankees 6</span> <span class="faint">·</span> <span class="mono mut">Red Sox 3</span> <span class="pick p-won" style="padding:2px 7px;font-size:11px">NYY −1.5</span></div>
+          <div class="l2"><b style="color:var(--txt)">The Dugout</b> · beat Theo · Final</div>
+        </div>
+        <div class="trail"><span class="amt pos">+$40</span><button class="btn pri">Confirm</button></div>
+      </div>
+      <div class="row">
+        <span class="dot d-lost"></span>
+        <div class="body">
+          <div class="l1"><span class="logo mia">MIA</span><span class="mono mut">Heat 98</span> <span class="faint">·</span> <span class="mono">Knicks 105</span> <span class="pick p-lost" style="padding:2px 7px;font-size:11px">Heat</span></div>
+          <div class="l2"><b style="color:var(--txt)">Office NBA</b> · lost to Casey · Final</div>
+        </div>
+        <div class="trail"><span class="amt neg">−$25</span></div>
+      </div>
+      <div class="row">
+        <span class="dot d-void"></span>
+        <div class="body">
+          <div class="l1"><span class="logo stl">STL</span>Cardinals <span class="faint">@</span> Blue Jays <span class="pick p-void" style="padding:2px 7px;font-size:11px">U 8.5</span></div>
+          <div class="l2"><b style="color:var(--txt)">Beer League</b> · vs Sam · 🍺 · refunded (postponed)</div>
+        </div>
+        <div class="trail"><span class="amt faint">—</span></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ OPTION 3 ============ -->
+<section>
+  <div class="sh"><h2>Option 3 — Data grid</h2><span class="tag">columns · most scannable</span></div>
+  <p class="sub"><b>Every bet on one column grid</b> — matchup · pick · opponent + league · stake/result · action — so the whole list scans top-to-bottom. Monospace amounts right-align; a 4px state tick keeps the columns rigid. Densest and best on desktop; reads more "app" than "social".</p>
+  <div class="stage c3">
+    <div class="ghead"><span></span><span>Matchup</span><span>Pick</span><span>Vs · League</span><span class="r">Stake</span></div>
+
+    <div class="grow s-pend">
+      <span class="tick"></span>
+      <div class="match"><div class="l1"><span class="logo lal">LAL</span>Lakers <span class="faint">@</span> Celtics</div><div class="l2">Sun 1:00 · <span style="color:var(--amber)">pending</span></div></div>
+      <span class="pick p-live" style="justify-self:start">LAL +3.5</span>
+      <div class="opp"><b>Marcus</b> · Office NBA</div>
+      <div class="act"><button class="btn pri">Accept</button></div>
+    </div>
+
+    <div class="grow s-live">
+      <span class="tick"></span>
+      <div class="match"><div class="l1"><span class="logo kc">KC</span><span class="mono">Chiefs 14</span> <span class="mono mut">· Bills 10</span></div><div class="l2" style="color:var(--blue)">● live</div></div>
+      <span class="pick p-live" style="justify-self:start">Chiefs</span>
+      <div class="opp"><b>Dana</b> · Sunday Pool</div>
+      <div class="act"><span class="lockrow"><svg><use href="#i-lock"/></svg></span></div>
+    </div>
+
+    <div class="grow s-acc">
+      <span class="tick"></span>
+      <div class="match"><div class="l1"><span class="logo gsw">GSW</span>Warriors <span class="faint">@</span> Nuggets</div><div class="l2">Sun 3:30 · accepted</div></div>
+      <span class="pick p-live" style="justify-self:start">Over 231</span>
+      <div class="opp"><b>Alex</b> · Hoops Money</div>
+      <div class="act money mut">$10</div>
+    </div>
+
+    <div class="grow s-won">
+      <span class="tick"></span>
+      <div class="match"><div class="l1"><span class="logo nyy">NYY</span><span class="mono">Yankees 6</span> <span class="mono mut">· Red Sox 3</span></div><div class="l2">Final · beat Theo</div></div>
+      <span class="pick p-won" style="justify-self:start">NYY −1.5</span>
+      <div class="opp"><b>Theo</b> · The Dugout</div>
+      <div class="act"><span class="money pos">+$40</span><br><button class="btn pri" style="margin-top:4px">Confirm</button></div>
+    </div>
+
+    <div class="grow s-lost">
+      <span class="tick"></span>
+      <div class="match"><div class="l1"><span class="logo mia">MIA</span><span class="mono mut">Heat 98</span> <span class="mono">· Knicks 105</span></div><div class="l2">Final · lost to Casey</div></div>
+      <span class="pick p-lost" style="justify-self:start">Heat</span>
+      <div class="opp"><b>Casey</b> · Office NBA</div>
+      <div class="act money neg">−$25</div>
+    </div>
+
+    <div class="grow s-void">
+      <span class="tick"></span>
+      <div class="match"><div class="l1"><span class="logo stl">STL</span>Cardinals <span class="faint">@</span> Blue Jays</div><div class="l2">Refunded · postponed</div></div>
+      <span class="pick p-void" style="justify-self:start">U 8.5</span>
+      <div class="opp"><b>Sam</b> · Beer League</div>
+      <div class="act money faint">🍺</div>
+    </div>
+
+  </div>
+</section>
+
+<div class="note">
+  <p><b>How to read this.</b> All three carry the same data and state language — <b style="color:var(--amber)">pending</b>, <b style="color:var(--blue)">live</b>, <b style="color:var(--pri2)">accepted</b>, <b style="color:var(--brand)">won</b>, <b style="color:var(--dest)">lost</b>, refunded — and the outcome-coloured pick chip is kept everywhere. They differ in density: <b>Option 1</b> is a card per bet (roomy, mobile-first), <b>Option 2</b> is a grouped quiet ledger (calm, scales to many bets), <b>Option 3</b> is a data grid (columns, most scannable on desktop). The filter pills (All / Active / Pending / Closed) sit above the list unchanged.</p>
+  <p style="margin-top:10px"><b>Tell me the number</b> (e.g. "Option 2") and I'll wire it into <code>bets/[filter]/page.tsx</code> + the <code>WagerBetCard</code> renderer and ship it. Sample teams/opponents are illustrative; every value maps to a real wager field.</p>
+</div>
+</div>
+</body>
+</html>
