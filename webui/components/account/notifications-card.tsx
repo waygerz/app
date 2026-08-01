@@ -12,6 +12,7 @@ import {
 } from '@/lib/notifications';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
+import { LegalLink } from '@/components/legal/legal-dialog';
 import { cn } from '@/lib/utils';
 
 const PREFS_KEY = ['notification-prefs'] as const;
@@ -83,7 +84,9 @@ export function NotificationsCard() {
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold text-foreground">Notifications</h2>
         <p className="text-xs text-muted-foreground">
-          Pick how you hear about each thing — a text (SMS) and/or the in-app bell.
+          Choose how you hear about each thing — a text message (SMS) and/or the in-app bell. Turning on{' '}
+          <span className="font-medium text-foreground">SMS</span> for a category means you agree to receive
+          those specific text messages from Waygerz at your verified number.
         </p>
       </div>
 
@@ -124,6 +127,25 @@ export function NotificationsCard() {
                 ))}
               </div>
             ))}
+          </div>
+
+          {/* SMS disclosures — required for carrier/toll-free verification. Kept
+              directly beneath the SMS toggles so consent + terms sit next to the
+              control. */}
+          <div className="mt-2 rounded-lg border border-border bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">Waygerz text messages.</span> You’ll only receive
+              SMS for the categories you switch on above — each sends the messages described next to it.
+              Message frequency varies by your activity. Msg &amp; data rates may apply. Reply{' '}
+              <span className="font-medium text-foreground">STOP</span> to opt out or{' '}
+              <span className="font-medium text-foreground">HELP</span> for help. See our{' '}
+              <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
+              <LegalLink doc="privacy">Privacy Policy</LegalLink>.
+            </p>
+            <p className="mt-1.5">
+              Account security texts (one-time sign-in codes) are always sent to verify it’s you and aren’t
+              controlled here.
+            </p>
           </div>
 
           {/* Global pause */}
