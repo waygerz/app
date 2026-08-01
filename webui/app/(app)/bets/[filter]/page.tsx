@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Ticket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi } from '@/lib/leagues';
-import { cancelLocked, groupWagers, wagersApi, type WagerGroup } from '@/lib/wagers';
+import { cancelLocked, groupWagers, wagersApi, type Wager, type WagerGroup } from '@/lib/wagers';
 import { fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,11 +17,17 @@ import { cn } from '@/lib/utils';
 import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
 
 // Status groups for the list. On the "All" tab these partition the bets;
-// on a single-status tab only one is non-empty (so no header is shown).
-const BUCKETS: { key: 'pending' | 'active' | 'closed'; label: string }[] = [
-  { key: 'pending', label: 'Pending' },
-  { key: 'active', label: 'Active' },
-  { key: 'closed', label: 'Closed' },
+// on a single-status tab only the relevant ones are non-empty. Cancelled bets
+// get their own group (kept out of "Closed", which is the resolved outcomes).
+const BUCKETS: { key: string; label: string; match: (w: Wager) => boolean }[] = [
+  { key: 'pending', label: 'Pending', match: (w) => w.status === 'open' },
+  { key: 'active', label: 'Active', match: (w) => w.status === 'accepted' || w.status === 'completed' },
+  {
+    key: 'closed',
+    label: 'Closed',
+    match: (w) => w.status === 'settled' || w.status === 'refunded' || w.status === 'declined',
+  },
+  { key: 'cancelled', label: 'Cancelled', match: (w) => w.status === 'cancelled' },
 ];
 import { WagerBetCard } from '@/app/(app)/leagues/[id]/sections';
 
@@ -213,7 +219,7 @@ export default function BetsView() {
         (() => {
           // Bucket the (already filter-scoped) rows by status. Headers show only
           // when more than one group is present — i.e. on the "All" tab.
-          const groups = BUCKETS.map((b) => ({ ...b, wagers: filterWagers(rows, b.key) })).filter(
+          const groups = BUCKETS.map((b) => ({ ...b, wagers: rows.filter(b.match) })).filter(
             (b) => b.wagers.length > 0,
           );
           const showHeaders = groups.length > 1;

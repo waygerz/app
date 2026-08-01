@@ -65,7 +65,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Ban, Beer, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, type LucideIcon } from 'lucide-react';
+import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, type LucideIcon } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import { dispatchOpenChat } from '@/lib/open-chat';
@@ -529,7 +529,8 @@ function wagerStatusBadge(w: Wager, me?: string) {
     return <Badge size="sm" variant="secondary" appearance="light">Declined</Badge>;
   }
   if (w.status === 'cancelled') {
-    return <StatusIcon icon={Ban} label="Cancelled" />;
+    // No trailing icon — cancelled bets live in their own "Cancelled" group.
+    return null;
   }
   return null;
 }
@@ -723,11 +724,13 @@ export function WagerBetCard({
         ? 'border-border bg-muted/40 text-muted-foreground'
         : 'border-primary bg-primary/10 text-foreground';
 
-  // Left rail colour encodes state at a glance: won / lost / push once settled,
-  // else amber (open offer), blue (game live), violet (accepted, awaiting).
+  // Dot colour encodes state at a glance: won / lost / push once decided, muted
+  // for voided (cancelled / declined / refunded), else amber (open offer), blue
+  // (game live), violet (accepted, awaiting).
+  const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
   const railTone = iWon ? 'bg-brand'
     : iLost ? 'bg-destructive'
-    : decided ? 'bg-muted-foreground/50'
+    : decided || voided ? 'bg-muted-foreground/50'
     : w.status === 'open' ? 'bg-amber-500'
     : started && !final ? 'bg-blue-500'
     : 'bg-primary';
