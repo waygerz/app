@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waygerz — Standardization C · Data Grid</title>
+<style>
+  :root{
+    --bg:#0e0f14;--bg2:#14151c;--panel:#191b24;--panel2:#22242e;--line:#2e3040;--line2:#3a3d4d;
+    --txt:#fafafa;--mut:#a1a1aa;--mut2:#71717a;--faint:#52525b;
+    --pri:#8b5cf6;--pri2:#a78bfa;--brand:#00c23a;--dest:#ef4444;--amber:#f59e0b;--sky:#38bdf8;--fuchsia:#e879f9;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+
+    /* ===== STANDARD TOKENS ===== */
+    --r-panel:14px;--r-pill:999px;--r-media:9px;--r-chip:7px;
+    --row-y:9px;                /* dense, uniform row height */
+    --colgap:14px;
+    /* the shared column grid — used by EVERY list so they align */
+    --cols:30px minmax(0,1fr) auto 92px;
+    --t-body:13px;--t-sub:11px;--t-eyebrow:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--sans);color:var(--txt);
+    background:var(--bg);-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:0 auto;padding:44px 22px 90px}
+  header .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--pri2);margin:0 0 12px}
+  header h1{font-size:clamp(28px,4.2vw,42px);line-height:1.05;letter-spacing:-.02em;margin:0 0 12px;font-weight:750}
+  header p{max-width:70ch;color:var(--mut);font-size:15px;line-height:1.6;margin:0}
+  header p b{color:var(--txt)}
+
+  .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-panel);overflow:hidden;margin:26px 0 8px}
+  .rules div{background:var(--panel);padding:13px 15px}
+  .rules .k{font-family:var(--mono);font-size:var(--t-eyebrow);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+  .rules .v{font-size:12.5px;color:var(--mut);line-height:1.5}
+  .rules .v b{color:var(--txt);font-weight:600}
+  .rules code{font-family:var(--mono);font-size:11px;color:var(--pri2)}
+
+  section{margin-top:44px;scroll-margin-top:20px}
+  .sh{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:20px}
+  .sh h2{font-size:20px;letter-spacing:-.01em;margin:0;font-weight:680}
+  .sh .num{font-family:var(--mono);font-size:12px;color:var(--faint)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;align-items:start}
+  .spec{display:flex;flex-direction:column;gap:9px}
+  .spec .lbl{font-size:12px;color:var(--mut2)}
+  .spec .lbl b{color:var(--txt);font-weight:650;font-size:13px}
+  .spec .where{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+
+  /* ===== the data grid ===== */
+  .gl{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-panel);overflow:hidden}
+  .gcap{display:flex;align-items:baseline;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .gcap .t{font-size:14px;font-weight:680}
+  .gcap .m{font-family:var(--mono);font-size:var(--t-eyebrow);letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+
+  /* column header + every row share --cols → columns line up down the whole list */
+  .glh,.grow{display:grid;grid-template-columns:var(--cols);gap:var(--colgap);align-items:center}
+  .glh{padding:7px 14px;border-bottom:1px solid var(--line);background:var(--bg2)}
+  .glh span{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+  .glh .r{text-align:right}
+  .grow{padding:var(--row-y) 14px}
+  .grow + .grow{border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+  .grow:hover{background:rgba(255,255,255,.02)}
+
+  .lead{display:grid;place-items:center}
+  .rank{font-family:var(--mono);font-size:12px;color:var(--mut2);text-align:center}
+  .primary{min-width:0}
+  .primary .p1{font-size:var(--t-body);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .primary .p1 .at{color:var(--mut2);font-weight:400}
+  .primary .p2{font-size:var(--t-sub);color:var(--mut2);margin-top:1px;font-family:var(--mono)}
+  .meta{font-size:var(--t-sub);color:var(--mut);white-space:nowrap}
+  .metric{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;text-align:right;line-height:1.15}
+  .metric .u{display:block;font-size:10px;font-weight:500;color:var(--faint)}
+  .pos{color:var(--brand)}.neg{color:var(--dest)}.muted{color:var(--mut)}.faint{color:var(--faint)}
+
+  .av{border-radius:var(--r-pill);display:grid;place-items:center;font-weight:650;color:#fff;flex:none;width:26px;height:26px;font-size:10px}
+  .media{border-radius:var(--r-media);display:grid;place-items:center;font-weight:700;color:#fff;flex:none;width:26px;height:26px;font-size:9px}
+  .a-m{background:linear-gradient(135deg,#8b5cf6,#6d28d9)}.a-d{background:linear-gradient(135deg,#f472b6,#db2777)}
+  .a-j{background:linear-gradient(135deg,#2dd4bf,#0d9488)}.a-t{background:linear-gradient(135deg,#60a5fa,#2563eb)}
+  .lak{background:linear-gradient(135deg,#7c3aed,#f59e0b)}.cel{background:linear-gradient(135deg,#059669,#065f46)}
+  .gsw{background:linear-gradient(135deg,#2563eb,#f59e0b)}.den{background:linear-gradient(135deg,#1e3a8a,#f59e0b)}
+  .mia{background:linear-gradient(135deg,#dc2626,#7f1d1d)}.nyk{background:linear-gradient(135deg,#2563eb,#f97316)}
+
+  /* state = a 4px status tick in the lead cell (keeps the grid rigid) */
+  .tick{width:4px;height:22px;border-radius:2px;background:var(--c,var(--line2))}
+  .s-act{--c:var(--pri)}.s-live{--c:var(--sky)}.s-win{--c:var(--brand)}.s-loss{--c:var(--dest)}.s-lead{--c:var(--amber)}
+
+  .chip{display:inline-flex;align-items:center;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11px;font-weight:600;border-radius:var(--r-chip);padding:2px 7px;color:var(--txt);background:var(--panel2);border:1px solid var(--line)}
+  .cat{font-size:10.5px;font-weight:600;border-radius:var(--r-chip);padding:2px 7px}
+  .cat.h2h{color:var(--pri2);background:rgba(139,92,246,.15)}.cat.pick{color:var(--amber);background:rgba(245,158,11,.15)}
+
+  .btn{font-family:var(--sans);font-size:11.5px;font-weight:600;border-radius:8px;padding:5px 11px;cursor:pointer;border:1px solid transparent;white-space:nowrap}
+  .btn.pri{background:var(--pri);color:#fff}.btn.gho{background:transparent;border-color:var(--line2);color:var(--mut)}
+  .count{min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:var(--dest);color:#fff;font:700 10px/20px var(--mono);text-align:center}
+
+  .note{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);color:var(--mut2);font-size:13px;line-height:1.65}
+  .note b{color:var(--txt)}
+  .note code{font-family:var(--mono);font-size:12px;color:var(--pri2)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+</svg>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">Waygerz · standardization — C of 3</p>
+  <h1>Data Grid</h1>
+  <p>Treat cards and the table as <b>one grid</b>. Every list is built on the same four-column template — <b>lead · primary · meta · metric</b> — so a standings list, the wallet ledger and the schedule "table" literally line up on the same columns and the same dense row height. Numbers are monospaced and right-aligned; an optional mono column header labels the metric. Best for scanning and power users; unifies the last <code style="font-family:var(--mono)">&lt;table&gt;</code> by making <em>everything</em> table-grade.</p>
+</header>
+
+<div class="rules">
+  <div><div class="k">The grid</div><div class="v"><code>--cols: 30px 1fr auto 92px</code> — every row &amp; header shares it</div></div>
+  <div><div class="k">Columns</div><div class="v"><b>lead</b> · <b>primary</b> (2-line) · <b>meta</b> · <b>metric</b> (mono, right)</div></div>
+  <div><div class="k">Density</div><div class="v">uniform <b>9px</b> row · 26px media · hover row-highlight</div></div>
+  <div><div class="k">State</div><div class="v">a <b>4px tick</b> in the lead cell — keeps columns rigid</div></div>
+  <div><div class="k">Numbers</div><div class="v"><b>mono, tabular, right-aligned</b>, value over unit</div></div>
+  <div><div class="k">Header</div><div class="v">optional <b>mono uppercase</b> column labels per list</div></div>
+</div>
+
+<section>
+  <div class="sh"><span class="num">01</span><h2>Standings — the reference grid</h2></div>
+  <div class="grid">
+    <div class="spec">
+      <div class="lbl"><b>Standings</b> — rank in lead, record as meta, net as metric</div>
+      <div class="where">leagues/[id]/standings</div>
+      <div class="gl">
+        <div class="glh"><span></span><span>Member</span><span>Record</span><span class="r">Net · Bal</span></div>
+        <div class="grow"><div class="lead"><span class="tick s-lead"></span></div><div class="primary" style="display:flex;align-items:center;gap:9px"><span class="av a-d">D</span><span class="p1">Dana <span class="at">🥇</span></span></div><div class="meta" style="font-family:var(--mono)">8–2–1</div><div class="metric pos">+240<span class="u muted">1,240</span></div></div>
+        <div class="grow"><div class="rank">2</div><div class="primary" style="display:flex;align-items:center;gap:9px"><span class="av a-m">Y</span><span class="p1">You</span></div><div class="meta" style="font-family:var(--mono)">6–4</div><div class="metric neg">−20<span class="u muted">980</span></div></div>
+        <div class="grow"><div class="rank">3</div><div class="primary" style="display:flex;align-items:center;gap:9px"><span class="av a-t">T</span><span class="p1">Theo</span></div><div class="meta" style="font-family:var(--mono)">5–5</div><div class="metric muted">0<span class="u faint">1,000</span></div></div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>League list</b> — same grid, count as metric</div>
+      <div class="where">app/(app)/page.tsx</div>
+      <div class="gl">
+        <div class="glh"><span></span><span>League</span><span>Type</span><span class="r">New</span></div>
+        <div class="grow"><div class="lead"><span class="media" style="background:linear-gradient(135deg,#fb923c,#ea580c)">ON</span></div><div class="primary"><div class="p1">Office NBA</div><div class="p2" style="font-family:var(--sans)">8 members</div></div><div class="meta"><span class="cat h2h">H2H</span></div><div class="metric" style="text-align:right"><span class="count">5</span></div></div>
+        <div class="grow"><div class="lead"><span class="media" style="background:linear-gradient(135deg,#22c55e,#059669)">SP</span></div><div class="primary"><div class="p1">Sunday Pool</div><div class="p2" style="font-family:var(--sans)">invited by Sam</div></div><div class="meta"><span class="cat pick">Pick</span></div><div class="metric"><button class="btn pri">Join</button></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sh"><span class="num">02</span><h2>Bets &amp; ledger — identical columns</h2></div>
+  <div class="grid">
+    <div class="spec">
+      <div class="lbl"><b>Open bets</b> — state tick, opponent meta, stake/payout metric</div>
+      <div class="where">/bets</div>
+      <div class="gl">
+        <div class="glh"><span></span><span>Matchup</span><span>Vs</span><span class="r">Amount</span></div>
+        <div class="grow"><div class="lead"><span class="tick s-act"></span></div><div class="primary"><div class="p1">Lakers <span class="at">@</span> Celtics</div><div class="p2">Lakers +3.5</div></div><div class="meta">Marcus</div><div class="metric"><button class="btn pri" style="padding:5px 9px">Accept</button></div></div>
+        <div class="grow"><div class="lead"><span class="tick s-live"></span></div><div class="primary"><div class="p1">Chiefs <span class="at">@</span> Bills</div><div class="p2">LIVE · 14-10</div></div><div class="meta"><svg style="width:14px;height:14px;color:var(--mut)" fill="none" stroke="currentColor" stroke-width="2"><use href="#i-lock"/></svg></div><div class="metric muted">25</div></div>
+        <div class="grow"><div class="lead"><span class="tick s-win"></span></div><div class="primary"><div class="p1">Yankees <span class="at">@</span> Red Sox</div><div class="p2">Final</div></div><div class="meta">Theo</div><div class="metric pos">+40</div></div>
+        <div class="grow"><div class="lead"><span class="tick s-loss"></span></div><div class="primary"><div class="p1">Warriors <span class="at">@</span> Nuggets</div><div class="p2">Final</div></div><div class="meta">Alex</div><div class="metric neg">−25</div></div>
+      </div>
+    </div>
+    <div class="spec">
+      <div class="lbl"><b>Wallet ledger</b> — same grid; amount over running balance</div>
+      <div class="where">LeagueActivity</div>
+      <div class="gl">
+        <div class="gcap"><span class="t">$1,040</span><span class="m" style="color:var(--brand)">+$40 this week</span></div>
+        <div class="glh"><span></span><span>Activity</span><span>When</span><span class="r">Amount · Bal</span></div>
+        <div class="grow"><div class="lead"><span class="tick s-win"></span></div><div class="primary"><div class="p1">Bet won</div><div class="p2" style="font-family:var(--sans)">Lakers −3.5</div></div><div class="meta">Today</div><div class="metric pos">+$40<span class="u muted">$1,040</span></div></div>
+        <div class="grow"><div class="lead"><span class="tick s-loss"></span></div><div class="primary"><div class="p1">Bet placed</div><div class="p2" style="font-family:var(--sans)">Celtics +3.5</div></div><div class="meta">Yesterday</div><div class="metric neg">−$25<span class="u muted">$1,000</span></div></div>
+        <div class="grow"><div class="lead"><span class="tick s-live"></span></div><div class="primary"><div class="p1">Bet refunded</div><div class="p2" style="font-family:var(--sans)">Postponed</div></div><div class="meta">Tue</div><div class="metric pos">+$25<span class="u muted">$1,025</span></div></div>
+        <div class="grow"><div class="lead"><span class="tick s-lead"></span></div><div class="primary"><div class="p1">Starting balance</div><div class="p2" style="font-family:var(--sans)">League grant</div></div><div class="meta">Jul 20</div><div class="metric muted">$1,000<span class="u faint">$1,000</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sh"><span class="num">03</span><h2>Schedule board — the table, now on the shared grid</h2></div>
+  <div class="grid">
+    <div class="spec">
+      <div class="lbl"><b>Schedule board</b> — one row per game; spread + total only, no moneyline</div>
+      <div class="where">ScheduleBoard · tap a row to bet</div>
+      <div class="gl" style="--cols:52px minmax(0,1fr) auto auto">
+        <div class="gcap"><span class="t">Sunday</span><span class="m">Tap a game to bet</span></div>
+        <div class="glh"><span>Tip</span><span>Matchup</span><span>Spread</span><span class="r">Total</span></div>
+        <div class="grow"><div class="meta" style="font-family:var(--mono);font-size:10.5px;line-height:1.25">1:00p</div><div class="primary" style="display:flex;flex-direction:column;gap:3px"><span class="p1" style="display:flex;align-items:center;gap:6px"><span class="media lak">LAL</span>Lakers</span><span class="p1" style="display:flex;align-items:center;gap:6px"><span class="media cel">BOS</span>Celtics</span></div><div class="meta"><span class="chip">−3.5</span></div><div style="text-align:right"><span class="chip">O 224.5</span></div></div>
+        <div class="grow"><div class="meta" style="font-family:var(--mono);font-size:10.5px;line-height:1.25">3:30p</div><div class="primary" style="display:flex;flex-direction:column;gap:3px"><span class="p1" style="display:flex;align-items:center;gap:6px"><span class="media gsw">GSW</span>Warriors</span><span class="p1" style="display:flex;align-items:center;gap:6px"><span class="media den">DEN</span>Nuggets</span></div><div class="meta"><span class="chip">+1.5</span></div><div style="text-align:right"><span class="chip">O 231</span></div></div>
+        <div class="grow"><div class="meta" style="font-family:var(--mono);font-size:10.5px;line-height:1.25">6:00p</div><div class="primary" style="display:flex;flex-direction:column;gap:3px"><span class="p1" style="display:flex;align-items:center;gap:6px"><span class="media mia">MIA</span>Heat</span><span class="p1" style="display:flex;align-items:center;gap:6px"><span class="media nyk">NYK</span>Knicks</span></div><div class="meta"><span class="chip">−6.5</span></div><div style="text-align:right"><span class="chip">O 210.5</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="note">
+  <p><b>What standardizes.</b> There is exactly one layout — a four-column grid — and the ledger, standings, open bets and schedule are all instances of it, so their columns align and scanning down any list feels the same. The lone <code>&lt;table&gt;</code> stops being special: it's the same grid with a wider lead column. State is a rigid <b>4px tick</b> so it never disrupts alignment. <b>Densest and most scannable</b>; the trade-off is it reads more "app/spreadsheet" than "social" — softer, hero-style cards (invite previews, profile) would sit outside this grid as deliberate exceptions.</p>
+</div>
+</div>
+</body>
+</html>
