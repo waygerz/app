@@ -486,53 +486,31 @@ function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) 
 }
 
 function wagerStatusBadge(w: Wager, me?: string) {
-  if (w.status === 'open' && w.acceptor_id === me) {
-    return <Badge size="sm" variant="warning" appearance="light">Needs response</Badge>;
-  }
-  if (w.status === 'open') {
-    return <Badge size="sm" variant="info" appearance="light">Awaiting</Badge>;
-  }
-  if (w.status === 'accepted' && w.cancel_requested_by) {
-    // Whoever still has to answer sees the ask; the requester sees they asked.
-    const mine = w.cancel_requested_by === me;
-    return (
-      <Badge size="sm" variant="warning" appearance="light">
-        {mine ? 'Cancel requested' : 'Cancel — needs you'}
-      </Badge>
-    );
-  }
-  if (w.status === 'accepted') {
-    return <Badge size="sm" variant="success" appearance="light">Live</Badge>;
-  }
-  if (w.status === 'completed') {
-    // Score already decided it — only the winner still has to claim.
-    if (w.winner_user_id === me) {
-      return <Badge size="sm" variant="success" appearance="light">You won</Badge>;
+  // Labels are the wager status names, with the one exception the viewer cares
+  // about: settled bets read "Won" / "Lost" rather than "Settled". Cancelled
+  // shows nothing (it sits in its own group).
+  switch (w.status) {
+    case 'open':
+      return <Badge size="sm" variant="secondary" appearance="light">Open</Badge>;
+    case 'accepted':
+      return <Badge size="sm" variant="secondary" appearance="light">Accepted</Badge>;
+    case 'completed':
+      return <Badge size="sm" variant="secondary" appearance="light">Completed</Badge>;
+    case 'settled': {
+      const won = w.winner_user_id === me;
+      return (
+        <Badge size="sm" variant={won ? 'success' : 'destructive'} appearance="light">
+          {won ? 'Won' : 'Lost'}
+        </Badge>
+      );
     }
-    if (w.winner_user_id) {
-      return <Badge size="sm" variant="destructive" appearance="light">You lost</Badge>;
-    }
-    return <Badge size="sm" variant="warning" appearance="light">Confirm result</Badge>;
+    case 'refunded':
+      return <Badge size="sm" variant="secondary" appearance="light">Refunded</Badge>;
+    case 'declined':
+      return <Badge size="sm" variant="secondary" appearance="light">Declined</Badge>;
+    default:
+      return null;
   }
-  if (w.status === 'settled') {
-    const won = w.winner_user_id === me;
-    return (
-      <Badge size="sm" variant={won ? 'success' : 'destructive'} appearance="light">
-        {won ? 'Won' : 'Lost'}
-      </Badge>
-    );
-  }
-  if (w.status === 'refunded') {
-    return <Badge size="sm" variant="secondary" appearance="light">Push</Badge>;
-  }
-  if (w.status === 'declined') {
-    return <Badge size="sm" variant="secondary" appearance="light">Declined</Badge>;
-  }
-  if (w.status === 'cancelled') {
-    // No trailing icon — cancelled bets live in their own "Cancelled" group.
-    return null;
-  }
-  return null;
 }
 
 // A terse status indicator: a muted icon standing in for a text label (Locked,
