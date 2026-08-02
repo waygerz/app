@@ -1554,22 +1554,6 @@ export function LeagueSportSchedule() {
 }
 
 // ===================== STANDINGS =====================
-function standingRankClass(rank: number) {
-  if (rank === 1) return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
-  if (rank === 2) return 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
-  if (rank === 3) return 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300';
-  return 'bg-muted text-muted-foreground';
-}
-
-// Left-accent border for standings cards — matches the /results card style
-// (border-l-4 + tinted bg). Top 3 get medal tints; the rest a neutral accent.
-function standingAccentClass(rank: number) {
-  if (rank === 1) return 'border-l-amber-500 bg-amber-500/5';
-  if (rank === 2) return 'border-l-slate-400 bg-slate-500/5';
-  if (rank === 3) return 'border-l-orange-500 bg-orange-500/5';
-  return 'border-l-border bg-muted/30';
-}
-
 function formatRecord(wins: number, losses: number, pushes?: number) {
   if (pushes) return `${wins}–${losses}–${pushes}`;
   return `${wins}–${losses}`;
@@ -1591,6 +1575,7 @@ export function LeagueStandings() {
     );
   }
   const money = rows[0].balance_cents !== undefined;
+  const roleById = new Map(lg.members.map((m) => [String(m.user_id), m.role]));
 
   return (
     <div className="flex flex-col gap-4">
@@ -1602,17 +1587,9 @@ export function LeagueStandings() {
           return (
             <Card
               key={r.user_id}
-              className={cn(
-                'flex w-full min-w-0 flex-row items-center gap-3 border-l-4 p-4',
-                standingAccentClass(rank),
-              )}
+              className="flex-row items-center gap-2 p-3"
             >
-              <div
-                className={cn(
-                  'flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold',
-                  standingRankClass(rank),
-                )}
-              >
+              <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
                 {rank}
               </div>
               <UserAvatar
@@ -1628,7 +1605,7 @@ export function LeagueStandings() {
                   {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {formatRecord(r.wins, r.losses, r.pushes)} W–L
+                  {memberRoleLabel(roleById.get(String(r.user_id)) ?? 'member')}
                 </p>
               </div>
               {money ? (
