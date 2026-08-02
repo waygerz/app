@@ -741,10 +741,11 @@ export function WagerBetCard({
               </span>
             ) : (
               <>
-                <span className="flex min-w-0 shrink items-center gap-2 truncate">
+                <span className="flex min-w-0 shrink items-center gap-1.5 truncate">
                   <TeamLogo src={rows[0].logo} name={rows[0].abbr} className={logoCls} framed />
                   <span className={cn('tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[0])}</span>
                   <span className="font-medium text-muted-foreground/60">·</span>
+                  <TeamLogo src={rows[1].logo} name={rows[1].abbr} className={logoCls} framed />
                   <span className={cn('tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[1])}</span>
                 </span>
                 {/* the viewer's pick — inline with the matchup, opens read-only details */}

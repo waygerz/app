@@ -64,7 +64,7 @@ export function TeamLogo({
       alt=""
       className={cn(
         'size-10 shrink-0 object-contain sm:size-14',
-        framed && 'rounded-full bg-white p-[12%] ring-1 ring-black/10',
+        framed && 'rounded-full bg-white p-0.5 ring-1 ring-black/10',
         className,
       )}
       loading="lazy"
