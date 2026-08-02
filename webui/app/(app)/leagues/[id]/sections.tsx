@@ -1767,6 +1767,7 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
 
   const res = resultsQ.data as PeriodResults | undefined;
   const rows = res?.rows ?? [];
+  const roleById = new Map(lg.members.map((m) => [String(m.user_id), m.role]));
   const rankCounts = rows.reduce<Record<number, number>>((acc, r) => {
     acc[r.rank] = (acc[r.rank] ?? 0) + 1;
     return acc;
@@ -1823,12 +1824,9 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
                     {r.display_name}
                     {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
                   </p>
-                  {r.tiebreaker_total !== null && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      tie-breaker {r.tiebreaker_total}
-                      {r.tiebreaker_diff !== null ? ` · off by ${r.tiebreaker_diff}` : ''}
-                    </p>
-                  )}
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {memberRoleLabel(roleById.get(String(r.user_id)) ?? 'member')}
+                  </p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-lg font-bold tabular-nums text-foreground">
