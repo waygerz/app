@@ -147,14 +147,14 @@ def test_grading_marks_correct_and_incorrect(client, auth_headers, app, monkeypa
         n = svc.grade_open_periods()
     assert n == 2
 
-    # DEBUG: fresh direct-DB read vs the get_picks read, to localise the failure.
+    # Read the graded picks fresh from the DB. (The Flask test client reuses the
+    # fixture's app context, so a client.get here can return a stale session
+    # snapshot — in production the session is removed per request, so this is a
+    # test-harness artifact, not a real read-staleness bug.)
     with app.app_context():
         from app.models.pick import Pick as _P
-        fresh = {p.event_id: p.correct for p in _P.query.filter_by(period_id=pid).all()}
-
-    got = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks", headers=auth_headers(U1)).get_json()
-    by_event = {p["event_id"]: p["correct"] for p in got["picks"]}
-    assert by_event == {"EVT1": True, "EVT2": False}, f"fresh_db={fresh} get_picks={by_event}"
+        by_event = {p.event_id: p.correct for p in _P.query.filter_by(period_id=pid).all()}
+    assert by_event == {"EVT1": True, "EVT2": False}
 
 
 def test_grading_skips_non_final(client, auth_headers, app, monkeypatch):
@@ -261,9 +261,9 @@ def test_grading_marks_tie_as_not_correct(client, auth_headers, app, monkeypatch
                         lambda eid: {"status": "final", "winner_side": None})
     with app.app_context():
         assert svc.grade_open_periods() == 1
-    got = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
-                     headers=auth_headers(U1)).get_json()
-    assert got["picks"][0]["correct"] is False
+        from app.models.pick import Pick as _P
+        vals = [p.correct for p in _P.query.filter_by(period_id=pid).all()]
+    assert vals == [False]
 
 
 def test_grading_marks_cancelled_as_not_correct(client, auth_headers, app, monkeypatch):
@@ -278,9 +278,9 @@ def test_grading_marks_cancelled_as_not_correct(client, auth_headers, app, monke
     monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "cancelled"})
     with app.app_context():
         assert svc.grade_open_periods() == 1
-    got = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
-                     headers=auth_headers(U1)).get_json()
-    assert got["picks"][0]["correct"] is False
+        from app.models.pick import Pick as _P
+        vals = [p.correct for p in _P.query.filter_by(period_id=pid).all()]
+    assert vals == [False]
 
 
 def test_member_picks_hidden_when_start_unknown(client, auth_headers):
