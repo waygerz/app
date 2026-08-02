@@ -1961,6 +1961,13 @@ function MemberPicksDialog({
           )}
           {picks.map((p) => {
             const ev = p.event;
+            // The picked side carries the result: violet while the game is live,
+            // green once it's graded correct, red if wrong. No separate badge.
+            const tone = p.correct === null
+              ? 'bg-primary/10 ring-1 ring-inset ring-primary/60'
+              : p.correct
+                ? 'bg-brand/10 ring-1 ring-inset ring-brand/60'
+                : 'bg-destructive/10 ring-1 ring-inset ring-destructive/60';
             return (
               <div key={p.id ?? p.event_id} className="flex items-center gap-1.5 rounded-lg border border-border p-2">
                 <PickTeam
@@ -1968,6 +1975,7 @@ function MemberPicksDialog({
                   label={ev?.away_abbr || ev?.away_team || '?'}
                   score={ev?.away_score}
                   picked={p.pick_side === 'away'}
+                  tone={tone}
                 />
                 <span className="shrink-0 px-0.5 text-xs font-medium text-muted-foreground">@</span>
                 <PickTeam
@@ -1975,12 +1983,8 @@ function MemberPicksDialog({
                   label={ev?.home_abbr || ev?.home_team || '?'}
                   score={ev?.home_score}
                   picked={p.pick_side === 'home'}
+                  tone={tone}
                 />
-                {p.correct === null ? (
-                  <Badge size="sm" appearance="light" variant="secondary" className="shrink-0">—</Badge>
-                ) : (
-                  <Badge size="sm" appearance="light" variant={p.correct ? 'success' : 'destructive'} className="shrink-0">{p.correct ? '✓' : '✗'}</Badge>
-                )}
               </div>
             );
           })}
@@ -1993,21 +1997,23 @@ function MemberPicksDialog({
 // One team side inside a member's pick row: logo + abbreviation + score, with
 // the member's picked side wrapped in a highlighted (primary) box.
 function PickTeam({
-  logo, label, score, picked,
+  logo, label, score, picked, tone,
 }: {
   logo?: string | null;
   label: string;
   score?: number | null;
   picked: boolean;
+  /** Highlight classes for the picked side (live / correct / wrong). */
+  tone: string;
 }) {
   return (
     <div
       className={cn(
         'flex flex-1 items-center gap-2 rounded-md px-2 py-1.5',
-        picked ? 'bg-primary/10 ring-1 ring-inset ring-primary/60' : 'opacity-60',
+        picked ? tone : 'opacity-60',
       )}
     >
-      <TeamLogo src={logo} name={label} className="size-6 shrink-0" />
+      <TeamLogo src={logo} name={label} className="size-8 shrink-0 text-[11px] sm:size-8 sm:text-[11px]" />
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{label}</span>
       {score !== null && score !== undefined && (
         <span className="text-sm font-bold tabular-nums text-foreground">{score}</span>
