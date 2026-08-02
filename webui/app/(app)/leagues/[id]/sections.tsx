@@ -726,7 +726,18 @@ export function WagerBetCard({
 
   return (
     <>
-      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-border px-4 py-3 last:border-b-0 hover:bg-muted/30">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setDetailsOpen(true)}
+        onKeyDown={(e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+            e.preventDefault();
+            setDetailsOpen(true);
+          }
+        }}
+        className="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-border px-4 py-3 last:border-b-0 hover:bg-muted/30"
+      >
         {/* state dot — quiet status marker (was a rail) */}
         <span className={cn('size-2.5 shrink-0 rounded-full', railTone)} />
 
@@ -751,7 +762,10 @@ export function WagerBetCard({
                 {/* the viewer's pick — inline with the matchup, opens read-only details */}
                 <button
                   type="button"
-                  onClick={() => setDetailsOpen(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDetailsOpen(true);
+                  }}
                   className={cn('flex h-6 shrink-0 items-center justify-center rounded-full border px-2.5 text-[11px] font-extrabold tabular-nums transition hover:brightness-110', pickCell)}
                 >
                   <span className="max-w-[96px] truncate">{shortPick()}</span>
@@ -765,7 +779,10 @@ export function WagerBetCard({
             {soloOpp && profile ? (
               <button
                 type="button"
-                onClick={() => profile.openProfile({ userId: soloOpp.id, name: soloOpp.name, avatarKey: soloOpp.avatar_key })}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  profile.openProfile({ userId: soloOpp.id, name: soloOpp.name, avatarKey: soloOpp.avatar_key });
+                }}
                 className="font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
               >
                 {soloOpp.name}
@@ -781,11 +798,14 @@ export function WagerBetCard({
         {/* trail: actions when interactive, else settled outcome (opens details), else live/pending status */}
         <div className="flex min-w-[64px] items-center justify-end text-right">
           {actions ? (
-            <div className="flex w-[84px] flex-col items-stretch gap-1">{actions}</div>
+            <div className="flex w-[84px] flex-col items-stretch gap-1" onClick={(e) => e.stopPropagation()}>{actions}</div>
           ) : settled ? (
             <button
               type="button"
-              onClick={() => setDetailsOpen(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDetailsOpen(true);
+              }}
               title={iWon ? 'Won' : iLost ? 'Lost' : 'Push'}
               className={cn(
                 'text-base font-extrabold tabular-nums transition hover:opacity-80',
