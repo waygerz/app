@@ -21,7 +21,7 @@ export function Leaderboard({ field }: { field: EspnCompetitor[] }) {
           <span className="w-8 shrink-0 text-center text-sm font-semibold tabular-nums text-muted-foreground">
             {c.position_display || c.order || i + 1}
           </span>
-          <CompetitorLogo src={c.logo} name={c.short_name || c.name} size={28} />
+          <CompetitorLogo src={c.logo} name={c.short_name || c.name} size={32} />
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{c.name}</span>
           {c.score != null && (
             <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{c.score}</span>

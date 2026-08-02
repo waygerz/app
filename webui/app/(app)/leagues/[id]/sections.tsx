@@ -331,7 +331,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                         disabled && !active && !isMyPick && 'opacity-60',
                       )}
                     >
-                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} className="size-12 sm:size-14" />
+                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} size="lg" />
                       <span className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{teamName}</span>
                       {isMyPick && <Check className="size-4 shrink-0 text-primary" />}
                     </button>
@@ -574,7 +574,7 @@ function BetDetailsDialog({
 
   const teamRow = (name: string, logo: string | null, score: number | null, lost: boolean) => (
     <div className="flex items-center gap-3 py-2.5">
-      <TeamLogo src={logo} name={name} className="size-8 shrink-0 text-[10px] sm:size-8 sm:text-[10px]" framed />
+      <TeamLogo src={logo} name={name} size="sm" framed />
       <span className={cn('min-w-0 flex-1 truncate text-base font-semibold', lost ? 'text-muted-foreground' : 'text-foreground')}>{name}</span>
       <span className={cn('text-lg font-bold tabular-nums', lost ? 'text-muted-foreground' : 'text-foreground')}>
         {started && score != null ? score : '–'}
@@ -718,10 +718,8 @@ export function WagerBetCard({
     : started && !final ? 'bg-blue-500'
     : 'bg-primary';
 
-  // A single small team logo (away) then "AWAY sc · HOME sc" as text — kept
-  // compact to match the ledger. TeamLogo bakes sm:size-14 / sm:text-base, so
-  // the sm: variants must be overridden too or the logo balloons on desktop.
-  const logoCls = 'size-6 sm:size-6 shrink-0 text-[9px] sm:text-[9px]';
+  // A small framed team logo (away) then "AWAY sc · HOME sc" as text — kept
+  // compact (xs) to match the ledger.
   const teamTxt = (r: (typeof rows)[number]) =>
     `${r.abbr}${started && r.score != null ? ` ${r.score}` : ''}`;
   // Single opponent's name opens their profile (head-to-head record); the pick
@@ -757,10 +755,10 @@ export function WagerBetCard({
             ) : (
               <>
                 <span className="flex min-w-0 shrink items-center gap-1.5 truncate">
-                  <TeamLogo src={rows[0].logo} name={rows[0].abbr} className={logoCls} framed />
+                  <TeamLogo src={rows[0].logo} name={rows[0].abbr} size="xs" framed />
                   <span className={cn('tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[0])}</span>
                   <span className="font-medium text-muted-foreground/60">·</span>
-                  <TeamLogo src={rows[1].logo} name={rows[1].abbr} className={logoCls} framed />
+                  <TeamLogo src={rows[1].logo} name={rows[1].abbr} size="xs" framed />
                   <span className={cn('tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[1])}</span>
                 </span>
                 {/* the viewer's pick — inline with the matchup, opens read-only details */}
@@ -2013,7 +2011,7 @@ function PickTeam({
         picked ? tone : 'opacity-60',
       )}
     >
-      <TeamLogo src={logo} name={label} className="size-8 shrink-0 text-[11px] sm:size-8 sm:text-[11px]" />
+      <TeamLogo src={logo} name={label} size="sm" />
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{label}</span>
       {score !== null && score !== undefined && (
         <span className="text-sm font-bold tabular-nums text-foreground">{score}</span>
@@ -2151,7 +2149,7 @@ function ScheduleBetDialog({
                           isSel(s, 'moneyline') ? STATE.selected : STATE.idle,
                         )}
                       >
-                        <TeamLogo src={teamLogo(s)} name={teamAbbr(s) || teamName(s)} className="size-7 shrink-0 text-[10px]" />
+                        <TeamLogo src={teamLogo(s)} name={teamAbbr(s) || teamName(s)} size="sm" />
                         <span className="truncate text-sm font-medium text-foreground">{teamName(s)}</span>
                       </button>
                       {/* Spread */}

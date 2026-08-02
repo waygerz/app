@@ -33,11 +33,23 @@ export function formatStart(iso: string | null) {
   });
 }
 
+// Standard team-logo sizes. Keep the set small: xs for dense inline chips,
+// sm for dialog / compact rows, lg for the prominent matchup cards. `className`
+// still overrides for the rare exception.
+const LOGO_SIZE = {
+  xs: { span: 'size-6 text-[9px]', img: 'size-6' },
+  sm: { span: 'size-8 text-[11px]', img: 'size-8' },
+  lg: { span: 'size-10 text-sm sm:size-14 sm:text-base', img: 'size-10 sm:size-14' },
+} as const;
+
+export type TeamLogoSize = keyof typeof LOGO_SIZE;
+
 export function TeamLogo({
   src,
   name,
   className,
   framed,
+  size = 'lg',
 }: {
   src?: string | null;
   name: string;
@@ -45,12 +57,16 @@ export function TeamLogo({
   /** Sit the logo on a light rounded chip so transparent/dark marks pop
    *  against a dark row (used in the compact My Bets rows). */
   framed?: boolean;
+  /** One of the standard sizes: xs = 24px, sm = 32px, lg = 40→56 responsive. */
+  size?: TeamLogoSize;
 }) {
+  const s = LOGO_SIZE[size];
   if (!src) {
     return (
       <span
         className={cn(
-          'flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-foreground sm:size-14 sm:text-base',
+          'flex shrink-0 items-center justify-center rounded-full bg-muted font-bold text-foreground',
+          s.span,
           className,
         )}
       >
@@ -63,7 +79,8 @@ export function TeamLogo({
       src={src}
       alt=""
       className={cn(
-        'size-10 shrink-0 object-contain sm:size-14',
+        'shrink-0 object-contain',
+        s.img,
         framed && 'rounded-full bg-white p-0.5 ring-1 ring-black/10',
         className,
       )}
@@ -292,7 +309,7 @@ function BookTeamLine({ name, abbr, logo }: { name: string; abbr?: string; logo?
   // Styled like a pick cell — the team line IS the "Winner" (straight-up) pick.
   return (
     <div className="flex h-11 min-w-0 items-center gap-2 rounded-md bg-muted/60 px-2.5 sm:h-10 sm:gap-2.5">
-      <TeamLogo src={logo} name={abbr || name} className="size-6 shrink-0 text-[9px] sm:size-7 sm:text-[10px]" />
+      <TeamLogo src={logo} name={abbr || name} size="xs" />
       {/* Abbreviation on a phone, full name from sm up. */}
       <span className="truncate text-sm font-semibold text-foreground">
         <span className="sm:hidden">{abbr || name}</span>

@@ -27,7 +27,7 @@ function Side({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <CompetitorLogo src={logo} name={name} size={36} />
+      <CompetitorLogo src={logo} name={name} size={32} />
       <span className={`min-w-0 flex-1 truncate text-base ${won ? 'font-bold text-foreground' : 'font-medium text-foreground'}`}>
         {name}
         {won && ' 🏆'}

@@ -101,10 +101,10 @@ function SummaryRow({ sport, shape, s }: { sport: string; shape: string; s: Espn
         </div>
         {shape === 'team' && (s.home || s.away) && (
           <div className="flex flex-wrap items-center gap-2 pt-1 text-sm text-foreground">
-            <CompetitorLogo src={s.away?.logo} name={s.away?.name ?? '?'} size={20} />
+            <CompetitorLogo src={s.away?.logo} name={s.away?.name ?? '?'} size={24} />
             <span className="truncate">{s.away?.name}{s.away?.score != null ? ` ${s.away.score}` : ''}</span>
             <span className="text-xs text-muted-foreground">v</span>
-            <CompetitorLogo src={s.home?.logo} name={s.home?.name ?? '?'} size={20} />
+            <CompetitorLogo src={s.home?.logo} name={s.home?.name ?? '?'} size={24} />
             <span className="truncate">{s.home?.name}{s.home?.score != null ? ` ${s.home.score}` : ''}</span>
           </div>
         )}
