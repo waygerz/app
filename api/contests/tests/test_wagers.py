@@ -395,10 +395,12 @@ def test_cannot_accept_someone_elses_wager(app, calls):
 
 def _accepted(monkeypatch, start_time=None):
     """An accepted wager, optionally with a start time on the model."""
+    from app.extensions import db
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     svc.accept(w, U2)
     if start_time is not None:
         w.start_time = start_time
+        db.session.commit()  # persist so the row-lock refresh in the service sees it
     return w
 
 
@@ -486,7 +488,9 @@ def test_approve_also_blocked_once_locked(app, calls, monkeypatch):
     w = _accepted(monkeypatch, start_time=_iso(later))
     svc.request_cancel(w, U1)
     # kickoff creeps up before the other side responds
+    from app.extensions import db
     w.start_time = _iso(datetime.utcnow() + timedelta(minutes=2))
+    db.session.commit()
     with pytest.raises(svc.WagerError):
         svc.approve_cancel(w, U2)
     assert w.status == ACCEPTED
@@ -494,8 +498,10 @@ def test_approve_also_blocked_once_locked(app, calls, monkeypatch):
 
 def test_open_wager_cancel_blocked_once_locked(app, calls):
     from datetime import datetime, timedelta
+    from app.extensions import db
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     w.start_time = _iso(datetime.utcnow() + timedelta(minutes=3))
+    db.session.commit()
     with pytest.raises(svc.WagerError):
         svc.cancel(w, U1)
 
