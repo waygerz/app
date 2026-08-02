@@ -1003,6 +1003,26 @@ def settle_due(refresh=True) -> int:
         except Exception:  # noqa: BLE001
             db.session.rollback()
             continue
+
+    # Expire un-accepted (open) offers once their game has kicked off — a bet on
+    # a game already in progress can no longer be fairly accepted, so it would
+    # otherwise sit "pending" forever (and keep the proposer's stake held). Void
+    # it (cancelled) and refund the proposer, mirroring a manual cancel. Only
+    # acts on a KNOWN, past start time — a startless offer is left alone rather
+    # than cancelled by mistake. Refund is idempotent on the ref; $0 bets no-op.
+    now = datetime.utcnow()
+    for wager in Wager.query.filter(Wager.status == OPEN).all():
+        dt = _parse_start(wager)
+        if dt is None or now < dt:
+            continue
+        try:
+            refund(_account(wager.league_id), wager.proposer_id, wager.amount_cents, _ref(wager.id))
+            wager.status = CANCELLED
+            db.session.commit()
+            moved += 1
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
+            continue
     return moved
 
 

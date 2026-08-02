@@ -208,6 +208,29 @@ def test_settle_noop_when_event_not_final(app, calls):
     assert w.status == ACCEPTED
 
 
+def test_settle_due_expires_open_offer_after_kickoff(app, calls):
+    # An un-accepted offer whose game has already started is auto-cancelled and
+    # the proposer refunded, instead of sitting pending forever.
+    from app.extensions import db
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    assert w.status == OPEN
+    w.start_time = "2020-01-01T00:00:00Z"  # kicked off long ago
+    db.session.commit()
+    svc.settle_due(refresh=False)
+    assert w.status == CANCELLED
+    assert ("refund", U1, 5000) in calls
+
+
+def test_settle_due_keeps_open_offer_before_kickoff(app, calls):
+    # A future start time must not expire a fresh offer.
+    from app.extensions import db
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    w.start_time = "2999-01-01T00:00:00Z"
+    db.session.commit()
+    svc.settle_due(refresh=False)
+    assert w.status == OPEN
+
+
 def test_only_winner_can_confirm(app, calls, monkeypatch):
     # Confirm is the separate manual settle path: from an accepted bet whose
     # game is final, only the score-decided winner (U1, home) may confirm —
