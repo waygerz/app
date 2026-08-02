@@ -6,10 +6,11 @@ account (``league:{league_id}``). Validation is delegated to the leagues service
 """
 import secrets
 import zlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 from flask import current_app, request
+from sqlalchemy import text
 
 from app.extensions import db
 from app.models.wager import (
@@ -53,6 +54,10 @@ COMPLETE_AFTER_HOURS = 6
 # How close to kickoff cancellation locks shut, for both the proposer's
 # withdrawal of an open wager and the mutual cancel of an accepted one.
 CANCEL_LOCK_SECONDS = 10 * 60
+
+# Postgres advisory-lock key that makes settle_due() single-runner across the
+# multiple service instances — only one tick settles at a time.
+SETTLE_LOCK_KEY = 0x5747_5A53  # "WGZS"
 
 
 class InsufficientFunds(Exception):
@@ -524,10 +529,17 @@ def _post_accepted_activity(wager):
 
 
 def accept(wager, user_id):
+    _lock(wager)
     if wager.status != OPEN:
         raise WagerError("this wager is no longer open")
     if wager.acceptor_id != user_id:
         raise WagerError("this wager isn't addressed to you")
+    # Can't accept a bet once its game has kicked off — otherwise an acceptor
+    # could wait to see the score move and only take a side that's already
+    # winning. (Startless offers are allowed; the scheduler never expires those.)
+    dt = _parse_start(wager)
+    if dt is not None and datetime.utcnow() >= dt:
+        raise WagerError("the game has already started — this bet can no longer be accepted")
     hold(_account(wager.league_id), user_id, wager.amount_cents, _ref(wager.id))
     wager.status = ACCEPTED
     db.session.commit()
@@ -550,6 +562,7 @@ def accept(wager, user_id):
 
 
 def decline(wager, user_id):
+    _lock(wager)
     if wager.status != OPEN:
         raise WagerError("this wager is no longer open")
     if wager.acceptor_id != user_id:
@@ -562,6 +575,7 @@ def decline(wager, user_id):
 
 def cancel(wager, user_id):
     """Withdraw an unaccepted proposal. Only the proposer has money at stake."""
+    _lock(wager)
     if wager.status != OPEN:
         raise WagerError("only an open wager can be cancelled")
     if wager.proposer_id != user_id:
@@ -579,6 +593,7 @@ def request_cancel(wager, user_id):
     Both sides have money held once a wager is accepted, so neither can back out
     alone — this only records the request; `approve_cancel` moves the money.
     """
+    _lock(wager)
     if wager.status != ACCEPTED:
         raise WagerError("only an accepted wager needs both sides to cancel")
     _require_cancel_window(wager)
@@ -594,6 +609,7 @@ def request_cancel(wager, user_id):
 
 def approve_cancel(wager, user_id):
     """Agree to the other side's cancel request: void the wager, refund both."""
+    _lock(wager)
     if wager.status != ACCEPTED:
         raise WagerError("only an accepted wager needs both sides to cancel")
     if not wager.cancel_requested_by:
@@ -613,6 +629,7 @@ def approve_cancel(wager, user_id):
 
 def reject_cancel(wager, user_id):
     """Turn down the other side's cancel request; the wager stands."""
+    _lock(wager)
     if wager.status != ACCEPTED:
         raise WagerError("only an accepted wager needs both sides to cancel")
     if not wager.cancel_requested_by:
@@ -639,9 +656,15 @@ def _parse_start(wager):
     if not wager.start_time:
         return None
     try:
-        return datetime.fromisoformat(wager.start_time.replace("Z", "+00:00")).replace(tzinfo=None)
+        dt = datetime.fromisoformat(wager.start_time.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
         return None
+    # Normalise to naive UTC. If the feed ever emits a real offset (e.g.
+    # -04:00), convert to UTC rather than dropping it (which would skew the
+    # start by that offset); today the ingestor emits naive-UTC + "Z".
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 def _cancel_locked(wager) -> bool:
@@ -701,6 +724,11 @@ def _resolve_outcome(wager, event):
     """
     if not event:
         return None
+    # Only a genuinely FINAL event resolves. Never read live / in-progress
+    # scores — doing so let a mid-game confirm (or an early auto-settle) pay off
+    # a lead that hadn't held up. A cancelled event is handled by the caller.
+    if event.get("status") != "final":
+        return None
     hs, aw = event.get("home_score"), event.get("away_score")
     ws = event.get("winner_side")
     bt = wager.bet_type or MONEYLINE
@@ -751,6 +779,24 @@ def _outcome_winner_id(wager, outcome):
     return None
 
 
+def _lock(wager):
+    """Row-lock this wager for the current transaction (SELECT ... FOR UPDATE)
+    and re-read its columns, so a user action and the scheduler tick can't both
+    pass a stale status guard. The lock releases on the next commit/rollback."""
+    db.session.refresh(wager, with_for_update=True)
+
+
+def _void_refund(wager, account, headline):
+    """Void an accepted wager: refund both stakes, mark it refunded, announce it.
+    Refund is idempotent on the wager ref, so a retry can't double-refund."""
+    refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
+    refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
+    wager.status = REFUNDED
+    wager.settled_at = datetime.utcnow()
+    db.session.commit()
+    _post_settled_activity(wager, headline)
+
+
 def settle_one(wager):
     """Advance an accepted wager once its event is over.
 
@@ -760,6 +806,9 @@ def settle_one(wager):
     does a cancelled event. If the result can't be determined (no score data),
     winner_user_id stays null and the pair fall back to peer concession.
     """
+    # Serialize against a concurrent user action on this same wager (accept /
+    # confirm / cancel) — lock the row and re-read its status under the lock.
+    _lock(wager)
     if wager.status != ACCEPTED:
         return wager
     account = _account(wager.league_id)
@@ -767,28 +816,18 @@ def settle_one(wager):
     status = event.get("status") if event else None
 
     if status == "cancelled":
-        refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
-        refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
-        wager.status = REFUNDED
-        wager.settled_at = datetime.utcnow()
-        db.session.commit()
+        _void_refund(wager, account, "The game was cancelled — stakes returned")
         return wager
 
-    if status == "final" or _likely_over(wager):
+    if status == "final":
         outcome = _resolve_outcome(wager, event)
         if outcome == "push":
-            refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
-            refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
-            wager.status = REFUNDED
-            wager.settled_at = datetime.utcnow()
-            db.session.commit()
-            _post_settled_activity(wager, "A bet pushed — stakes returned")
+            _void_refund(wager, account, "A bet pushed — stakes returned")
             return wager
-        # Auto-settle: once the score gives a winner, pay them the pot and mark
-        # settled. There is no confirmation gate — settlement runs off the game
-        # result alone (Confirm is a separate system). If the score isn't
-        # readable yet, leave it accepted and retry next tick. Payout is
-        # idempotent on the wager ref, so a retry can't double-pay.
+        # Auto-settle: once the FINAL score gives a winner, pay them the pot and
+        # mark settled. No confirmation gate — settlement runs off the result
+        # alone (Confirm is a separate system). Payout is idempotent on the
+        # wager ref, so a retry can't double-pay.
         if outcome in ("proposer", "acceptor"):
             wager.winner_user_id = _outcome_winner_id(wager, outcome)
             payout(account, wager.winner_user_id, wager.amount_cents * 2, _ref(wager.id))
@@ -797,6 +836,18 @@ def settle_one(wager):
             db.session.commit()
             _post_completed_activity(wager)
             _notify_settled(wager)
+            return wager
+        # Final but the score is unreadable (data gap). Give the feed a grace
+        # window (_likely_over), then void so the stakes aren't stranded forever.
+        if _likely_over(wager):
+            _void_refund(wager, account, "The result couldn't be read — stakes returned")
+        return wager
+
+    # Never reported final but it's long past the scheduled start — the feed
+    # abandoned it (suspended / postponed). Void and return both stakes rather
+    # than leave them held indefinitely.
+    if _likely_over(wager):
+        _void_refund(wager, account, "The game didn't finish — stakes returned")
     return wager
 
 
@@ -902,6 +953,7 @@ def confirm(wager, user_id):
     Allowed once the event is over: from `completed`, or directly from
     `accepted` once the event has started. A known *future* start is blocked.
     """
+    _lock(wager)
     if not wager.involves(user_id):
         raise WagerError("this wager isn't yours to settle")
     if wager.status == COMPLETED:
@@ -910,6 +962,8 @@ def confirm(wager, user_id):
         pass
     elif wager.status == ACCEPTED:
         raise WagerError("you can confirm the result once the event has started")
+    elif wager.status == OPEN:
+        raise WagerError("this bet hasn't been accepted yet")
     else:
         raise WagerError("this wager has already been settled")
 
@@ -945,7 +999,22 @@ def confirm(wager, user_id):
 
 
 def settle_due(refresh=True) -> int:
-    """Advance every accepted wager whose event has finished. Returns the count moved."""
+    """Advance every accepted wager whose event has finished. Returns the count moved.
+
+    Single-runner across service instances via a Postgres advisory lock — if
+    another instance is already mid-tick, this call is a no-op (returns 0), so
+    two ticks can never process the same wager at once.
+    """
+    if not db.session.execute(text("SELECT pg_try_advisory_lock(:k)"), {"k": SETTLE_LOCK_KEY}).scalar():
+        return 0
+    try:
+        return _settle_due(refresh)
+    finally:
+        db.session.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": SETTLE_LOCK_KEY})
+        db.session.commit()
+
+
+def _settle_due(refresh=True) -> int:
     accepted = Wager.query.filter_by(status=ACCEPTED).all()
 
     if refresh:
@@ -977,6 +1046,9 @@ def settle_due(refresh=True) -> int:
     pending = Wager.query.filter(Wager.status == COMPLETED).all()
     for wager in pending:
         try:
+            _lock(wager)
+            if wager.status != COMPLETED:
+                continue
             account = _account(wager.league_id)
             winner = wager.winner_user_id
             if not winner:
@@ -1016,6 +1088,11 @@ def settle_due(refresh=True) -> int:
         if dt is None or now < dt:
             continue
         try:
+            # Re-read under a row lock: a concurrent accept/decline/cancel may
+            # have taken this offer between the query and now.
+            _lock(wager)
+            if wager.status != OPEN:
+                continue
             refund(_account(wager.league_id), wager.proposer_id, wager.amount_cents, _ref(wager.id))
             wager.status = CANCELLED
             db.session.commit()

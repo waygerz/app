@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import pytest
 
 from app.services import service_wagers as svc
@@ -229,6 +231,76 @@ def test_settle_due_keeps_open_offer_before_kickoff(app, calls):
     db.session.commit()
     svc.settle_due(refresh=False)
     assert w.status == OPEN
+
+
+def _past(hours):
+    return (datetime.utcnow() - timedelta(hours=hours)).isoformat() + "Z"
+
+
+def test_accept_rejects_after_kickoff(app, calls):
+    # You can't accept a bet once its game has started.
+    from app.extensions import db
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    w.start_time = _past(1)
+    db.session.commit()
+    with pytest.raises(svc.WagerError):
+        svc.accept(w, U2)
+    assert ("hold", U2, 5000) not in calls  # acceptor never charged
+
+
+def test_confirm_does_not_pay_off_a_live_score(app, calls, monkeypatch):
+    # Mid-game, the current leader must NOT be able to confirm and grab the pot.
+    from app.extensions import db
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    w.start_time = _past(1)
+    db.session.commit()
+    monkeypatch.setattr(svc, "get_event",
+                        lambda eid: {"status": "live", "home_score": 7, "away_score": 0})
+    with pytest.raises(svc.WagerError):
+        svc.confirm(w, U1)  # U1 (home) leads 7-0 but the game isn't final
+    assert not any(c[0] == "payout" for c in calls)
+    assert w.status == ACCEPTED
+
+
+def test_settle_ignores_live_game(app, calls, monkeypatch):
+    # A started-but-not-final game (well under the stale window) never settles.
+    from app.extensions import db
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    w.start_time = _past(1)
+    db.session.commit()
+    monkeypatch.setattr(svc, "get_event",
+                        lambda eid: {"status": "live", "home_score": 7, "away_score": 0})
+    svc.settle_one(w)
+    assert w.status == ACCEPTED
+    assert not any(c[0] == "payout" for c in calls)
+
+
+def test_settle_voids_final_with_unreadable_score(app, calls, monkeypatch):
+    # Final but no box score, past the stale window -> void and refund both.
+    from app.extensions import db
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    w.start_time = _past(svc.COMPLETE_AFTER_HOURS + 1)
+    db.session.commit()
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "final"})
+    svc.settle_one(w)
+    assert w.status == REFUNDED
+    assert ("refund", U1, 5000) in calls and ("refund", U2, 5000) in calls
+
+
+def test_settle_voids_abandoned_game(app, calls, monkeypatch):
+    # Never reported final and long past start (suspended/abandoned) -> void both.
+    from app.extensions import db
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    w.start_time = _past(svc.COMPLETE_AFTER_HOURS + 1)
+    db.session.commit()
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "live"})
+    svc.settle_one(w)
+    assert w.status == REFUNDED
+    assert ("refund", U1, 5000) in calls and ("refund", U2, 5000) in calls
 
 
 def test_only_winner_can_confirm(app, calls, monkeypatch):
