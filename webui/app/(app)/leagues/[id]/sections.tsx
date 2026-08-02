@@ -1986,6 +1986,20 @@ function MemberPicksDialog({
               </div>
             );
           })}
+
+          {/* Tie-breaker: their total-points guess for the week's last game,
+              plus how far off once it's final. */}
+          {!q.isError && member?.tiebreaker_total != null && (
+            <div className="mt-1 flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <div className="flex flex-col">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Tie-breaker · total points</span>
+                {member.tiebreaker_diff != null && (
+                  <span className="text-xs text-muted-foreground">off by {member.tiebreaker_diff}</span>
+                )}
+              </div>
+              <span className="text-lg font-bold tabular-nums text-foreground">{member.tiebreaker_total}</span>
+            </div>
+          )}
         </DialogBody>
       </DialogContent>
     </Dialog>
