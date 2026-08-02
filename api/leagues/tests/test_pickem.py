@@ -147,9 +147,14 @@ def test_grading_marks_correct_and_incorrect(client, auth_headers, app, monkeypa
         n = svc.grade_open_periods()
     assert n == 2
 
+    # DEBUG: fresh direct-DB read vs the get_picks read, to localise the failure.
+    with app.app_context():
+        from app.models.pick import Pick as _P
+        fresh = {p.event_id: p.correct for p in _P.query.filter_by(period_id=pid).all()}
+
     got = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks", headers=auth_headers(U1)).get_json()
     by_event = {p["event_id"]: p["correct"] for p in got["picks"]}
-    assert by_event == {"EVT1": True, "EVT2": False}
+    assert by_event == {"EVT1": True, "EVT2": False}, f"fresh_db={fresh} get_picks={by_event}"
 
 
 def test_grading_skips_non_final(client, auth_headers, app, monkeypatch):
