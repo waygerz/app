@@ -1365,12 +1365,13 @@ export function PickemThisWeek() {
         <>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 text-sm">
-              <Trophy className="size-4 shrink-0 text-primary" />
+              <Trophy className={cn('size-4 shrink-0', complete ? 'text-brand' : 'text-amber-500')} />
               <span className="font-semibold tabular-nums text-foreground">{picked} / {total}</span>
               <span className="text-muted-foreground">picked</span>
             </div>
+            {/* Amber while picks are outstanding, green once the full slate is in. */}
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${total ? (picked / total) * 100 : 0}%` }} />
+              <div className={cn('h-full rounded-full transition-all', complete ? 'bg-brand' : 'bg-amber-500')} style={{ width: `${total ? (picked / total) * 100 : 0}%` }} />
             </div>
           </div>
 
