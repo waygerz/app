@@ -84,8 +84,15 @@ class Config:
     ODDS_API_BASE = os.environ.get("ODDS_API_BASE", "https://api.the-odds-api.com/v4")
     ODDS_API_MARKETS = os.environ.get("ODDS_API_MARKETS", "h2h,spreads,totals")
     ODDS_API_REGIONS = os.environ.get("ODDS_API_REGIONS", "us")
-    ODDS_REFRESH_TTL = int(os.environ.get("ODDS_REFRESH_TTL", 43200))  # 12h per league
-    ODDS_LOOKAHEAD_HOURS = int(os.environ.get("ODDS_LOOKAHEAD_HOURS", 36))
+    # 6h per league: one /odds call per sport returns ~2-3 days of games, so the
+    # cost is unchanged by lookahead — only the refresh cadence spends credits.
+    # 6h catches newly-posted next-day lines within a few hours (was 12h, which
+    # left tomorrow's games showing "—" until the next cycle). ~2x the credits;
+    # well within the plan given typical usage (monitor via x-requests-remaining).
+    ODDS_REFRESH_TTL = int(os.environ.get("ODDS_REFRESH_TTL", 21600))
+    # Price games up to 2 days out (matches the "next 10 games" board). Free —
+    # the per-sport response already includes them; this only widens the match.
+    ODDS_LOOKAHEAD_HOURS = int(os.environ.get("ODDS_LOOKAHEAD_HOURS", 48))
     ODDS_QUOTA_FLOOR = int(os.environ.get("ODDS_QUOTA_FLOOR", 25))
     ODDS_TIMEOUT = int(os.environ.get("ODDS_TIMEOUT", 10))
     # Leagues/tours per ESPN sport (slug lists).
