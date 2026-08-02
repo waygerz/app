@@ -573,8 +573,8 @@ function BetDetailsDialog({
   const opp = group.opponents[0];
 
   const teamRow = (name: string, logo: string | null, score: number | null, lost: boolean) => (
-    <div className="flex items-center gap-3">
-      <TeamLogo src={logo} name={name} className="size-8 shrink-0 text-[10px] sm:size-8 sm:text-[10px]" />
+    <div className="flex items-center gap-3 py-2.5">
+      <TeamLogo src={logo} name={name} className="size-8 shrink-0 text-[10px] sm:size-8 sm:text-[10px]" framed />
       <span className={cn('min-w-0 flex-1 truncate text-base font-semibold', lost ? 'text-muted-foreground' : 'text-foreground')}>{name}</span>
       <span className={cn('text-lg font-bold tabular-nums', lost ? 'text-muted-foreground' : 'text-foreground')}>
         {started && score != null ? score : '–'}
@@ -585,19 +585,47 @@ function BetDetailsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{field ? (w.event_name || 'Matchup') : `${w.away_team} @ ${w.home_team}`}</DialogTitle>
-          <DialogDescription className="sr-only">Bet details</DialogDescription>
-        </DialogHeader>
-        <DialogBody className="flex flex-col gap-3">
+        <DialogTitle className="sr-only">{field ? (w.event_name || 'Matchup') : `${w.away_team} @ ${w.home_team}`}</DialogTitle>
+        <DialogDescription className="sr-only">Bet details</DialogDescription>
+
+        {/* opponent header — centered, large avatar; settled outcome sits here */}
+        <div className="flex flex-col items-center gap-2 text-center">
+          {opp && (
+            <UserAvatar userId={opp.id} name={opp.name} imageUrl={opp.avatar_key} className="size-16 shrink-0" fallbackClassName="text-xl" />
+          )}
+          <div>
+            <div className="text-lg font-semibold text-foreground">{opponentsLabel(group.opponents.map((o) => o.name))}</div>
+            <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {group.iAmProposer ? 'You challenged' : 'Challenged you'}
+            </div>
+          </div>
+          {settled ? (
+            <div className="flex flex-col items-center gap-1.5">
+              <div className={cn('text-2xl font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
+                <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
+              </div>
+              <Badge size="sm" appearance="light" variant={iWon ? 'success' : iLost ? 'destructive' : 'secondary'}>
+                {iWon ? 'Won' : iLost ? 'Lost' : 'Push'}
+              </Badge>
+            </div>
+          ) : (
+            wagerStatusBadge(w, me)
+          )}
+        </div>
+
+        <DialogBody className="mt-5 flex flex-col">
+          {field && w.event_name && (
+            <div className="border-t border-border pt-3 text-center text-sm font-semibold text-foreground">{w.event_name}</div>
+          )}
           {!field && (
-            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+            <div className="flex flex-col divide-y divide-border border-t border-border">
               {teamRow(ev?.away_team ?? w.away_team, ev?.away_logo ?? null, as, awayLost)}
               {teamRow(ev?.home_team ?? w.home_team, ev?.home_logo ?? null, hs, homeLost)}
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+          {/* pick + stake — borderless, split left/right */}
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
             <div className="min-w-0">
               <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Your pick · {betTypeLabel}</div>
               <div className="mt-0.5 truncate text-base font-bold text-foreground">{wagerPick(w, side)}</div>
@@ -605,30 +633,6 @@ function BetDetailsDialog({
             <div className="shrink-0 text-right">
               <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Stake</div>
               <div className="mt-0.5 text-base font-bold tabular-nums text-foreground"><StakeText cents={w.amount_cents} /></div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-            <div className="flex min-w-0 items-center gap-2.5">
-              {opp && <UserAvatar userId={opp.id} name={opp.name} imageUrl={opp.avatar_key} className="size-8 shrink-0" />}
-              <div className="min-w-0">
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {group.iAmProposer ? 'Challenged' : 'Offered by'}
-                </div>
-                <div className="truncate text-sm font-semibold text-foreground">{opponentsLabel(group.opponents.map((o) => o.name))}</div>
-              </div>
-            </div>
-            <div className="shrink-0 text-right">
-              {settled ? (
-                <>
-                  <div className={cn('text-base font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
-                    <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
-                  </div>
-                  <div className="text-xs text-muted-foreground">{iWon ? 'Won' : iLost ? 'Lost' : 'Push'}</div>
-                </>
-              ) : (
-                wagerStatusBadge(w, me)
-              )}
             </div>
           </div>
         </DialogBody>
