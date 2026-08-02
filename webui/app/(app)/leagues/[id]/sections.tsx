@@ -1283,6 +1283,136 @@ export function LeagueUpcomingGames() {
   );
 }
 
+// Human "time until" for the pick-lock countdown (e.g. "2d 4h left").
+function untilLabel(ms: number): string {
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${Math.max(1, mins)}m left`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ${mins % 60}m left`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ${hrs % 24}h left`;
+}
+
+// "This week" card for the Pick'em Overview aside: the current (open) week's
+// pick progress, the lock countdown, and a CTA into the Picks tab. Replaces the
+// head-to-head betting board, which pick'em leagues don't use. Self-gates to
+// pick'em; renders nothing on head-to-head leagues.
+export function PickemThisWeek() {
+  const lg = useLeague();
+  const sportLeagueIds = lg.sports.map((s) => s.sport_league_id);
+
+  const periodsQ = useQuery({ queryKey: ['periods', lg.id], queryFn: () => leaguesApi.periods(lg.id) });
+  const periods: LeaguePeriod[] = [...(periodsQ.data ?? [])].sort((a, b) => a.index - b.index);
+  // The open week if there is one, else the next upcoming week.
+  const period = periods.find((p) => p.status === 'open') ?? periods.find((p) => p.status === 'upcoming') ?? null;
+  const selectedId = period?.id ?? '';
+
+  // Same query keys as PickemPlay, so this shares the cache with the Picks tab.
+  const events = useQuery({
+    queryKey: ['period-events', lg.id, selectedId],
+    queryFn: () => fetchPeriodEvents(sportLeagueIds, period?.starts_at, period?.ends_at),
+    enabled: !!period && sportLeagueIds.length > 0,
+  });
+  const existing = useQuery({
+    queryKey: ['picks', lg.id, selectedId],
+    queryFn: () => leaguesApi.getPicks(lg.id, selectedId),
+    enabled: !!selectedId,
+  });
+
+  if (lg.league_type !== 'pickem') return null;
+  if (periodsQ.isLoading) {
+    return (
+      <Card className="gap-3 p-4">
+        <Skeleton className="h-4 w-24 rounded" />
+        <Skeleton className="h-16 rounded-lg" />
+      </Card>
+    );
+  }
+  if (!period) return null;
+
+  const evs = events.data ?? [];
+  const total = evs.length;
+  const graded = new Map((existing.data ?? []).map((p: PickRow) => [p.event_id, p]));
+  const picked = evs.filter((e) => !!graded.get(e.external_id)?.pick_side).length;
+
+  const startTimes = evs
+    .map((e) => e.start_time)
+    .filter((s): s is string => !!s)
+    .map((s) => new Date(s).getTime())
+    .filter((t) => !isNaN(t));
+  const firstStart = startTimes.length ? Math.min(...startTimes) : null;
+  const lockAt = firstStart !== null ? firstStart - 60 * 60 * 1000 : null;
+  const locked = lockAt !== null && Date.now() >= lockAt;
+  const open = period.status === 'open';
+  const complete = total > 0 && picked >= total;
+
+  const statusPill = !open
+    ? { label: 'Upcoming', cls: 'bg-secondary text-secondary-foreground' }
+    : locked
+      ? { label: 'Locked', cls: 'bg-muted text-muted-foreground' }
+      : { label: 'Open', cls: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-500' };
+
+  return (
+    <Card className="gap-3 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">This week</span>
+        <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', statusPill.cls)}>{statusPill.label}</span>
+      </div>
+
+      <div className="text-lg font-bold text-foreground">{period.label}</div>
+
+      {open && total > 0 ? (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 text-sm">
+              <Trophy className="size-4 shrink-0 text-primary" />
+              <span className="font-semibold tabular-nums text-foreground">{picked} / {total}</span>
+              <span className="text-muted-foreground">picked</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${total ? (picked / total) * 100 : 0}%` }} />
+            </div>
+          </div>
+
+          {lockAt !== null && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Clock className="size-3.5 shrink-0" />
+              {locked ? (
+                <span>Picks are locked</span>
+              ) : (
+                <span>Locks {formatStart(new Date(lockAt).toISOString())} · {untilLabel(lockAt - Date.now())}</span>
+              )}
+            </div>
+          )}
+
+          {!locked ? (
+            <Button asChild className="w-full">
+              <Link href={`/leagues/${lg.id}/play`}>{complete ? 'Edit picks' : picked > 0 ? 'Finish your picks' : 'Make your picks'}</Link>
+            </Button>
+          ) : (
+            <Button asChild variant="outline" className="w-full">
+              <Link href={`/leagues/${lg.id}/play`}>View picks</Link>
+            </Button>
+          )}
+        </>
+      ) : open ? (
+        // Open but no games loaded for the week yet.
+        <p className="text-sm text-muted-foreground">This week&apos;s slate isn&apos;t posted yet.</p>
+      ) : (
+        // Upcoming week — not open for picks yet.
+        <>
+          <p className="text-sm text-muted-foreground">
+            {period.starts_at ? `Picks open ${formatStart(period.starts_at)}.` : 'Picks open when the week starts.'}
+          </p>
+          <Button asChild variant="outline" className="w-full">
+            <Link href={`/leagues/${lg.id}/play`}>View schedule</Link>
+          </Button>
+        </>
+      )}
+    </Card>
+  );
+}
+
 // One sport's upcoming schedule; tap a game to propose a wager.
 export function LeagueSportSchedule() {
   const lg = useLeague();

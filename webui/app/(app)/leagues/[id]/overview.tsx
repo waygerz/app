@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext';
 import { commentsApi } from '@/lib/comments';
 import { leaguesApi, type LeagueDetail } from '@/lib/leagues';
-import { LeagueUpcomingGames } from './sections';
+import { LeagueUpcomingGames, PickemThisWeek } from './sections';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -178,8 +178,10 @@ export function LeagueOverview() {
           </Card>
         )}
 
-        {/* Upcoming games — tap-to-bet cards; desktop-only (aside stacks on mobile). */}
+        {/* Head-to-head: tap-to-bet board (desktop-only). Pick'em: the "this
+            week" pick-progress card. Each self-gates by league type. */}
         <LeagueUpcomingGames />
+        <PickemThisWeek />
 
         {!isCommish && (
           <AlertDialog open={leaveOpen} onOpenChange={setLeaveOpen}>
