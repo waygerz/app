@@ -10,6 +10,7 @@ import {
   Megaphone,
   MessageCircle,
   PartyPopper,
+  Swords,
   Trash2,
   Trophy,
   UserPlus,
@@ -30,13 +31,18 @@ import {
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 
-// System (author-less) activity posts get a per-event-type icon + tinted chip,
-// mirroring the color language of the leagues home and landing page.
-const EVENT_STYLE: Record<string, { icon: LucideIcon; chip: string }> = {
+// System activity posts get a per-event-type icon + tinted chip, mirroring the
+// color language of the leagues home and landing page. Entries with a `label`
+// render as a system line (icon + label, no avatar/matchup) even when the post
+// carries an author_id — used for head-to-head bet events (Swords = H2H).
+const EVENT_STYLE: Record<string, { icon: LucideIcon; chip: string; label?: string }> = {
   league_created: { icon: PartyPopper, chip: 'bg-brand/15 text-brand' },
   member_joined: { icon: UserPlus, chip: 'bg-sky-500/15 text-sky-600 dark:text-sky-400' },
   period_opened: { icon: CalendarClock, chip: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
   period_final: { icon: Trophy, chip: 'bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white' },
+  wager_accepted: { icon: Swords, chip: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', label: 'Bet accepted' },
+  wager_settled: { icon: Swords, chip: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', label: 'Bet settled' },
+  wager_completed: { icon: Swords, chip: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', label: 'Bet result' },
 };
 const DEFAULT_EVENT = { icon: Activity, chip: 'bg-muted text-muted-foreground' };
 
@@ -80,19 +86,28 @@ function PostHeader({
   const isWinner = item.event_type === 'period_final';
   const isAnnouncement = item.kind === 'announcement';
 
+  // A labelled event (bet events) reads as a system line — the icon + a short
+  // label, no avatar and no matchup title — even though it carries an author_id
+  // (the proposer). Everything else keeps the avatar + title behaviour.
+  const asSystem = !item.author_id || !!ev.label;
+
   // Activity posts embed the actor in the title ("Anky took … against Johnny"),
   // so the title is the heading and the author's avatar sits beside it.
   // Announcements/chat lead with the poster's name, with any title below.
   const heading =
-    item.kind === 'activity'
+    ev.label ??
+    (item.kind === 'activity'
       ? item.title ?? item.author_name ?? 'Update'
-      : item.author_name ?? item.title ?? 'Update';
+      : item.author_name ?? item.title ?? 'Update');
+  // The distinct sub-title (system posts) is suppressed for labelled events so
+  // the matchup name doesn't reappear under the label.
+  const showSubtitle = !ev.label && !!item.title && item.title !== heading;
 
   return (
     <div className={cn('flex flex-col gap-4 p-4 sm:p-5', className)}>
       {/* Heading — avatar + author name over the date (post4 style). */}
       <div className="flex items-center gap-3">
-        {item.author_id ? (
+        {!asSystem && item.author_id ? (
           <UserAvatar
             userId={item.author_id}
             name={item.author_name ?? 'Member'}
@@ -117,7 +132,7 @@ function PostHeader({
       </div>
 
       {/* Body — a distinct title (system posts) then the text. */}
-      {item.title && item.title !== heading && (
+      {showSubtitle && (
         <div className="text-base font-semibold text-foreground">{item.title}</div>
       )}
       {item.body && (
