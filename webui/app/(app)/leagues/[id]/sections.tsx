@@ -1227,6 +1227,9 @@ export function LeagueUpcomingGames() {
   const teamEvs = shown.filter((e) => !isFieldSport(e.sport));
   const fieldEvs = shown.filter((e) => isFieldSport(e.sport));
 
+  // Pick'em leagues don't place head-to-head bets, so the tap-to-bet board is
+  // hidden there entirely.
+  if (lg.league_type === 'pickem') return null;
   if (lg.sports.length === 0) return null;
 
   return (

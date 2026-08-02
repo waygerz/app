@@ -17,17 +17,30 @@ import {
   Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { UserPlus } from 'lucide-react';
+import { Swords, Trophy, UserPlus } from 'lucide-react';
 import { shareLink } from '@/lib/share';
 import { inviteUrl } from '@/lib/invites';
 import { LeagueProvider } from './league-context';
 
 const PLAY_TAB: Record<LeagueType, string> = {
   head_to_head: 'My Bets',
-  pickem: 'Picks',
+  pickem: 'My Picks',
 };
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// The league-type chip: an icon (always) + the label (hidden on mobile when
+// `responsive`, to save room in the header). Swords = head-to-head, Trophy =
+// pick'em — matching the dashboard league cards.
+function LeagueTypeBadge({ type, responsive = false }: { type: LeagueType; responsive?: boolean }) {
+  const Icon = type === 'pickem' ? Trophy : Swords;
+  return (
+    <Badge size="sm" appearance="light">
+      <Icon className="size-3.5" />
+      <span className={responsive ? 'hidden sm:inline' : undefined}>{leagueTypeLabel(type)}</span>
+    </Badge>
+  );
+}
 
 export default function LeagueLayout({ children }: { children: ReactNode }) {
   const { id = '' } = useParams<{ id: string }>();
@@ -67,15 +80,15 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   const isMoney = lg.league_type !== 'pickem';
   const commish = lg.members.find((m) => m.role === 'commissioner');
 
-  // Overview, then Sports (money-only), the reference tabs Results → Standings,
-  // then the play tab (My Bets / Picks) sitting just before Wallet (money-only),
-  // then Members and admin. Pick'em drops Sports/Wallet.
+  // Overview, then Sports (money-only), then the play tab (My Bets / My Picks)
+  // up front, followed by Results → Standings, Wallet (money-only), Members and
+  // admin. Pick'em drops Sports/Wallet, so its play tab sits right after Overview.
   const tabs = [
     { to: `/leagues/${id}`, label: 'Overview', end: true },
     ...(isMoney ? [{ to: `/leagues/${id}/sports`, label: 'Sports', end: false }] : []),
+    { to: `/leagues/${id}/play`, label: PLAY_TAB[lg.league_type], end: false },
     { to: `/leagues/${id}/results`, label: 'Results', end: false },
     { to: `/leagues/${id}/standings`, label: 'Standings', end: false },
-    { to: `/leagues/${id}/play`, label: PLAY_TAB[lg.league_type], end: false },
     ...(isMoney ? [{ to: `/leagues/${id}/activity`, label: 'Wallet', end: false }] : []),
     { to: `/leagues/${id}/members`, label: 'Members', end: false },
     ...(isCommish ? [{ to: `/leagues/${id}/manage`, label: 'Manage', end: false }] : []),
@@ -116,7 +129,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-bold text-foreground sm:text-2xl">{lg.name}</h1>
-              <Badge size="sm" appearance="light">{leagueTypeLabel(lg.league_type)}</Badge>
+              <LeagueTypeBadge type={lg.league_type} responsive />
               {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
             </div>
             {isMoney && (
@@ -154,7 +167,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
             <div className="flex flex-col items-center gap-1.5 text-center">
               <h2 className="text-lg font-bold text-foreground">{lg.name}</h2>
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <Badge size="sm" appearance="light">{leagueTypeLabel(lg.league_type)}</Badge>
+                <LeagueTypeBadge type={lg.league_type} />
                 {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
               </div>
               <p className="text-sm text-muted-foreground">
