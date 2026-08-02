@@ -684,7 +684,8 @@ export function WagerBetCard({
 
   // The viewer's pick, kept short enough for the cell.
   const shortPick = () => {
-    if (isTotal) return wagerPick(w, side); // "Over 8.5"
+    // Totals are abbreviated to O/U for the compact chip ("O 8.5" / "U 8.5").
+    if (isTotal) return `${side === 'over' ? 'O' : 'U'} ${w.line ?? ''}`.trim();
     const abbr = side === 'home' ? homeAbbr : awayAbbr;
     if (w.bet_type === 'spread' && w.line != null) {
       const ln = side === w.proposer_side ? w.line : -w.line;
