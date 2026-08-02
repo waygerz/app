@@ -45,6 +45,17 @@ def test_accept_posts_league_feed(app, calls, monkeypatch):
     assert payload["upsert"] is True
 
 
+def test_accept_zero_stake_feed_reads_bet_a_beer(app, calls, monkeypatch):
+    # A $0 bragging-rights bet reads as a beer bet, never "for $0".
+    feed_posts = []
+    monkeypatch.setattr(svc, "post_league_activity", lambda lid, p: feed_posts.append((lid, p)))
+    monkeypatch.setattr(svc, "resolve_users", lambda ids: {U1: "Alice", U2: "Bob"})
+    w = svc.propose(U1, LG, "ev1", "home", 0, U2)  # Alice bets a beer vs Bob
+    svc.accept(w, U2)
+    _, payload = feed_posts[0]
+    assert payload["body"] == "Alice bet a beer on Home against Bob"
+
+
 def test_accept_aggregates_multiple_opponents(app, calls, monkeypatch):
     feed_posts = []
     monkeypatch.setattr(svc, "post_league_activity", lambda lid, p: feed_posts.append((lid, p)))
@@ -77,6 +88,7 @@ def test_format_stake_strips_whole_dollars():
     assert svc._format_stake(1000) == "$10"
     assert svc._format_stake(1050) == "$10.50"
     assert svc._format_stake(500) == "$5"
+    assert svc._format_stake(0) == "a beer"
 
 
 def test_propose_requires_comembership(app, calls, monkeypatch):

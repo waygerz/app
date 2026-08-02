@@ -452,7 +452,10 @@ def _format_credits(amount_cents):
 
 
 def _format_stake(amount_cents):
-    """Dollar-style stake for the feed title: $10, or $10.50 when not whole."""
+    """Stake as text: $10, $10.50 when not whole, or "a beer" for a $0
+    bragging-rights wager (loser buys the beer)."""
+    if amount_cents == 0:
+        return "a beer"
     dollars = amount_cents / 100
     return f"${dollars:.0f}" if amount_cents % 100 == 0 else f"${dollars:.2f}"
 
@@ -491,10 +494,17 @@ def _post_accepted_activity(wager):
     connector = "against" if len(opponents) == 1 else "over"
     # Short heading = the matchup; the pick sentence goes in the body, which
     # wraps — so a bet against many opponents doesn't blow out the title line.
-    sentence = (
-        f"{proposer} took {team} for {_format_stake(wager.amount_cents)} "
-        f"{connector} {_opponent_phrase(opponents)}"
-    )
+    if wager.amount_cents == 0:
+        # A $0 bragging-rights wager reads as a beer bet, not "for $0".
+        sentence = (
+            f"{proposer} bet a beer on {team} "
+            f"{connector} {_opponent_phrase(opponents)}"
+        )
+    else:
+        sentence = (
+            f"{proposer} took {team} for {_format_stake(wager.amount_cents)} "
+            f"{connector} {_opponent_phrase(opponents)}"
+        )
     post_league_activity(wager.league_id, {
         "event_type": "wager_accepted",
         "author_id": wager.proposer_id,
