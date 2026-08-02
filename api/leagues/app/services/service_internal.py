@@ -7,7 +7,9 @@ from app.models.member import ACTIVE, LeagueMember
 from app.models.sport import LeagueSport
 from app.models import feed as feed_model
 from app.models.feed import LeagueFeed
-from app.services.service_leagues import add_feed, current_period, grade_open_periods, rollover_periods
+from app.services.service_leagues import (
+    add_feed, current_period, grade_open_periods, rollover_periods, _reannounce_winners,
+)
 
 
 def are_comembers():
@@ -100,9 +102,15 @@ def member_access():
 
 def tick():
     """Grade Pick'em picks and roll league periods. Called by the scheduler service."""
+    graded = grade_open_periods()
+    rolled = rollover_periods()
+    # After grading + rollover, fill in the winner on any period that finished
+    # grading late (its period_final post was written generic).
+    reannounced = _reannounce_winners()
     return {
-        "picks_graded": grade_open_periods(),
-        "periods_rolled": rollover_periods(),
+        "picks_graded": graded,
+        "periods_rolled": rolled,
+        "winners_reannounced": reannounced,
     }, 200
 
 

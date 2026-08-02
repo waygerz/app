@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timedelta
 
 from app.extensions import db
 from tests.conftest import API_PREFIX
@@ -218,3 +219,78 @@ def test_money_league_standings_shape(client, auth_headers, monkeypatch):
     assert row["balance_cents"] == 120000
     assert row["net_cents"] == 20000  # 120000 - 100000 starting
     assert row["wins"] == 3 and row["losses"] == 1
+
+
+def test_pick_locked_after_kickoff(client, auth_headers, monkeypatch):
+    # A pick for a game that has already started must be rejected server-side
+    # (the webui hides it, but the API is the authority — else you could pick a
+    # game whose result you already know).
+    from app.services import service_leagues as svc
+
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
+    lid, pid = d["id"], _period_id(d)
+    past = (datetime.utcnow() - timedelta(hours=1)).isoformat() + "Z"
+    monkeypatch.setattr(svc, "get_event",
+                        lambda eid: {"status": "live", "start_time": past, "winner_side": None})
+    r = client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+                   json={"picks": [{"event_id": "EVT1", "side": "home"}]},
+                   headers=auth_headers(U1))
+    assert r.status_code == 200
+    got = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+                     headers=auth_headers(U1)).get_json()
+    assert got["picks"] == []  # the locked pick was not recorded
+
+
+def test_grading_marks_tie_as_not_correct(client, auth_headers, app, monkeypatch):
+    # A final tie (no winner side) must grade — not strand the period ungraded.
+    from app.services import service_leagues as svc
+
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
+    lid, pid = d["id"], _period_id(d)
+    client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+               json={"picks": [{"event_id": "EVT1", "side": "home"}]},
+               headers=auth_headers(U1))
+    monkeypatch.setattr(svc, "get_event",
+                        lambda eid: {"status": "final", "winner_side": None})
+    with app.app_context():
+        assert svc.grade_open_periods() == 1
+    got = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+                     headers=auth_headers(U1)).get_json()
+    assert got["picks"][0]["correct"] is False
+
+
+def test_grading_marks_cancelled_as_not_correct(client, auth_headers, app, monkeypatch):
+    from app.services import service_leagues as svc
+
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
+    lid, pid = d["id"], _period_id(d)
+    client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+               json={"picks": [{"event_id": "EVT1", "side": "home"}]},
+               headers=auth_headers(U1))
+    monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "cancelled"})
+    with app.app_context():
+        assert svc.grade_open_periods() == 1
+    got = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+                     headers=auth_headers(U1)).get_json()
+    assert got["picks"][0]["correct"] is False
+
+
+def test_member_picks_hidden_when_start_unknown(client, auth_headers):
+    # Fail closed: a member can't see another member's picks when we can't prove
+    # the lock has passed (no readable start time) — else the slate leaks early.
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    code = d["invite_code"]
+    d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
+    lid, pid = d["id"], _period_id(d)
+    u2, u3 = str(uuid.uuid4()), str(uuid.uuid4())
+    client.post(f"/v1/gameplay/leagues/c/{code}/act", json={"action": "join"}, headers=auth_headers(u2))
+    client.post(f"/v1/gameplay/leagues/c/{code}/act", json={"action": "join"}, headers=auth_headers(u3))
+    client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+               json={"picks": [{"event_id": "EVT1", "side": "home"}]},
+               headers=auth_headers(u2))
+    r = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/members/{u2}/picks",
+                   headers=auth_headers(u3))
+    assert r.status_code == 403

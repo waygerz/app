@@ -317,11 +317,12 @@ def _prebuild_periods(league):
         p = existing.get(label)
         if p is None:
             max_idx += 1
-            db.session.add(LeaguePeriod(
+            p = LeaguePeriod(
                 league_id=league.id, index=max_idx, label=label,
                 starts_at=start, ends_at=end, status=period_model.UPCOMING,
-            ))
-            existing[label] = p
+            )
+            db.session.add(p)
+            existing[label] = p  # was `= None`, so a repeated label re-created it
         elif p.status == period_model.UPCOMING:
             p.starts_at, p.ends_at = start, end
     return len(kept)
@@ -374,6 +375,17 @@ def grant_starting_balance(league, user_id):
 
 
 # ---- Pick'em grading ------------------------------------------------------
+# Terminal event states that will never produce a winner. Picks on such games
+# are graded False (no one scored) so the period doesn't strand forever with
+# ungraded picks — which would also block the winner announcement.
+VOID_EVENT_STATUSES = {"cancelled", "canceled", "postponed", "abandoned"}
+
+# Fallback body for a period_final post written before every game was graded.
+# `_reannounce_winners` later replaces it with the "🏆 winner" line once grading
+# finishes (a late/postponed game otherwise leaves the winner unannounced).
+GENERIC_FINAL_BODY = "Standings are locked for this period."
+
+
 def grade_period(period) -> int:
     picks = Pick.query.filter_by(period_id=period.id, correct=None).all()
     graded = 0
@@ -382,12 +394,20 @@ def grade_period(period) -> int:
             event = get_event(pick.event_id)
             if not event:
                 continue
-            if event.get("status") != period_model.FINAL:
-                continue
-            winner = event.get("winner_side")
-            if winner not in (HOME, AWAY):
-                continue
-            pick.correct = (pick.pick_side == winner)
+            status = event.get("status")
+            if status == period_model.FINAL:
+                winner = event.get("winner_side")
+                if winner in (HOME, AWAY):
+                    pick.correct = (pick.pick_side == winner)
+                else:
+                    # A tie / no-winner final: nobody scored this game. Grade it
+                    # False for everyone so it resolves instead of stranding.
+                    pick.correct = False
+            elif status in VOID_EVENT_STATUSES:
+                # Cancelled / postponed: the game won't produce a result.
+                pick.correct = False
+            else:
+                continue  # not terminal yet — try again next tick
             db.session.commit()
             graded += 1
         except Exception as exc:  # noqa: BLE001
@@ -442,8 +462,8 @@ def rollover_periods() -> int:
         p.status = FINAL
         # Grading runs before rollover in the same tick, so the winner is
         # normally known here; if anything is still ungraded we stay generic
-        # rather than announce a wrong winner.
-        body = _period_final_body(league.id, p) or "Standings are locked for this period."
+        # rather than announce a wrong winner (filled in later by re-announce).
+        body = _period_final_body(league.id, p) or GENERIC_FINAL_BODY
         _rollover_feed(league.id, "period_final", f"{p.label} is final",
                        body, dedup_key=f"period_final:{p.id}")
         if league.period_type == WEEKLY and league.status == L_ACTIVE:
@@ -470,6 +490,33 @@ def rollover_periods() -> int:
         db.session.commit()
         rolled += 1
     return rolled
+
+
+def _reannounce_winners() -> int:
+    """Fill in the '🏆 winner' line on any period_final post that was written
+    generic because games were still ungraded (a late / postponed game). Updates
+    the existing post in place once every pick is graded and a winner is known."""
+    updated = 0
+    stale = LeagueFeed.query.filter_by(
+        event_type="period_final", body=GENERIC_FINAL_BODY,
+    ).all()
+    for item in stale:
+        key = item.dedup_key or ""
+        if not key.startswith("period_final:"):
+            continue
+        period = db.session.get(LeaguePeriod, key.split(":", 1)[1])
+        if not period:
+            continue
+        try:
+            body = _period_final_body(period.league_id, period)
+        except Exception as exc:  # noqa: BLE001 — a feed blurb must never break the tick
+            print(f"[winner] re-announce failed for period {period.id}: {exc}", flush=True)
+            continue
+        if body and body != GENERIC_FINAL_BODY:
+            item.body = body
+            db.session.commit()
+            updated += 1
+    return updated
 
 
 def regenerate_periods(league_id, me):
@@ -950,10 +997,30 @@ def submit_picks(league_id, period_id, me, data):
         row.event_id: row
         for row in Pick.query.filter_by(period_id=period_id, user_id=me).all()
     }
+
+    # Server-side lock: a pick can't be set or changed once its game has kicked
+    # off — otherwise a member could pick (or re-pick) a game whose result they
+    # already know. Look up start times for the submitted events and skip any
+    # that have started, so resubmitting the full slate still updates the games
+    # that are still open. (The webui hides these; the server is the authority.)
+    now = datetime.utcnow()
+    started = {}
+    for event_id in {e for e, _, _ in cleaned}:
+        try:
+            ev = get_event(event_id)
+        except Exception:  # noqa: BLE001
+            ev = None
+        start = _parse_dt((ev or {}).get("start_time"))
+        started[event_id] = bool(start) and now >= start
+
     for event_id, side, tb_val in cleaned:
+        if started.get(event_id):
+            continue  # locked — the game is already underway
         row = existing.get(event_id)
         if row:
-            row.pick_side = side
+            if row.pick_side != side:
+                row.pick_side = side
+                row.correct = None  # a changed pick must be re-graded
             if tb_val is not None:
                 row.tiebreaker_total = tb_val
         else:
@@ -1058,7 +1125,9 @@ def standings(league_id, me):
         }
         for m in members
     ]
-    rows.sort(key=lambda r: r["wins"], reverse=True)
+    # Rank by wins, then fewest losses, then name — so a tidier record outranks
+    # a more-losses one at the same win count (was wins-only, arbitrary ties).
+    rows.sort(key=lambda r: (-r["wins"], r["losses"], r["display_name"].lower()))
     return {"standings": rows, "period_id": period.id if period else None}, 200
 
 
@@ -1274,14 +1343,19 @@ def member_picks(league_id, period_id, user_id, me):
         except Exception:  # noqa: BLE001
             events[p.event_id] = None
 
-    if user_id != me and league.commissioner_id != me:
+    if picks and user_id != me and league.commissioner_id != me:
         starts = [
             _parse_dt((ev or {}).get("start_time"))
             for ev in events.values()
             if (ev or {}).get("start_time")
         ]
         starts = [s for s in starts if s]
-        if starts and datetime.utcnow() < min(starts) - timedelta(hours=1):
+        # Fail CLOSED: reveal a member's picks only once we can PROVE the lock
+        # has passed (an hour before the first game). If no start time is
+        # readable (missing data / ingestor error), keep them hidden rather than
+        # leaking the slate early.
+        revealed = bool(starts) and datetime.utcnow() >= min(starts) - timedelta(hours=1)
+        if not revealed:
             return {"error": "picks are hidden until an hour before the first game"}, 403
 
     out = []
@@ -1529,8 +1603,10 @@ def advance_period(league_id, me):
         return {"error": "no open period to advance"}, 400
 
     period.status = period_model.FINAL
+    body = _period_final_body(league_id, period) or GENERIC_FINAL_BODY
     add_feed(league_id, feed_model.ACTIVITY, event_type="period_final",
-             title=f"{period.label} is final", body="Standings are locked for this period.")
+             title=f"{period.label} is final", body=body,
+             dedup_key=f"period_final:{period.id}")
     if league.period_type == "weekly":
         tz = _league_zone(league)
         if period.ends_at:
