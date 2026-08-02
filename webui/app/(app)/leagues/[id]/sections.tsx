@@ -717,7 +717,7 @@ export function WagerBetCard({
   // A single small team logo (away) then "AWAY sc · HOME sc" as text — kept
   // compact to match the ledger. TeamLogo bakes sm:size-14 / sm:text-base, so
   // the sm: variants must be overridden too or the logo balloons on desktop.
-  const logoCls = 'size-5 sm:size-5 shrink-0 text-[9px] sm:text-[9px]';
+  const logoCls = 'size-6 sm:size-6 shrink-0 text-[9px] sm:text-[9px]';
   const teamTxt = (r: (typeof rows)[number]) =>
     `${r.abbr}${started && r.score != null ? ` ${r.score}` : ''}`;
   // Single opponent's name opens their profile (head-to-head record); the pick
@@ -742,7 +742,7 @@ export function WagerBetCard({
             ) : (
               <>
                 <span className="flex min-w-0 shrink items-center gap-2 truncate">
-                  <TeamLogo src={rows[0].logo} name={rows[0].abbr} className={logoCls} />
+                  <TeamLogo src={rows[0].logo} name={rows[0].abbr} className={logoCls} framed />
                   <span className={cn('tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[0])}</span>
                   <span className="font-medium text-muted-foreground/60">·</span>
                   <span className={cn('tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[1])}</span>

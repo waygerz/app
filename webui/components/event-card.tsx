@@ -37,10 +37,14 @@ export function TeamLogo({
   src,
   name,
   className,
+  framed,
 }: {
   src?: string | null;
   name: string;
   className?: string;
+  /** Sit the logo on a light rounded chip so transparent/dark marks pop
+   *  against a dark row (used in the compact My Bets rows). */
+  framed?: boolean;
 }) {
   if (!src) {
     return (
@@ -58,7 +62,11 @@ export function TeamLogo({
     <img
       src={src}
       alt=""
-      className={cn('size-10 shrink-0 object-contain sm:size-14', className)}
+      className={cn(
+        'size-10 shrink-0 object-contain sm:size-14',
+        framed && 'rounded-full bg-white p-[12%] ring-1 ring-black/10',
+        className,
+      )}
       loading="lazy"
     />
   );
