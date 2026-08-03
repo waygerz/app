@@ -86,14 +86,14 @@ function useNotifPrefs() {
 // disclosures, together in one bordered box (switch on top, fine print below
 // the divider).
 function SmsCard({
-  desc,
+  title,
   checked,
   disabled,
   onChange,
   ariaLabel,
   variant,
 }: {
-  desc: string;
+  title: string;
   checked: boolean;
   disabled: boolean;
   onChange: (v: boolean) => void;
@@ -103,10 +103,7 @@ function SmsCard({
   return (
     <div className="overflow-hidden rounded-lg border border-border">
       <div className="flex items-center justify-between gap-4 bg-muted/20 p-3">
-        <div className="flex flex-col gap-0.5 pr-2">
-          <span className="text-sm font-medium text-foreground">Allow SMS</span>
-          <span className="text-xs text-muted-foreground">{desc}</span>
-        </div>
+        <span className="text-sm font-medium text-foreground">{title}</span>
         <Switch aria-label={ariaLabel} checked={checked} disabled={disabled} onCheckedChange={onChange} />
       </div>
       <div className="border-t border-border bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground">
@@ -143,8 +140,8 @@ export function NotificationsCard() {
 
       <SmsCard
         variant="notifications"
+        title="Allow SMS for Notifications"
         ariaLabel="Allow app notification SMS"
-        desc="Text me app notifications. Off = no app texts — the in-app bell still works, and sign-in codes are always sent."
         checked={!smsMuted}
         disabled={isPending}
         onChange={(v) => set({ opted_out: !v })}
@@ -215,8 +212,8 @@ export function PromotionsCard() {
 
       <SmsCard
         variant="promotions"
+        title="Allow SMS for Promotions"
         ariaLabel="Allow promotional SMS"
-        desc="Text me promotions and special offers."
         checked={promoSms}
         disabled={isPending}
         onChange={(v) => toggleChannel('marketing', 'sms', v)}
