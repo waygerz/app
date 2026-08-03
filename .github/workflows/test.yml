@@ -47,6 +47,9 @@ jobs:
       JWT_SECRET_KEY: test-jwt-secret
       SECRET_KEY: test-secret
       INTERNAL_TOKEN: test-internal-token
+      # No sibling services in CI — keep auth's OTP path from trying to reach the
+      # notifications host (it falls back to logging the revealed dev code).
+      INTERNAL_NOTIFICATIONS_URL: ""
 
     defaults:
       run:
