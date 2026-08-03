@@ -81,52 +81,52 @@ function useNotifPrefs() {
   return { data, isPending, isError, set, toggleChannel };
 }
 
-// The "Allow SMS" master row that heads each card.
-function AllowSmsRow({
+// The "Allow SMS" master switch plus its required carrier / toll-free
+// disclosures, together in one bordered box (switch on top, fine print below
+// the divider).
+function SmsCard({
   desc,
   checked,
   disabled,
   onChange,
   ariaLabel,
+  variant,
 }: {
   desc: string;
   checked: boolean;
   disabled: boolean;
   onChange: (v: boolean) => void;
   ariaLabel: string;
+  variant: 'notifications' | 'promotions';
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/20 p-3">
-      <div className="flex flex-col gap-0.5 pr-2">
-        <span className="text-sm font-medium text-foreground">Allow SMS</span>
-        <span className="text-xs text-muted-foreground">{desc}</span>
+    <div className="overflow-hidden rounded-lg border border-border">
+      <div className="flex items-center justify-between gap-4 bg-muted/20 p-3">
+        <div className="flex flex-col gap-0.5 pr-2">
+          <span className="text-sm font-medium text-foreground">Allow SMS</span>
+          <span className="text-xs text-muted-foreground">{desc}</span>
+        </div>
+        <Switch aria-label={ariaLabel} checked={checked} disabled={disabled} onCheckedChange={onChange} />
       </div>
-      <Switch aria-label={ariaLabel} checked={checked} disabled={disabled} onCheckedChange={onChange} />
-    </div>
-  );
-}
-
-// Required carrier / toll-free disclosures, shown under the Allow SMS switch.
-function SmsDisclaimer({ variant }: { variant: 'notifications' | 'promotions' }) {
-  return (
-    <div className="rounded-lg border border-border bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground">
-      <p>
-        <span className="font-medium text-foreground">Waygerz text messages.</span>{' '}
-        {variant === 'promotions'
-          ? 'Promotional texts are sent only while you allow them above.'
-          : 'You’ll only receive texts for the options you switch on.'}{' '}
-        Message frequency varies by your activity. Msg &amp; data rates may apply. Reply{' '}
-        <span className="font-medium text-foreground">STOP</span> to opt out or{' '}
-        <span className="font-medium text-foreground">HELP</span> for help. See our{' '}
-        <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
-        <LegalLink doc="privacy">Privacy Policy</LegalLink>.
-      </p>
-      {variant === 'notifications' && (
-        <p className="mt-1.5">
-          Account security texts (one-time sign-in codes) are always sent to verify it’s you and aren’t
-          controlled here.
+      <div className="border-t border-border bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground">
+        <p>
+          <span className="font-medium text-foreground">Waygerz text messages.</span>{' '}
+          {variant === 'promotions'
+            ? 'Promotional texts are sent only while you allow them above.'
+            : 'You’ll only receive texts for the options you switch on.'}{' '}
+          Message frequency varies by your activity. Msg &amp; data rates may apply. Reply{' '}
+          <span className="font-medium text-foreground">STOP</span> to opt out or{' '}
+          <span className="font-medium text-foreground">HELP</span> for help. See our{' '}
+          <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
+          <LegalLink doc="privacy">Privacy Policy</LegalLink>.
         </p>
-      )}
+        {variant === 'notifications' && (
+          <p className="mt-1.5">
+            Account security texts (one-time sign-in codes) are always sent to verify it’s you and aren’t
+            controlled here.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -146,14 +146,14 @@ export function NotificationsCard() {
         </p>
       </div>
 
-      <AllowSmsRow
+      <SmsCard
+        variant="notifications"
         ariaLabel="Allow app notification SMS"
         desc="Text me app notifications. Off = no app texts — the in-app bell still works, and sign-in codes are always sent."
         checked={!smsMuted}
         disabled={isPending}
         onChange={(v) => set({ opted_out: !v })}
       />
-      <SmsDisclaimer variant="notifications" />
 
       {isError ? (
         <p className="text-sm text-muted-foreground">Couldn’t load your preferences.</p>
@@ -218,14 +218,14 @@ export function PromotionsCard() {
         </p>
       </div>
 
-      <AllowSmsRow
+      <SmsCard
+        variant="promotions"
         ariaLabel="Allow promotional SMS"
         desc="Text me promotions and special offers."
         checked={promoSms}
         disabled={isPending}
         onChange={(v) => toggleChannel('marketing', 'sms', v)}
       />
-      <SmsDisclaimer variant="promotions" />
 
       {isError ? (
         <p className="text-sm text-muted-foreground">Couldn’t load your preferences.</p>
