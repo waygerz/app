@@ -51,12 +51,26 @@ def user(app):
         return {"id": str(u.id), "phone": phone, "pin": "1234"}
 
 
+# Redis is shared across tests (unlike the DB, which is recreated per test), so
+# any per-phone state left in it — the OTP itself, the send cooldown, verify
+# attempts, registration tickets, and sessions — would bleed into the next test.
+# Notably the send cooldown (otp:cooldown:{phone}) makes a second login with the
+# same phone return 429. Clear it all, before and after each test, to keep the
+# suite hermetic.
+_REDIS_TEST_PREFIXES = ("auth:sessions:*", "users:sessions:*", "otp:*", "regticket:*")
+
+
+def _flush_auth_redis():
+    redis = get_redis()
+    for prefix in _REDIS_TEST_PREFIXES:
+        for key in redis.scan_iter(prefix):
+            redis.delete(key)
+
+
 @pytest.fixture(autouse=True)
 def _clean_redis_sessions(app):
+    with app.app_context():
+        _flush_auth_redis()
     yield
     with app.app_context():
-        redis = get_redis()
-        for key in redis.scan_iter("auth:sessions:*"):
-            redis.delete(key)
-        for key in redis.scan_iter("users:sessions:*"):
-            redis.delete(key)
+        _flush_auth_redis()
