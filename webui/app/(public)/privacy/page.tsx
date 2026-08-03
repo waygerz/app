@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { PrivacyContent, LegalDraftNotice, LEGAL_EFFECTIVE } from '@/components/legal/legal-content';
+import { PrivacyContent, LEGAL_EFFECTIVE } from '@/components/legal/legal-content';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy · Waygerz',
@@ -17,7 +17,6 @@ export default function PrivacyPage() {
         <h1 className="text-2xl font-bold text-foreground">Privacy Policy</h1>
         <p className="text-sm text-muted-foreground">Effective {LEGAL_EFFECTIVE}</p>
       </header>
-      <LegalDraftNotice />
       <PrivacyContent />
       <footer className="mt-4 border-t border-border pt-4 text-xs text-muted-foreground">
         See also our{' '}

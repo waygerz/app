@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { TermsContent, PrivacyContent, LegalDraftNotice, LEGAL_EFFECTIVE } from './legal-content';
+import { TermsContent, PrivacyContent, LEGAL_EFFECTIVE } from './legal-content';
 
 type Doc = 'terms' | 'privacy';
 const TITLES: Record<Doc, string> = { terms: 'Terms of Service', privacy: 'Privacy Policy' };
@@ -31,7 +31,6 @@ export function LegalDialog({
         <DialogBody className="min-h-0 p-0">
           <ScrollArea className="h-[min(68vh,620px)]">
             <div className="flex flex-col gap-4 px-6 py-5">
-              <LegalDraftNotice />
               {doc === 'terms' ? <TermsContent /> : <PrivacyContent />}
             </div>
           </ScrollArea>

@@ -65,17 +65,6 @@ function PH({ children }: { children: ReactNode }) {
   );
 }
 
-/** A small banner both surfaces show while the copy is still a draft. Remove
- *  once counsel has reviewed and the placeholders are filled. */
-export function LegalDraftNotice() {
-  return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-      <strong className="font-semibold">Draft.</strong> This is placeholder copy for review — it is not
-      legal advice and hasn’t been reviewed by counsel. Highlighted fields still need to be filled in.
-    </div>
-  );
-}
-
 // ── Terms of Service ─────────────────────────────────────────────────────────
 
 export function TermsContent() {
