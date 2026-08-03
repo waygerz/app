@@ -106,8 +106,8 @@ export default function LoginPage() {
               {busy ? 'Sending…' : 'Send code'}
             </Button>
             <span className="text-center text-xs text-muted-foreground">
-              We’ll text you a one-time code to sign in or create your account. Message and data rates may
-              apply. See our <LegalLink doc="terms">Terms</LegalLink> and{' '}
+              We’ll text you a one-time code to verify your number and sign you in — this is how you log in to
+              Waygerz. Message and data rates may apply. See our <LegalLink doc="terms">Terms</LegalLink> and{' '}
               <LegalLink doc="privacy">Privacy Policy</LegalLink>.
             </span>
           </form>
@@ -162,6 +162,7 @@ export default function LoginPage() {
             </div>
 
             <div className="flex flex-col gap-3 rounded-lg border border-input p-3">
+              {/* Required: the legal agreement. */}
               <div className="flex items-start gap-2.5">
                 <Checkbox
                   id="consent-tos"
@@ -177,35 +178,49 @@ export default function LoginPage() {
                 </span>
               </div>
 
-              <div className="flex items-start gap-2.5">
-                <Checkbox
-                  id="consent-sms-tx"
-                  size="sm"
-                  checked={smsTx}
-                  onCheckedChange={(v) => setSmsTx(v === true)}
-                  className="mt-0.5"
-                />
-                <label htmlFor="consent-sms-tx" className="text-xs leading-relaxed text-muted-foreground">
-                  {SMS_TRANSACTIONAL_CONSENT}
-                </label>
-              </div>
+              {/* Optional, and clearly separate from the agreement above: text-alert
+                  opt-ins. Neither is required to create or use the account. */}
+              <div className="flex flex-col gap-3 border-t border-border pt-3">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-foreground">
+                    Text messages (optional)
+                  </span>
+                  <span className="text-[11px] leading-relaxed text-muted-foreground">
+                    These are separate from the agreement above — you can create and use your account
+                    without them, and sign-in codes are sent either way.
+                  </span>
+                </div>
 
-              <div className="flex items-start gap-2.5">
-                <Checkbox
-                  id="consent-sms-mkt"
-                  size="sm"
-                  checked={smsMkt}
-                  onCheckedChange={(v) => setSmsMkt(v === true)}
-                  className="mt-0.5"
-                />
-                <label htmlFor="consent-sms-mkt" className="text-xs leading-relaxed text-muted-foreground">
-                  {SMS_MARKETING_CONSENT} <span className="text-muted-foreground/60">(optional)</span>
-                </label>
+                <div className="flex items-start gap-2.5">
+                  <Checkbox
+                    id="consent-sms-tx"
+                    size="sm"
+                    checked={smsTx}
+                    onCheckedChange={(v) => setSmsTx(v === true)}
+                    className="mt-0.5"
+                  />
+                  <label htmlFor="consent-sms-tx" className="text-xs leading-relaxed text-muted-foreground">
+                    {SMS_TRANSACTIONAL_CONSENT} <span className="text-muted-foreground/60">(optional)</span>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <Checkbox
+                    id="consent-sms-mkt"
+                    size="sm"
+                    checked={smsMkt}
+                    onCheckedChange={(v) => setSmsMkt(v === true)}
+                    className="mt-0.5"
+                  />
+                  <label htmlFor="consent-sms-mkt" className="text-xs leading-relaxed text-muted-foreground">
+                    {SMS_MARKETING_CONSENT} <span className="text-muted-foreground/60">(optional)</span>
+                  </label>
+                </div>
               </div>
             </div>
 
             {error && <div className="text-sm text-destructive">{error}</div>}
-            <Button type="submit" disabled={busy || !displayName.trim() || !agreeTos || !smsTx}>
+            <Button type="submit" disabled={busy || !displayName.trim() || !agreeTos}>
               {busy ? 'Creating…' : 'Create account'}
             </Button>
           </form>

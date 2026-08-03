@@ -20,10 +20,15 @@ export const LEGAL_CONTACT = 'support@waygerz.com';
 
 // Consent copy shown at sign-up. Kept here so the wording stays in sync with the
 // SMS terms in the documents below and with what we record server-side.
+//
+// Per Twilio's A2P review, authentication is kept OUT of these opt-ins: one-time
+// sign-in codes are their own flow (described at the phone-entry step and the
+// account page), and both alert opt-ins below are optional — not a condition of
+// creating or using an account.
 export const SMS_TRANSACTIONAL_CONSENT =
-  'I agree to receive account and bet-related text messages from Waygerz (one-time sign-in codes, bet challenges, results, and reminders) at the number provided. Message and data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help.';
+  `I agree to receive account and bet-related text messages from Waygerz — bet challenges, results, and reminders — at the number provided. These alerts are optional and not a condition of using Waygerz. Message and data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help, or email ${LEGAL_CONTACT}.`;
 export const SMS_MARKETING_CONSENT =
-  'I agree to receive occasional promotional and marketing text messages from Waygerz. Consent is not a condition of using Waygerz. Message and data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help.';
+  `I agree to receive occasional promotional and marketing text messages from Waygerz. Consent is not a condition of using Waygerz. Message and data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help, or email ${LEGAL_CONTACT}.`;
 
 // ── shared typographic pieces ────────────────────────────────────────────────
 
