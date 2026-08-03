@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [contests, leagues]
+        service: [auth, contests, leagues]
 
     services:
       postgres:
@@ -29,11 +29,21 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 15
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
 
     env:
       # Tests run against a dedicated <service>_test schema (conftest asserts it).
       DATABASE_URL: postgresql+psycopg2://waygerz:waygerz@localhost:5432/waygerz
       DB_SCHEMA: ${{ matrix.service }}_test
+      REDIS_URL: redis://localhost:6379/0
       JWT_SECRET_KEY: test-jwt-secret
       SECRET_KEY: test-secret
       INTERNAL_TOKEN: test-internal-token

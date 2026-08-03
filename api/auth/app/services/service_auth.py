@@ -217,9 +217,10 @@ def otp_complete(data: dict):
         return {"error": "display_name is required"}, 400
 
     # Consent is captured at signup and recorded here. Agreeing to the Terms of
-    # Service + Privacy Policy is required; transactional SMS consent is required
-    # by the client, marketing SMS is optional. We enforce the legal agreement
-    # server-side so an account can't be created without it.
+    # Service + Privacy Policy is required; both SMS opt-ins (transactional alerts
+    # and marketing) are optional, per Twilio's A2P review — sign-in codes are a
+    # separate authentication flow, not one of these opt-ins. We enforce only the
+    # legal agreement server-side so an account can't be created without it.
     if not bool(data.get("tos_accepted")):
         return {"error": "You must agree to the Terms of Service and Privacy Policy"}, 400
     tos_version = (str(data.get("tos_version") or "")).strip()[:32] or None
@@ -241,8 +242,13 @@ def otp_complete(data: dict):
     db.session.add(user)
     db.session.commit()
 
-    # Reflect a marketing opt-in in the notifications service so /account shows it
-    # (and the user can later turn it off). Best-effort; never fails signup.
+    # Mirror both SMS choices into the notifications service so /account reflects
+    # what the user picked (and they can change it later). Transactional SMS
+    # defaults ON there, so a decline MUST be synced or we'd text a non-consenter;
+    # marketing defaults OFF, so we only need to sync an opt-in. Best-effort — a
+    # notifications outage never fails signup.
+    if not bool(data.get("sms_transactional")):
+        service_notifications.set_transactional_optin(user.id, False)
     if bool(data.get("sms_marketing")):
         service_notifications.set_marketing_optin(user.id, True)
 

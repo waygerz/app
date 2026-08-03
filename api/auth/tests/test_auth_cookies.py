@@ -108,6 +108,51 @@ def test_complete_requires_consent(client, device_uuid):
     assert res.status_code == 400
 
 
+def test_complete_allows_declining_sms(client, device_uuid, monkeypatch):
+    """Transactional/marketing SMS are optional: a user can sign up with both
+    declined, and declining transactional opts them out in notifications so
+    /account doesn't show SMS on (and we don't text a non-consenter)."""
+    from app.services import service_auth
+
+    calls: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        service_auth.service_notifications,
+        "set_transactional_optin",
+        lambda uid, enabled: calls.append(("tx", enabled)),
+    )
+    monkeypatch.setattr(
+        service_auth.service_notifications,
+        "set_marketing_optin",
+        lambda uid, enabled: calls.append(("mkt", enabled)),
+    )
+
+    phone_raw = "9042398487"  # distinct unregistered number
+    start = client.post("/v1/platform/auth/otp/start", json={"phone": phone_raw})
+    code = start.get_json()["dev_otp"]
+    verify = client.post(
+        "/v1/platform/auth/otp/verify",
+        json={"phone": phone_raw, "otp": code, "device_uuid": device_uuid},
+    )
+    ticket = verify.get_json()["ticket"]
+
+    res = client.post(
+        "/v1/platform/auth/otp/complete",
+        json={
+            "ticket": ticket,
+            "display_name": "OptOut",
+            "device_uuid": device_uuid,
+            "tos_accepted": True,
+            "sms_transactional": False,
+            "sms_marketing": False,
+        },
+    )
+    assert res.status_code == 201
+    # Transactional decline is synced as an opt-out; marketing (already off by
+    # default) needs no sync.
+    assert ("tx", False) in calls
+    assert not any(kind == "mkt" for kind, _ in calls)
+
+
 def test_me_accepts_access_cookie(client, user, device_uuid):
     res = _login(client, user, device_uuid)
     access_name, refresh_name = auth_cookie_names()
