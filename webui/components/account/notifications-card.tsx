@@ -12,6 +12,7 @@ import {
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { LegalLink } from '@/components/legal/legal-dialog';
+import { SMS_TRANSACTIONAL_CONSENT, SMS_MARKETING_CONSENT } from '@/components/legal/legal-content';
 import { cn } from '@/lib/utils';
 
 const PREFS_KEY = ['notification-prefs'] as const;
@@ -110,13 +111,7 @@ function SmsCard({
       </div>
       <div className="border-t border-border bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground">
         <p>
-          <span className="font-medium text-foreground">Waygerz text messages.</span>{' '}
-          {variant === 'promotions'
-            ? 'Promotional texts are sent only while you allow them above.'
-            : 'You’ll only receive texts for the options you switch on.'}{' '}
-          Message frequency varies by your activity. Msg &amp; data rates may apply. Reply{' '}
-          <span className="font-medium text-foreground">STOP</span> to opt out or{' '}
-          <span className="font-medium text-foreground">HELP</span> for help. See our{' '}
+          {variant === 'promotions' ? SMS_MARKETING_CONSENT : SMS_TRANSACTIONAL_CONSENT} See our{' '}
           <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
           <LegalLink doc="privacy">Privacy Policy</LegalLink>.
         </p>
