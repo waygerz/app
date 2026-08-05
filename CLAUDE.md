@@ -12,12 +12,12 @@ Images are built for `linux/arm64` and deployed to AWS ECS/ECR.
 > **Doc drift warning:** `AGENTS.md` describes an `app/<name>/` directory layout
 > and calls webui a "React + Vite SPA". It is stale. The backend services now
 > live under **`api/`** and webui is **Next.js SSR on `:3000`** at the repo root
-> (**`webui/`**). Trust `api/docker-compose.yml` and
+> (**`web/`**). Trust `api/docker-compose.yml` and
 > `api/gateway/conf.d/default.conf` over that doc.
 
 ## Layout
 
-Top-level split: **`api/`** (backend), **`webui/`** (Next.js), and **`mobile/`**
+Top-level split: **`api/`** (backend), **`web/`** (Next.js), and **`mobile/`**
 (Flutter — iOS + Android). The repo **root** holds these plus docs and CI.
 
 Every backend container lives under **`api/`**: each service is its own directory
@@ -59,7 +59,7 @@ Conventions that matter across all services:
   cross-query another service's schema — go through its API.
 - **API mounts at `/v1/{SERVICE_GROUP}/{SERVICE_NAME}`** — see
   `Config.api_prefix()`. Groups are `platform` / `social` / `gameplay`. This
-  prefix must stay in sync with the gateway routes and `webui/lib/api-paths.ts`.
+  prefix must stay in sync with the gateway routes and `web/lib/api-paths.ts`.
 - **Auth is decentralized JWT.** `auth` mints the JWT; every service verifies it
   locally with the shared `JWT_SECRET_KEY` (flask-jwt-extended). There is **no**
   central auth check in the gateway — it just forwards the `Authorization`
@@ -95,7 +95,7 @@ to `webui:3000`. When you add/rename a backend route group, update this file.
 ## webui (Next.js)
 
 Next.js 16 App Router, React 19, Tailwind 4, TanStack Query, based on the
-Metronic template (`webui/README.md` is the stock template readme — ignore its
+Metronic template (`web/README.md` is the stock template readme — ignore its
 Prisma instructions; this app has no Prisma).
 
 - `app/(app)` (auth-gated), `app/(guest)` (login/signup), `app/(public)`
@@ -178,4 +178,4 @@ CI is `.github/workflows/build-and-deploy.yml` — **manual `workflow_dispatch`*
 (no auto-deploy on push). Pick a service (or `all`), it builds arm64, pushes to
 ECR `waygerz/<service>`, optionally registers a new task def from
 `<service>/taskdef.json` and rolls the ECS service. webui builds from
-`webui/docker/Dockerfile` with `NEXT_PUBLIC_API_URL=` (empty, ALB mode).
+`web/docker/Dockerfile` with `NEXT_PUBLIC_API_URL=` (empty, ALB mode).

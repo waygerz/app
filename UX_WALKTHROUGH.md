@@ -2,7 +2,7 @@
 
 > **What this is.** A screen-by-screen, state-by-state narration of the actual
 > user journey through leagues and both play modes as the app behaves **today**,
-> grounded in the live webui (`webui/app/(app)/leagues/`, `.../bets/`,
+> grounded in the live webui (`web/app/(app)/leagues/`, `.../bets/`,
 > `(public)/c/[code]`, `components/messages-sheet.tsx`). Companion to the
 > gap-to-ship plans — where a screen is missing or half-built, it's flagged
 > inline as **[gap → PICKEM Gx]** / **[gap → H2H Bx]** pointing at
@@ -17,7 +17,7 @@
 
 ## 0. The shell
 
-Three route groups gate the whole app (`webui/proxy.ts` middleware, keyed on the
+Three route groups gate the whole app (`web/proxy.ts` middleware, keyed on the
 `waygerz_access` cookie):
 
 - **`(guest)`** — logged-out: `/login` (phone → OTP → profile/consent).
@@ -319,14 +319,14 @@ the *journeys*, not just the screens:
 
 | Screen / surface | Code |
 |---|---|
-| Create wizard | `webui/app/(app)/leagues/new/page.tsx` |
-| League container + tabs | `webui/app/(app)/leagues/[id]/layout.tsx` |
+| Create wizard | `web/app/(app)/leagues/new/page.tsx` |
+| League container + tabs | `web/app/(app)/leagues/[id]/layout.tsx` |
 | Overview + feed | `[id]/page.tsx` → `overview.tsx`, `[id]/feed-post.tsx` |
 | Pick'em play / results / standings | `[id]/sections.tsx` (`PickemPlay`, `PickemResults`, `LeagueStandings`) |
 | H2H propose dialogs | `[id]/sections.tsx` (`ScheduleBetDialog`, `MatchupBetDialog`, `WagerBetCard`) |
-| My Bets list | `webui/app/(app)/bets/[filter]/page.tsx`, `bets-common.tsx` |
-| Wallet | `webui/lib/wallet.ts` + Wallet tab in `sections.tsx` |
-| Deep-link preview | `webui/app/(public)/c/[code]/page.tsx` |
-| DMs / bet cards | `webui/components/messages-sheet.tsx` |
-| Notifications | `webui/components/notifications-sheet.tsx` |
-| Data clients | `webui/lib/leagues.ts`, `wagers.ts`, `wallet.ts` |
+| My Bets list | `web/app/(app)/bets/[filter]/page.tsx`, `bets-common.tsx` |
+| Wallet | `web/lib/wallet.ts` + Wallet tab in `sections.tsx` |
+| Deep-link preview | `web/app/(public)/c/[code]/page.tsx` |
+| DMs / bet cards | `web/components/messages-sheet.tsx` |
+| Notifications | `web/components/notifications-sheet.tsx` |
+| Data clients | `web/lib/leagues.ts`, `wagers.ts`, `wallet.ts` |

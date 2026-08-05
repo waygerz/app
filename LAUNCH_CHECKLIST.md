@@ -1,9 +1,9 @@
 # Launch Checklist — webui Routes
 
-Every user-facing page in `webui/`, what it does, and the cards/tables/lists it
+Every user-facing page in `web/`, what it does, and the cards/tables/lists it
 renders. Check each route off as it passes launch QA.
 
-Route access is gated by `webui/proxy.ts`:
+Route access is gated by `web/proxy.ts`:
 - **Public** — no auth (shareable deep links)
 - **Guest-only** — signed-in users are bounced home
 - **App** — requires a session cookie

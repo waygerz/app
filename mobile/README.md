@@ -7,7 +7,7 @@ with **bearer tokens** (stored in Keychain/Keystore) instead of cookies.
 
 ```
 lib/
-  config.dart                 # API base URL + path prefixes (mirror webui/lib/api-paths.ts)
+  config.dart                 # API base URL + path prefixes (mirror web/lib/api-paths.ts)
   models.dart                 # User, FeedNotification
   api/
     api_client.dart           # http wrapper: bearer auth, X-Client-Type: mobile, auto-refresh on 401

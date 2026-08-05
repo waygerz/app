@@ -13,11 +13,15 @@ class Config {
   static const String clientType = 'mobile';
 
   // API path prefixes — mirror api/<service>/app/utils/config.py::api_prefix()
-  // and webui/lib/api-paths.ts. Keep in sync when a service group changes.
+  // and web/lib/api-paths.ts. Keep in sync when a service group changes.
   static const String auth = '/v1/platform/auth';
-  static const String notifications = '/v1/platform/notifications';
-  static const String wallet = '/v1/platform/wallet';
   static const String friends = '/v1/social/friends';
+  static const String wallet = '/v1/gameplay/wallet';
   static const String contests = '/v1/gameplay/contests';
   static const String leagues = '/v1/gameplay/leagues';
+  static const String comments = '/v1/social/comments';
+  static const String messaging = '/v1/social/messaging';
+  static const String media = '/v1/platform/media';
+  static const String ingestor = '/v1/platform/ingestor';
+  static const String notifications = '/v1/platform/notifications';
 }

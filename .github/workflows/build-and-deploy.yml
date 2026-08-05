@@ -111,8 +111,9 @@ jobs:
           # webui is the Next.js standalone app: docker/Dockerfile + baked API
           # base ("" so the browser calls /v1/... directly, matching ALB rules).
           if [ "${SVC}" = "webui" ]; then
-            echo "CTX=webui" >> "$GITHUB_OUTPUT"
-            echo "DOCKERFILE=webui/docker/Dockerfile" >> "$GITHUB_OUTPUT"
+            # Dir renamed webui -> web; ECR repo + ECS service stay "webui".
+            echo "CTX=web" >> "$GITHUB_OUTPUT"
+            echo "DOCKERFILE=web/docker/Dockerfile" >> "$GITHUB_OUTPUT"
             echo "BUILD_ARGS=NEXT_PUBLIC_API_URL=" >> "$GITHUB_OUTPUT"
           else
             echo "CTX=api/${SVC}" >> "$GITHUB_OUTPUT"
