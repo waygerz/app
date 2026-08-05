@@ -457,9 +457,13 @@ def tick():
 # TODAY's board, and ESPN drops old games from the scoreboard, so an event whose
 # score fetch is missed stays 'scheduled' forever and keeps showing in the
 # bettable list with a stale date. Sweep anything still scheduled/live well past
-# its start to 'final'. The grace comfortably exceeds any real game length, so a
-# genuinely-live game is never mis-reaped; a real score, if it ever arrives,
-# overwrites 'final' on a later tick anyway.
+# its start to 'cancelled' — the honest state, because we never actually observed
+# a result. Marking it 'final' would fabricate a 0-0 outcome: Pick'em would grade
+# every pick a loss, and an H2H total/spread could mis-settle against a phantom
+# score. 'cancelled' instead void-refunds H2H wagers and voids Pick'em picks (no
+# contest). The grace comfortably exceeds any real game length, so a genuinely
+# live game is never mis-reaped; a real score, if it ever arrives, overwrites the
+# status on a later tick anyway.
 _STALE_EVENT_GRACE = timedelta(hours=12)
 
 
@@ -468,7 +472,7 @@ def reap_stale_events() -> int:
     n = (
         Event.query
         .filter(Event.status.in_([SCHEDULED, LIVE]), Event.start_time < cutoff)
-        .update({Event.status: FINAL}, synchronize_session=False)
+        .update({Event.status: CANCELLED}, synchronize_session=False)
     )
     if n:
         db.session.commit()

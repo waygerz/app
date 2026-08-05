@@ -1,8 +1,10 @@
-"""The stale-event reaper: past games stuck in scheduled/live get marked final.
+"""The stale-event reaper: past games stuck in scheduled/live get marked cancelled.
 
 refresh_scores only re-fetches today's board and ESPN drops old games from the
 scoreboard, so a missed score fetch would otherwise leave an event 'scheduled'
 forever — showing in the bettable list with a stale date. This is the safety net.
+It marks them 'cancelled', not 'final', because we never observed a result — a
+fabricated 'final' would grade Pick'em picks a loss and mis-settle H2H totals.
 """
 from datetime import datetime, timedelta
 
@@ -35,7 +37,7 @@ def test_reaps_past_scheduled_and_live(app):
     assert n == 2
     for ext in ("old-sched", "old-live"):
         e = Event.query.filter_by(external_id=ext).one()
-        assert e.status == FINAL
+        assert e.status == CANCELLED
 
 
 def test_leaves_future_and_recent_events_alone(app):

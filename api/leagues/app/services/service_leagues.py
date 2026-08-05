@@ -305,12 +305,22 @@ def _prebuild_periods(league):
     existing = {p.label: p for p in LeaguePeriod.query.filter_by(league_id=league.id).all()}
     max_idx = max((p.index for p in existing.values()), default=0)
 
+    zone = _league_zone(league)
     kept = []
     for w in weeks:
+        start = _parse_iso(w.get("start"))
         end = _parse_iso(w.get("end"))
-        if end and end < now:
+        # Guarantee a close time. A week can arrive without an end; derive one a
+        # week out from the start so the period can still roll over. A null
+        # ends_at would strand the period OPEN forever — rollover_periods skips
+        # any period with no ends_at.
+        if end is None and start is not None:
+            end = _add_week(start, zone)
+        if end is None:
+            continue  # no start and no end — can't schedule a close; skip
+        if end < now:
             continue  # fully in the past
-        kept.append((_parse_iso(w.get("start")), end, (w.get("label") or "Week")[:40]))
+        kept.append((start, end, (w.get("label") or "Week")[:40]))
     kept.sort(key=lambda r: (r[0] is None, r[0] or datetime.max))
 
     for start, end, label in kept:
@@ -387,7 +397,11 @@ GENERIC_FINAL_BODY = "Standings are locked for this period."
 
 
 def grade_period(period) -> int:
-    picks = Pick.query.filter_by(period_id=period.id, correct=None).all()
+    picks = Pick.query.filter(
+        Pick.period_id == period.id,
+        Pick.correct.is_(None),
+        Pick.voided.is_(False),
+    ).all()
     graded = 0
     for pick in picks:
         try:
@@ -399,13 +413,20 @@ def grade_period(period) -> int:
                 winner = event.get("winner_side")
                 if winner in (HOME, AWAY):
                     pick.correct = (pick.pick_side == winner)
-                else:
-                    # A tie / no-winner final: nobody scored this game. Grade it
-                    # False for everyone so it resolves instead of stranding.
+                elif event.get("home_score") is not None and event.get("away_score") is not None:
+                    # A real final with scores but no winner side — a genuine
+                    # draw. Nobody picked "tie", so everyone was wrong.
                     pick.correct = False
+                else:
+                    # Final with no winner AND no scores: we never actually got a
+                    # result (e.g. a stale event swept to a terminal status). Void
+                    # it — no contest — rather than punishing the pick as a loss.
+                    pick.voided = True
             elif status in VOID_EVENT_STATUSES:
-                # Cancelled / postponed: the game won't produce a result.
-                pick.correct = False
+                # Cancelled / postponed / abandoned: the game won't produce a
+                # result. Void the pick (no contest) rather than marking it a
+                # loss, and let the period finalize.
+                pick.voided = True
             else:
                 continue  # not terminal yet — try again next tick
             db.session.commit()
@@ -426,7 +447,9 @@ def grade_open_periods() -> int:
     """
     pending_period_ids = [
         row[0] for row in
-        db.session.query(Pick.period_id).filter(Pick.correct.is_(None)).distinct()
+        db.session.query(Pick.period_id)
+        .filter(Pick.correct.is_(None), Pick.voided.is_(False))
+        .distinct()
     ]
     periods = (
         LeaguePeriod.query.filter(LeaguePeriod.id.in_(pending_period_ids)).all()
@@ -1021,6 +1044,7 @@ def submit_picks(league_id, period_id, me, data):
             if row.pick_side != side:
                 row.pick_side = side
                 row.correct = None  # a changed pick must be re-graded
+                row.voided = False
             if tb_val is not None:
                 row.tiebreaker_total = tb_val
         else:
@@ -1108,6 +1132,8 @@ def standings(league_id, me):
     for p in picks:
         if p.user_id not in wins:
             continue
+        if p.voided:
+            continue  # no contest — never a win or a loss
         if p.correct is True:
             wins[p.user_id] += 1
         elif p.correct is False:
@@ -1181,6 +1207,8 @@ def _period_leaderboard(league_id, period_id):
         agg = per.get(p.user_id)
         if agg is None:
             continue
+        if p.voided:
+            continue  # no contest — excluded from the tally entirely
         agg["total"] += 1
         if p.correct is True:
             agg["correct"] += 1
@@ -1266,7 +1294,12 @@ def _period_final_body(league_id, period):
     The post is written once (dedup_key), so we only name a winner when *every*
     pick is graded; a game finishing late could otherwise change the outcome.
     """
-    if Pick.query.filter_by(period_id=str(period.id), correct=None).count():
+    unresolved = Pick.query.filter(
+        Pick.period_id == str(period.id),
+        Pick.correct.is_(None),
+        Pick.voided.is_(False),
+    ).count()
+    if unresolved:
         return None
     try:
         rows, _ = _period_leaderboard(str(league_id), str(period.id))

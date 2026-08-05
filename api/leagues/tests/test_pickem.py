@@ -248,7 +248,8 @@ def test_pick_locked_after_kickoff(client, auth_headers, monkeypatch):
 
 
 def test_grading_marks_tie_as_not_correct(client, auth_headers, app, monkeypatch):
-    # A final tie (no winner side) must grade — not strand the period ungraded.
+    # A genuine final draw (scores present, no winner side) grades as a loss for
+    # everyone who picked a team — and must resolve, not strand the period.
     from app.services import service_leagues as svc
 
     d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
@@ -258,15 +259,19 @@ def test_grading_marks_tie_as_not_correct(client, auth_headers, app, monkeypatch
                json={"picks": [{"event_id": "EVT1", "side": "home"}]},
                headers=auth_headers(U1))
     monkeypatch.setattr(svc, "get_event",
-                        lambda eid: {"status": "final", "winner_side": None})
+                        lambda eid: {"status": "final", "winner_side": None,
+                                     "home_score": 2, "away_score": 2})
     with app.app_context():
         assert svc.grade_open_periods() == 1
         from app.models.pick import Pick as _P
-        vals = [p.correct for p in _P.query.filter_by(period_id=pid).all()]
-    assert vals == [False]
+        rows = _P.query.filter_by(period_id=pid).all()
+        vals = [(p.correct, p.voided) for p in rows]
+    assert vals == [(False, False)]
 
 
-def test_grading_marks_cancelled_as_not_correct(client, auth_headers, app, monkeypatch):
+def test_grading_voids_cancelled_game(client, auth_headers, app, monkeypatch):
+    # Cancelled / postponed: no contest. The pick is voided (resolved, so the
+    # period can finalize) but NOT counted as a loss.
     from app.services import service_leagues as svc
 
     d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
@@ -276,11 +281,37 @@ def test_grading_marks_cancelled_as_not_correct(client, auth_headers, app, monke
                json={"picks": [{"event_id": "EVT1", "side": "home"}]},
                headers=auth_headers(U1))
     monkeypatch.setattr(svc, "get_event", lambda eid: {"status": "cancelled"})
+    monkeypatch.setattr(svc, "resolve_users_full", lambda ids: {})  # no auth call
     with app.app_context():
         assert svc.grade_open_periods() == 1
         from app.models.pick import Pick as _P
-        vals = [p.correct for p in _P.query.filter_by(period_id=pid).all()]
-    assert vals == [False]
+        p = _P.query.filter_by(period_id=pid).one()
+        assert p.voided is True and p.correct is None
+        # No losses recorded: the void is excluded from the standings tally.
+        rows = svc.standings(lid, U1)[0]["standings"]
+        me = next(r for r in rows if r["user_id"] == U1)
+        assert me["wins"] == 0 and me["losses"] == 0
+
+
+def test_grading_voids_final_without_a_result(client, auth_headers, app, monkeypatch):
+    # A final with no winner AND no scores is a swept/stale event — we never got
+    # a result. Void it rather than grading everyone a loss.
+    from app.services import service_leagues as svc
+
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
+    lid, pid = d["id"], _period_id(d)
+    client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+               json={"picks": [{"event_id": "EVT1", "side": "home"}]},
+               headers=auth_headers(U1))
+    monkeypatch.setattr(svc, "get_event",
+                        lambda eid: {"status": "final", "winner_side": None,
+                                     "home_score": None, "away_score": None})
+    with app.app_context():
+        assert svc.grade_open_periods() == 1
+        from app.models.pick import Pick as _P
+        p = _P.query.filter_by(period_id=pid).one()
+        assert p.voided is True and p.correct is None
 
 
 def test_member_picks_hidden_when_start_unknown(client, auth_headers):
