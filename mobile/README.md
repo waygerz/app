@@ -13,16 +13,24 @@ lib/
     api_client.dart           # http wrapper: bearer auth, X-Client-Type: mobile, auto-refresh on 401
     auth_api.dart             # OTP start/verify/complete, me, logout
     notifications_api.dart    # feed, unread, prefs, device registration
+    leagues_api.dart          # Pick'em + league container: list, detail, activate, picks, standings
+    wagers_api.dart           # H2H wagers: mine, propose, accept/decline/cancel
+    wallet_api.dart           # league-scoped play-money balance + transactions
   auth/
     token_store.dart          # secure token + device-uuid storage
     auth_controller.dart      # app auth state (ChangeNotifier)
   push/push_service.dart      # FCM token registration (opt-in, see below)
-  screens/                    # login, home shell, notifications feed
+  screens/                    # login, home shell (Leagues/Bets/Alerts/Profile),
+                              #   leagues list + detail, bets, notifications, shared widgets
   main.dart
 ```
 
-The API layer is the reusable core; screens are a minimal starting point
-(login + notifications feed + a profile/logout tab, with Leagues/Bets stubbed).
+The API layer is the reusable core. Screens now cover the primary flows:
+**Leagues** (list → detail with standings, wallet balance, activate, and Pick'em
+picks) and **Bets** (the caller's H2H wagers with accept / decline / cancel),
+alongside login, the notifications feed, and profile/logout. Still to build:
+the pick-submission slate (needs the ingestor events endpoint), the propose-bet
+flow, bet-in-DM cards (messaging service), and avatar-key → URL resolution.
 
 ## Generate the platform folders (one-time)
 

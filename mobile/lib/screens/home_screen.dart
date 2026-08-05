@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../api/notifications_api.dart';
 import '../auth/auth_controller.dart';
 import '../models.dart';
+import 'bets_screen.dart';
+import 'leagues_screen.dart';
 import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -22,12 +24,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final notifications = NotificationsApi(auth.api);
 
     final tabs = <Widget>[
-      const _Placeholder(icon: Icons.emoji_events_outlined, label: 'Leagues & bets go here'),
+      LeaguesScreen(api: auth.api),
+      BetsScreen(api: auth.api),
       NotificationsScreen(api: notifications),
       _ProfileTab(user: auth.user, onLogout: auth.logout),
     ];
 
-    const titles = ['Leagues', 'Notifications', 'Profile'];
+    const titles = ['Leagues', 'Bets', 'Notifications', 'Profile'];
     return Scaffold(
       appBar: AppBar(title: Text(titles[_tab])),
       body: IndexedStack(index: _tab, children: tabs),
@@ -36,28 +39,9 @@ class _HomeScreenState extends State<HomeScreen> {
         onDestinationSelected: (i) => setState(() => _tab = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.sports_basketball_outlined), label: 'Leagues'),
+          NavigationDestination(icon: Icon(Icons.sports_mma_outlined), label: 'Bets'),
           NavigationDestination(icon: Icon(Icons.notifications_outlined), label: 'Alerts'),
           NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
-        ],
-      ),
-    );
-  }
-}
-
-class _Placeholder extends StatelessWidget {
-  const _Placeholder({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 48, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(height: 12),
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
     );
