@@ -1,0 +1,96 @@
+<title>SMS cards — cleanup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --background:#0b0d13; --card:#191b24; --border:#2a2d3a;
+    --foreground:#e7e9ee; --muted-foreground:#8b8f9e; --muted:#20232e;
+    --primary:#7c3aed; --input:#2a2d3a;
+  }
+  body{background:var(--background);color:var(--foreground);font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;}
+  .card{background:var(--card);border:1px solid var(--border);}
+  .brd{border-color:var(--border);}
+  .fg{color:var(--foreground);} .mfg{color:var(--muted-foreground);}
+  .bg-muted20{background:rgba(32,35,46,.5);} .bg-muted30{background:rgba(32,35,46,.7);}
+  a{color:#a78bfa;text-decoration:underline;}
+  .sw{width:44px;height:24px;border-radius:999px;position:relative;flex:none;}
+  .sw.on{background:var(--primary);} .sw.off{background:#3a3d4a;}
+  .sw .knob{position:absolute;top:2px;width:20px;height:20px;border-radius:999px;background:#fff;transition:.15s;}
+  .sw.on .knob{left:22px;} .sw.off .knob{left:2px;}
+  .sw-sm{width:36px;height:20px;} .sw-sm .knob{width:16px;height:16px;} .sw-sm.on .knob{left:18px;}
+</style>
+<body class="p-6 flex justify-center">
+<div class="w-full max-w-md flex flex-col gap-8">
+
+  <div class="text-xs mfg uppercase tracking-wide">Proposed cleanup</div>
+
+  <!-- ── Notifications card ─────────────────────────────── -->
+  <div class="card rounded-xl p-5 flex flex-col gap-4">
+    <div class="flex flex-col gap-1">
+      <h2 class="text-base font-semibold fg">Notifications</h2>
+      <p class="text-xs mfg">How you hear about app activity — bets, invites, friends, and your weekly recap.</p>
+    </div>
+
+    <!-- merged SMS box: title only, no subtitle -->
+    <div class="rounded-lg border brd overflow-hidden">
+      <div class="flex items-center justify-between gap-4 bg-muted20 p-3">
+        <span class="text-sm font-medium fg">Allow SMS for Notifications</span>
+        <div class="sw on"><div class="knob"></div></div>
+      </div>
+      <div class="border-t brd bg-muted30 p-3 text-[11px] leading-relaxed mfg">
+        <p>I agree to receive account and bet-related text messages from Waygerz (one-time sign-in codes, bet challenges, results, and reminders) at the number provided. Message and data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help. See our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.</p>
+        <p class="mt-1.5">Account security texts (one-time sign-in codes) are always sent to verify it’s you and aren’t controlled here.</p>
+      </div>
+    </div>
+
+    <!-- channel grid -->
+    <div>
+      <div class="grid grid-cols-[1fr_4rem_4rem] items-center gap-x-3 pb-1">
+        <span></span>
+        <span class="justify-self-center text-[11px] font-medium uppercase tracking-wide mfg">SMS</span>
+        <span class="justify-self-center text-[11px] font-medium uppercase tracking-wide mfg">In-app</span>
+      </div>
+      <div class="flex flex-col divide-y" style="--tw-divide-opacity:1;">
+        <div class="grid grid-cols-[1fr_4rem_4rem] items-center gap-x-3 py-3 border-t brd">
+          <div class="flex flex-col gap-0.5 pr-2"><span class="text-sm font-medium fg">Wager alerts</span><span class="text-xs mfg">Bets proposed, accepted, or settled.</span></div>
+          <div class="justify-self-center sw sw-sm on"><div class="knob"></div></div>
+          <div class="justify-self-center sw sw-sm on"><div class="knob"></div></div>
+        </div>
+        <div class="grid grid-cols-[1fr_4rem_4rem] items-center gap-x-3 py-3 border-t brd">
+          <div class="flex flex-col gap-0.5 pr-2"><span class="text-sm font-medium fg">League invites</span><span class="text-xs mfg">When someone invites you to a league.</span></div>
+          <div class="justify-self-center sw sw-sm on"><div class="knob"></div></div>
+          <div class="justify-self-center sw sw-sm on"><div class="knob"></div></div>
+        </div>
+        <div class="grid grid-cols-[1fr_4rem_4rem] items-center gap-x-3 py-3 border-t brd">
+          <div class="flex flex-col gap-0.5 pr-2"><span class="text-sm font-medium fg">Weekly digest</span><span class="text-xs mfg">A weekly recap of your leagues.</span></div>
+          <div class="justify-self-center sw sw-sm off"><div class="knob"></div></div>
+          <div class="justify-self-center sw sw-sm off"><div class="knob"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Promotions card ─────────────────────────────── -->
+  <div class="card rounded-xl p-5 flex flex-col gap-4">
+    <div class="flex flex-col gap-1">
+      <h2 class="text-base font-semibold fg">Promotions</h2>
+      <p class="text-xs mfg">Occasional promos, news, and offers — separate from your notifications, and never turned on or off by them.</p>
+    </div>
+
+    <div class="rounded-lg border brd overflow-hidden">
+      <div class="flex items-center justify-between gap-4 bg-muted20 p-3">
+        <span class="text-sm font-medium fg">Allow SMS for Promotions</span>
+        <div class="sw off"><div class="knob"></div></div>
+      </div>
+      <div class="border-t brd bg-muted30 p-3 text-[11px] leading-relaxed mfg">
+        <p>I agree to receive occasional promotional and marketing text messages from Waygerz. Consent is not a condition of using Waygerz. Message and data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help. See our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.</p>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between gap-4 py-1">
+      <div class="flex flex-col gap-0.5 pr-2"><span class="text-sm font-medium fg">Show in the app</span><span class="text-xs mfg">Also show promotions and offers in your in-app bell.</span></div>
+      <div class="sw sw-sm off"><div class="knob"></div></div>
+    </div>
+  </div>
+
+</div>
+</body>

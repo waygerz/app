@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Waygerz · Member picks — selection carries the result</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { darkMode: 'class', theme: { extend: { colors: {
+    background: 'rgb(var(--background) / <alpha-value>)', foreground: 'rgb(var(--foreground) / <alpha-value>)',
+    card: 'rgb(var(--card) / <alpha-value>)', primary: 'rgb(var(--primary) / <alpha-value>)',
+    'primary-foreground': 'rgb(var(--primary-foreground) / <alpha-value>)',
+    secondary: 'rgb(var(--secondary) / <alpha-value>)', 'secondary-foreground': 'rgb(var(--secondary-foreground) / <alpha-value>)',
+    muted: 'rgb(var(--muted) / <alpha-value>)', 'muted-foreground': 'rgb(var(--muted-foreground) / <alpha-value>)',
+    border: 'rgb(var(--border) / <alpha-value>)', input: 'rgb(var(--input) / <alpha-value>)',
+    destructive: 'rgb(var(--destructive) / <alpha-value>)', brand: 'rgb(var(--brand) / <alpha-value>)',
+  } } } };
+</script>
+<style type="text/tailwindcss">
+  :root { --background:255 255 255; --foreground:9 9 11; --card:255 255 255; --primary:124 58 237; --primary-foreground:255 255 255; --secondary:244 244 245; --secondary-foreground:24 24 27; --muted:244 244 245; --muted-foreground:113 113 122; --border:236 236 238; --input:228 228 231; --destructive:220 38 38; --brand:0 162 46; }
+  .dark { --background:14 15 20; --foreground:250 250 250; --card:25 27 36; --primary:139 92 246; --primary-foreground:255 255 255; --secondary:38 41 53; --secondary-foreground:250 250 250; --muted:34 36 46; --muted-foreground:113 113 122; --border:46 48 64; --input:46 48 64; --destructive:220 38 38; --brand:0 194 58; }
+  .lg5 { @apply flex size-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white; }
+  .lg6 { @apply flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white; }
+  /* picked-side highlight by outcome */
+  .pk-live    { @apply bg-primary/10 ring-1 ring-inset ring-primary/60; }
+  .pk-correct { @apply bg-brand/10 ring-1 ring-inset ring-brand/60; }
+  .pk-wrong   { @apply bg-destructive/10 ring-1 ring-inset ring-destructive/60; }
+</style>
+<style>body{background:rgb(var(--background));}</style>
+</head>
+<body class="min-h-dvh text-foreground antialiased [font-family:ui-sans-serif,system-ui,-apple-system,Segoe_UI,Roboto,sans-serif]">
+<div class="mx-auto max-w-6xl px-4 py-10">
+  <div class="mb-8 flex items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">Member picks — the selection carries the result</h1>
+      <p class="mt-1 text-sm text-muted-foreground">No right column. Picked side is <span class="text-primary">violet while live</span>, <span class="text-brand">green if correct</span>, <span class="text-red-500">red if wrong</span> once final. Eddie's picks, Hall of Fame Weekend.</p>
+    </div>
+    <button id="t" class="rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted"><span class="dark:hidden">🌙 Dark</span><span class="hidden dark:inline">☀️ Light</span></button>
+  </div>
+
+  <div class="grid gap-8 lg:grid-cols-3">
+
+    <!-- ============ OPTION 1 — Recolored boxes ============ -->
+    <div>
+      <div class="mb-3"><span class="text-sm font-semibold">Option 1 · Recolored boxes</span><p class="text-xs text-muted-foreground">Your current two-box layout, minus the badge. The picked box turns violet / green / red.</p></div>
+      <div class="relative w-full rounded-xl border border-border bg-card p-5 shadow-2xl">
+        <button class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="mb-4"><h2 class="text-lg font-semibold text-foreground">Eddie&rsquo;s picks</h2><p class="text-sm text-muted-foreground">Hall of Fame Weekend</p></div>
+        <div class="flex flex-col gap-1.5">
+          <!-- live -->
+          <div class="flex items-center gap-1.5 rounded-lg border border-border p-1.5">
+            <div class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 pk-live"><span class="lg5 bg-sky-600">CAR</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">CAR</span><span class="text-sm font-bold tabular-nums text-foreground">0</span></div>
+            <span class="shrink-0 px-0.5 text-xs font-medium text-muted-foreground">@</span>
+            <div class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 opacity-60"><span class="lg5 bg-red-700">ARI</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">ARI</span><span class="text-sm font-bold tabular-nums text-foreground">0</span></div>
+          </div>
+          <!-- correct -->
+          <div class="flex items-center gap-1.5 rounded-lg border border-border p-1.5">
+            <div class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 opacity-60"><span class="lg5 bg-blue-800">DET</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">DET</span><span class="text-sm font-bold tabular-nums text-foreground">17</span></div>
+            <span class="shrink-0 px-0.5 text-xs font-medium text-muted-foreground">@</span>
+            <div class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 pk-correct"><span class="lg5 bg-yellow-500">LAC</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">LAC</span><span class="text-sm font-bold tabular-nums text-foreground">24</span></div>
+          </div>
+          <!-- wrong -->
+          <div class="flex items-center gap-1.5 rounded-lg border border-border p-1.5">
+            <div class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 pk-wrong"><span class="lg5 bg-blue-700">NYG</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">NYG</span><span class="text-sm font-bold tabular-nums text-foreground">10</span></div>
+            <span class="shrink-0 px-0.5 text-xs font-medium text-muted-foreground">@</span>
+            <div class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 opacity-60"><span class="lg5 bg-blue-500">BUF</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">BUF</span><span class="text-sm font-bold tabular-nums text-foreground">20</span></div>
+          </div>
+          <!-- correct 2 -->
+          <div class="flex items-center gap-1.5 rounded-lg border border-border p-1.5">
+            <div class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 opacity-60"><span class="lg5 bg-red-800">NE</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">NE</span><span class="text-sm font-bold tabular-nums text-foreground">14</span></div>
+            <span class="shrink-0 px-0.5 text-xs font-medium text-muted-foreground">@</span>
+            <div class="flex flex-1 items-center gap-1.5 rounded-md px-2 py-1 pk-correct"><span class="lg5 bg-yellow-700">WAS</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-foreground">WAS</span><span class="text-sm font-bold tabular-nums text-foreground">17</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ OPTION 2 — Single line, colored pick pill ============ -->
+    <div>
+      <div class="mb-3"><span class="text-sm font-semibold">Option 2 · Single line</span><p class="text-xs text-muted-foreground">No boxes. Only the picked team sits in a colored pill; opponent is muted. Tightest.</p></div>
+      <div class="relative w-full rounded-xl border border-border bg-card p-5 shadow-2xl">
+        <button class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="mb-4"><h2 class="text-lg font-semibold text-foreground">Eddie&rsquo;s picks</h2><p class="text-sm text-muted-foreground">Hall of Fame Weekend</p></div>
+        <div class="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border">
+          <!-- live -->
+          <div class="flex items-center gap-1 px-2.5 py-1.5 text-sm">
+            <span class="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 pk-live"><span class="lg5 bg-sky-600">CAR</span><span class="font-semibold text-foreground">CAR</span><span class="font-bold tabular-nums text-foreground">0</span></span>
+            <span class="px-1 text-xs text-muted-foreground">@</span>
+            <span class="inline-flex items-center gap-1.5 px-1 opacity-60"><span class="lg5 bg-red-700">ARI</span><span class="text-muted-foreground">ARI</span><span class="tabular-nums text-muted-foreground">0</span></span>
+          </div>
+          <!-- correct -->
+          <div class="flex items-center gap-1 px-2.5 py-1.5 text-sm">
+            <span class="inline-flex items-center gap-1.5 px-1 opacity-60"><span class="lg5 bg-blue-800">DET</span><span class="text-muted-foreground">DET</span><span class="tabular-nums text-muted-foreground">17</span></span>
+            <span class="px-1 text-xs text-muted-foreground">@</span>
+            <span class="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 pk-correct"><span class="lg5 bg-yellow-500">LAC</span><span class="font-semibold text-foreground">LAC</span><span class="font-bold tabular-nums text-foreground">24</span></span>
+          </div>
+          <!-- wrong -->
+          <div class="flex items-center gap-1 px-2.5 py-1.5 text-sm">
+            <span class="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 pk-wrong"><span class="lg5 bg-blue-700">NYG</span><span class="font-semibold text-foreground">NYG</span><span class="font-bold tabular-nums text-foreground">10</span></span>
+            <span class="px-1 text-xs text-muted-foreground">@</span>
+            <span class="inline-flex items-center gap-1.5 px-1 opacity-60"><span class="lg5 bg-blue-500">BUF</span><span class="text-muted-foreground">BUF</span><span class="tabular-nums text-muted-foreground">20</span></span>
+          </div>
+          <!-- correct 2 -->
+          <div class="flex items-center gap-1 px-2.5 py-1.5 text-sm">
+            <span class="inline-flex items-center gap-1.5 px-1 opacity-60"><span class="lg5 bg-red-800">NE</span><span class="text-muted-foreground">NE</span><span class="tabular-nums text-muted-foreground">14</span></span>
+            <span class="px-1 text-xs text-muted-foreground">@</span>
+            <span class="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 pk-correct"><span class="lg5 bg-yellow-700">WAS</span><span class="font-semibold text-foreground">WAS</span><span class="font-bold tabular-nums text-foreground">17</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ OPTION 3 — Filled pick, plain opponent ============ -->
+    <div>
+      <div class="mb-3"><span class="text-sm font-semibold">Option 3 · Filled pick</span><p class="text-xs text-muted-foreground">Picked team gets a solid soft fill spanning its half; opponent is plain text (no box). Strong, clean read.</p></div>
+      <div class="relative w-full rounded-xl border border-border bg-card p-5 shadow-2xl">
+        <button class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="mb-4"><h2 class="text-lg font-semibold text-foreground">Eddie&rsquo;s picks</h2><p class="text-sm text-muted-foreground">Hall of Fame Weekend</p></div>
+        <div class="flex flex-col gap-1.5">
+          <!-- live -->
+          <div class="flex items-center gap-2 overflow-hidden rounded-lg border border-border">
+            <div class="flex flex-1 items-center gap-2 self-stretch bg-primary/15 px-2.5 py-2"><span class="lg6 bg-sky-600">CAR</span><span class="text-sm font-bold text-foreground">CAR</span><span class="ml-auto text-sm font-bold tabular-nums text-foreground">0</span></div>
+            <span class="shrink-0 text-xs font-medium text-muted-foreground">@</span>
+            <div class="flex flex-1 items-center gap-2 px-2.5 py-2"><span class="lg6 bg-red-700 opacity-70">ARI</span><span class="text-sm text-muted-foreground">ARI</span><span class="ml-auto text-sm tabular-nums text-muted-foreground">0</span></div>
+          </div>
+          <!-- correct -->
+          <div class="flex items-center gap-2 overflow-hidden rounded-lg border border-border">
+            <div class="flex flex-1 items-center gap-2 px-2.5 py-2"><span class="lg6 bg-blue-800 opacity-70">DET</span><span class="text-sm text-muted-foreground">DET</span><span class="ml-auto text-sm tabular-nums text-muted-foreground">17</span></div>
+            <span class="shrink-0 text-xs font-medium text-muted-foreground">@</span>
+            <div class="flex flex-1 items-center gap-2 self-stretch bg-brand/15 px-2.5 py-2"><span class="lg6 bg-yellow-500">LAC</span><span class="text-sm font-bold text-foreground">LAC</span><span class="ml-auto text-sm font-bold tabular-nums text-foreground">24</span></div>
+          </div>
+          <!-- wrong -->
+          <div class="flex items-center gap-2 overflow-hidden rounded-lg border border-border">
+            <div class="flex flex-1 items-center gap-2 self-stretch bg-destructive/15 px-2.5 py-2"><span class="lg6 bg-blue-700">NYG</span><span class="text-sm font-bold text-foreground">NYG</span><span class="ml-auto text-sm font-bold tabular-nums text-foreground">10</span></div>
+            <span class="shrink-0 text-xs font-medium text-muted-foreground">@</span>
+            <div class="flex flex-1 items-center gap-2 px-2.5 py-2"><span class="lg6 bg-blue-500 opacity-70">BUF</span><span class="text-sm text-muted-foreground">BUF</span><span class="ml-auto text-sm tabular-nums text-muted-foreground">20</span></div>
+          </div>
+          <!-- correct 2 -->
+          <div class="flex items-center gap-2 overflow-hidden rounded-lg border border-border">
+            <div class="flex flex-1 items-center gap-2 px-2.5 py-2"><span class="lg6 bg-red-800 opacity-70">NE</span><span class="text-sm text-muted-foreground">NE</span><span class="ml-auto text-sm tabular-nums text-muted-foreground">14</span></div>
+            <span class="shrink-0 text-xs font-medium text-muted-foreground">@</span>
+            <div class="flex flex-1 items-center gap-2 self-stretch bg-brand/15 px-2.5 py-2"><span class="lg6 bg-yellow-700">WAS</span><span class="text-sm font-bold text-foreground">WAS</span><span class="ml-auto text-sm font-bold tabular-nums text-foreground">17</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>document.getElementById('t').addEventListener('click',()=>document.documentElement.classList.toggle('dark'));</script>
+</body>
+</html>
