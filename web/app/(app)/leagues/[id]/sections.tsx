@@ -1812,6 +1812,15 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
                     <span className="text-xs font-normal text-muted-foreground">/{r.graded || r.total}</span>
                   </p>
                   <p className="text-xs text-muted-foreground">correct</p>
+                  {r.tiebreaker_total != null && (
+                    <>
+                      <p className="mt-1.5 text-sm font-semibold tabular-nums text-foreground">
+                        {r.tiebreaker_total}
+                        <span className="text-xs font-normal text-muted-foreground">/{last?.actual_total ?? '—'}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">tie-break</p>
+                    </>
+                  )}
                 </div>
               </button>
               <ConfirmMemberButton
