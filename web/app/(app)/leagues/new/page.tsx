@@ -112,7 +112,7 @@ export default function NewLeaguePage() {
     name.trim() && chosen.length > 0 && (!isMoney || Number(startingCredits) > 0);
 
   return (
-    <div className="container py-8">
+    <div className="container py-5 sm:py-8">
       <div className="mx-auto w-full max-w-2xl">
       <h1 className="mb-6 text-xl font-bold text-foreground sm:text-2xl">Create a league</h1>
 
@@ -146,7 +146,13 @@ export default function NewLeaguePage() {
         {/* Name */}
         <div className="flex flex-col gap-1.5">
           <Label>League name</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Office NBA" />
+          <Input
+            variant="lg"
+            className="h-12 text-base"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Office NBA"
+          />
         </div>
 
         {/* Description */}
@@ -156,7 +162,7 @@ export default function NewLeaguePage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What's this league about? (shown on the invite page)"
-            className="min-h-[72px] rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
+            className="min-h-24 rounded-lg border border-input bg-background px-3 py-2.5 text-base text-foreground"
           />
         </div>
 
@@ -168,11 +174,11 @@ export default function NewLeaguePage() {
             <div className="flex w-full flex-col gap-2 sm:w-auto">
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickLogo} />
               <div className="flex gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+                <Button type="button" variant="outline" size="md" onClick={() => fileRef.current?.click()}>
                   {logoFile ? 'Change image' : 'Upload image'}
                 </Button>
                 {logoFile && (
-                  <Button type="button" variant="ghost" size="sm" onClick={clearLogo}>
+                  <Button type="button" variant="ghost" size="md" onClick={clearLogo}>
                     Remove
                   </Button>
                 )}
@@ -193,7 +199,7 @@ export default function NewLeaguePage() {
                 key={p}
                 type="button"
                 onClick={() => setPeriodType(p)}
-                className={`rounded-lg border px-4 py-2 text-sm capitalize transition-colors ${
+                className={`rounded-lg border px-4 py-2.5 text-sm capitalize transition-colors ${
                   periodType === p ? 'border-primary bg-primary/5 text-foreground' : 'border-input text-muted-foreground'
                 }`}
               >
@@ -206,9 +212,10 @@ export default function NewLeaguePage() {
               <Label>Season year</Label>
               <Input
                 type="number"
+                variant="lg"
                 value={year}
                 onChange={(e) => setYear(e.target.value)}
-                className="max-w-[140px]"
+                className="h-12 max-w-[160px] text-base"
               />
             </div>
           ) : type === 'pickem' ? (
@@ -241,7 +248,14 @@ export default function NewLeaguePage() {
         {isMoney && (
           <div className="flex flex-col gap-1.5">
             <Label>Starting balance per member ($)</Label>
-            <Input type="number" min={1} value={startingCredits} onChange={(e) => setStartingCredits(e.target.value)} />
+            <Input
+              type="number"
+              min={1}
+              variant="lg"
+              className="h-12 text-base"
+              value={startingCredits}
+              onChange={(e) => setStartingCredits(e.target.value)}
+            />
             <span className="text-xs text-muted-foreground">
               No personal wallet — this is each member’s only funds in the league.
             </span>
@@ -262,7 +276,7 @@ export default function NewLeaguePage() {
                 key={s.id}
                 type="button"
                 onClick={() => setActiveSport(s.slug)}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
                   activeSport === s.slug ? 'border-primary bg-primary/5 text-foreground' : 'border-input text-muted-foreground'
                 }`}
               >
@@ -282,7 +296,7 @@ export default function NewLeaguePage() {
                     key={l.id}
                     type="button"
                     onClick={() => toggleLeague(l.sport_league_id || l.id, label)}
-                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+                    className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm transition-colors ${
                       on ? 'border-primary bg-primary text-primary-foreground' : 'border-input text-muted-foreground'
                     }`}
                   >
@@ -307,10 +321,15 @@ export default function NewLeaguePage() {
           {chosen.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {chosen.map((c) => (
-                <span key={c.id} className="flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-foreground">
+                <span key={c.id} className="flex items-center gap-1 rounded-full bg-muted py-1 pl-3.5 pr-1.5 text-sm text-foreground">
                   {c.label}
-                  <button type="button" onClick={() => toggleLeague(c.id, c.label)}>
-                    <X className="size-3" />
+                  <button
+                    type="button"
+                    onClick={() => toggleLeague(c.id, c.label)}
+                    aria-label={`Remove ${c.label}`}
+                    className="rounded-full p-1.5 hover:bg-muted-foreground/15"
+                  >
+                    <X className="size-3.5" />
                   </button>
                 </span>
               ))}
@@ -320,10 +339,12 @@ export default function NewLeaguePage() {
         </div>
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row">
-          <Button type="submit" className="w-full sm:w-auto" disabled={!canSubmit || create.isPending}>
+          <Button type="submit" size="lg" className="h-11 w-full sm:w-auto" disabled={!canSubmit || create.isPending}>
             {create.isPending ? 'Creating…' : 'Create league'}
           </Button>
-          <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={() => router.push('/')}>Cancel</Button>
+          <Button type="button" variant="ghost" size="lg" className="h-11 w-full sm:w-auto" onClick={() => router.push('/')}>
+            Cancel
+          </Button>
         </div>
       </form>
       </div>
