@@ -114,7 +114,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="container min-w-0 w-full py-8">
+    <div className="container min-w-0 w-full py-5 sm:py-8">
       {/* Header — stacks on mobile (action under the title), row on desktop */}
       <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
@@ -213,7 +213,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
                 key={t.to}
                 href={t.to}
                 className={cn(
-                  'shrink-0 whitespace-nowrap rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
+                  'shrink-0 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-medium transition-colors',
                   isActive
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground',

@@ -55,12 +55,17 @@ export default function HomePage() {
   const pendingInvites = invites.data ?? [];
 
   return (
-    <div className="container py-8">
+    <div className="container py-5 sm:py-8">
       {/* Header */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">My Leagues</h1>
-        </div>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">My Leagues</h1>
+        {data.length > 0 && (
+          <Button asChild size="lg" className="h-11 shrink-0">
+            <Link href="/leagues/new">
+              <Plus className="size-4" /> Create
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* A failed invites fetch would otherwise just hide the section silently. */}
@@ -240,12 +245,11 @@ export default function HomePage() {
 
       {data.length > 0 && (
         <div className="mt-6 flex justify-center">
-          <Link
-            href="/leagues/new"
-            className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-          >
-            <Plus className="size-4" /> Create league
-          </Link>
+          <Button asChild variant="outline" size="lg" className="h-11">
+            <Link href="/leagues/new">
+              <Plus className="size-4" /> Create league
+            </Link>
+          </Button>
         </div>
       )}
     </div>
