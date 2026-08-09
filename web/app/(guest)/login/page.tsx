@@ -13,8 +13,12 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { LegalLink } from '@/components/legal/legal-dialog';
 import { LEGAL_VERSION, SMS_TRANSACTIONAL_CONSENT, SMS_MARKETING_CONSENT } from '@/components/legal/legal-content';
+import { cn } from '@/lib/utils';
 
-type Step = 'phone' | 'code' | 'profile';
+// The new-account flow is split into three focused steps so the name field
+// (previously buried above a wall of consent text) can't be missed:
+//   name → terms (required) → sms opt-ins (optional).
+type Step = 'phone' | 'code' | 'name' | 'terms' | 'sms';
 
 export default function LoginPage() {
   const { startOtp, verifyOtp, completeProfile } = useAuth();
@@ -62,7 +66,7 @@ export default function LoginPage() {
       const res = await verifyOtp(phone, otp);
       if (res.needsProfile) {
         setTicket(res.ticket ?? '');
-        setStep('profile');
+        setStep('name');
       } else {
         router.push(next);
       }
@@ -82,12 +86,13 @@ export default function LoginPage() {
     });
   };
 
+  // Profile sub-steps carry their own step indicator + heading, so no subtitle.
   const subtitle =
     step === 'phone'
       ? 'Sign in or create your account'
       : step === 'code'
         ? 'Check your phone'
-        : 'One last thing';
+        : null;
 
   return (
     <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-4 p-4">
@@ -95,7 +100,7 @@ export default function LoginPage() {
         <div className="flex flex-col items-center gap-3 text-center">
           <img src="/logo.png" alt="Waygerz" className="h-20 w-auto" />
           <h1 className="text-3xl font-bold text-primary">Waygerz</h1>
-          <p className="text-base text-foreground">{subtitle}</p>
+          {subtitle && <p className="text-base text-foreground">{subtitle}</p>}
         </div>
         <PendingLinkBanner returnPath={next} />
 
@@ -180,10 +185,19 @@ export default function LoginPage() {
           </form>
         )}
 
-        {step === 'profile' && (
-          <form onSubmit={onCreate} className="flex flex-col gap-4">
+        {/* Step 1 — Name. On its own screen so it can't be missed. */}
+        {step === 'name' && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setError(null);
+              if (displayName.trim()) setStep('terms');
+            }}
+            className="flex flex-col gap-5"
+          >
+            <StepProgress current={1} />
             <div className="flex flex-col gap-2">
-              <Label htmlFor="display-name" className="text-base">
+              <Label htmlFor="display-name" className="text-lg font-semibold text-foreground">
                 What should we call you?
               </Label>
               <Input
@@ -195,80 +209,112 @@ export default function LoginPage() {
                 placeholder="Alex"
                 autoComplete="nickname"
                 maxLength={64}
+                autoFocus
               />
               <span className="text-sm text-muted-foreground">
                 This is the name your leaguemates will see.
               </span>
             </div>
+            <Button type="submit" size="lg" className="h-14 text-base" disabled={!displayName.trim()}>
+              Next
+            </Button>
+          </form>
+        )}
 
+        {/* Step 2 — Terms & Privacy (required). */}
+        {step === 'terms' && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setError(null);
+              if (agreeTos) setStep('sms');
+            }}
+            className="flex flex-col gap-5"
+          >
+            <StepProgress current={2} />
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold text-foreground">Agree to continue</h2>
+              <p className="text-sm text-muted-foreground">
+                Please accept our terms to create your account.
+              </p>
+            </div>
+            {/* Kept a div (not a label) — a label would toggle the box when tapping the links. */}
+            <div className="flex items-start gap-3 rounded-lg border border-input p-4">
+              <Checkbox
+                id="consent-tos"
+                size="md"
+                checked={agreeTos}
+                onCheckedChange={(v) => setAgreeTos(v === true)}
+                className="mt-0.5"
+                aria-label="I agree to the Terms of Service and Privacy Policy"
+              />
+              <span className="text-sm leading-relaxed text-foreground">
+                I agree to the <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
+                <LegalLink doc="privacy">Privacy Policy</LegalLink>.
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="lg" className="h-14" onClick={() => setStep('name')}>
+                ← Back
+              </Button>
+              <Button type="submit" size="lg" className="h-14 flex-1 text-base" disabled={!agreeTos}>
+                Next
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* Step 3 — SMS opt-ins (optional, standalone from the agreement). */}
+        {step === 'sms' && (
+          <form onSubmit={onCreate} className="flex flex-col gap-5">
+            <StepProgress current={3} />
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold text-foreground">Text alerts (optional)</h2>
+              <p className="text-sm text-muted-foreground">
+                Totally optional — you can create and use your account without these, and your sign-in
+                codes are texted either way.
+              </p>
+            </div>
             <div className="flex flex-col gap-4 rounded-lg border border-input p-4">
-              {/* Required: the legal agreement. Kept as a span (not a label) because it
-                  wraps the Terms/Privacy links — a label would toggle the box on link tap. */}
               <div className="flex items-start gap-3">
                 <Checkbox
-                  id="consent-tos"
+                  id="consent-sms-tx"
                   size="md"
-                  checked={agreeTos}
-                  onCheckedChange={(v) => setAgreeTos(v === true)}
+                  checked={smsTx}
+                  onCheckedChange={(v) => setSmsTx(v === true)}
                   className="mt-0.5"
-                  aria-label="I agree to the Terms of Service and Privacy Policy"
                 />
-                <span className="text-sm leading-relaxed text-foreground">
-                  I agree to the <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
-                  <LegalLink doc="privacy">Privacy Policy</LegalLink>.
-                </span>
+                <label htmlFor="consent-sms-tx" className="text-sm leading-relaxed text-muted-foreground">
+                  {SMS_TRANSACTIONAL_CONSENT}
+                </label>
               </div>
-
-              {/* Optional, and clearly separate from the agreement above: text-alert
-                  opt-ins. Neither is required to create or use the account. */}
-              <div className="flex flex-col gap-4 border-t border-border pt-4">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
-                    Text messages (optional)
-                  </span>
-                  <span className="text-sm leading-relaxed text-muted-foreground">
-                    These are separate from the agreement above — you can create and use your account
-                    without them, and sign-in codes are sent either way.
-                  </span>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    id="consent-sms-tx"
-                    size="md"
-                    checked={smsTx}
-                    onCheckedChange={(v) => setSmsTx(v === true)}
-                    className="mt-0.5"
-                  />
-                  <label htmlFor="consent-sms-tx" className="text-sm leading-relaxed text-muted-foreground">
-                    {SMS_TRANSACTIONAL_CONSENT} <span className="text-muted-foreground/60">(optional)</span>
-                  </label>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    id="consent-sms-mkt"
-                    size="md"
-                    checked={smsMkt}
-                    onCheckedChange={(v) => setSmsMkt(v === true)}
-                    className="mt-0.5"
-                  />
-                  <label htmlFor="consent-sms-mkt" className="text-sm leading-relaxed text-muted-foreground">
-                    {SMS_MARKETING_CONSENT} <span className="text-muted-foreground/60">(optional)</span>
-                  </label>
-                </div>
+              <div className="flex items-start gap-3 border-t border-border pt-4">
+                <Checkbox
+                  id="consent-sms-mkt"
+                  size="md"
+                  checked={smsMkt}
+                  onCheckedChange={(v) => setSmsMkt(v === true)}
+                  className="mt-0.5"
+                />
+                <label htmlFor="consent-sms-mkt" className="text-sm leading-relaxed text-muted-foreground">
+                  {SMS_MARKETING_CONSENT}
+                </label>
               </div>
             </div>
-
             {error && <div className="text-base text-destructive">{error}</div>}
-            <Button
-              type="submit"
-              size="lg"
-              className="h-14 text-base"
-              disabled={busy || !displayName.trim() || !agreeTos}
-            >
-              {busy ? 'Creating…' : 'Create my account'}
-            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="lg" className="h-14" onClick={() => setStep('terms')}>
+                ← Back
+              </Button>
+              <Button
+                type="submit"
+                size="lg"
+                className="h-14 flex-1 text-base"
+                disabled={busy || !displayName.trim() || !agreeTos}
+              >
+                {busy ? 'Creating…' : 'Create my account'}
+              </Button>
+            </div>
           </form>
         )}
       </Card>
@@ -283,6 +329,29 @@ export default function LoginPage() {
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+// Step indicator for the 3-step new-account flow: a "Step N of 3" label + three
+// dots, the current one elongated.
+function StepProgress({ current }: { current: number }) {
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Step {current} of 3
+      </span>
+      <div className="flex items-center gap-1.5" aria-hidden>
+        {[1, 2, 3].map((n) => (
+          <span
+            key={n}
+            className={cn(
+              'h-1.5 rounded-full transition-all',
+              n === current ? 'w-6 bg-primary' : n < current ? 'w-1.5 bg-primary/60' : 'w-1.5 bg-muted',
+            )}
+          />
+        ))}
+      </div>
     </div>
   );
 }
