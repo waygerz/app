@@ -30,7 +30,9 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [agreeTos, setAgreeTos] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const agreedLegal = agreeTerms && agreePrivacy;
   const [smsTx, setSmsTx] = useState(false);
   const [smsMkt, setSmsMkt] = useState(false);
   const [ticket, setTicket] = useState('');
@@ -78,7 +80,7 @@ export default function LoginPage() {
     run(async () => {
       await completeProfile(ticket, displayName, {
         tos_version: LEGAL_VERSION,
-        tos_accepted: agreeTos,
+        tos_accepted: agreedLegal,
         sms_transactional: smsTx,
         sms_marketing: smsMkt,
       });
@@ -95,7 +97,7 @@ export default function LoginPage() {
         : null;
 
   return (
-    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-4 p-4">
+    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-4 p-4 py-8">
       <Card className="w-full max-w-md gap-6 p-8">
         <div className="flex flex-col items-center gap-3 text-center">
           <img src="/logo.png" alt="Waygerz" className="h-20 w-auto" />
@@ -107,7 +109,7 @@ export default function LoginPage() {
         {step === 'phone' && (
           <form onSubmit={onSendCode} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="phone" className="text-base">
+              <Label htmlFor="phone" className="text-center text-base">
                 Phone number
               </Label>
               <Input
@@ -144,11 +146,11 @@ export default function LoginPage() {
         {step === 'code' && (
           <form onSubmit={onVerify} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="otp" className="text-base">
+              <Label htmlFor="otp" className="text-center text-base">
                 Enter your code
               </Label>
               {phone && (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-center text-sm text-muted-foreground">
                   We sent a 6-digit code to <span className="font-medium text-foreground">{phone}</span>.
                 </p>
               )}
@@ -197,7 +199,7 @@ export default function LoginPage() {
           >
             <StepProgress current={1} />
             <div className="flex flex-col gap-2">
-              <Label htmlFor="display-name" className="text-lg font-semibold text-foreground">
+              <Label htmlFor="display-name" className="text-center text-lg font-semibold text-foreground">
                 What should we call you?
               </Label>
               <Input
@@ -211,7 +213,7 @@ export default function LoginPage() {
                 maxLength={64}
                 autoFocus
               />
-              <span className="text-sm text-muted-foreground">
+              <span className="text-center text-sm text-muted-foreground">
                 This is the name your leaguemates will see.
               </span>
             </div>
@@ -227,37 +229,52 @@ export default function LoginPage() {
             onSubmit={(e) => {
               e.preventDefault();
               setError(null);
-              if (agreeTos) setStep('sms');
+              if (agreedLegal) setStep('sms');
             }}
             className="flex flex-col gap-5"
           >
             <StepProgress current={2} />
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 text-center">
               <h2 className="text-lg font-semibold text-foreground">Agree to continue</h2>
               <p className="text-sm text-muted-foreground">
-                Please accept our terms to create your account.
+                Please accept both to create your account.
               </p>
             </div>
-            {/* Kept a div (not a label) — a label would toggle the box when tapping the links. */}
-            <div className="flex items-start gap-3 rounded-lg border border-input p-4">
-              <Checkbox
-                id="consent-tos"
-                size="md"
-                checked={agreeTos}
-                onCheckedChange={(v) => setAgreeTos(v === true)}
-                className="mt-0.5"
-                aria-label="I agree to the Terms of Service and Privacy Policy"
-              />
-              <span className="text-sm leading-relaxed text-foreground">
-                I agree to the <LegalLink doc="terms">Terms of Service</LegalLink> and{' '}
-                <LegalLink doc="privacy">Privacy Policy</LegalLink>.
-              </span>
+            {/* Two separate agreements. Kept as divs (not labels) — a label would
+                toggle the box when tapping the Terms / Privacy links. */}
+            <div className="flex flex-col gap-4 rounded-lg border border-input p-4">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="consent-terms"
+                  size="md"
+                  checked={agreeTerms}
+                  onCheckedChange={(v) => setAgreeTerms(v === true)}
+                  className="mt-0.5"
+                  aria-label="I agree to the Terms of Service"
+                />
+                <span className="text-sm leading-relaxed text-foreground">
+                  I agree to the <LegalLink doc="terms">Terms of Service</LegalLink>.
+                </span>
+              </div>
+              <div className="flex items-start gap-3 border-t border-border pt-4">
+                <Checkbox
+                  id="consent-privacy"
+                  size="md"
+                  checked={agreePrivacy}
+                  onCheckedChange={(v) => setAgreePrivacy(v === true)}
+                  className="mt-0.5"
+                  aria-label="I agree to the Privacy Policy"
+                />
+                <span className="text-sm leading-relaxed text-foreground">
+                  I agree to the <LegalLink doc="privacy">Privacy Policy</LegalLink>.
+                </span>
+              </div>
             </div>
             <div className="flex gap-2">
               <Button type="button" variant="ghost" size="lg" className="h-14" onClick={() => setStep('name')}>
                 ← Back
               </Button>
-              <Button type="submit" size="lg" className="h-14 flex-1 text-base" disabled={!agreeTos}>
+              <Button type="submit" size="lg" className="h-14 flex-1 text-base" disabled={!agreedLegal}>
                 Next
               </Button>
             </div>
@@ -268,7 +285,7 @@ export default function LoginPage() {
         {step === 'sms' && (
           <form onSubmit={onCreate} className="flex flex-col gap-5">
             <StepProgress current={3} />
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 text-center">
               <h2 className="text-lg font-semibold text-foreground">Text alerts (optional)</h2>
               <p className="text-sm text-muted-foreground">
                 Totally optional — you can create and use your account without these, and your sign-in
@@ -310,7 +327,7 @@ export default function LoginPage() {
                 type="submit"
                 size="lg"
                 className="h-14 flex-1 text-base"
-                disabled={busy || !displayName.trim() || !agreeTos}
+                disabled={busy || !displayName.trim() || !agreedLegal}
               >
                 {busy ? 'Creating…' : 'Create my account'}
               </Button>
@@ -319,7 +336,7 @@ export default function LoginPage() {
         )}
       </Card>
 
-      {devOtp && (
+      {devOtp && step === 'code' && (
         <div className="w-full max-w-md rounded-lg border border-dashed border-primary/50 bg-primary/5 p-4 text-center">
           <p className="text-base text-foreground">
             Testing code: <strong className="text-lg tracking-widest">{devOtp}</strong>
