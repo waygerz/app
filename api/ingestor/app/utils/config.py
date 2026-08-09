@@ -55,7 +55,9 @@ class Config:
     # ---- ESPN public API (free) — covers what RealTimeSportsAPI can't: field
     # sports (golf, racing), 1v1 (mma), and sports RTS lacks (cricket). Redis-only
     # cache-aside, flat freshness window (serve cached; older than TTL -> refetch).
-    ESPN_BASE = os.environ.get("ESPN_BASE", "https://site.api.espn.com/apis/site/v2/sports")
+    # site.api.espn.com is Akamai-blocked (403 Access Denied); site.web.api.espn.com
+    # is the same API + response shape, unblocked.
+    ESPN_BASE = os.environ.get("ESPN_BASE", "https://site.web.api.espn.com/apis/site/v2/sports")
     ESPN_CACHE_TTL = int(os.environ.get("ESPN_CACHE_TTL", 600))  # 10 minutes
     ESPN_TIMEOUT = int(os.environ.get("ESPN_TIMEOUT", 8))  # seconds; serve stale/empty on timeout
     # Team-sport schedule ingest (service_schedule): how far ahead date-based

@@ -22,7 +22,15 @@ from flask import current_app
 
 from app.extensions import get_redis
 
-_UA = {"User-Agent": "waygerz-ingestor"}
+# ESPN's public site API bot-blocks non-browser User-Agents with a 403, so send
+# a browser-like UA (and Accept) — a plain "waygerz-ingestor" gets rejected.
+_UA = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+}
 
 SCHEDULED = "scheduled"
 IN_PROGRESS = "in_progress"
