@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
-import { Metadata } from 'next';
+import { Metadata, Viewport } from 'next';
 import { ThemeProvider } from 'next-themes';
 import { Providers } from '@/providers';
 import { ColorThemeProvider, colorThemeScript } from '@/components/theme/color-theme';
@@ -21,6 +21,20 @@ export const metadata: Metadata = {
     icon: [{ url: '/favicon.png', type: 'image/png', sizes: '32x32' }],
     apple: '/favicon.png',
   },
+};
+
+// Mobile-first (~99% of traffic is phones). `viewportFit: 'cover'` lets the app
+// paint under the notch/home-indicator and enables the `env(safe-area-inset-*)`
+// values the header + main use. User scaling is intentionally left enabled
+// (never set maximum-scale / user-scalable=no — it breaks accessibility zoom).
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#09090b' },
+  ],
 };
 
 export default async function RootLayout({

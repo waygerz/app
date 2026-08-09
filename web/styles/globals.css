@@ -224,6 +224,19 @@
   }
 }
 
+/** Mobile hardening (~99% of traffic is phones) **/
+@layer base {
+  html {
+    /* Stop iOS Safari from auto-inflating text on orientation change. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    /* App-like feel: drop the grey tap highlight on touch. */
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 /** Custom Scrollbar **/
 @layer base {
   ::-webkit-scrollbar {
