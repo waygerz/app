@@ -168,6 +168,10 @@ def _cache_event_teams(ev, sport, league):
 
 
 def _ingest_events(raw_events, sport, league, week_label=None):
+    if raw_events:
+        # Serialize the team upserts below with the background fixtures thread's
+        # sync_teams (both write teams.last_synced_at → deadlock otherwise).
+        sports.acquire_team_write_lock()
     count = 0
     for ev in raw_events or []:
         fields = _parse_espn_event(ev, sport, league, week_label)

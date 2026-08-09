@@ -58,6 +58,13 @@ def test_reaps_stuck_game_with_score_to_final(app):
     assert got.winner_side == "home"  # 20 > 17
 
 
+def test_acquire_team_write_lock_runs(app):
+    # Smoke: the team-write advisory-lock SQL is valid and executes (guards the
+    # deadlock between the score tick and the fixtures thread).
+    from app.services import service_sports
+    service_sports.acquire_team_write_lock()  # no error = OK
+
+
 def test_finalize_stale_live_refetches_only_overdue(app, monkeypatch):
     # A game still 'live' longer than it could possibly run is re-fetched by id;
     # a recent one is left alone (it might genuinely still be in progress).

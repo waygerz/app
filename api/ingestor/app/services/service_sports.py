@@ -5,6 +5,7 @@ from datetime import datetime
 
 import requests
 from flask import current_app
+from sqlalchemy import text
 
 from app.extensions import db, get_redis
 from app.models.sport_league import SportLeague
@@ -230,10 +231,24 @@ def upsert_team(fields):
     return team
 
 
+# Both the score tick (_cache_event_teams) and the background fixtures thread
+# (sync_teams) upsert overlapping teams.last_synced_at rows in different orders,
+# which deadlocks. A single transaction-scoped Postgres advisory lock makes any
+# team-writing transaction take turns; released automatically on commit/rollback.
+_TEAM_WRITE_LOCK_KEY = 915623
+
+
+def acquire_team_write_lock():
+    db.session.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _TEAM_WRITE_LOCK_KEY})
+
+
 def sync_teams(sport, league, force=False):
     raw_teams = fetch_teams(sport, league, force=force)
+    if not raw_teams:
+        return 0
+    acquire_team_write_lock()  # serialize with the score-tick team upserts
     count = 0
-    for raw in raw_teams or []:
+    for raw in raw_teams:
         fields = parse_team(raw, sport, league)
         if not fields["external_id"] or not fields["name"]:
             continue
