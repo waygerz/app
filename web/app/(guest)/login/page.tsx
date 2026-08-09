@@ -97,8 +97,11 @@ export default function LoginPage() {
         : null;
 
   return (
-    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-4 p-4 py-8">
-      <Card className="w-full max-w-md gap-6 p-8">
+    <div className="flex h-dvh w-full flex-col items-center overflow-y-auto p-4 py-8">
+      {/* my-auto centers the card when it fits, and collapses to 0 when a step is
+          taller than the viewport so it scrolls from the top — never clipped. */}
+      <div className="my-auto flex w-full max-w-md flex-col items-center gap-4">
+        <Card className="w-full max-w-md gap-6 p-8">
         <div className="flex flex-col items-center gap-3 text-center">
           <img src="/logo.png" alt="Waygerz" className="h-20 w-auto" />
           <h1 className="text-3xl font-bold text-primary">Waygerz</h1>
@@ -346,6 +349,7 @@ export default function LoginPage() {
           </p>
         </div>
       )}
+      </div>
     </div>
   );
 }
