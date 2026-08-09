@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useLayout } from './context';
-import { Home, Ticket, Trophy, type LucideIcon } from 'lucide-react';
+import { Home, Ticket, Trophy, Users, type LucideIcon } from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -14,10 +14,18 @@ interface NavItem {
   badge?: string;
 }
 
+// Full primary nav — used by the desktop top-bar.
 const navItems: NavItem[] = [
   { label: 'Leagues', href: '/', icon: Home },
   { label: 'Bets', href: '/bets', icon: Ticket },
   { label: 'Sports', href: '/sports', icon: Trophy },
+];
+
+// Secondary destinations for the mobile "browse" sheet — the things NOT already
+// in the bottom tab bar (which holds Leagues / Bets / Alerts / Profile).
+export const secondaryNavItems: NavItem[] = [
+  { label: 'Sports', href: '/sports', icon: Trophy },
+  { label: 'Friends', href: '/friends', icon: Users },
 ];
 
 function isItemActive(pathname: string, href: string) {
@@ -25,7 +33,13 @@ function isItemActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
 }
 
-export function Navbar({ isVertical = false }: { isVertical?: boolean }) {
+export function Navbar({
+  isVertical = false,
+  items = navItems,
+}: {
+  isVertical?: boolean;
+  items?: NavItem[];
+}) {
   const { isMobile } = useLayout();
   const pathname = usePathname();
   const isVerticalLayout = isVertical || isMobile;
@@ -37,7 +51,7 @@ export function Navbar({ isVertical = false }: { isVertical?: boolean }) {
         isVerticalLayout ? 'flex flex-col p-2 w-full' : 'inline-flex p-1.5',
       )}
     >
-      {navItems.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon;
         const isActive = isItemActive(pathname, item.href);
 

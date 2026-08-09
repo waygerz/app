@@ -4,6 +4,7 @@ import { ReactNode, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutProvider } from '@/components/shell/context';
 import { Header } from '@/components/shell/header';
+import { BottomNav } from '@/components/shell/bottom-nav';
 import { ScreenLoader } from '@/components/screen-loader';
 import { ProfileDialogProvider } from '@/components/profile-dialog-provider';
 import { useAuth } from '@/auth/AuthContext';
@@ -44,11 +45,12 @@ export default function Layout({ children }: { children: ReactNode }) {
       <ProfileDialogProvider me={user.id}>
         <Header />
         <main
-          className="flex w-full min-w-0 max-w-full grow flex-col overflow-x-hidden pt-[calc(var(--header-height-mobile)_+_env(safe-area-inset-top))] pb-[env(safe-area-inset-bottom)] lg:pt-(--header-height) lg:pb-0"
+          className="flex w-full min-w-0 max-w-full grow flex-col overflow-x-hidden pt-[calc(var(--header-height-mobile)_+_env(safe-area-inset-top))] pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pt-(--header-height) lg:pb-0"
           role="main"
         >
           {children}
         </main>
+        <BottomNav />
       </ProfileDialogProvider>
     </LayoutProvider>
   );

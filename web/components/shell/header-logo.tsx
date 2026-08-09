@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetBody } from '@/components/ui/sheet';
 import { Menu } from 'lucide-react';
 import { useLayout } from './context';
-import { Navbar } from './navbar';
+import { Navbar, secondaryNavItems } from './navbar';
 
 export function HeaderLogo() {
   const pathname = usePathname();
@@ -37,7 +37,7 @@ export function HeaderLogo() {
             >
               <SheetHeader className="p-0 space-y-0" />
               <SheetBody className="flex flex-col grow p-0 dark overflow-y-auto">
-                <Navbar />
+                <Navbar items={secondaryNavItems} />
               </SheetBody>
             </SheetContent>
           </Sheet>

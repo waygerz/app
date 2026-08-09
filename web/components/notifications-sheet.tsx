@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -67,7 +67,13 @@ function timeAgo(iso: string | null) {
   return new Date(iso).toLocaleDateString();
 }
 
-export function NotificationsSheet() {
+export function NotificationsSheet({
+  renderTrigger,
+}: {
+  // Lets a caller (e.g. the mobile bottom nav) supply its own trigger while
+  // sharing this single sheet instance + query. Receives the unread count.
+  renderTrigger?: (unread: number) => ReactNode;
+} = {}) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const router = useRouter();
@@ -138,19 +144,23 @@ export function NotificationsSheet() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative text-white/90 hover:text-white"
-          aria-label="Notifications"
-        >
-          <Bell className="size-5" />
-          {unread > 0 && (
-            <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-white">
-              {unread > 9 ? '9+' : unread}
-            </span>
-          )}
-        </Button>
+        {renderTrigger ? (
+          renderTrigger(unread)
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative text-white/90 hover:text-white"
+            aria-label="Notifications"
+          >
+            <Bell className="size-5" />
+            {unread > 0 && (
+              <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-white">
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent side="right" className="w-full gap-0 p-0">
         <SheetHeader className="flex-row items-center justify-between gap-2 border-b border-border p-4">
