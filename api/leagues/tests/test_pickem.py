@@ -269,6 +269,27 @@ def test_grading_marks_tie_as_not_correct(client, auth_headers, app, monkeypatch
     assert vals == [(False, False)]
 
 
+def test_grading_derives_winner_from_score(client, auth_headers, app, monkeypatch):
+    # A final with scores but no winner_side (e.g. a stuck game finalized from
+    # its score) must grade from the score — not be treated as a draw/void.
+    from app.services import service_leagues as svc
+
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
+    lid, pid = d["id"], _period_id(d)
+    client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+               json={"picks": [{"event_id": "EVT1", "side": "home"}]},
+               headers=auth_headers(U1))
+    monkeypatch.setattr(svc, "get_event",
+                        lambda eid: {"status": "final", "winner_side": None,
+                                     "home_score": 20, "away_score": 17})
+    with app.app_context():
+        assert svc.grade_open_periods() == 1
+        from app.models.pick import Pick as _P
+        p = _P.query.filter_by(period_id=pid).one()
+        assert p.correct is True and p.voided is False  # picked home, home won 20-17
+
+
 def test_grading_voids_cancelled_game(client, auth_headers, app, monkeypatch):
     # Cancelled / postponed: no contest. The pick is voided (resolved, so the
     # period can finalize) but NOT counted as a loss.

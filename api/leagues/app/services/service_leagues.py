@@ -411,16 +411,21 @@ def grade_period(period) -> int:
             status = event.get("status")
             if status == period_model.FINAL:
                 winner = event.get("winner_side")
+                hs, as_ = event.get("home_score"), event.get("away_score")
+                # Derive the winner from the score when the feed left it unset but
+                # the game clearly has a result (e.g. a stuck 'live' game that was
+                # finalized from its score). Only an equal score is a real draw.
+                if winner not in (HOME, AWAY) and hs is not None and as_ is not None and hs != as_:
+                    winner = HOME if hs > as_ else AWAY
                 if winner in (HOME, AWAY):
                     pick.correct = (pick.pick_side == winner)
-                elif event.get("home_score") is not None and event.get("away_score") is not None:
-                    # A real final with scores but no winner side — a genuine
-                    # draw. Nobody picked "tie", so everyone was wrong.
+                elif hs is not None and as_ is not None:
+                    # Real final, equal score — a genuine draw; anyone who picked
+                    # a team was wrong.
                     pick.correct = False
                 else:
-                    # Final with no winner AND no scores: we never actually got a
-                    # result (e.g. a stale event swept to a terminal status). Void
-                    # it — no contest — rather than punishing the pick as a loss.
+                    # Final with no result at all — void it (no contest) rather
+                    # than punishing the pick as a loss.
                     pick.voided = True
             elif status in VOID_EVENT_STATUSES:
                 # Cancelled / postponed / abandoned: the game won't produce a
@@ -1202,13 +1207,14 @@ def _period_leaderboard(league_id, period_id):
         if hs is not None and as_ is not None:
             actual_total = int(hs) + int(as_)
 
-    per = {uid: {"correct": 0, "graded": 0, "total": 0, "tb": None} for uid in member_ids}
+    per = {uid: {"correct": 0, "graded": 0, "total": 0, "made": 0, "tb": None} for uid in member_ids}
     for p in picks:
         agg = per.get(p.user_id)
         if agg is None:
             continue
+        agg["made"] += 1  # participation — counts voided picks too
         if p.voided:
-            continue  # no contest — excluded from the tally entirely
+            continue  # no contest — excluded from the W/L math
         agg["total"] += 1
         if p.correct is True:
             agg["correct"] += 1
@@ -1220,7 +1226,7 @@ def _period_leaderboard(league_id, period_id):
 
     rows = []
     for uid, agg in per.items():
-        if agg["total"] == 0:
+        if agg["made"] == 0:
             continue
         u = users.get(uid) or {}
         tb = agg["tb"]

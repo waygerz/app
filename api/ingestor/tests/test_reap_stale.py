@@ -37,7 +37,25 @@ def test_reaps_past_scheduled_and_live(app):
     assert n == 2
     for ext in ("old-sched", "old-live"):
         e = Event.query.filter_by(external_id=ext).one()
+        # No score was ever recorded → genuinely no result → cancelled.
         assert e.status == CANCELLED
+
+
+def test_reaps_stuck_game_with_score_to_final(app):
+    # A game we captured a score for but ESPN never flipped to final should be
+    # finalized with the winner derived from the score — never voided.
+    long_ago = datetime.utcnow() - timedelta(days=1)
+    e = Event(
+        external_id="stuck-live", sport="football", league="nfl",
+        name="Away @ Home", home_team="Home", away_team="Away",
+        status=LIVE, start_time=long_ago, home_score=20, away_score=17,
+    )
+    _seed(e)
+    n = sched.reap_stale_events()
+    assert n == 1
+    got = Event.query.filter_by(external_id="stuck-live").one()
+    assert got.status == FINAL
+    assert got.winner_side == "home"  # 20 > 17
 
 
 def test_leaves_future_and_recent_events_alone(app):

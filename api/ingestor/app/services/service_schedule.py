@@ -455,25 +455,38 @@ def tick():
 
 # Games clearly finished but never marked so. refresh_scores only re-fetches
 # TODAY's board, and ESPN drops old games from the scoreboard, so an event whose
-# score fetch is missed stays 'scheduled' forever and keeps showing in the
-# bettable list with a stale date. Sweep anything still scheduled/live well past
-# its start to 'cancelled' — the honest state, because we never actually observed
-# a result. Marking it 'final' would fabricate a 0-0 outcome: Pick'em would grade
-# every pick a loss, and an H2H total/spread could mis-settle against a phantom
-# score. 'cancelled' instead void-refunds H2H wagers and voids Pick'em picks (no
-# contest). The grace comfortably exceeds any real game length, so a genuinely
-# live game is never mis-reaped; a real score, if it ever arrives, overwrites the
-# status on a later tick anyway.
+# final-status flip is missed can stay 'scheduled'/'live' forever. Sweep anything
+# still scheduled/live well past its start:
+#   * If we captured a score, the game plainly finished (ESPN just never flipped
+#     it to 'final') — finalize it and derive the winner from the score. Never
+#     void a played game: that would strand Pick'em picks and refund live wagers.
+#   * If there's no score at all, we truly never observed a result — 'cancelled'
+#     (void-refunds H2H, voids Pick'em picks, no contest).
+# The grace comfortably exceeds any real game length, so a genuinely live game is
+# never mis-reaped.
 _STALE_EVENT_GRACE = timedelta(hours=12)
 
 
 def reap_stale_events() -> int:
     cutoff = datetime.utcnow() - _STALE_EVENT_GRACE
-    n = (
+    stuck = (
         Event.query
         .filter(Event.status.in_([SCHEDULED, LIVE]), Event.start_time < cutoff)
-        .update({Event.status: CANCELLED}, synchronize_session=False)
+        .all()
     )
+    n = 0
+    for ev in stuck:
+        if ev.home_score is not None and ev.away_score is not None:
+            ev.status = FINAL
+            if ev.home_score > ev.away_score:
+                ev.winner_side = "home"
+            elif ev.away_score > ev.home_score:
+                ev.winner_side = "away"
+            else:
+                ev.winner_side = "draw"
+        else:
+            ev.status = CANCELLED
+        n += 1
     if n:
         db.session.commit()
     return n
