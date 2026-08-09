@@ -345,11 +345,12 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                     type="number"
                     min={0}
                     inputMode="numeric"
+                    variant="lg"
                     value={tiebreaker}
                     onChange={(e) => setTiebreaker(e.target.value)}
                     disabled={disabled}
                     placeholder="e.g. 48"
-                    className="h-9 w-24"
+                    className="h-11 w-24 text-base"
                   />
                 </div>
               )}
@@ -360,7 +361,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
 
       {/* Save bar pinned to the bottom of the page (open week only) */}
       {evs.length > 0 && editable && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur-sm">
+        <div className="fixed inset-x-0 bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-20 border-t border-border bg-background/95 backdrop-blur-sm lg:bottom-0">
           <div className="container flex items-center justify-between gap-3 py-3">
             <span className="text-xs text-muted-foreground">
               {picksLocked
@@ -369,7 +370,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                   ? `${unsaved} unsaved pick${unsaved === 1 ? '' : 's'}${tbDirty ? ' + tie-breaker' : ''}`
                   : 'Tap a team to make a pick.'}
             </span>
-            <Button className="shrink-0" disabled={save.isPending || picksLocked || !hasChanges} onClick={() => save.mutate()}>
+            <Button size="lg" className="h-11 shrink-0" disabled={save.isPending || picksLocked || !hasChanges} onClick={() => save.mutate()}>
               {save.isPending ? 'Saving…' : 'Save picks'}
             </Button>
           </div>
