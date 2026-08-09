@@ -1763,11 +1763,6 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
           options={periods.map((p) => ({ value: p.id, label: p.label }))}
           searchPlaceholder="Search week…"
         />
-        {last?.final && last.actual_total !== null && (
-          <span className="text-xs text-muted-foreground">
-            Tie-breaker: {last.away_team} @ {last.home_team} · {last.actual_total} pts
-          </span>
-        )}
       </div>
 
       {resultsQ.isLoading && <Skeleton className="h-40 rounded-xl" />}

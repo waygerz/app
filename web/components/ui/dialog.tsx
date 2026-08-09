@@ -11,16 +11,12 @@ const dialogContentVariants = cva(
   {
     variants: {
       variant: {
-        // Desktop: centered modal. Mobile (max-sm): dock to the bottom as a
-        // sheet — full width, rounded top, slides up, scrolls its own body, and
-        // clears the home indicator. Desktop styles are untouched.
+        // Centered modal. On mobile it stays centered (with a small side margin)
+        // but is capped to the viewport height and scrolls its own body, so a
+        // tall dialog never clips.
         default:
-          'left-[50%] top-[50%] max-w-lg translate-x-[-50%] translate-y-[-50%] w-full ' +
-          'max-sm:left-0 max-sm:right-0 max-sm:top-auto max-sm:bottom-0 max-sm:max-w-none ' +
-          'max-sm:translate-x-0 max-sm:translate-y-0 max-sm:max-h-[90dvh] max-sm:overflow-y-auto ' +
-          'max-sm:rounded-t-2xl max-sm:rounded-b-none ' +
-          'max-sm:pb-[calc(1.5rem_+_env(safe-area-inset-bottom))] ' +
-          'max-sm:data-[state=open]:slide-in-from-bottom max-sm:data-[state=closed]:slide-out-to-bottom',
+          'left-[50%] top-[50%] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] ' +
+          'max-sm:max-h-[85dvh] max-sm:overflow-y-auto',
         fullscreen: 'inset-5',
       },
     },
