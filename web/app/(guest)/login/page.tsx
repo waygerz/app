@@ -256,7 +256,7 @@ export default function LoginPage() {
                   aria-label="I agree to the Terms of Service"
                 />
                 <span className="text-sm leading-relaxed text-foreground">
-                  I agree to the <LegalLink doc="terms">Terms of Service</LegalLink>.
+                  I agree to the <LegalLink doc="terms">TOS</LegalLink>.
                 </span>
               </div>
               <div className="flex items-start gap-3 border-t border-border pt-4">

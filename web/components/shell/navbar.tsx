@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useLayout } from './context';
-import { Home, Ticket, Trophy, Users, type LucideIcon } from 'lucide-react';
+import { Home, Ticket, type LucideIcon } from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -14,18 +14,11 @@ interface NavItem {
   badge?: string;
 }
 
-// Full primary nav — used by the desktop top-bar.
+// Primary nav — used by the desktop top-bar. (Sports lives inside league
+// creation, and Friends is in the account menu, so neither needs a top-level nav.)
 const navItems: NavItem[] = [
   { label: 'Leagues', href: '/', icon: Home },
   { label: 'Bets', href: '/bets', icon: Ticket },
-  { label: 'Sports', href: '/sports', icon: Trophy },
-];
-
-// Secondary destinations for the mobile "browse" sheet — the things NOT already
-// in the bottom tab bar (which holds Leagues / Bets / Alerts / Profile).
-export const secondaryNavItems: NavItem[] = [
-  { label: 'Sports', href: '/sports', icon: Trophy },
-  { label: 'Friends', href: '/friends', icon: Users },
 ];
 
 function isItemActive(pathname: string, href: string) {
