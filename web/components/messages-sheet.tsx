@@ -75,7 +75,13 @@ function conversationTitle(conv: Conversation, leagueNames: Record<string, strin
   return author ? `Chat with ${author}` : 'Direct message';
 }
 
-export function MessagesSheet() {
+export function MessagesSheet({
+  renderTrigger,
+}: {
+  // Lets the mobile bottom nav supply its own trigger while sharing this single
+  // sheet instance + queries. Receives the unread count.
+  renderTrigger?: (unread: number) => ReactNode;
+} = {}) {
   const { user } = useAuth();
   const me = String(user?.id ?? '');
   const qc = useQueryClient();
@@ -635,14 +641,18 @@ export function MessagesSheet() {
   return (
     <Sheet open={sheetOpen} onOpenChange={(o) => { setSheetOpen(o); if (!o) setActiveId(null); }}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative text-white/90 hover:text-white" aria-label="Messages">
-          <MessageCircle className="size-5" />
-          {unreadCount > 0 && (
-            <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </Button>
+        {renderTrigger ? (
+          renderTrigger(unreadCount)
+        ) : (
+          <Button variant="ghost" size="icon" className="relative text-white/90 hover:text-white" aria-label="Messages">
+            <MessageCircle className="size-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0">
         <SheetHeader className="border-b border-border p-4">

@@ -121,7 +121,7 @@ export default function AccountPage() {
   return (
     <div className="container py-5 sm:py-8">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-        <h1 className="text-2xl font-bold text-foreground">Account</h1>
+        <h1 className="hidden text-2xl font-bold text-foreground lg:block">Account</h1>
 
         {/* Avatar */}
         <Card className="gap-4 p-5">

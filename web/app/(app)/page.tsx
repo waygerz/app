@@ -58,9 +58,9 @@ export default function HomePage() {
     <div className="container py-5 sm:py-8">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">My Leagues</h1>
+        <h1 className="hidden text-xl font-bold tracking-tight sm:text-2xl lg:block">My Leagues</h1>
         {data.length > 0 && (
-          <Button asChild size="lg" className="h-11 shrink-0">
+          <Button asChild size="lg" className="ml-auto h-11 shrink-0">
             <Link href="/leagues/new">
               <Plus className="size-4" /> Create
             </Link>

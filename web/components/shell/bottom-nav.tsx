@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Ticket, Bell, type LucideIcon } from 'lucide-react';
+import { Home, Ticket, Bell, MessageCircle, type LucideIcon } from 'lucide-react';
 import { NotificationsSheet } from '@/components/notifications-sheet';
+import { MessagesSheet } from '@/components/messages-sheet';
 import { UserAvatar } from '@/components/user-avatar';
 import { useAuth } from '@/auth/AuthContext';
 import { cn } from '@/lib/utils';
@@ -68,6 +69,14 @@ export function BottomNav() {
         renderTrigger={(unread) => (
           <button type="button" className={tabBase} aria-label="Alerts">
             <TabInner icon={Bell} label="Alerts" badge={unread} />
+          </button>
+        )}
+      />
+
+      <MessagesSheet
+        renderTrigger={(unread) => (
+          <button type="button" className={tabBase} aria-label="Messages">
+            <TabInner icon={MessageCircle} label="Messages" badge={unread} />
           </button>
         )}
       />

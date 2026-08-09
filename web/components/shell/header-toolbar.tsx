@@ -19,10 +19,9 @@ export function HeaderToolbar() {
         </Button>
       ) : (
         <>
-          {/* Messages stays reachable in the header at every size. */}
-          <MessagesSheet />
-          {/* Alerts + Profile move to the bottom nav on mobile; keep them here on desktop. */}
+          {/* Messages, Alerts + Profile all live in the bottom nav on mobile; keep them here on desktop. */}
           <div className="hidden items-center gap-1 sm:gap-2.5 lg:flex">
+            <MessagesSheet />
             <NotificationsSheet />
             <ProfileMenu>
               <button type="button" className="cursor-pointer" aria-label="Account menu">

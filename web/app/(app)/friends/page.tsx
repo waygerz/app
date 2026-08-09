@@ -105,7 +105,7 @@ export default function FriendsPage() {
   return (
     <div className="container py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-foreground">Friends</h1>
+        <h1 className="hidden text-2xl font-bold text-foreground lg:block">Friends</h1>
         {user && <AddFriendsButton inviteLink={inviteLink} displayName={user.display_name} />}
       </div>
 

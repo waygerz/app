@@ -4,7 +4,6 @@ import { ReactNode, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Ticket } from 'lucide-react';
 import { wagersApi } from '@/lib/wagers';
 import { cn } from '@/lib/utils';
 import { FILTERS, filterWagers, type BetFilter } from './bets-common';
@@ -25,8 +24,8 @@ export default function BetsLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="container min-w-0 w-full py-5 sm:py-8">
-      <div className="mb-6 flex items-center gap-3">
-        <Ticket className="size-7 text-primary" />
+      {/* Title rides in the top bar on mobile; keep it in-page on desktop. */}
+      <div className="mb-6 hidden items-center gap-3 lg:flex">
         <h1 className="text-2xl font-bold text-foreground">My Bets</h1>
       </div>
 
