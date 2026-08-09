@@ -234,7 +234,7 @@ export default function AccountPage() {
         {/* Display name */}
         <Card className="gap-2 p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex flex-1 flex-col gap-1.5">
+            <div className="flex flex-1 flex-col gap-2.5">
               <Label htmlFor="display-name">Display name</Label>
               <Input
                 id="display-name"
@@ -277,7 +277,7 @@ export default function AccountPage() {
 
         {/* Phone (read-only — it's the sign-in identity) */}
         <Card className="gap-2 p-5">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2.5">
             <Label htmlFor="phone">Phone</Label>
             <Input id="phone" variant="lg" className="h-12 text-base" value={user.phone} readOnly disabled />
           </div>
