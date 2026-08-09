@@ -119,7 +119,7 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="container py-8">
+    <div className="container py-5 sm:py-8">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
         <h1 className="text-2xl font-bold text-foreground">Account</h1>
 
@@ -193,7 +193,7 @@ export default function AccountPage() {
             </div>
 
             {/* Button underneath */}
-            <Button size="sm" disabled={busy} onClick={() => fileRef.current?.click()}>
+            <Button size="lg" className="h-11" disabled={busy} onClick={() => fileRef.current?.click()}>
               <ImagePlus className="size-4" />
               {busy ? 'Uploading…' : user.avatar_key ? 'Upload new' : 'Choose image'}
             </Button>
@@ -238,6 +238,8 @@ export default function AccountPage() {
               <Label htmlFor="display-name">Display name</Label>
               <Input
                 id="display-name"
+                variant="lg"
+                className="h-12 text-base"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={64}
@@ -245,6 +247,8 @@ export default function AccountPage() {
               />
             </div>
             <Button
+              size="lg"
+              className="h-12"
               disabled={savingName || !name.trim() || name.trim() === user.display_name}
               onClick={saveName}
             >
@@ -275,7 +279,7 @@ export default function AccountPage() {
         <Card className="gap-2 p-5">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="phone">Phone</Label>
-            <Input id="phone" value={user.phone} readOnly disabled />
+            <Input id="phone" variant="lg" className="h-12 text-base" value={user.phone} readOnly disabled />
           </div>
           <p className="text-xs text-muted-foreground">
             Your phone number is how you sign in and can’t be changed here yet.
