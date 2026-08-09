@@ -1808,9 +1808,9 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
                   </p>
                   <p className="text-xs text-muted-foreground">correct</p>
                   {r.tiebreaker_total != null && (
-                    <p className="mt-1.5 text-sm font-semibold tabular-nums text-foreground">
+                    <p className="mt-1 text-xs font-semibold tabular-nums text-foreground">
                       {r.tiebreaker_total}
-                      <span className="text-xs font-normal text-muted-foreground">/{last?.actual_total ?? '—'}</span>
+                      <span className="text-[10px] font-normal text-muted-foreground">/{last?.actual_total ?? '—'}</span>
                     </p>
                   )}
                 </div>
