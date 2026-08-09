@@ -29,7 +29,7 @@ from app.models.event import CANCELLED, FINAL, LIVE, SCHEDULED, Event
 from app.models.sport_league import SportLeague
 from app.services import service_sports as sports
 from app.services.service_espn import espn_get
-from app.services.service_events import _parse_dt, upsert_event
+from app.services.service_events import _parse_dt, parse_event, upsert_event
 from app.services.service_logos import cache_logo
 
 # ---------------------------------------------------------------- registry
@@ -441,6 +441,14 @@ def tick():
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         current_app.logger.warning("field sync: %s", exc)
+    # Pull the real final for games ESPN left stuck 'live' past their max
+    # duration (by event id) before the score-based reaper runs.
+    try:
+        finalized = finalize_stale_live()
+    except Exception as exc:  # noqa: BLE001
+        db.session.rollback()
+        current_app.logger.warning("finalize stale live: %s", exc)
+        finalized = 0
     try:
         reaped = reap_stale_events()
     except Exception as exc:  # noqa: BLE001
@@ -449,7 +457,7 @@ def tick():
         reaped = 0
     return {
         "fixtures": fixtures_state, "scores": scores, "odds": odds,
-        "combat": combat, "field": field, "reaped": reaped,
+        "combat": combat, "field": field, "finalized": finalized, "reaped": reaped,
     }
 
 
@@ -487,6 +495,65 @@ def reap_stale_events() -> int:
         else:
             ev.status = CANCELLED
         n += 1
+    if n:
+        db.session.commit()
+    return n
+
+
+# A game still 'live'/'scheduled' this long after kickoff is certainly over —
+# ESPN just never flipped it, or it dropped off the daily board before we saw
+# the final. Comfortably longer than any real game (incl. OT / delays), shorter
+# than the 12h reaper's score-based fallback. Team sports only; field (golf,
+# racing) and combat (mma) have their own handlers.
+_MAX_GAME_DURATION = {
+    "football": timedelta(hours=5),
+    "basketball": timedelta(hours=4),
+    "baseball": timedelta(hours=6),
+    "hockey": timedelta(hours=4),
+    "soccer": timedelta(hours=3),
+}
+
+
+def finalize_stale_live() -> int:
+    """Re-fetch games still live/scheduled longer than they could possibly run,
+    by event id. refresh_scores only reads today+yesterday's board, so a game
+    whose final-flip we missed while it dropped off that board would sit 'live'
+    until the 12h reaper. Fetching the event by id queries its own date, where
+    ESPN keeps the real final — so the week grades the same day, from ESPN's
+    actual result, not a guess. Bounded to the [maxdur, 12h] window; older games
+    are the reaper's job."""
+    now = datetime.utcnow()
+    floor = now - _STALE_EVENT_GRACE  # older than this → reaper handles it
+    candidates = (
+        Event.query
+        .filter(
+            Event.status.in_([SCHEDULED, LIVE]),
+            Event.start_time.isnot(None),
+            Event.start_time < now,
+            Event.start_time > floor,
+        )
+        .all()
+    )
+    n = 0
+    for ev in candidates:
+        maxdur = _MAX_GAME_DURATION.get(ev.sport)
+        if maxdur is None:
+            continue  # field / combat sports have their own tick handlers
+        if ev.start_time > now - maxdur:
+            continue  # could still genuinely be in progress
+        try:
+            raw = sports.fetch_event(ev.sport, ev.league, ev.external_id, force=True)
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.warning(
+                "finalize_stale_live %s/%s %s: %s", ev.sport, ev.league, ev.external_id, exc
+            )
+            continue
+        if not raw:
+            continue
+        fields = parse_event(raw, ev.sport, ev.league)
+        if fields.get("external_id"):
+            upsert_event(fields)
+            n += 1
     if n:
         db.session.commit()
     return n

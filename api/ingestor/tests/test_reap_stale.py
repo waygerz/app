@@ -58,6 +58,24 @@ def test_reaps_stuck_game_with_score_to_final(app):
     assert got.winner_side == "home"  # 20 > 17
 
 
+def test_finalize_stale_live_refetches_only_overdue(app, monkeypatch):
+    # A game still 'live' longer than it could possibly run is re-fetched by id;
+    # a recent one is left alone (it might genuinely still be in progress).
+    from app.services import service_schedule as s
+    now = datetime.utcnow()
+    _seed(
+        _ev("overdue", LIVE, now - timedelta(hours=7)),  # baseball maxdur 6h → refetch
+        _ev("recent", LIVE, now - timedelta(hours=1)),   # → skip
+    )
+    seen = []
+    monkeypatch.setattr(s.sports, "fetch_event", lambda sp, lg, eid, force=False: {"id": eid})
+    monkeypatch.setattr(s, "parse_event", lambda raw, sp, lg: {"external_id": raw["id"], "status": FINAL})
+    monkeypatch.setattr(s, "upsert_event", lambda fields: seen.append(fields["external_id"]))
+    n = s.finalize_stale_live()
+    assert n == 1
+    assert seen == ["overdue"]
+
+
 def test_leaves_future_and_recent_events_alone(app):
     future = datetime.utcnow() + timedelta(days=1)
     just_started = datetime.utcnow() - timedelta(hours=2)  # inside the 12h grace
