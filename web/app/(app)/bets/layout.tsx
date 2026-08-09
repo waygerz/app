@@ -24,7 +24,7 @@ export default function BetsLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   return (
-    <div className="container min-w-0 w-full py-8">
+    <div className="container min-w-0 w-full py-5 sm:py-8">
       <div className="mb-6 flex items-center gap-3">
         <Ticket className="size-7 text-primary" />
         <h1 className="text-2xl font-bold text-foreground">My Bets</h1>
@@ -39,7 +39,7 @@ export default function BetsLayout({ children }: { children: ReactNode }) {
               key={f.key}
               href={to}
               className={cn(
-                'shrink-0 whitespace-nowrap rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
+                'shrink-0 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-medium transition-colors',
                 isActive
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground',

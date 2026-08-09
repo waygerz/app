@@ -135,7 +135,7 @@ export default function BetsView() {
       // button (the badge carries the result).
       if (w.winner_user_id === me) {
         return (
-          <Button size="sm" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate(ids)}>
+          <Button size="sm" className="h-9 w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate(ids)}>
             Confirm
           </Button>
         );
@@ -151,7 +151,7 @@ export default function BetsView() {
       }
       if (!w.cancel_requested_by) {
         return (
-          <Button size="sm" variant="outline" className="w-full" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(ids)}>
+          <Button size="sm" variant="outline" className="h-9 w-full" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(ids)}>
             Cancel
           </Button>
         );
@@ -161,8 +161,8 @@ export default function BetsView() {
       }
       return (
         <>
-          <Button size="sm" className="w-full" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(ids)}>Approve</Button>
-          <Button size="sm" variant="ghost" className="w-full" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(ids)}>Reject</Button>
+          <Button size="sm" className="h-9 w-full" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(ids)}>Approve</Button>
+          <Button size="sm" variant="ghost" className="h-9 w-full" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(ids)}>Reject</Button>
         </>
       );
     }
@@ -170,8 +170,8 @@ export default function BetsView() {
     if (w.acceptor_id === me) {
       return (
         <>
-          <Button size="sm" className="w-full" disabled={acceptM.isPending} onClick={() => acceptM.mutate(ids)}>Accept</Button>
-          <Button size="sm" variant="outline" className="w-full" disabled={declineM.isPending} onClick={() => declineM.mutate(ids)}>Decline</Button>
+          <Button size="sm" className="h-9 w-full" disabled={acceptM.isPending} onClick={() => acceptM.mutate(ids)}>Accept</Button>
+          <Button size="sm" variant="outline" className="h-9 w-full" disabled={declineM.isPending} onClick={() => declineM.mutate(ids)}>Decline</Button>
         </>
       );
     }
@@ -181,7 +181,7 @@ export default function BetsView() {
         return null;
       }
       return (
-        <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>Cancel</Button>
+        <Button size="sm" variant="outline" className="h-9 w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>Cancel</Button>
       );
     }
     return null;
