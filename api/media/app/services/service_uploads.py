@@ -110,10 +110,34 @@ def complete_upload(owner_id: str, asset_id: str) -> tuple[dict, int]:
 
     asset.status = STATUS_READY
     asset.ready_at = datetime.utcnow()
+    # Avatars accumulate in the re-picker forever otherwise; keep only the newest
+    # few. The just-completed upload is the newest row, so it's always in the kept
+    # set — and clients point the profile at the freshly-uploaded avatar right
+    # after this, so the active avatar is the one being kept.
+    if asset.purpose == PURPOSE_AVATAR:
+        _prune_old_avatars(str(asset.owner_id))
     db.session.commit()
 
     url = storage.presign_get(bucket=asset.s3_bucket, key=asset.s3_key)
     return {"asset": asset.to_dict(download_url=url)}, 200
+
+
+def _prune_old_avatars(owner_id: str, keep: int = 5) -> None:
+    """Soft-delete every ready avatar past the newest `keep` for this owner, so
+    the re-picker never grows unbounded. Newest-first with a stable id tiebreaker
+    so the keep/drop boundary is deterministic when two share a timestamp. This is
+    a soft delete — the S3 object stays, so an avatar still resolves for display
+    even in the edge case where an older one is still referenced. Caller commits."""
+    stale = (
+        Asset.query.filter_by(
+            owner_id=str(owner_id), purpose=PURPOSE_AVATAR, status=STATUS_READY
+        )
+        .order_by(Asset.created_at.desc(), Asset.id.desc())
+        .offset(keep)
+        .all()
+    )
+    for asset in stale:
+        asset.status = STATUS_DELETED
 
 
 def get_upload(owner_id: str, asset_id: str) -> tuple[dict, int]:
