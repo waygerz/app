@@ -1876,7 +1876,7 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
             </span>
           </div>
           <div className="flex flex-col divide-y divide-border border-t border-border">
-            {[...recon.perOpp.entries()].map(([id, o]) => (
+            {Array.from(recon.perOpp.entries()).map(([id, o]) => (
               <div key={id} className="flex items-center justify-between gap-2 pt-2">
                 <span className="min-w-0 truncate text-sm text-foreground">{o.name}</span>
                 <ReconAmount o={o} />
