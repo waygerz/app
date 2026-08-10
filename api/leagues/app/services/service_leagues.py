@@ -396,6 +396,22 @@ VOID_EVENT_STATUSES = {"cancelled", "canceled", "postponed", "abandoned"}
 GENERIC_FINAL_BODY = "Standings are locked for this period."
 
 
+def _event_result(event):
+    """The graded outcome of a FINAL event: HOME/AWAY when decided, "draw" on an
+    equal final score, or None when there's no usable result. Derives the winner
+    from the score when the feed left winner_side unset but the game clearly has
+    one (e.g. a stuck 'live' game finalized from its score)."""
+    winner = event.get("winner_side")
+    hs, as_ = event.get("home_score"), event.get("away_score")
+    if winner not in (HOME, AWAY) and hs is not None and as_ is not None and hs != as_:
+        winner = HOME if hs > as_ else AWAY
+    if winner in (HOME, AWAY):
+        return winner
+    if hs is not None and as_ is not None:
+        return "draw"
+    return None
+
+
 def grade_period(period) -> int:
     picks = Pick.query.filter(
         Pick.period_id == period.id,
@@ -410,16 +426,10 @@ def grade_period(period) -> int:
                 continue
             status = event.get("status")
             if status == period_model.FINAL:
-                winner = event.get("winner_side")
-                hs, as_ = event.get("home_score"), event.get("away_score")
-                # Derive the winner from the score when the feed left it unset but
-                # the game clearly has a result (e.g. a stuck 'live' game that was
-                # finalized from its score). Only an equal score is a real draw.
-                if winner not in (HOME, AWAY) and hs is not None and as_ is not None and hs != as_:
-                    winner = HOME if hs > as_ else AWAY
-                if winner in (HOME, AWAY):
-                    pick.correct = (pick.pick_side == winner)
-                elif hs is not None and as_ is not None:
+                result = _event_result(event)
+                if result in (HOME, AWAY):
+                    pick.correct = (pick.pick_side == result)
+                elif result == "draw":
                     # Real final, equal score — a genuine draw; anyone who picked
                     # a team was wrong.
                     pick.correct = False
@@ -468,6 +478,70 @@ def grade_open_periods() -> int:
             db.session.rollback()
             print(f"[grading] failed to grade period {period.id}: {exc}", flush=True)
     return total
+
+
+def reconcile_recent_finals(window_days: int = 3) -> int:
+    """Safety net for results that change after their picks were already settled.
+
+    grade_period never revisits a settled pick (correct set, or voided), so if an
+    event's authoritative result is corrected later — a late score fix, or an
+    outage-era finalization the real feed overturns — the stale grade sticks. For
+    each recently-ended FINAL period, re-verify every settled pick against the
+    current event and flip any that now disagree; when a period changes, reset its
+    winner post to generic so `_reannounce_winners` re-announces the right winner.
+
+    Bounded to recently-ended periods so it only re-checks weeks whose results
+    could still move; get_event is a cached ingestor read, deduped per period.
+    """
+    cutoff = datetime.utcnow() - timedelta(days=window_days)
+    periods = LeaguePeriod.query.filter(
+        LeaguePeriod.status == FINAL,
+        LeaguePeriod.ends_at.isnot(None),
+        LeaguePeriod.ends_at >= cutoff,
+    ).all()
+    changed = 0
+    for period in periods:
+        picks = Pick.query.filter(
+            Pick.period_id == period.id,
+            db.or_(Pick.correct.isnot(None), Pick.voided.is_(True)),
+        ).all()
+        if not picks:
+            continue
+        events: dict = {}
+        flips = 0
+        try:
+            for pick in picks:
+                event = events.get(pick.event_id)
+                if event is None:
+                    event = get_event(pick.event_id) or {}
+                    events[pick.event_id] = event
+                # Only a FINAL game with a usable result overrides a settled pick.
+                # A genuinely cancelled / not-yet-final game leaves it untouched, so
+                # we never un-settle a pick that shouldn't be.
+                if event.get("status") != period_model.FINAL:
+                    continue
+                result = _event_result(event)
+                if result is None:
+                    continue
+                want_correct = (pick.pick_side == result) if result in (HOME, AWAY) else False
+                if pick.voided or pick.correct != want_correct:
+                    pick.voided = False
+                    pick.correct = want_correct
+                    flips += 1
+            if flips:
+                # Force the winner line to recompute against the corrected grades.
+                for post in LeagueFeed.query.filter_by(
+                    event_type="period_final", dedup_key=f"period_final:{period.id}"
+                ).all():
+                    post.body = GENERIC_FINAL_BODY
+                db.session.commit()
+                changed += flips
+            else:
+                db.session.rollback()  # no change — drop any read-state, next period
+        except Exception as exc:  # noqa: BLE001 — one bad period must not stop the pass
+            db.session.rollback()
+            print(f"[reconcile] failed for period {period.id}: {exc}", flush=True)
+    return changed
 
 
 # ---- Period rollover ------------------------------------------------------

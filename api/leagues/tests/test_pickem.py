@@ -335,6 +335,42 @@ def test_grading_voids_final_without_a_result(client, auth_headers, app, monkeyp
         assert p.voided is True and p.correct is None
 
 
+def test_reconcile_flips_stale_grade_when_result_corrected(client, auth_headers, app, monkeypatch):
+    # A pick graded correct against an early/wrong result must self-heal once the
+    # event's authoritative result is corrected: reconcile flips the frozen grade.
+    from app.services import service_leagues as svc
+
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
+    lid, pid = d["id"], _period_id(d)
+    client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+               json={"picks": [{"event_id": "EVT1", "side": "home"}]},
+               headers=auth_headers(U1))
+    # Initial (wrong) result: home wins -> the home pick grades correct.
+    monkeypatch.setattr(svc, "get_event",
+                        lambda eid: {"status": "final", "winner_side": "home"})
+    with app.app_context():
+        from app.models.pick import Pick as _P
+        assert svc.grade_open_periods() == 1
+        assert _P.query.filter_by(period_id=pid).one().correct is True
+        # Make it a recently-ended FINAL period so the reconcile pass considers it.
+        period = db.session.get(LeaguePeriod, pid)
+        period.status = period_model.FINAL
+        period.ends_at = datetime.utcnow() - timedelta(hours=1)
+        db.session.commit()
+
+    # Corrected result: away actually won -> the frozen grade must flip to wrong.
+    monkeypatch.setattr(svc, "get_event",
+                        lambda eid: {"status": "final", "winner_side": "away"})
+    with app.app_context():
+        from app.models.pick import Pick as _P
+        assert svc.reconcile_recent_finals() == 1
+        p = _P.query.filter_by(period_id=pid).one()
+        assert p.correct is False and p.voided is False
+        # Idempotent: a second pass with the same result changes nothing.
+        assert svc.reconcile_recent_finals() == 0
+
+
 def test_member_picks_hidden_when_start_unknown(client, auth_headers):
     # Fail closed: a member can't see another member's picks when we can't prove
     # the lock has passed (no readable start time) — else the slate leaks early.

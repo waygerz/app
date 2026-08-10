@@ -8,7 +8,7 @@ from app.models.sport import LeagueSport
 from app.models import feed as feed_model
 from app.models.feed import LeagueFeed
 from app.services.service_leagues import (
-    add_feed, current_period, grade_open_periods, rollover_periods, _reannounce_winners,
+    add_feed, current_period, grade_open_periods, reconcile_recent_finals, rollover_periods, _reannounce_winners,
 )
 
 
@@ -103,12 +103,23 @@ def member_access():
 def tick():
     """Grade Pick'em picks and roll league periods. Called by the scheduler service."""
     graded = grade_open_periods()
+    # Safety net: re-verify recently-final picks against the current event, so a
+    # result corrected after grading (a late fix, or an outage-era finalization
+    # the real feed overturns) self-heals instead of staying frozen. Must never
+    # break the core tick, so it's guarded.
+    try:
+        reconciled = reconcile_recent_finals()
+    except Exception as exc:  # noqa: BLE001
+        reconciled = 0
+        print(f"[reconcile] pass failed: {exc}", flush=True)
     rolled = rollover_periods()
     # After grading + rollover, fill in the winner on any period that finished
-    # grading late (its period_final post was written generic).
+    # grading late, or whose grades the reconcile pass just corrected (its
+    # period_final post was written / reset generic).
     reannounced = _reannounce_winners()
     return {
         "picks_graded": graded,
+        "picks_reconciled": reconciled,
         "periods_rolled": rolled,
         "winners_reannounced": reannounced,
     }, 200
