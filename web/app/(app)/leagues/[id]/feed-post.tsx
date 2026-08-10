@@ -177,7 +177,7 @@ export function FeedPostCard({ item, engagement, currentUserId, engagementKey, a
     <Button
       variant="ghost"
       size="sm"
-      className={cn('h-8 gap-1.5 px-2.5 text-xs text-muted-foreground', engagement.liked_by_me && 'text-rose-500')}
+      className={cn('h-8 gap-1.5 px-2.5 text-xs text-muted-foreground', engagement.liked_by_me && 'text-primary')}
       disabled={like.isPending}
       onClick={(e) => {
         e.stopPropagation();
@@ -351,8 +351,8 @@ function PostContent({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={replyTo ? 'Write a reply…' : 'Write a comment…'}
-            rows={2}
-            className="min-h-[4.5rem] min-w-0 flex-1 resize-none text-sm"
+            rows={1}
+            className="min-h-[2.5rem] min-w-0 flex-1 resize-none text-sm"
             onKeyDown={(e) => {
               // Enter sends; Shift+Enter inserts a newline.
               if (e.key === 'Enter' && !e.shiftKey && draft.trim()) {

@@ -30,7 +30,7 @@ export default function AccountPage() {
   // The user's recent avatars, so they can re-select one without re-uploading.
   const recent = useQuery({
     queryKey: ['my-avatars'],
-    queryFn: () => mediaApi.myUploads('avatar', 10),
+    queryFn: () => mediaApi.myUploads('avatar', 5),
     enabled: !!user,
   });
 
@@ -147,7 +147,7 @@ export default function AccountPage() {
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={onDrop}
                 className={cn(
-                  'group relative flex size-24 cursor-pointer items-center justify-center overflow-hidden rounded-full border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                  'group relative flex size-48 cursor-pointer items-center justify-center overflow-hidden rounded-full border outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   isDragging
                     ? 'border-primary bg-primary/5'
                     : 'border-dashed border-muted-foreground/25 hover:border-muted-foreground/40',
@@ -160,12 +160,12 @@ export default function AccountPage() {
                     userId={user.id}
                     name={user.display_name}
                     imageUrl={user.avatar_key}
-                    className="size-24"
-                    fallbackClassName="text-2xl"
+                    className="size-48"
+                    fallbackClassName="text-4xl"
                     clickable={false}
                   />
                 ) : (
-                  <User className="size-6 text-muted-foreground" />
+                  <User className="size-12 text-muted-foreground" />
                 )}
               </div>
 
@@ -257,6 +257,17 @@ export default function AccountPage() {
           </div>
         </Card>
 
+        {/* Phone (read-only — it's the sign-in identity) */}
+        <Card className="gap-2 p-5">
+          <div className="flex flex-col gap-2.5">
+            <Label htmlFor="phone">Phone</Label>
+            <Input id="phone" variant="lg" className="h-12 text-base" value={user.phone} readOnly disabled />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Your phone number is how you sign in and can’t be changed here yet.
+          </p>
+        </Card>
+
         {/* Appearance — ROYGBIV primary + accent colors */}
         <Card className="gap-4 p-5">
           <div className="flex flex-col gap-1">
@@ -274,17 +285,6 @@ export default function AccountPage() {
         {/* Notifications + Promotions — two independent SMS consent cards */}
         <NotificationsCard />
         <PromotionsCard />
-
-        {/* Phone (read-only — it's the sign-in identity) */}
-        <Card className="gap-2 p-5">
-          <div className="flex flex-col gap-2.5">
-            <Label htmlFor="phone">Phone</Label>
-            <Input id="phone" variant="lg" className="h-12 text-base" value={user.phone} readOnly disabled />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Your phone number is how you sign in and can’t be changed here yet.
-          </p>
-        </Card>
 
         {/* Agreements — read-only consent record */}
         <Card className="gap-2 p-5">

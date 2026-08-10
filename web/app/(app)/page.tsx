@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
@@ -33,6 +34,7 @@ const accentFor = (t: string) => TYPE_ACCENT[t] ?? TYPE_ACCENT.head_to_head;
 export default function HomePage() {
   const qc = useQueryClient();
   const router = useRouter();
+  const { user } = useAuth();
 
   const leagues = useQuery({ queryKey: ['leagues'], queryFn: leaguesApi.list });
   const invites = useQuery({ queryKey: ['league-invites'], queryFn: leaguesApi.invites });
@@ -56,17 +58,8 @@ export default function HomePage() {
 
   return (
     <div className="container py-5 sm:py-8">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="hidden text-xl font-bold tracking-tight sm:text-2xl lg:block">My Leagues</h1>
-        {data.length > 0 && (
-          <Button asChild size="lg" className="ml-auto h-11 shrink-0">
-            <Link href="/leagues/new">
-              <Plus className="size-4" /> Create
-            </Link>
-          </Button>
-        )}
-      </div>
+      {/* Header — the mobile page title lives in the navbar. */}
+      <h1 className="mb-6 hidden text-xl font-bold tracking-tight sm:text-2xl lg:block">My Leagues</h1>
 
       {/* A failed invites fetch would otherwise just hide the section silently. */}
       {invites.isError && (
@@ -176,8 +169,11 @@ export default function HomePage() {
           {data.map((c) => {
             const a = accentFor(c.league_type);
             // Cap the avatar stack so it never spans the whole card on mobile.
-            const shownMembers = c.top_members?.slice(0, 3) ?? [];
-            const extra = c.member_count - shownMembers.length;
+            // Never show the viewer's own avatar — this is "My Leagues", so it's a
+            // given they're a member; the stack is for seeing who else is in.
+            const others = (c.top_members ?? []).filter((m) => m.user_id !== user?.id);
+            const shownMembers = others.slice(0, 3);
+            const extra = Math.max(0, c.member_count - 1 - shownMembers.length);
             return (
               <Link key={c.id} href={`/leagues/${c.id}`} className="group">
                 <Card className="flex-row items-center gap-4 border border-border p-4 shadow-sm transition-all group-hover:border-primary/40 group-hover:shadow-md">

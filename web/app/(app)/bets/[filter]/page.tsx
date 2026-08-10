@@ -8,27 +8,12 @@ import { toast } from 'sonner';
 import { Ticket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi } from '@/lib/leagues';
-import { cancelLocked, groupWagers, wagersApi, type Wager, type WagerGroup } from '@/lib/wagers';
+import { cancelLocked, groupWagers, wagersApi, type WagerGroup } from '@/lib/wagers';
 import { fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
-
-// Status groups for the list. On the "All" tab these partition the bets;
-// on a single-status tab only the relevant ones are non-empty. Cancelled bets
-// get their own group (kept out of "Closed", which is the resolved outcomes).
-const BUCKETS: { key: string; label: string; match: (w: Wager) => boolean }[] = [
-  { key: 'pending', label: 'Pending', match: (w) => w.status === 'open' },
-  { key: 'active', label: 'Active', match: (w) => w.status === 'accepted' || w.status === 'completed' },
-  {
-    key: 'closed',
-    label: 'Closed',
-    match: (w) => w.status === 'settled' || w.status === 'refunded' || w.status === 'declined',
-  },
-  { key: 'cancelled', label: 'Cancelled', match: (w) => w.status === 'cancelled' },
-];
 import { WagerBetCard } from '@/app/(app)/leagues/[id]/sections';
 
 export default function BetsView() {
@@ -215,41 +200,23 @@ export default function BetsView() {
         </Card>
       )}
 
-      {rows.length > 0 &&
-        (() => {
-          // Bucket the (already filter-scoped) rows by status. Headers show only
-          // when more than one group is present — i.e. on the "All" tab.
-          const groups = BUCKETS.map((b) => ({ ...b, wagers: rows.filter(b.match) })).filter(
-            (b) => b.wagers.length > 0,
-          );
-          const showHeaders = groups.length > 1;
-          return (
-            <div className="overflow-hidden rounded-xl border border-border bg-card">
-              {groups.map((b, i) => (
-                <div key={b.key} className={cn(showHeaders && i > 0 && 'border-t border-border')}>
-                  {showHeaders && (
-                    <div className="flex items-center justify-between border-b border-border bg-background/50 px-4 pb-1.5 pt-2.5">
-                      <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {b.label}
-                      </span>
-                      <span className="font-mono text-[11px] text-muted-foreground/60">{b.wagers.length}</span>
-                    </div>
-                  )}
-                  {groupWagers(b.wagers, me).map((g) => (
-                    <WagerBetCard
-                      key={g.key}
-                      group={g}
-                      me={me}
-                      leagueName={leagueNames.get(g.rep.league_id)}
-                      ev={eventMap[g.rep.event_id]}
-                      actions={actionsFor(g)}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          );
-        })()}
+      {/* One continuous table of every bet in the current filter, newest first
+          (filterWagers already ordered them) — no per-status grouping; each
+          card's own status badge carries its state. */}
+      {rows.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          {groupWagers(rows, me).map((g) => (
+            <WagerBetCard
+              key={g.key}
+              group={g}
+              me={me}
+              leagueName={leagueNames.get(g.rep.league_id)}
+              ev={eventMap[g.rep.event_id]}
+              actions={actionsFor(g)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

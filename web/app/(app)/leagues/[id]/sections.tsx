@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useLeague } from './league-context';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   leaguesApi,
@@ -102,6 +102,31 @@ function useScheduled(sportLeagueIds: string[]) {
   });
 }
 
+// Tournament-style events (golf, racing — any "field" sport, present or future)
+// are only bettable once their competitor list is posted — the ESPN browse list
+// reports field_size, populated only during tournament week. Returns a predicate:
+// a field event is bettable only when its field is ready; a not-yet-posted or
+// unknown one is not. Team/1v1 events (fixed matchups) are always bettable.
+// Shares the ['espn-list', slug] cache with LeagueSportSchedule — no extra cost.
+function useFieldReady(evs: SportEvent[]) {
+  const slugs = Array.from(new Set(evs.filter((e) => isFieldSport(e.sport)).map((e) => e.sport)));
+  const results = useQueries({
+    queries: slugs.map((slug) => ({
+      queryKey: ['espn-list', slug],
+      queryFn: () => fetchEspnList(slug),
+      staleTime: 5 * 60_000,
+    })),
+  });
+  const ready = new Map<string, boolean>();
+  for (const r of results) {
+    for (const s of r.data ?? []) ready.set(s.external_id, (s.field_size ?? 0) > 0);
+  }
+  const loading = results.some((r) => r.isLoading);
+  const isBettable = (ev: SportEvent) =>
+    !isFieldSport(ev.sport) || ready.get(ev.external_id) === true;
+  return { isBettable, loading };
+}
+
 // Resolve an icon for a league's sports. LeagueSportRef has no sport slug or
 // logo, so we derive the slug from each sport's events (for an emoji fallback),
 // then pull competition logos from fetchLeagues(sport). id -> {logo?, emoji}.
@@ -148,6 +173,17 @@ export function LeaguePlay() {
 }
 
 // ---- Pick'em ----
+// The point spread for one side of a game, from the odds persisted on the event.
+// spread.line is the home team's number, so the away side is its inverse; an even
+// game reads "EVEN". Null when the game has no spread (e.g. odds not posted yet).
+function sideSpread(ev: SportEvent, side: 'home' | 'away'): string | null {
+  const sp = ev.odds?.spread;
+  if (!sp) return null;
+  const line = side === 'home' ? sp.line : -sp.line;
+  if (line === 0) return 'EVEN';
+  return line > 0 ? `+${line}` : `${line}`;
+}
+
 function PickemPlay({ lg }: { lg: LeagueDetail }) {
   const qc = useQueryClient();
   const isCommish = lg.my_role === 'commissioner';
@@ -275,7 +311,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
             <p className="text-xs text-muted-foreground">
               {picksLocked
                 ? 'Picks are locked — the first game is about to start.'
-                : `Picks lock ${formatStart(new Date(lockAt).toISOString())}, an hour before the first game.`}
+                : `Picks lock ${formatStart(new Date(lockAt).toISOString())}.`}
             </p>
           )
         ) : (
@@ -316,6 +352,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                   const teamLogo = isHome ? ev.home_logo : ev.away_logo;
                   const active = cur === side;
                   const isMyPick = gradedLock && g!.pick_side === side;
+                  const spread = sideSpread(ev, side);
                   return (
                     <button
                       key={side}
@@ -333,6 +370,11 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                     >
                       <TeamLogo src={teamLogo} name={teamAbbr || teamName} size="lg" />
                       <span className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{teamName}</span>
+                      {spread && (
+                        <span className="shrink-0 text-sm font-semibold tabular-nums text-muted-foreground" title="Point spread">
+                          {spread}
+                        </span>
+                      )}
                       {isMyPick && <Check className="size-4 shrink-0 text-primary" />}
                     </button>
                   );
@@ -413,11 +455,11 @@ const STATE = {
 const pickBtn = (selected: boolean) =>
   `rounded-lg border text-sm transition-colors ${selected ? STATE.selected : STATE.idle}`;
 
-// Amount step: quick-pick stake chips. The first chip is a beer — a $0 "bragging
-// rights" wager (no money, just pride and a beer for the loser 🍺), which the
-// backend accepts as valid, skipping the wallet and the league min/max. Then
-// dollar presets, and a "Custom" chip that reveals a free-type field for any
-// other amount. Replaces the old always-on amount input.
+// Amount step: quick-pick stake chips. The first chip is the beer bet — no
+// money, just pride and a round for the loser 🍺 — which the backend accepts as
+// valid, skipping the wallet and the league min/max. Then dollar presets, and a
+// "Custom" chip that reveals a free-type field for any other amount. Replaces
+// the old always-on amount input.
 const STAKE_PRESETS = [10, 20];
 function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) => void }) {
   const val = Number(credits);
@@ -438,12 +480,12 @@ function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) 
         <button
           type="button"
           aria-pressed={brag}
-          aria-label="Bragging rights — $0, loser buys the beer"
-          title="Bragging rights — $0"
+          aria-label="Beer — loser buys the round"
+          title="Beer — loser buys the round"
           onClick={() => pick('0')}
-          className={cn(chip(brag), 'px-3 py-2')}
+          className={cn(chip(brag), 'gap-1.5 px-3 py-2 text-sm')}
         >
-          <Beer aria-hidden className="size-4" />
+          <Beer aria-hidden className="size-4" /> Beer
         </button>
         {STAKE_PRESETS.map((amt) => {
           const on = !custom && val === amt;
@@ -528,11 +570,11 @@ export function StatusIcon({ icon: Icon, label }: { icon: typeof Lock; label: st
 // pick and its action on the right, the opponents (folded when a bet went to
 // several friends) and stake across the top. Takes a WagerGroup so one card can
 // stand for a batch — Cancel / Confirm then act on every sibling at once.
-// $0 stakes are "bragging rights — loser buys the beer", so render the beer
-// glass in place of "$0" (a won/lost outcome passes a sign for real amounts).
+// A beer bet (no money, loser buys the round) renders as the beer glass in place
+// of a dollar figure on the compact cards; real stakes render the signed amount.
 function StakeText({ cents, sign }: { cents: number; sign?: string }) {
   if (cents === 0) {
-    return <Beer aria-label="Bragging rights — $0" className="inline-block size-[1em] align-[-0.15em]" />;
+    return <Beer aria-label="Beer — loser buys the round" className="inline-block size-[1em] align-[-0.15em]" />;
   }
   return (
     <>
@@ -540,6 +582,20 @@ function StakeText({ cents, sign }: { cents: number; sign?: string }) {
       {formatCredits(cents)}
     </>
   );
+}
+
+// The full stake phrase for the bet-confirmation summary: a beer bet spells out
+// "Beer (loser buys the round)"; a real stake is the play-money dollar amount.
+function StakeSummary({ cents }: { cents: number }) {
+  if (cents === 0) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Beer aria-hidden className="size-[1em] align-[-0.15em]" />
+        Beer <span className="text-muted-foreground">(loser buys the round)</span>
+      </span>
+    );
+  }
+  return <>{formatCredits(cents)}</>;
 }
 
 // Read-only detail view of an existing wager — matchup + scores, the viewer's
@@ -1085,6 +1141,8 @@ export function LeagueSports() {
 
   const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
   const evs = events.data ?? [];
+  // Tournament-style events (golf, racing) aren't tappable until their field is posted.
+  const { isBettable } = useFieldReady(evs);
 
   // Sports as tabs, alphabetical.
   const sortedSports = [...lg.sports].sort((a, b) =>
@@ -1179,7 +1237,11 @@ export function LeagueSports() {
           {fieldEvs.length > 0 && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {fieldEvs.map((ev) => (
-                <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
+                <EventCard
+                  key={ev.external_id}
+                  event={ev}
+                  onSelect={canBet && isBettable(ev) ? () => setSelected(ev) : undefined}
+                />
               ))}
             </div>
           )}
@@ -1225,6 +1287,8 @@ export function LeagueUpcomingGames() {
     .slice(0, UPCOMING_LIMIT);
   const teamEvs = shown.filter((e) => !isFieldSport(e.sport));
   const fieldEvs = shown.filter((e) => isFieldSport(e.sport));
+  // Tournament-style events (golf, racing) aren't tappable until their field is posted.
+  const { isBettable } = useFieldReady(shown);
 
   // Pick'em leagues don't place head-to-head bets, so the tap-to-bet board is
   // hidden there entirely.
@@ -1255,7 +1319,7 @@ export function LeagueUpcomingGames() {
             <EventCard
               key={ev.external_id}
               event={ev}
-              onSelect={canBet ? () => setSelected(ev) : undefined}
+              onSelect={canBet && isBettable(ev) ? () => setSelected(ev) : undefined}
             />
           ))}
         </div>
@@ -1656,10 +1720,88 @@ function NoResults({ text }: { text: string }) {
   );
 }
 
-// Settled head-to-head bets, grouped by the week (period) they belong to.
+// "Week ending MM/DD" from the period's end date; falls back to the period's own
+// label ("Week 3" / "Other") when there's no end date to format.
+function weekEndingLabel(p: LeaguePeriod): string {
+  if (p.ends_at) {
+    const d = new Date(p.ends_at);
+    if (!Number.isNaN(d.getTime())) {
+      return `Week ending ${d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' })}`;
+    }
+  }
+  return p.label;
+}
+
+type OppRecon = { name: string; netCents: number; netBeers: number; wins: number; losses: number };
+type Recon = { wins: number; losses: number; netCents: number; netBeers: number; perOpp: Map<string, OppRecon> };
+
+// Net out a week's decided bets from the viewer's perspective: dollars and beers
+// tracked separately (they're different currencies), overall and per opponent.
+// Pushes and refunds carry no result, so they don't move the tally.
+function reconcile(wagers: Wager[], me: string): Recon {
+  const perOpp = new Map<string, OppRecon>();
+  let wins = 0, losses = 0, netCents = 0, netBeers = 0;
+  for (const w of wagers) {
+    if (w.status !== 'settled' || w.winner_user_id == null) continue;
+    const iWon = w.winner_user_id === me;
+    const oppId = w.proposer_id === me ? w.acceptor_id : w.proposer_id;
+    const oppName = w.proposer_id === me ? w.acceptor_name : w.proposer_name;
+    const beer = w.amount_cents === 0;
+    const o = perOpp.get(oppId) ?? { name: oppName, netCents: 0, netBeers: 0, wins: 0, losses: 0 };
+    if (iWon) {
+      wins++; o.wins++;
+      if (beer) { netBeers++; o.netBeers++; } else { netCents += w.amount_cents; o.netCents += w.amount_cents; }
+    } else {
+      losses++; o.losses++;
+      if (beer) { netBeers--; o.netBeers--; } else { netCents -= w.amount_cents; o.netCents -= w.amount_cents; }
+    }
+    perOpp.set(oppId, o);
+  }
+  return { wins, losses, netCents, netBeers, perOpp };
+}
+
+// Signed play-money delta: +$30 (up/green) or −$25 (down/red).
+function MoneyDelta({ cents }: { cents: number }) {
+  const up = cents > 0;
+  return (
+    <span className={cn('font-semibold tabular-nums', up ? 'text-brand' : 'text-destructive')}>
+      {up ? '+' : '−'}{formatCredits(Math.abs(cents))}
+    </span>
+  );
+}
+
+// Signed beer delta: +1 🍺 (up/green) or −2 🍺 (down/red).
+function BeerDelta({ count }: { count: number }) {
+  const up = count > 0;
+  return (
+    <span className={cn('inline-flex items-center gap-0.5 font-semibold tabular-nums', up ? 'text-brand' : 'text-destructive')}>
+      {up ? '+' : '−'}{Math.abs(count)}
+      <Beer aria-hidden className="size-[1em] align-[-0.15em]" />
+    </span>
+  );
+}
+
+// One opponent's net for the week: a friendly "you won / you owe" verb when it's
+// a single currency, or just the two signed deltas when it's a mix of both.
+function ReconAmount({ o }: { o: OppRecon }) {
+  const parts: ReactNode[] = [];
+  if (o.netCents !== 0) parts.push(<MoneyDelta key="m" cents={o.netCents} />);
+  if (o.netBeers !== 0) parts.push(<BeerDelta key="b" count={o.netBeers} />);
+  if (parts.length === 0) return <span className="text-sm text-muted-foreground">even</span>;
+  const verb = parts.length === 1 ? ((o.netCents || o.netBeers) > 0 ? 'you won' : 'you owe') : '';
+  return (
+    <span className="flex items-center gap-1.5 text-sm">
+      {verb && <span className="text-muted-foreground">{verb}</span>}
+      {parts}
+    </span>
+  );
+}
+
+// Settled head-to-head bets for one week: a date picker, a reconciliation summary
+// (net dollars + beers, overall and per opponent), then that week's bet cards.
 function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
   const { user } = useAuth();
-  const me = user?.id;
+  const me = user?.id ?? '';
   const periodsQ = useQuery({ queryKey: ['periods', lg.id], queryFn: () => leaguesApi.periods(lg.id) });
   const betsQ = useQuery({ queryKey: ['wagers', lg.id], queryFn: () => wagersApi.mine(lg.id) });
 
@@ -1677,8 +1819,12 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
   });
   const eventMap = eventsQ.data ?? {};
 
+  const [periodId, setPeriodId] = useState('');
+
   if (betsQ.isLoading || periodsQ.isLoading) return <Skeleton className="h-40 rounded-xl" />;
 
+  // Bucket settled bets by week; only weeks that actually have results become
+  // options, newest first, with any period-less bets under "Other".
   const byPeriod = new Map<string, Wager[]>();
   for (const w of settled) {
     const key = w.period_id ?? '_none';
@@ -1686,27 +1832,65 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
     if (arr) arr.push(w);
     else byPeriod.set(key, [w]);
   }
-  const ordered = [...(periodsQ.data ?? [])].sort((a, b) => b.index - a.index);
-  const sections = ordered
-    .map((p) => ({ label: p.label, wagers: byPeriod.get(p.id) ?? [] }))
-    .filter((s) => s.wagers.length > 0);
-  const orphan = byPeriod.get('_none') ?? [];
-  if (orphan.length) sections.push({ label: 'Other', wagers: orphan });
+  const periodsDesc = [...(periodsQ.data ?? [])].sort((a, b) => b.index - a.index);
+  const options = periodsDesc
+    .filter((p) => (byPeriod.get(p.id)?.length ?? 0) > 0)
+    .map((p) => ({ value: p.id, label: weekEndingLabel(p) }));
+  if ((byPeriod.get('_none')?.length ?? 0) > 0) options.push({ value: '_none', label: 'Other' });
 
-  if (sections.length === 0) return <NoResults text="No results yet — settled bets show up here by week." />;
+  if (options.length === 0) return <NoResults text="No results yet — settled bets show up here by week." />;
+
+  const selectedId = options.some((o) => o.value === periodId) ? periodId : options[0].value;
+  const weekWagers = byPeriod.get(selectedId) ?? [];
+  const recon = reconcile(weekWagers, me);
+  const decided = recon.wins + recon.losses;
 
   return (
-    <div className="flex flex-col gap-8">
-      {sections.map((s) => (
-        <section key={s.label} className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-foreground sm:text-lg">{s.label}</h2>
-          <div className="overflow-hidden rounded-xl border border-border">
-            {groupWagers(s.wagers, me ?? '').map((g) => (
-              <WagerBetCard key={g.key} group={g} me={me} ev={eventMap[g.rep.event_id]} />
+    <div className="flex flex-col gap-4">
+      <Combobox
+        ariaLabel="Select week"
+        className="w-full max-w-[220px]"
+        value={selectedId}
+        onChange={setPeriodId}
+        options={options}
+        searchPlaceholder="Search week…"
+      />
+
+      {/* Weekly reconciliation — net dollars + beers, overall then per opponent. */}
+      {decided > 0 && (
+        <Card className="gap-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <span className="text-sm font-semibold text-foreground">This week</span>
+            <span className="flex items-center gap-2.5 text-base">
+              <span className="text-sm font-medium text-muted-foreground">
+                {recon.wins}–{recon.losses}
+              </span>
+              {recon.netCents === 0 && recon.netBeers === 0 ? (
+                <span className="text-sm text-muted-foreground">even</span>
+              ) : (
+                <>
+                  {recon.netCents !== 0 && <MoneyDelta cents={recon.netCents} />}
+                  {recon.netBeers !== 0 && <BeerDelta count={recon.netBeers} />}
+                </>
+              )}
+            </span>
+          </div>
+          <div className="flex flex-col divide-y divide-border border-t border-border">
+            {[...recon.perOpp.entries()].map(([id, o]) => (
+              <div key={id} className="flex items-center justify-between gap-2 pt-2">
+                <span className="min-w-0 truncate text-sm text-foreground">{o.name}</span>
+                <ReconAmount o={o} />
+              </div>
             ))}
           </div>
-        </section>
-      ))}
+        </Card>
+      )}
+
+      <div className="overflow-hidden rounded-xl border border-border">
+        {groupWagers(weekWagers, me).map((g) => (
+          <WagerBetCard key={g.key} group={g} me={me} ev={eventMap[g.rep.event_id]} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -2173,7 +2357,7 @@ function ScheduleBetDialog({
                   ? <>Backing <span className="font-semibold">{side === 'over' ? 'Over' : 'Under'} {line}</span></>
                   : <>Backing <span className="font-semibold">{teamName(side as 'home' | 'away')}</span>{betType === 'spread' ? ` ${sign(line ?? undefined)}` : ''}</>}
                 {' · '}{betType === 'moneyline' ? 'Straight up' : betType === 'spread' ? 'Spread' : 'Total'}
-                {' · '}{formatCredits(Math.round(Number(credits) * 100))}
+                {' · '}<StakeSummary cents={Math.round(Number(credits) * 100)} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Challenge members</Label>
@@ -2338,7 +2522,7 @@ function MatchupBetDialog({
             <>
               <div className="text-sm text-foreground">
                 <span className="font-semibold">{myPick}</span> vs <span className="font-semibold">{theirPick}</span>
-                {' · '}{formatCredits(Math.round(Number(credits) * 100))}
+                {' · '}<StakeSummary cents={Math.round(Number(credits) * 100)} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label>Challenge members</Label>
