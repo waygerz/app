@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useLeague } from './league-context';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -1705,6 +1705,23 @@ export function LeagueStandings() {
 }
 
 // ===================== RESULTS (by week) =====================
+// Read/write the ?week=<period index> query param so a specific week's results
+// are linkable, savable and shareable. The URL is the source of truth for the
+// selected week; changing the picker rewrites it in place (no navigation). Needs
+// a Suspense boundary above it (the results route provides one) for useSearchParams.
+function useWeekParam() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const week = params.get('week');
+  const setWeek = (index: number) => {
+    const next = new URLSearchParams(params.toString());
+    next.set('week', String(index));
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+  return { week, setWeek };
+}
+
 export function LeagueResults() {
   const lg = useLeague();
   if (lg.league_type === 'pickem') return <PickemResults lg={lg} />;
@@ -1819,7 +1836,7 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
   });
   const eventMap = eventsQ.data ?? {};
 
-  const [periodId, setPeriodId] = useState('');
+  const { week, setWeek } = useWeekParam();
 
   if (betsQ.isLoading || periodsQ.isLoading) return <Skeleton className="h-40 rounded-xl" />;
 
@@ -1840,7 +1857,9 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
 
   if (options.length === 0) return <NoResults text="No results yet — settled bets show up here by week." />;
 
-  const selectedId = options.some((o) => o.value === periodId) ? periodId : options[0].value;
+  const fromParam = week != null ? periodsDesc.find((p) => String(p.index) === week) : undefined;
+  const paramValue = fromParam && options.some((o) => o.value === fromParam.id) ? fromParam.id : '';
+  const selectedId = paramValue || options[0].value;
   const weekWagers = byPeriod.get(selectedId) ?? [];
   const recon = reconcile(weekWagers, me);
   const decided = recon.wins + recon.losses;
@@ -1851,7 +1870,10 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
         ariaLabel="Select week"
         className="w-full max-w-[220px]"
         value={selectedId}
-        onChange={setPeriodId}
+        onChange={(id) => {
+          const p = periodsDesc.find((x) => x.id === id);
+          if (p) setWeek(p.index);
+        }}
         options={options}
         searchPlaceholder="Search week…"
       />
@@ -1906,8 +1928,9 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
   const periods: LeaguePeriod[] = [...(periodsQ.data ?? [])].sort((a, b) => a.index - b.index);
   const openPeriod = periods.find((p) => p.status === 'open') ?? null;
 
-  const [periodId, setPeriodId] = useState('');
-  const selectedId = periodId || openPeriod?.id || periods[periods.length - 1]?.id || '';
+  const { week, setWeek } = useWeekParam();
+  const fromParam = week != null ? periods.find((p) => String(p.index) === week) : undefined;
+  const selectedId = fromParam?.id || openPeriod?.id || periods[periods.length - 1]?.id || '';
   const [openMember, setOpenMember] = useState<WeeklyResultRow | null>(null);
   // Only crown a winner once the week is final — never mid-week.
   const weekFinal = periods.find((p) => p.id === selectedId)?.status === 'final';
@@ -1943,7 +1966,10 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
           ariaLabel="Select week"
           className="w-full max-w-[220px]"
           value={selectedId}
-          onChange={setPeriodId}
+          onChange={(id) => {
+            const p = periods.find((x) => x.id === id);
+            if (p) setWeek(p.index);
+          }}
           options={periods.map((p) => ({ value: p.id, label: p.label }))}
           searchPlaceholder="Search week…"
         />
