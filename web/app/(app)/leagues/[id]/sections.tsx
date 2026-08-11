@@ -65,10 +65,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, type LucideIcon } from 'lucide-react';
+import { Trophy, Medal, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, type LucideIcon } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
-import { dispatchOpenChat } from '@/lib/open-chat';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1918,6 +1917,97 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
 }
 
 // Graded pick'em picks, one section per week.
+// The week's winner(s), pulled out above the standings so first place reads at a
+// glance. Driven by every rank-1 row (co-leaders share rank 1). A tie means the
+// tie-breaker didn't separate them, so it reads "tied" and drops the tie-breaker
+// line — the same logic the winner feed post uses.
+function WeekWinnerCard({
+  winners, weekLabel, actualTotal,
+}: {
+  winners: WeeklyResultRow[];
+  weekLabel: string;
+  actualTotal: number | null;
+}) {
+  if (winners.length === 0) return null;
+  const solo = winners.length === 1;
+  const top = winners[0];
+  const correct = `${top.correct}/${top.graded || top.total}`;
+  const names = winners.map((w) => w.display_name);
+  const nameLine = solo
+    ? names[0]
+    : names.length === 2
+      ? `${names[0]} & ${names[1]}`
+      : names.length === 3
+        ? `${names[0]}, ${names[1]} & ${names[2]}`
+        : `${names[0]}, ${names[1]} & ${names.length - 2} more`;
+  const shown = winners.slice(0, 3);
+  const extra = winners.length - shown.length;
+
+  return (
+    <Card className="relative flex-row items-center gap-4 overflow-hidden border-t-2 border-t-amber-400 p-4">
+      <div className="pointer-events-none absolute -end-9 top-3 rotate-45 bg-amber-400 px-10 py-1 text-center text-[10px] font-extrabold uppercase tracking-wider text-amber-950 shadow-md">
+        {solo ? '1st' : 'Tie'}
+      </div>
+
+      <div className="relative shrink-0">
+        {solo ? (
+          <>
+            <UserAvatar
+              userId={top.user_id}
+              name={top.display_name}
+              imageUrl={top.avatar_key}
+              className="size-16 ring-2 ring-amber-400 ring-offset-2 ring-offset-card"
+              clickable={false}
+            />
+            <span className="absolute -bottom-1 -end-1 grid place-items-center rounded-full bg-card p-0.5 text-amber-400">
+              <Medal className="size-5" />
+            </span>
+          </>
+        ) : (
+          <div className="flex items-center">
+            {shown.map((w, i) => (
+              <UserAvatar
+                key={w.user_id}
+                userId={w.user_id}
+                name={w.display_name}
+                imageUrl={w.avatar_key}
+                className={cn('size-14 ring-2 ring-amber-400/70 ring-offset-2 ring-offset-card', i > 0 && '-ms-4')}
+                clickable={false}
+              />
+            ))}
+            {extra > 0 && (
+              <span className="-ms-4 grid size-14 place-items-center rounded-full bg-muted text-sm font-bold text-muted-foreground ring-2 ring-card">
+                +{extra}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-400">
+          <Trophy className="size-3.5" />
+          {solo ? 'Champion' : `Co-Winners${winners.length > 2 ? ` · ${winners.length}-Way` : ''}`}
+        </span>
+        <p className="mt-0.5 truncate text-base font-extrabold text-foreground">{nameLine}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {solo ? `Won ${weekLabel}` : weekLabel}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>
+            <b className="font-bold tabular-nums text-brand">{correct}</b> correct{solo ? '' : ' · tied'}
+          </span>
+          {solo && top.tiebreaker_total != null && (
+            <span>
+              <b className="font-bold tabular-nums text-foreground">{top.tiebreaker_total}/{actualTotal ?? '—'}</b> tiebreaker
+            </span>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function PickemResults({ lg }: { lg: LeagueDetail }) {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -1977,6 +2067,14 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
 
       {resultsQ.isLoading && <Skeleton className="h-40 rounded-xl" />}
       {!resultsQ.isLoading && rows.length === 0 && <NoResults text="No picks for this week yet." />}
+
+      {weekFinal && (
+        <WeekWinnerCard
+          winners={rows.filter((r) => r.rank === 1 && r.graded > 0)}
+          weekLabel={periods.find((p) => p.id === selectedId)?.label ?? ''}
+          actualTotal={last?.actual_total ?? null}
+        />
+      )}
 
       <div className="flex flex-col gap-2">
         {rows.map((r) => {
@@ -2865,6 +2963,7 @@ export function LeagueMembers() {
   const lg = useLeague();
   const qc = useQueryClient();
   const { user } = useAuth();
+  const router = useRouter();
   const me = String(user?.id ?? '');
   const isCommish = lg.my_role === 'commissioner';
   const canModerate = isCommish || lg.my_role === 'moderator';
@@ -2905,8 +3004,8 @@ export function LeagueMembers() {
   const openMessage = useMutation({
     mutationFn: (uid: string) => messagingApi.openDirect(uid),
     onSuccess: (conv) => {
-      dispatchOpenChat(conv.id);
       qc.invalidateQueries({ queryKey: ['conversations'] });
+      router.push('/messages/' + conv.id);
     },
     onError: onErr,
   });
