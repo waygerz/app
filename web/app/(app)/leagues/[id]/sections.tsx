@@ -327,7 +327,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
         <p className="text-sm text-muted-foreground">No games scheduled for this week.</p>
       )}
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3">
         {evs.map((ev) => {
           const g = graded.get(ev.external_id);
           const gradedLock = !!(g && g.correct !== null);
@@ -1218,23 +1218,13 @@ export function LeagueSports() {
       ) : (
         <div className="flex flex-col gap-4">
           {teamEvs.length > 0 && (
-            // Two side-by-side boards on desktop so games fill the width instead
-            // of one narrow column; single column (stacked) on mobile.
-            <div className="grid grid-cols-1 gap-x-8 gap-y-2 lg:grid-cols-2">
-              <ScheduleBoard
-                events={teamEvs.slice(0, Math.ceil(teamEvs.length / 2))}
-                onSelect={canBet ? (ev) => setSelected(ev) : undefined}
-              />
-              {teamEvs.length > 1 && (
-                <ScheduleBoard
-                  events={teamEvs.slice(Math.ceil(teamEvs.length / 2))}
-                  onSelect={canBet ? (ev) => setSelected(ev) : undefined}
-                />
-              )}
-            </div>
+            <ScheduleBoard
+              events={teamEvs}
+              onSelect={canBet ? (ev) => setSelected(ev) : undefined}
+            />
           )}
           {fieldEvs.length > 0 && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4">
               {fieldEvs.map((ev) => (
                 <EventCard
                   key={ev.external_id}
@@ -1542,7 +1532,7 @@ export function LeagueSportSchedule() {
         </CenterCard>
       )}
       {sport && (events.isLoading || fieldLoading) && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
         </div>
       )}
@@ -1559,7 +1549,7 @@ export function LeagueSportSchedule() {
           {ready.length > 0 && (
             fieldSport ? (
               // Golf/racing tournaments have no two-team odds — keep the cards.
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4">
                 {ready.map((ev: SportEvent) => (
                   <EventCard key={ev.external_id} event={ev} onSelect={canBet ? () => setSelected(ev) : undefined} />
                 ))}
@@ -3023,7 +3013,7 @@ export function LeagueMembers() {
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold text-foreground">Members ({lg.members.length})</h2>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4">
         {lg.members.map((m) => {
           const uid = String(m.user_id);
           const isMe = uid === me;
@@ -3346,7 +3336,7 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
       </div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="flex flex-col gap-6">
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5">
             <FormField
               control={form.control}
               name="min"

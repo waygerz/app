@@ -7,8 +7,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext';
 import { commentsApi } from '@/lib/comments';
-import { leaguesApi, type LeagueDetail } from '@/lib/leagues';
-import { LeagueUpcomingGames, PickemThisWeek } from './sections';
+import { leaguesApi } from '@/lib/leagues';
+import { LeagueUpcomingGames } from './sections';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -89,10 +89,18 @@ export function LeagueOverview() {
   const membersById = new Map(lg.members.map((m) => [String(m.user_id), m]));
 
   return (
-    <div className="grid min-w-0 gap-6 lg:grid-cols-2">
-      {/* Left: feed */}
-      <div className="flex min-w-0 flex-col gap-6">
-        <section>
+    <div className="flex min-w-0 flex-col gap-6">
+      {lg.description && (
+        <Card className="gap-2 p-4">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Description</span>
+          <p className="break-words text-sm text-foreground">{lg.description}</p>
+        </Card>
+      )}
+
+      {/* Head-to-head: tap-to-bet board. Pick'em leagues render nothing here. */}
+      <LeagueUpcomingGames />
+
+      <section>
           {canModerate && (
             <Card className="mb-3 min-w-0 flex-row items-center gap-3 p-3">
               {user && (
@@ -167,21 +175,6 @@ export function LeagueOverview() {
             )}
           </div>
         </section>
-      </div>
-
-      {/* Right aside: description → balance → invite */}
-      <div className="flex min-w-0 flex-col gap-6">
-        {lg.description && (
-          <Card className="gap-2 p-4">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Description</span>
-            <p className="break-words text-sm text-foreground">{lg.description}</p>
-          </Card>
-        )}
-
-        {/* Head-to-head: tap-to-bet board (desktop-only). Pick'em: the "this
-            week" pick-progress card. Each self-gates by league type. */}
-        <LeagueUpcomingGames />
-        <PickemThisWeek />
 
         {!isCommish && (
           <AlertDialog open={leaveOpen} onOpenChange={setLeaveOpen}>
@@ -209,7 +202,6 @@ export function LeagueOverview() {
             </AlertDialogContent>
           </AlertDialog>
         )}
-      </div>
     </div>
   );
 }

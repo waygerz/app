@@ -126,7 +126,7 @@ export default function NewLeaguePage() {
         {/* Type */}
         <div className="flex flex-col gap-2">
           <Label>League type</Label>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2">
             {TYPES.map((t) => (
               <button
                 key={t.value}

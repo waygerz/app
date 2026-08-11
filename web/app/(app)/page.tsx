@@ -111,7 +111,7 @@ export default function HomePage() {
       {leagues.isLoading ? (
         // Skeleton mirrors the real card geometry (same breakpoints, same cover
         // height, same body rows) so nothing shifts when the data lands.
-        <div className="flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4">
+        <div className="flex flex-col gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i} className="flex-row items-center gap-4 border border-border p-4 shadow-sm">
               <Skeleton className="size-[72px] rounded-xl" />
@@ -165,7 +165,7 @@ export default function HomePage() {
           </Button>
         </Card>
       ) : (
-        <div className="flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4">
+        <div className="flex flex-col gap-3">
           {data.map((c) => {
             const a = accentFor(c.league_type);
             // Cap the avatar stack so it never spans the whole card on mobile.
