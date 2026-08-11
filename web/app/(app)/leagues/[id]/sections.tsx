@@ -1946,7 +1946,7 @@ function WeekWinnerCard({
               userId={top.user_id}
               name={top.display_name}
               imageUrl={top.avatar_key}
-              className="size-16 ring-2 ring-amber-400 ring-offset-2 ring-offset-card"
+              className="size-16 rounded-full ring-2 ring-amber-400 ring-offset-2 ring-offset-card"
               clickable={false}
             />
             <span className="absolute -bottom-1 -end-1 grid place-items-center rounded-full bg-card p-0.5 text-amber-400">
@@ -1961,7 +1961,7 @@ function WeekWinnerCard({
                 userId={w.user_id}
                 name={w.display_name}
                 imageUrl={w.avatar_key}
-                className={cn('size-14 ring-2 ring-amber-400/70 ring-offset-2 ring-offset-card', i > 0 && '-ms-4')}
+                className={cn('size-14 rounded-full ring-2 ring-amber-400/70 ring-offset-2 ring-offset-card', i > 0 && '-ms-4')}
                 clickable={false}
               />
             ))}
