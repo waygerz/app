@@ -1,5 +1,7 @@
+import { useQuery } from '@tanstack/react-query';
 import { API } from './api-paths';
 import { apiJson } from './http';
+import { useAuth } from '@/auth/AuthContext';
 import type { BetType, WagerSide, WagerStatus } from './wagers';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -111,3 +113,19 @@ export const messagingApi = {
     return `${BASE}${MESSAGING_API}/conversations/${conversationId}/stream`;
   },
 };
+
+// Unread-message badge count for the shell nav. Polls on its own (30s) since the
+// inbox is no longer always mounted to keep this fresh. Shares the
+// ['conversations-unread'] cache with the inbox/thread pages, so reading a
+// conversation there decrements the badge here immediately.
+export function useUnreadMessages(): number {
+  const { user } = useAuth();
+  const q = useQuery({
+    queryKey: ['conversations-unread'],
+    queryFn: () => messagingApi.unreadCount(),
+    enabled: !!user,
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+  });
+  return q.data?.total ?? 0;
+}

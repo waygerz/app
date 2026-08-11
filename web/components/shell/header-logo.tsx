@@ -11,6 +11,11 @@ function pageTitle(pathname: string): string | null {
   if (pathname === '/bets' || pathname.startsWith('/bets/')) return 'My Bets';
   if (pathname === '/account') return 'Account';
   if (pathname === '/friends') return 'Friends';
+  // The message thread renders its own in-thread header (avatar + name), so
+  // suppress the generic title there — same as league detail.
+  if (pathname === '/messages') return 'Messages';
+  if (pathname.startsWith('/messages/')) return null;
+  if (pathname === '/notifications') return 'Notifications';
   return null;
 }
 

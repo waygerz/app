@@ -3,17 +3,17 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Ticket, Bell, MessageCircle, type LucideIcon } from 'lucide-react';
-import { NotificationsSheet } from '@/components/notifications-sheet';
-import { MessagesSheet } from '@/components/messages-sheet';
 import { UserAvatar } from '@/components/user-avatar';
 import { useAuth } from '@/auth/AuthContext';
+import { useUnreadMessages } from '@/lib/messaging';
+import { useUnreadNotifications } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
 import { ProfileMenu } from './profile-menu';
 
 // Persistent mobile tab bar (hidden at lg+). Mirrors the native app's tabs so
-// web + mobile feel like one product. "Alerts" and "Profile" reuse the existing
-// notifications sheet + account menu via their trigger slots — one instance
-// each, no duplicated queries. Sits above the home indicator (safe-area).
+// web + mobile feel like one product. Alerts + Messages link to their pages;
+// their badges come from the shared unread-count hooks. Sits above the home
+// indicator (safe-area).
 
 const tabBase =
   'flex flex-1 flex-col items-center justify-center gap-1 pt-2 pb-1 min-h-14 text-[11px] font-medium';
@@ -47,10 +47,14 @@ function TabInner({
 export function BottomNav() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const msgUnread = useUnreadMessages();
+  const notifUnread = useUnreadNotifications();
   if (!user) return null;
 
   const isLeagues = pathname === '/' || pathname.startsWith('/leagues');
   const isBets = pathname.startsWith('/bets');
+  const isAlerts = pathname.startsWith('/notifications');
+  const isMessages = pathname.startsWith('/messages');
 
   return (
     <nav
@@ -65,21 +69,13 @@ export function BottomNav() {
         <TabInner icon={Ticket} label="Bets" active={isBets} />
       </Link>
 
-      <NotificationsSheet
-        renderTrigger={(unread) => (
-          <button type="button" className={tabBase} aria-label="Alerts">
-            <TabInner icon={Bell} label="Alerts" badge={unread} />
-          </button>
-        )}
-      />
+      <Link href="/notifications" className={tabBase} aria-label="Alerts" aria-current={isAlerts ? 'page' : undefined}>
+        <TabInner icon={Bell} label="Alerts" active={isAlerts} badge={notifUnread} />
+      </Link>
 
-      <MessagesSheet
-        renderTrigger={(unread) => (
-          <button type="button" className={tabBase} aria-label="Messages">
-            <TabInner icon={MessageCircle} label="Messages" badge={unread} />
-          </button>
-        )}
-      />
+      <Link href="/messages" className={tabBase} aria-label="Messages" aria-current={isMessages ? 'page' : undefined}>
+        <TabInner icon={MessageCircle} label="Messages" active={isMessages} badge={msgUnread} />
+      </Link>
 
       <ProfileMenu>
         <button type="button" className={tabBase} aria-label="Profile">

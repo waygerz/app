@@ -1,6 +1,8 @@
 // Client for the Waygerz notifications service — the user-facing feed (cookie session).
+import { useQuery } from '@tanstack/react-query';
 import { API } from './api-paths';
 import { apiJson } from './http';
+import { useAuth } from '@/auth/AuthContext';
 
 const NOTIFICATIONS_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -46,7 +48,7 @@ export interface NotificationPreferencesPatch {
   channels?: Partial<Record<NotificationCategory, Partial<ChannelToggles>>>;
 }
 
-function req<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+function req<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   return apiJson<T>(`${NOTIFICATIONS_URL}${path}`, options);
 }
 
@@ -68,3 +70,19 @@ export const notificationsApi = {
       body: JSON.stringify(patch),
     }),
 };
+
+// Unread-notification badge count for the shell nav. Uses the light
+// /me/unread-count endpoint (not the full feed) since the feed is no longer
+// always mounted. The /notifications page invalidates ['notifications-unread']
+// on mark-read so the bell badge here decrements immediately.
+export function useUnreadNotifications(): number {
+  const { user } = useAuth();
+  const q = useQuery({
+    queryKey: ['notifications-unread'],
+    queryFn: () => notificationsApi.unreadCount(),
+    enabled: !!user,
+    staleTime: 20_000,
+    refetchInterval: 60_000,
+  });
+  return q.data?.unread ?? 0;
+}

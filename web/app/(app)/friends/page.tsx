@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Share2, MessageCircle, EllipsisVertical, UserMinus } from 'lucide-react';
@@ -7,7 +8,6 @@ import { useAuth } from '@/auth/AuthContext';
 import { friendsApi, type Friend, type FriendRequest } from '@/lib/friends';
 import { myFriendCode, inviteUrl } from '@/lib/invites';
 import { messagingApi } from '@/lib/messaging';
-import { dispatchOpenChat } from '@/lib/open-chat';
 import { shareLink } from '@/lib/share';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -57,6 +57,7 @@ function AddFriendsButton({
 export default function FriendsPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const router = useRouter();
 
   const friends = useQuery({ queryKey: ['friends'], queryFn: friendsApi.list });
   const requests = useQuery({ queryKey: ['friend-requests'], queryFn: friendsApi.requests });
@@ -85,7 +86,10 @@ export default function FriendsPage() {
 
   const openMessage = useMutation({
     mutationFn: (userId: string) => messagingApi.openDirect(userId),
-    onSuccess: (conv) => dispatchOpenChat(conv.id),
+    onSuccess: (conv) => {
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+      router.push('/messages/' + conv.id);
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
