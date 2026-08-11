@@ -331,20 +331,22 @@ export default function ThreadPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2.5 border-b border-border px-3 py-2">
-        <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Back to inbox"
-          onClick={() => router.push('/messages')}>
-          <ArrowLeft className="size-4" />
-        </Button>
-        {activeConv && (isLeague ? (
-          <LeagueAvatar name={title} logoUrl={null} id={activeConv.league_id!} size={32} />
-        ) : (
-          <UserAvatar userId={activeConv.other_user?.id ?? activeConv.id} name={title}
-            imageUrl={activeConv.other_user?.avatar_key} className="size-8" clickable={false} />
-        ))}
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-foreground">{title}</div>
-          {isLeague && <div className="text-[11px] text-muted-foreground">League chat</div>}
+      <div className="shrink-0 border-b border-border">
+        <div className="mx-auto flex w-full max-w-2xl items-center gap-2.5 px-3 py-2">
+          <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Back to inbox"
+            onClick={() => router.push('/messages')}>
+            <ArrowLeft className="size-4" />
+          </Button>
+          {activeConv && (isLeague ? (
+            <LeagueAvatar name={title} logoUrl={null} id={activeConv.league_id!} size={32} />
+          ) : (
+            <UserAvatar userId={activeConv.other_user?.id ?? activeConv.id} name={title}
+              imageUrl={activeConv.other_user?.avatar_key} className="size-8" clickable={false} />
+          ))}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-foreground">{title}</div>
+            {isLeague && <div className="text-[11px] text-muted-foreground">League chat</div>}
+          </div>
         </div>
       </div>
 
@@ -368,8 +370,8 @@ export default function ThreadPage() {
         </div>
       </ScrollArea>
 
-      <div className="flex shrink-0 items-center gap-2 border-t border-border p-3">
-        <div className="mx-auto flex w-full max-w-2xl items-center gap-2">
+      <div className="shrink-0 border-t border-border">
+        <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-3 py-3">
           <Input
             value={draft}
             onChange={(e) => {
