@@ -262,11 +262,10 @@ html {
 
 /** Custom Containers **/
 @utility container {
-  @apply mx-auto max-w-none px-4 lg:px-5;
-
-  @media (width >= --theme(--breakpoint-xl)) {
-    @apply max-w-(--breakpoint-xl);
-  }
+  /* App-wide centered column. The webui is ~99% mobile, so on larger screens
+     every page (and the header) sits in a single tablet-ish column rather than
+     stretching the full width. All page wrappers + the header share this. */
+  @apply mx-auto w-full max-w-2xl px-4 lg:px-5;
 }
 
 @utility container-fluid {
