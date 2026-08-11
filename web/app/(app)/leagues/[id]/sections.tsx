@@ -2048,6 +2048,11 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
     return acc;
   }, {});
   const last = res?.last_game;
+  // Once the week is final, the winner(s) are pulled into the WeekWinnerCard, so
+  // drop them from the list below — they shouldn't appear twice.
+  const winners = weekFinal ? rows.filter((r) => r.rank === 1 && r.graded > 0) : [];
+  const winnerIds = new Set(winners.map((w) => w.user_id));
+  const listRows = rows.filter((r) => !winnerIds.has(r.user_id));
 
   return (
     <div className="flex flex-col gap-4">
@@ -2068,16 +2073,16 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
       {resultsQ.isLoading && <Skeleton className="h-40 rounded-xl" />}
       {!resultsQ.isLoading && rows.length === 0 && <NoResults text="No picks for this week yet." />}
 
-      {weekFinal && (
+      {winners.length > 0 && (
         <WeekWinnerCard
-          winners={rows.filter((r) => r.rank === 1 && r.graded > 0)}
+          winners={winners}
           weekLabel={periods.find((p) => p.id === selectedId)?.label ?? ''}
           actualTotal={last?.actual_total ?? null}
         />
       )}
 
       <div className="flex flex-col gap-2">
-        {rows.map((r) => {
+        {listRows.map((r) => {
           const isMe = r.user_id === me;
           const tied = rankCounts[r.rank] > 1;
           const isWinner = weekFinal && r.rank === 1;
