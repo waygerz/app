@@ -19,9 +19,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UserMiniCard } from '@/components/user-mini-card';
 
-// Two-up grid of vertical mini cards, 2 columns even on phones.
-const GRID = 'grid grid-cols-2 gap-3';
-const ACTION_GRID = 'grid grid-cols-2 gap-3';
+// Single column on mobile (compact rows), 2-up on desktop (vertical cards).
+const GRID = 'grid grid-cols-1 gap-4 lg:grid-cols-2';
+const ACTION_GRID = 'grid grid-cols-1 gap-4 lg:grid-cols-2';
 
 function AddFriendsButton({
   inviteLink,
