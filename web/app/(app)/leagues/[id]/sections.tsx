@@ -65,7 +65,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, Medal, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, type LucideIcon } from 'lucide-react';
+import { Trophy, Medal, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, ChevronRight, type LucideIcon } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import {
@@ -1912,12 +1912,15 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
 // tie-breaker didn't separate them, so it reads "tied" and drops the tie-breaker
 // line — the same logic the winner feed post uses.
 function WeekWinnerCard({
-  winners, weekLabel, actualTotal,
+  winners, weekLabel, actualTotal, onPick,
 }: {
   winners: WeeklyResultRow[];
   weekLabel: string;
   actualTotal: number | null;
+  /** Show a winner's picks. Solo taps through directly; a tie routes here from the chooser. */
+  onPick: (winner: WeeklyResultRow) => void;
 }) {
+  const [chooserOpen, setChooserOpen] = useState(false);
   if (winners.length === 0) return null;
   const solo = winners.length === 1;
   const top = winners[0];
@@ -1934,66 +1937,110 @@ function WeekWinnerCard({
   const extra = winners.length - shown.length;
 
   return (
-    <Card className="relative flex-row items-center gap-4 overflow-hidden border-t-2 border-t-amber-400 p-4">
-      <div className="pointer-events-none absolute -end-9 top-3 rotate-45 bg-amber-400 px-10 py-1 text-center text-[10px] font-extrabold uppercase tracking-wider text-amber-950 shadow-md">
+    <Card className="relative overflow-hidden border-t-2 border-t-amber-400 p-0">
+      <div className="pointer-events-none absolute -end-9 top-3 z-10 rotate-45 bg-amber-400 px-10 py-1 text-center text-[10px] font-extrabold uppercase tracking-wider text-amber-950 shadow-md">
         {solo ? '1st' : 'Tie'}
       </div>
 
-      <div className="relative shrink-0">
-        {solo ? (
-          <>
-            <UserAvatar
-              userId={top.user_id}
-              name={top.display_name}
-              imageUrl={top.avatar_key}
-              className="size-16 rounded-full ring-2 ring-amber-400 ring-offset-2 ring-offset-card"
-              clickable={false}
-            />
-            <span className="absolute -bottom-1 -end-1 grid place-items-center rounded-full bg-card p-0.5 text-amber-400">
-              <Medal className="size-5" />
-            </span>
-          </>
-        ) : (
-          <div className="flex items-center">
-            {shown.map((w, i) => (
+      <button
+        type="button"
+        onClick={() => (solo ? onPick(top) : setChooserOpen(true))}
+        aria-label={solo ? `View ${top.display_name}'s picks` : 'View co-winners and their picks'}
+        className="flex w-full flex-row items-center gap-4 p-4 text-left transition hover:bg-muted/40"
+      >
+        <div className="relative shrink-0">
+          {solo ? (
+            <>
               <UserAvatar
-                key={w.user_id}
-                userId={w.user_id}
-                name={w.display_name}
-                imageUrl={w.avatar_key}
-                className={cn('size-14 rounded-full ring-2 ring-amber-400/70 ring-offset-2 ring-offset-card', i > 0 && '-ms-4')}
+                userId={top.user_id}
+                name={top.display_name}
+                imageUrl={top.avatar_key}
+                className="size-16 rounded-full ring-2 ring-amber-400 ring-offset-2 ring-offset-card"
                 clickable={false}
               />
-            ))}
-            {extra > 0 && (
-              <span className="-ms-4 grid size-14 place-items-center rounded-full bg-muted text-sm font-bold text-muted-foreground ring-2 ring-card">
-                +{extra}
+              <span className="absolute -bottom-1 -end-1 grid place-items-center rounded-full bg-card p-0.5 text-amber-400">
+                <Medal className="size-5" />
+              </span>
+            </>
+          ) : (
+            <div className="flex items-center">
+              {shown.map((w, i) => (
+                <UserAvatar
+                  key={w.user_id}
+                  userId={w.user_id}
+                  name={w.display_name}
+                  imageUrl={w.avatar_key}
+                  className={cn('size-14 rounded-full ring-2 ring-amber-400/70 ring-offset-2 ring-offset-card', i > 0 && '-ms-4')}
+                  clickable={false}
+                />
+              ))}
+              {extra > 0 && (
+                <span className="-ms-4 grid size-14 place-items-center rounded-full bg-muted text-sm font-bold text-muted-foreground ring-2 ring-card">
+                  +{extra}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-400">
+            <Trophy className="size-3.5" />
+            {solo ? 'Champion' : `Co-Winners${winners.length > 2 ? ` · ${winners.length}-Way` : ''}`}
+          </span>
+          <p className="mt-0.5 truncate text-base font-extrabold text-foreground">{nameLine}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {solo ? `Won ${weekLabel}` : weekLabel}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>
+              <b className="font-bold tabular-nums text-brand">{correct}</b> correct{solo ? '' : ' · tied'}
+            </span>
+            {solo && top.tiebreaker_total != null && (
+              <span>
+                <b className="font-bold tabular-nums text-foreground">{top.tiebreaker_total}/{actualTotal ?? '—'}</b> tiebreaker
               </span>
             )}
           </div>
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-amber-400">
-          <Trophy className="size-3.5" />
-          {solo ? 'Champion' : `Co-Winners${winners.length > 2 ? ` · ${winners.length}-Way` : ''}`}
-        </span>
-        <p className="mt-0.5 truncate text-base font-extrabold text-foreground">{nameLine}</p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {solo ? `Won ${weekLabel}` : weekLabel}
-        </p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>
-            <b className="font-bold tabular-nums text-brand">{correct}</b> correct{solo ? '' : ' · tied'}
-          </span>
-          {solo && top.tiebreaker_total != null && (
-            <span>
-              <b className="font-bold tabular-nums text-foreground">{top.tiebreaker_total}/{actualTotal ?? '—'}</b> tiebreaker
-            </span>
-          )}
         </div>
-      </div>
+
+        <ChevronRight className="size-5 shrink-0 self-center text-muted-foreground" />
+      </button>
+
+      {!solo && (
+        <Dialog open={chooserOpen} onOpenChange={setChooserOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Co-winners{weekLabel ? ` — ${weekLabel}` : ''}</DialogTitle>
+              <DialogDescription>Tap a winner to see their picks for the week.</DialogDescription>
+            </DialogHeader>
+            <DialogBody className="flex flex-col gap-1 py-2">
+              {winners.map((w) => (
+                <button
+                  key={w.user_id}
+                  type="button"
+                  onClick={() => { setChooserOpen(false); onPick(w); }}
+                  className="flex items-center gap-3 rounded-lg p-2 text-left transition hover:bg-muted"
+                >
+                  <UserAvatar
+                    userId={w.user_id}
+                    name={w.display_name}
+                    imageUrl={w.avatar_key}
+                    className="size-11 shrink-0"
+                    clickable={false}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{w.display_name}</span>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                    {w.correct}
+                    <span className="text-xs font-normal text-muted-foreground">/{w.graded || w.total}</span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </button>
+              ))}
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
+      )}
     </Card>
   );
 }
@@ -2068,6 +2115,7 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
           winners={winners}
           weekLabel={periods.find((p) => p.id === selectedId)?.label ?? ''}
           actualTotal={last?.actual_total ?? null}
+          onPick={setOpenMember}
         />
       )}
 
