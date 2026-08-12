@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -18,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { UserMiniCard } from '@/components/user-mini-card';
+import { ListSearch } from '@/components/list-search';
 
 // Single column on mobile (compact rows), 2-up on desktop (vertical cards).
 const GRID = 'grid grid-cols-1 gap-4 lg:grid-cols-2';
@@ -105,6 +107,15 @@ export default function FriendsPage() {
   const outgoing = requests.data?.outgoing ?? [];
   const inviteLink = myCode.data?.code ? inviteUrl(myCode.data.code) : '';
 
+  // Client-side filter over the already-loaded friends list; only shown once the
+  // list is long enough to be worth scanning.
+  const [q, setQ] = useState('');
+  const query = q.trim().toLowerCase();
+  const allFriends = friends.data ?? [];
+  const shownFriends = query
+    ? allFriends.filter((f) => f.display_name.toLowerCase().includes(query))
+    : allFriends;
+
   return (
     <div className="container py-8">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -137,17 +148,24 @@ export default function FriendsPage() {
 
       <section className="mb-8">
         <h2 className="mb-3 text-sm font-semibold text-foreground">
-          Your friends ({friends.data?.length ?? 0})
+          Your friends ({allFriends.length})
         </h2>
+        {allFriends.length > 8 && (
+          <ListSearch value={q} onChange={setQ} placeholder="Search friends" className="mb-3" />
+        )}
         {friends.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (friends.data?.length ?? 0) === 0 ? (
+        ) : allFriends.length === 0 ? (
           <Card className="p-6 text-center text-sm text-muted-foreground">
             No friends yet — share your link or add someone from a league members page.
           </Card>
+        ) : shownFriends.length === 0 ? (
+          <Card className="p-6 text-center text-sm text-muted-foreground">
+            No friends match “{q.trim()}”.
+          </Card>
         ) : (
           <div className={GRID}>
-            {friends.data?.map((f: Friend) => (
+            {shownFriends.map((f: Friend) => (
               <UserMiniCard
                 key={f.friendship_id}
                 userId={String(f.user_id)}

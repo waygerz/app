@@ -28,6 +28,7 @@ import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
 import { useProfileDialog } from '@/components/profile-dialog-context';
 import { UserMiniCard } from '@/components/user-mini-card';
+import { ListSearch } from '@/components/list-search';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { mediaApi } from '@/lib/media';
 import { imageToWebp } from '@/lib/imageToWebp';
@@ -3058,11 +3059,26 @@ export function LeagueMembers() {
     onError: onErr,
   });
 
+  // Filter is client-side — the full roster already ships in the league payload.
+  // Only surface the box once the list is long enough to be worth scanning.
+  const [q, setQ] = useState('');
+  const query = q.trim().toLowerCase();
+  const members = query
+    ? lg.members.filter((m) => m.display_name.toLowerCase().includes(query))
+    : lg.members;
+  const showSearch = lg.members.length > 8;
+
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold text-foreground">Members ({lg.members.length})</h2>
+      {showSearch && <ListSearch value={q} onChange={setQ} placeholder="Search members" />}
+      {members.length === 0 ? (
+        <Card className="p-6 text-center text-sm text-muted-foreground">
+          No members match “{q.trim()}”.
+        </Card>
+      ) : (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {lg.members.map((m) => {
+        {members.map((m) => {
           const uid = String(m.user_id);
           const isMe = uid === me;
           return (
@@ -3125,6 +3141,7 @@ export function LeagueMembers() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
