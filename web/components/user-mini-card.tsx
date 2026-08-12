@@ -4,13 +4,12 @@ import { type ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { UserAvatar } from '@/components/user-avatar';
 import { useProfileDialog } from '@/components/profile-dialog-context';
-import { cn } from '@/lib/utils';
 
 /**
- * Card for a person. On mobile it's a single horizontal row — avatar, then
- * name/subtitle, then actions on the right. From `sm` up it's the centered
- * vertical "mini card" (Metronic CardUserMini). Used on /friends and the
- * league Members page (paired with a 1-col mobile grid).
+ * Card for a person: the centered vertical "mini card" (Metronic CardUserMini)
+ * at every width — avatar on top, then name/subtitle, then actions underneath.
+ * Used on /friends and the league Members page, both a 2-col grid (2-up even on
+ * phones), so the card never falls back to a horizontal row.
  *
  * Tapping the avatar or name opens that person's profile dialog (details +
  * head-to-head bet history). Your own card isn't clickable.
@@ -37,15 +36,15 @@ export function UserMiniCard({
   const canOpen = !!profile && profile.me !== userId;
 
   return (
-    <Card className="flex flex-row items-center gap-3 p-3 sm:flex-col sm:items-center sm:gap-1.5 sm:p-5 sm:text-center lg:py-8">
+    <Card className="flex flex-col items-center gap-1.5 p-4 text-center sm:p-5 lg:py-8">
       <UserAvatar
         userId={userId}
         name={name}
         imageUrl={imageUrl}
-        className="size-12 shrink-0 sm:mb-2 sm:size-20"
+        className="mb-2 size-16 shrink-0 sm:size-20"
         fallbackClassName="text-lg sm:text-xl"
       />
-      <div className="flex min-w-0 flex-1 flex-col sm:max-w-full sm:flex-none sm:items-center">
+      <div className="flex min-w-0 max-w-full flex-col items-center">
         <div className="flex min-w-0 max-w-full items-center gap-1.5">
           {canOpen ? (
             <button
@@ -63,7 +62,7 @@ export function UserMiniCard({
         {subtitle && <div className="truncate text-xs text-muted-foreground sm:text-sm">{subtitle}</div>}
       </div>
       {actions && (
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:mt-2 sm:w-full sm:justify-center">
+        <div className="mt-2 flex w-full shrink-0 flex-wrap items-center justify-center gap-2">
           {actions}
         </div>
       )}

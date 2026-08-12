@@ -19,10 +19,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UserMiniCard } from '@/components/user-mini-card';
 
-// Dense grid for display-only cards; roomier grid for cards with action buttons
-// (Accept/Decline) so they don't cramp at 2 columns on phones.
-const GRID = 'grid grid-cols-1 gap-4';
-const ACTION_GRID = 'grid grid-cols-1 gap-4';
+// Two-up grid of vertical mini cards, 2 columns even on phones.
+const GRID = 'grid grid-cols-2 gap-3';
+const ACTION_GRID = 'grid grid-cols-2 gap-3';
 
 function AddFriendsButton({
   inviteLink,
