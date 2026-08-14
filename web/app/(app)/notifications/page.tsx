@@ -197,18 +197,21 @@ export default function NotificationsPage() {
                 const betStale = betStatus !== undefined && betStatus !== 'open';
                 const showActions = !!meta.action && !n.read && !done && !betStale;
                 const busy = act.isPending && act.variables?.n.id === n.id;
+                // An expired bet challenge has no live destination — drop the row link.
+                const clickable = !betStale;
                 return (
                   <div
                     key={n.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openItem(n)}
-                    onKeyDown={(e) => {
+                    role={clickable ? 'button' : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    onClick={clickable ? () => openItem(n) : undefined}
+                    onKeyDown={clickable ? (e) => {
                       if (e.target !== e.currentTarget) return; // let inner buttons handle their own keys
                       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openItem(n); }
-                    }}
+                    } : undefined}
                     className={cn(
-                      'relative flex cursor-pointer items-start gap-3 border-b border-border px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/40',
+                      'relative flex items-start gap-3 border-b border-border px-4 py-3 text-left transition-colors last:border-b-0',
+                      clickable && 'cursor-pointer hover:bg-muted/40',
                       !n.read && !done && 'bg-primary/[0.04]',
                     )}
                   >
@@ -273,9 +276,9 @@ export default function NotificationsPage() {
                           </Button>
                         </div>
                       ) : betStale && !n.read ? (
-                        <span className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                          <Swords className="size-3.5" /> No longer available
-                        </span>
+                        <div className="mt-2">
+                          <Button size="sm" variant="outline" disabled>No longer available</Button>
+                        </div>
                       ) : null}
 
                       <span className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
