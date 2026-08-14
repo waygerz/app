@@ -22,3 +22,15 @@ def update_profile():
 @jwt_required()
 def set_avatar():
     return ctrl.set_avatar()
+
+
+@profile_bp.put("/favorites/teams")
+@jwt_required()
+def save_favorites():
+    return ctrl.save_favorites()
+
+
+@profile_bp.get("/users/<user_id>/profile")
+@jwt_required()
+def public_profile(user_id):
+    return ctrl.public_profile(user_id)
