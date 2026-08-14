@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import { notificationsApi, type FeedNotification } from '@/lib/notifications';
 import { actOnCode } from '@/lib/invites';
 import { friendsApi } from '@/lib/friends';
 import { leaguesApi } from '@/lib/leagues';
+import { wagersApi } from '@/lib/wagers';
 import { UserAvatar } from '@/components/user-avatar';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { useAuth } from '@/auth/AuthContext';
@@ -80,6 +81,24 @@ export default function NotificationsPage() {
   const items = feedQ.data?.notifications ?? [];
   const unread = feedQ.data?.unread ?? 0;
 
+  // A bet challenge expires when its game kicks off (the scheduler voids the open
+  // offer). The notification row can't see that on its own, so cross-reference
+  // the viewer's own wagers — `my_wagers` includes the offers addressed to them,
+  // with live status — and show "no longer available" instead of a dead
+  // Accept/Reject that only errors when tapped.
+  const hasBetActions = items.some((n) => notifMeta(n).action === 'bet' && !n.read);
+  const wagersQ = useQuery({
+    queryKey: ['wagers-all'],
+    queryFn: () => wagersApi.all(),
+    enabled: !!user && hasBetActions,
+    staleTime: 15_000,
+  });
+  const wagerStatusById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const w of wagersQ.data ?? []) m.set(w.id, w.status);
+    return m;
+  }, [wagersQ.data]);
+
   const markRead = useMutation({
     mutationFn: (ids?: string[]) => notificationsApi.markRead(ids),
     onSuccess: () => {
@@ -122,7 +141,16 @@ export default function NotificationsPage() {
         qc.invalidateQueries({ queryKey: key });
       }
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error, { n }) => {
+      // Race: the offer/invite lapsed between render and tap. Reflect it as a
+      // resolved "no longer available" line rather than a jarring red error.
+      if (/no longer|already started|expired/i.test(e.message)) {
+        setResolved((r) => ({ ...r, [n.id]: 'No longer available' }));
+        if (!n.read) markRead.mutate([n.id]);
+        return;
+      }
+      toast.error(e.message);
+    },
   });
 
   // Opening an item marks it read and jumps to where the live action lives.
@@ -164,7 +192,10 @@ export default function NotificationsPage() {
                 const meta = notifMeta(n);
                 const Icon = meta.Icon;
                 const done = resolved[n.id];
-                const showActions = !!meta.action && !n.read && !done;
+                // Bet challenge that's no longer open (expired/voided/taken).
+                const betStatus = meta.action === 'bet' ? wagerStatusById.get(n.ref_id ?? '') : undefined;
+                const betStale = betStatus !== undefined && betStatus !== 'open';
+                const showActions = !!meta.action && !n.read && !done && !betStale;
                 const busy = act.isPending && act.variables?.n.id === n.id;
                 return (
                   <div
@@ -241,6 +272,10 @@ export default function NotificationsPage() {
                             {meta.action === 'bet' ? 'Reject' : meta.action === 'league' ? 'Dismiss' : 'Decline'}
                           </Button>
                         </div>
+                      ) : betStale && !n.read ? (
+                        <span className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                          <Swords className="size-3.5" /> No longer available
+                        </span>
                       ) : null}
 
                       <span className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
