@@ -26,18 +26,21 @@ def _auth_base():
 
 
 def resolve_users_full(ids) -> dict:
-    """id -> full user dict ({display_name, avatar_key, ...}) from auth."""
+    """id -> profile dict ({id, display_name, avatar_key}) from the users service."""
     ids = list({str(i) for i in ids})
     if not ids:
         return {}
     resp = requests.post(
-        f"{_auth_base()}/internal/users",
+        f"{current_app.config['USERS_URL']}/internal/profiles",
         json={"ids": ids},
         headers=_auth_headers(),
         timeout=10,
     )
     resp.raise_for_status()
-    return {u["id"]: u for u in resp.json().get("users", [])}
+    return {
+        p["user_id"]: {"id": p["user_id"], "display_name": p.get("display_name"), "avatar_key": p.get("avatar_key")}
+        for p in resp.json().get("profiles", [])
+    }
 
 
 def resolve_users(ids) -> dict:

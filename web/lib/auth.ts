@@ -2,14 +2,20 @@
 import { API } from './api-paths';
 import { getDeviceUuid } from './device';
 import { apiJson } from './http';
+import type { FavoriteTeam } from './users';
 
 const AUTH_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export interface AuthUser {
   id: string;
   phone: string;
+  // display_name/avatar_key are sourced from the users (profile) service and
+  // merged onto this object in AuthContext; auth still returns them until the
+  // split's contract phase (A3) drops them.
   display_name: string;
   avatar_key: string | null;
+  /** Favorite teams, merged in from the users (profile) service. */
+  favorite_teams?: FavoriteTeam[];
   created_at: string;
   /** Read-only consent record from signup (null for pre-consent accounts). */
   tos_accepted_at?: string | null;

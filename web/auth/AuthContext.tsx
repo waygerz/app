@@ -8,7 +8,25 @@ import {
   type ReactNode,
 } from 'react';
 import { authApi, tryRefreshSession, type AuthUser, type SignupConsent } from '@/lib/auth';
+import { usersApi } from '@/lib/users';
 import { hasSessionMarker } from '@/lib/session';
+
+/** Merge the profile (display name, avatar, favorites) from the users service
+ *  onto the credentials object from auth. If the profile fetch fails, fall back
+ *  to whatever auth returned (transition-safe until A3 drops those fields). */
+async function withProfile(creds: AuthUser): Promise<AuthUser> {
+  try {
+    const { profile } = await usersApi.getMyProfile();
+    return {
+      ...creds,
+      display_name: profile.display_name,
+      avatar_key: profile.avatar_key,
+      favorite_teams: profile.favorite_teams,
+    };
+  } catch {
+    return creds;
+  }
+}
 
 interface VerifyResult {
   needsProfile: boolean;
@@ -44,13 +62,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       const { user: me } = await authApi.me();
-      setUser(me);
+      setUser(await withProfile(me));
     } catch {
       const ok = await tryRefreshSession();
       if (ok) {
         try {
           const { user: me } = await authApi.me();
-          setUser(me);
+          setUser(await withProfile(me));
           return;
         } catch {
           // fall through
@@ -75,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function verifyOtp(phone: string, otp: string): Promise<VerifyResult> {
     const res = await authApi.otpVerify(phone, otp);
     if (res.user) {
-      setUser(res.user);
+      setUser(await withProfile(res.user));
       return { needsProfile: false };
     }
     return { needsProfile: true, ticket: res.ticket };
@@ -83,17 +101,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function completeProfile(ticket: string, displayName: string, consent: SignupConsent) {
     const { user: u } = await authApi.otpComplete(ticket, displayName, consent);
-    setUser(u);
+    setUser(await withProfile(u));
   }
 
   async function setAvatar(avatarKey: string | null) {
-    const { user: u } = await authApi.setAvatar(avatarKey);
-    setUser(u);
+    // Avatar now lives in the users (profile) service; merge the result onto the
+    // current credentials rather than replacing the whole user.
+    const { profile } = await usersApi.setAvatar(avatarKey);
+    setUser((u) => (u ? { ...u, avatar_key: profile.avatar_key, favorite_teams: profile.favorite_teams } : u));
   }
 
   async function updateProfile(patch: { display_name?: string }) {
-    const { user: u } = await authApi.updateProfile(patch);
-    setUser(u);
+    const { profile } = await usersApi.updateProfile(patch);
+    setUser((u) => (u ? { ...u, display_name: profile.display_name, favorite_teams: profile.favorite_teams } : u));
   }
 
   async function logout() {

@@ -46,6 +46,11 @@ class Config:
 
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
     AUTH_URL = os.environ.get("INTERNAL_AUTH_URL", "http://auth:8000")
+    # Profiles (display_name/avatar) moved to the users service (split A2). Full
+    # /v1 prefix in the default so the compose network resolves it; prod taskdefs
+    # must set INTERNAL_USERS_URL to the https://waygerz.com ALB form (same
+    # internal-URL footgun as every other cross-service call).
+    USERS_URL = os.environ.get("INTERNAL_USERS_URL", "http://users:8000/v1/platform/users")
     LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000")
 
     MAX_COMMENT_BODY = int(os.environ.get("MAX_COMMENT_BODY", 2000))

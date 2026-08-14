@@ -27,13 +27,13 @@ def resolve_users(ids) -> dict:
     if not ids:
         return {}
     resp = requests.post(
-        f"{_auth_base()}/internal/users",
+        f"{current_app.config['USERS_URL']}/internal/profiles",
         json={"ids": ids},
         headers=_headers(),
         timeout=10,
     )
     resp.raise_for_status()
-    return {u["id"]: u["display_name"] for u in resp.json().get("users", [])}
+    return {p["user_id"]: p.get("display_name") for p in resp.json().get("profiles", [])}
 
 
 def _verify_post_access(post_id, user_id):

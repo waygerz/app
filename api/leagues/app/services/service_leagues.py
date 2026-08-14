@@ -145,18 +145,21 @@ def resolve_users(ids) -> dict:
 
 
 def resolve_users_full(ids) -> dict:
-    """id -> full user dict ({display_name, avatar_key, ...}) from auth."""
+    """id -> profile dict ({id, display_name, avatar_key}) from the users service."""
     ids = list({str(i) for i in ids if i})
     if not ids:
         return {}
     r = requests.post(
-        f"{current_app.config['AUTH_URL']}/internal/users",
+        f"{current_app.config['USERS_URL']}/internal/profiles",
         json={"ids": ids},
         headers=_headers(),
         timeout=10,
     )
     r.raise_for_status()
-    return {u["id"]: u for u in r.json().get("users", [])}
+    return {
+        p["user_id"]: {"id": p["user_id"], "display_name": p.get("display_name"), "avatar_key": p.get("avatar_key")}
+        for p in r.json().get("profiles", [])
+    }
 
 
 def ingestor_warm_cache(sport_league_ids) -> dict:

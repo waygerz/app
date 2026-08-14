@@ -1,6 +1,7 @@
 /** Versioned public API prefixes — must match backend Config.api_prefix() per service. */
 export const API = {
   auth: '/v1/platform/auth',
+  users: '/v1/platform/users',
   friends: '/v1/social/friends',
   wallet: '/v1/gameplay/wallet',
   contests: '/v1/gameplay/contests',
