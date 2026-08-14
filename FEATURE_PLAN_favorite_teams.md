@@ -242,6 +242,31 @@ non-`head_to_head` before any wager). Gaps to build:
 2. **Web** (`team-picker`, account "Favorite teams" card, profile-dialog row).
 3. **Polish** (optional mini-card primary-team badge — pending the open question).
 
+## BUILT + audited (Track B, 2026-08-14)
+Built in the `users` service (not `auth`), per the split. Commits: `280e418`
+(B1 backend), `38c1891` (B2 web), `030d626` (B3 nudge), `2b81aca` (full-audit
+fixes). Per-phase + a 2-reviewer full audit ran; fixes applied (400-not-500 on
+bad input; account-card data-loss guard + 44px targets; nudge batch/timeout +
+partial index; picker error states; nudge deep-link anchor). **No functional
+bugs remained at the gate.**
+
+### Deploy (Track B — only after Track A is fully live)
+B sits on top of the `users` service, so deploy it as one unit once A's 3 phases
+are live. Order:
+1. **`flask db upgrade` on `users`** — applies `c2d3e4f5a6b7` (`favorites_nudged_at`
+   + the partial index `ix_profiles_pending_nudge`). Additive + online-safe;
+   note the index build is **not `CONCURRENTLY`**, so it briefly locks `profiles`
+   writes — negligible at current scale, watch it if the table grows.
+2. **Roll `users`** (B1 favorites endpoints + B3 `/internal/tick`) — after the
+   migration (the code needs the column).
+3. **Roll `webui`** (B2) — any time after B1 is live.
+4. **Roll `scheduler`** (so it ticks `users`), with notifications reachable.
+
+**Prod env (ALB form — silent no-op if unset):** scheduler `USERS_URL` =
+`https://waygerz.com/v1/platform/users`; users `INTERNAL_NOTIFICATIONS_URL` =
+`https://waygerz.com/v1/platform/notifications`; shared `JWT_SECRET_KEY` +
+`INTERNAL_TOKEN` identical across users/scheduler/notifications.
+
 ## Audit (verified against code, 2026-08-14)
 All claims checked against the real `auth` service. Verdicts:
 - **`GET /me` / `to_dict()`** — VERIFIED. `/me` → `svc.me()` (`service_auth.py`
