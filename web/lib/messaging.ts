@@ -2,31 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { API } from './api-paths';
 import { apiJson } from './http';
 import { useAuth } from '@/auth/AuthContext';
-import type { BetType, WagerSide, WagerStatus } from './wagers';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 const MESSAGING_API = API.messaging;
-
-// Payload on a `kind: 'bet'` message — a self-describing snapshot the webui
-// renders as an in-thread bet card (posted by contests when a wager is made).
-export interface BetMessageMeta {
-  wager_id: string;
-  league_id: string;
-  event_id: string;
-  event_name: string | null;
-  home_team: string;
-  away_team: string;
-  bet_type: BetType;
-  line: number | null;
-  amount_cents: number;
-  proposer_id: string;
-  acceptor_id: string;
-  proposer_side: WagerSide;
-  acceptor_side: WagerSide;
-  proposer_name: string;
-  acceptor_name: string;
-  status: WagerStatus;
-}
 
 export type ConversationUser = {
   id: string;
@@ -50,9 +28,9 @@ export type ChatMessage = {
   author_id: string;
   author_name?: string;
   body: string;
-  // 'text' (default) or 'bet' — a native in-thread bet card, rendered from meta.
+  // 'text' (default). Generic message kind + payload; no non-text kinds render today.
   kind?: string;
-  meta?: BetMessageMeta | null;
+  meta?: Record<string, unknown> | null;
   created_at: string;
   read_at?: string | null;
   edited_at?: string | null;

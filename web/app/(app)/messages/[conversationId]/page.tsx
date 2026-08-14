@@ -4,17 +4,15 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Send, Swords, CheckCheck } from 'lucide-react';
+import { ArrowLeft, Send, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { UserAvatar } from '@/components/user-avatar';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { messagingApi, type ChatMessage, type BetMessageMeta } from '@/lib/messaging';
+import { messagingApi, type ChatMessage } from '@/lib/messaging';
 import { leaguesApi } from '@/lib/leagues';
-import { wagersApi, wagerPick, type Wager } from '@/lib/wagers';
-import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
 import { conversationTitle, clockTime, dayKey, dayLabel, senderColor } from '../helpers';
 
@@ -59,21 +57,6 @@ export default function ThreadPage() {
 
   const conversations = convsQ.data ?? [];
   const activeConv = conversations.find((c) => c.id === conversationId);
-  const otherId = activeConv?.other_user?.id ?? null;
-
-  // In-thread bet slips: the open wagers between me and the person I'm DMing,
-  // interleaved into the chat by time. (Direct chats only.)
-  const chatWagersQ = useQuery({
-    queryKey: ['chat-wagers', me, otherId],
-    queryFn: () => wagersApi.all(),
-    enabled: activeConv?.type === 'direct' && !!otherId,
-    staleTime: 15_000,
-  });
-  const wagersById = useMemo(() => {
-    const m = new Map<string, Wager>();
-    for (const w of chatWagersQ.data ?? []) m.set(w.id, w);
-    return m;
-  }, [chatWagersQ.data]);
 
   // Opening a thread marks it read.
   useEffect(() => {
@@ -156,79 +139,6 @@ export default function ThreadPage() {
     onError: onErr,
   });
 
-  const betAct = useMutation({
-    mutationFn: ({ id, yes }: { id: string; yes: boolean }) =>
-      yes ? wagersApi.accept(id) : wagersApi.decline(id),
-    onSuccess: (_r, { yes }) => {
-      toast.success(yes ? 'Bet accepted' : 'Bet rejected');
-      qc.invalidateQueries({ queryKey: ['chat-wagers'] });
-      qc.invalidateQueries({ queryKey: ['wagers-all'] });
-      qc.invalidateQueries({ queryKey: ['wagers'] });
-    },
-    onError: onErr,
-  });
-
-  // Native in-thread bet card. Display comes from the message's own `meta`
-  // snapshot; the live wager (by id) supplies the current status + whether
-  // Accept/Reject is still available.
-  function BetSlip({ meta, live }: { meta: BetMessageMeta; live?: Wager }) {
-    const status = live?.status ?? meta.status;
-    const iAmAcceptor = String(live?.acceptor_id ?? meta.acceptor_id) === me;
-    const canAct = status === 'open' && iAmAcceptor;
-    const pick = wagerPick(
-      { bet_type: meta.bet_type, line: meta.line, home_team: meta.home_team, away_team: meta.away_team, proposer_side: meta.proposer_side },
-      iAmAcceptor ? meta.acceptor_side : meta.proposer_side,
-    );
-    const won = live?.winner_user_id ? String(live.winner_user_id) === me : null;
-
-    let action: ReactNode;
-    if (canAct) {
-      action = (
-        <span className="flex gap-1.5">
-          <Button size="sm" variant="outline" disabled={betAct.isPending}
-            onClick={() => betAct.mutate({ id: meta.wager_id, yes: false })}>Reject</Button>
-          <Button size="sm" disabled={betAct.isPending}
-            onClick={() => betAct.mutate({ id: meta.wager_id, yes: true })}>Accept</Button>
-        </span>
-      );
-    } else if (status === 'open') {
-      action = <span className="text-[11px] text-muted-foreground">Waiting on {meta.acceptor_name}…</span>;
-    } else if (status === 'accepted') {
-      action = <span className="text-[11px] font-medium text-brand">Accepted ✓</span>;
-    } else if (status === 'completed' || status === 'settled') {
-      action = <span className={cn('text-[11px] font-semibold', won ? 'text-brand' : won === false ? 'text-destructive' : 'text-muted-foreground')}>
-        {won ? 'Won' : won === false ? 'Lost' : 'Settled'}
-      </span>;
-    } else {
-      action = <span className="text-[11px] capitalize text-muted-foreground">{status}</span>;
-    }
-
-    return (
-      <div className="max-w-[86%] self-start rounded-2xl rounded-bl-md border border-primary/40 bg-muted/40 p-3 ring-1 ring-inset ring-primary/20">
-        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="flex size-5 items-center justify-center rounded-md bg-primary/15 text-primary">
-            <Swords className="size-3" />
-          </span>
-          {iAmAcceptor ? `${meta.proposer_name} challenged you` : 'Your bet'}
-        </div>
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 py-2">
-          <span className="text-[13px] font-semibold">
-            {meta.away_team} <span className="font-medium text-muted-foreground">@</span> {meta.home_team}
-          </span>
-          <span className="whitespace-nowrap rounded-md border border-primary/40 bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-primary">
-            {pick}
-          </span>
-        </div>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-[11px] text-muted-foreground">
-            Stake <b className="font-mono text-foreground">{formatCredits(meta.amount_cents)}</b>
-          </span>
-          {action}
-        </div>
-      </div>
-    );
-  }
-
   const title = activeConv ? conversationTitle(activeConv, leagueNames) : 'Chat';
   const isLeague = activeConv?.type === 'league' && !!activeConv.league_id;
   const messages = msgsQ.data ?? [];
@@ -256,18 +166,10 @@ export default function ThreadPage() {
   };
 
   for (const m of messages) {
-    pushDivider(m.created_at);
+    // Native in-thread bet cards were removed; skip bet messages entirely.
+    if (m.kind === 'bet') continue;
 
-    if (m.kind === 'bet' && m.meta) {
-      lastAuthor = '';
-      const meta = m.meta;
-      items.push({
-        at: new Date(m.created_at).getTime(),
-        key: m.id,
-        node: <div key={m.id} className="flex flex-col"><BetSlip meta={meta} live={wagersById.get(meta.wager_id)} /></div>,
-      });
-      continue;
-    }
+    pushDivider(m.created_at);
 
     const mine = String(m.author_id) === me;
     const showSender = isLeague && !mine && m.author_id !== lastAuthor;

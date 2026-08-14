@@ -236,46 +236,6 @@ def _notify(user_id, template_key, title, context, *, actor_uid=None, ref_id=Non
         current_app.logger.exception("wager notify failed user=%s key=%s", user_id, template_key)
 
 
-def _post_bet_dm(w, proposer_name, acceptor_name):
-    """Best-effort: drop a native bet card into the two players' direct chat.
-    The webui renders `kind: "bet"` messages from `meta`. Fail-fast so a
-    messaging hiccup never affects the bet."""
-    try:
-        base = current_app.config["MESSAGING_URL"]
-        requests.post(
-            f"{base}/internal/messages",
-            json={
-                "user_a": str(w.proposer_id),
-                "user_b": str(w.acceptor_id),
-                "author_id": str(w.proposer_id),
-                "kind": "bet",
-                "body": f"{proposer_name} bet {_format_stake(w.amount_cents)} on {_matchup(w)}",
-                "meta": {
-                    "wager_id": w.id,
-                    "league_id": w.league_id,
-                    "event_id": w.event_id,
-                    "event_name": w.event_name,
-                    "home_team": w.home_team,
-                    "away_team": w.away_team,
-                    "bet_type": w.bet_type,
-                    "line": w.line,
-                    "amount_cents": w.amount_cents,
-                    "proposer_id": str(w.proposer_id),
-                    "acceptor_id": str(w.acceptor_id),
-                    "proposer_side": w.proposer_side,
-                    "acceptor_side": w.acceptor_side,
-                    "proposer_name": proposer_name,
-                    "acceptor_name": acceptor_name,
-                    "status": w.status,
-                },
-            },
-            headers=_itoken(),
-            timeout=3,
-        )
-    except Exception:  # noqa: BLE001
-        current_app.logger.exception("bet DM post failed wager=%s", w.id)
-
-
 def _matchup(wager):
     return wager.event_name or f"{wager.away_team} at {wager.home_team}"
 
@@ -411,10 +371,6 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
     db.session.commit()
 
     prop_name = _name(proposer_id)
-    acc_name = _name(acceptor_id)
-
-    # Native in-thread bet: drop the challenge into the two players' DM.
-    _post_bet_dm(w, prop_name, acc_name)
 
     _notify(
         acceptor_id,

@@ -21,7 +21,7 @@ class ChatMessage(db.Model):
     )
     author_id = db.Column(UUID(as_uuid=False), nullable=False, index=True)
     body = db.Column(db.Text, nullable=False)
-    # "text" (default) or "bet" — a native in-thread bet card rendered from meta.
+    # Generic message kind (default "text") + optional JSON payload in `meta`.
     kind = db.Column(db.String(16), nullable=False, default="text", server_default="text")
     meta = db.Column(JSONB, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
