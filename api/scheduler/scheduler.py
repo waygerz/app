@@ -15,6 +15,9 @@ JOBS = (
     ("contests", f"{os.environ.get('CONTESTS_URL', 'http://contests:8000')}/internal/tick"),
     ("leagues", f"{os.environ.get('LEAGUES_URL', 'http://leagues:8000')}/internal/tick"),
     ("ingestor", f"{os.environ.get('INGESTOR_URL', 'http://ingestor:8000')}/internal/tick"),
+    # users owns the no-favorites nudge. Its /internal/tick is under the /v1
+    # prefix, so the default carries it; prod sets USERS_URL to the ALB form.
+    ("users", f"{os.environ.get('USERS_URL', 'http://users:8000/v1/platform/users')}/internal/tick"),
 )
 
 

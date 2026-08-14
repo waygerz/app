@@ -11,6 +11,15 @@ class Profile(db.Model):
     this holds the display fields that used to squat in auth.users."""
 
     __tablename__ = "profiles"
+    __table_args__ = (
+        # Supports the no-favorites nudge tick: a partial index over un-nudged
+        # rows only, so it stays tiny (near-empty once everyone's been nudged).
+        db.Index(
+            "ix_profiles_pending_nudge",
+            "created_at",
+            postgresql_where=db.text("favorites_nudged_at IS NULL"),
+        ),
+    )
 
     # = auth.users.id (a string UUID). Soft cross-service reference, no FK.
     user_id = db.Column(UUID(as_uuid=False), primary_key=True)
@@ -22,6 +31,8 @@ class Profile(db.Model):
     updated_at = db.Column(
         db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+    # When the one-time "pick your favorite teams" nudge was sent (null = not yet).
+    favorites_nudged_at = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
         return {

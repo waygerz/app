@@ -54,6 +54,19 @@ class Config:
     # Favorite-team cap per user (enforced in the service, not the DB).
     FAVORITE_TEAMS_MAX = int(os.environ.get("FAVORITE_TEAMS_MAX", 6))
 
+    # No-favorites nudge (scheduler-driven /internal/tick). A user with zero
+    # favorites this long after signup gets a one-time in-app notification. The
+    # notifications base includes the /v1/... prefix; /internal/notify is
+    # appended. In prod this MUST be the https://waygerz.com ALB form.
+    NOTIFICATIONS_URL = os.environ.get(
+        "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
+    )
+    FAVORITES_NUDGE_AFTER_HOURS = int(os.environ.get("FAVORITES_NUDGE_AFTER_HOURS", 24))
+    # Kept small so batch × per-nudge timeout stays well under the scheduler's
+    # 120s per-tick read window even if notifications is slow.
+    FAVORITES_NUDGE_BATCH = int(os.environ.get("FAVORITES_NUDGE_BATCH", 25))
+    FAVORITES_NUDGE_DEEP_LINK = os.environ.get("FAVORITES_NUDGE_DEEP_LINK", "/account")
+
     @classmethod
     def api_prefix(cls) -> str:
         return f"/v1/{cls.SERVICE_GROUP}/{cls.SERVICE_NAME}"

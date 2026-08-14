@@ -16,3 +16,9 @@ def profiles():
 @internal_only
 def upsert_profile():
     return ctrl.upsert_profile()
+
+
+@users_internal_bp.post("/tick")
+@internal_only
+def tick():
+    return ctrl.tick()

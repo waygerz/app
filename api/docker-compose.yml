@@ -120,6 +120,8 @@ services:
       SERVICE_GROUP: platform
       SERVICE_NAME: users
       DB_SCHEMA: users
+      # For the no-favorites nudge (scheduler → users /internal/tick → notify).
+      INTERNAL_NOTIFICATIONS_URL: "http://notifications:8000/v1/platform/notifications"
     depends_on:
       pgsql: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -320,6 +322,7 @@ services:
     depends_on:
       - contests
       - leagues
+      - users
     deploy:
       resources:
         limits:
