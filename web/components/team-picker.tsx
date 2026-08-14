@@ -148,7 +148,9 @@ export function TeamPicker({
           )}
 
           {level === 'sport' &&
-            (sportsQ.isPending ? (
+            (sportsQ.isError ? (
+              <CatalogError onRetry={() => sportsQ.refetch()} />
+            ) : sportsQ.isPending ? (
               <RowSkeletons />
             ) : (
               <ul className="flex flex-col">
@@ -167,7 +169,9 @@ export function TeamPicker({
             ))}
 
           {level === 'league' &&
-            (leaguesQ.isPending ? (
+            (leaguesQ.isError ? (
+              <CatalogError onRetry={() => leaguesQ.refetch()} />
+            ) : leaguesQ.isPending ? (
               <RowSkeletons />
             ) : (
               <ul className="flex flex-col">
@@ -196,7 +200,9 @@ export function TeamPicker({
                   className="h-11 ps-9 text-base"
                 />
               </div>
-              {teamsQ.isPending ? (
+              {teamsQ.isError ? (
+                <CatalogError onRetry={() => teamsQ.refetch()} />
+              ) : teamsQ.isPending ? (
                 <div className="grid grid-cols-3 gap-2.5">
                   {[...Array(9)].map((_, i) => (
                     <Skeleton key={i} className="h-[92px] rounded-xl" />
@@ -252,6 +258,17 @@ function RowSkeletons() {
       {[...Array(6)].map((_, i) => (
         <Skeleton key={i} className="h-11 w-full rounded-lg" />
       ))}
+    </div>
+  );
+}
+
+function CatalogError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="py-10 text-center text-sm text-muted-foreground">
+      Couldn’t load right now.{' '}
+      <button type="button" onClick={onRetry} className="font-medium text-primary">
+        Retry
+      </button>
     </div>
   );
 }

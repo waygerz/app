@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Star, X } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { usersApi, MAX_FAVORITE_TEAMS, type FavoriteTeam, type FavoriteTeamInput } from '@/lib/users';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { TeamPicker } from '@/components/team-picker';
 import { FavoriteTeamPills, TeamLogo } from '@/components/favorite-teams';
 
@@ -14,15 +16,28 @@ const withPositions = (list: FavoriteTeam[]) => list.map((t, i) => ({ ...t, posi
 
 export function FavoriteTeamsCard() {
   const { user, saveFavorites } = useAuth();
-  const [teams, setTeams] = useState<FavoriteTeam[]>(user?.favorite_teams ?? []);
+  // null = not loaded yet. We do NOT seed from AuthContext: a degraded bootstrap
+  // could leave user.favorite_teams empty, and since saving is a REPLACE-ALL,
+  // editing from a guessed-empty list would wipe the stored favorites. So load
+  // the authoritative list here and gate editing on it.
+  const [teams, setTeams] = useState<FavoriteTeam[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const profileQ = useQuery({
+    queryKey: ['my-profile'],
+    queryFn: () => usersApi.getMyProfile(),
+    enabled: !!user,
+    staleTime: 30_000,
+  });
+  useEffect(() => {
+    if (profileQ.data && teams === null) setTeams(profileQ.data.profile.favorite_teams);
+  }, [profileQ.data, teams]);
+
   // Optimistic: apply locally, then persist the whole list via the context
-  // saveFavorites (which merges the result back into AuthContext so the list
-  // stays fresh across remounts). Don't overwrite from the success response
-  // (avoids out-of-order clobbering on rapid edits); on error, resync from the
-  // server truth.
+  // saveFavorites (which merges the result back into AuthContext). Don't
+  // overwrite from the success response (avoids out-of-order clobbering on rapid
+  // edits); on error, resync from the server truth.
   async function persist(next: FavoriteTeam[]) {
     setTeams(next);
     setSaving(true);
@@ -42,31 +57,46 @@ export function FavoriteTeamsCard() {
   }
 
   function add(t: FavoriteTeamInput) {
-    if (teams.length >= MAX_FAVORITE_TEAMS) return;
+    if (!teams || teams.length >= MAX_FAVORITE_TEAMS) return;
     if (teams.some((e) => e.sport === t.sport && e.league === t.league && e.external_id === t.external_id)) return;
     persist(withPositions([...teams, { ...t, position: teams.length }]));
   }
   function remove(i: number) {
-    persist(withPositions(teams.filter((_, idx) => idx !== i)));
+    if (teams) persist(withPositions(teams.filter((_, idx) => idx !== i)));
   }
   function makePrimary(i: number) {
-    if (i === 0) return;
-    persist(withPositions([teams[i], ...teams.filter((_, idx) => idx !== i)]));
+    if (teams && i > 0) persist(withPositions([teams[i], ...teams.filter((_, idx) => idx !== i)]));
   }
 
   if (!user) return null;
-  const full = teams.length >= MAX_FAVORITE_TEAMS;
+  const full = !!teams && teams.length >= MAX_FAVORITE_TEAMS;
 
   return (
-    <Card className="gap-3 p-5">
+    <Card id="favorite-teams" className="scroll-mt-20 gap-3 p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-foreground">Favorite teams</h2>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {teams.length}/{MAX_FAVORITE_TEAMS}
-        </span>
+        {teams !== null && (
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {teams.length}/{MAX_FAVORITE_TEAMS}
+          </span>
+        )}
       </div>
 
-      {teams.length > 0 ? (
+      {teams === null ? (
+        profileQ.isError ? (
+          <p className="text-sm text-muted-foreground">
+            Couldn’t load your favorite teams.{' '}
+            <button type="button" className="font-medium text-primary" onClick={() => profileQ.refetch()}>
+              Retry
+            </button>
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-7 w-44 rounded-full" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+          </div>
+        )
+      ) : teams.length > 0 ? (
         <>
           <FavoriteTeamPills teams={teams} />
           <ul className="mt-1 flex flex-col border-t border-border">
@@ -111,16 +141,20 @@ export function FavoriteTeamsCard() {
         </p>
       )}
 
-      <Button
-        variant="outline"
-        className="mt-1 w-full"
-        disabled={saving || full}
-        onClick={() => setPickerOpen(true)}
-      >
-        {full ? 'Maximum reached' : '+ Add team'}
-      </Button>
+      {teams !== null && (
+        <Button
+          variant="outline"
+          className="mt-1 w-full"
+          disabled={saving || full}
+          onClick={() => setPickerOpen(true)}
+        >
+          {full ? 'Maximum reached' : '+ Add team'}
+        </Button>
+      )}
 
-      <TeamPicker open={pickerOpen} onOpenChange={setPickerOpen} existing={teams} onAdd={add} />
+      {teams !== null && (
+        <TeamPicker open={pickerOpen} onOpenChange={setPickerOpen} existing={teams} onAdd={add} />
+      )}
     </Card>
   );
 }

@@ -65,7 +65,9 @@ class Config:
     # Kept small so batch × per-nudge timeout stays well under the scheduler's
     # 120s per-tick read window even if notifications is slow.
     FAVORITES_NUDGE_BATCH = int(os.environ.get("FAVORITES_NUDGE_BATCH", 25))
-    FAVORITES_NUDGE_DEEP_LINK = os.environ.get("FAVORITES_NUDGE_DEEP_LINK", "/account")
+    # Deep link the nudge to the favorites card (id="favorite-teams" on the
+    # account page), not just the top of /account.
+    FAVORITES_NUDGE_DEEP_LINK = os.environ.get("FAVORITES_NUDGE_DEEP_LINK", "/account#favorite-teams")
 
     @classmethod
     def api_prefix(cls) -> str:
