@@ -19,6 +19,7 @@ on:
         options:
           - all
           - auth
+          - users
           - friends
           - comments
           - messaging
@@ -73,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ github.event.inputs.service }}" = "all" ]; then
-            SERVICES='["auth","friends","comments","messaging","ingestor","wallet","contests","leagues","media","notifications","webui","scheduler"]'
+            SERVICES='["auth","users","friends","comments","messaging","ingestor","wallet","contests","leagues","media","notifications","webui","scheduler"]'
           else
             SERVICES='["${{ github.event.inputs.service }}"]'
           fi

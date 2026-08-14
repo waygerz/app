@@ -98,6 +98,8 @@ services:
       AUTH_REVEAL_OTP: "true"
       # OTP is delivered by the notifications service (see auth service_sms).
       INTERNAL_NOTIFICATIONS_URL: "http://notifications:8000/v1/platform/notifications"
+      # Profiles live in the users service; auth creates the profile row at signup.
+      INTERNAL_USERS_URL: "http://users:8000/v1/platform/users"
     depends_on:
       pgsql: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -107,6 +109,26 @@ services:
           memory: 128M
         reservations:
           memory: 64M
+    restart: unless-stopped
+
+  # Profile store (display_name, avatar, favorite teams) — split out of auth.
+  users:
+    build: ./users
+    env_file: .env
+    environment:
+      <<: *app-db
+      SERVICE_GROUP: platform
+      SERVICE_NAME: users
+      DB_SCHEMA: users
+    depends_on:
+      pgsql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+        reservations:
+          memory: 48M
     restart: unless-stopped
 
   notifications:

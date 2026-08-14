@@ -61,6 +61,14 @@ class Config:
     INTERNAL_NOTIFICATIONS_URL = os.environ.get(
         "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
     )
+    # Profiles (display_name/avatar) now live in the users service; auth creates
+    # the profile row at signup. Base incl. the /v1/... prefix; the
+    # /internal/profiles/upsert path is appended. In prod this MUST be the
+    # https://waygerz.com ALB form, not the compose default, or signup can't
+    # create profiles (same internal-URL footgun as notifications).
+    INTERNAL_USERS_URL = os.environ.get(
+        "INTERNAL_USERS_URL", "http://users:8000/v1/platform/users"
+    )
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 
     @classmethod

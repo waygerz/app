@@ -54,6 +54,17 @@ def create_app(config_class=Config):
         user = User(phone=phone, pin_hash=hash_pin(pin), display_name=name)
         db.session.add(user)
         db.session.commit()
+
+        # Profiles live in the users service now — create it too (an account
+        # without a profile is broken). Best-effort in the CLI: warn instead of
+        # hard-failing if the users service is unreachable, and point at the
+        # backfill to reconcile later.
+        from app.services.service_users import ProfileError, create_profile
+
+        try:
+            create_profile(user.id, name)
+        except ProfileError as exc:
+            print(f"WARNING: profile not created ({exc}); run 'flask backfill-profiles' in the users service")
         print(f"created user id={user.id} phone={phone} name={name!r}")
 
     return app

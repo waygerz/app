@@ -9,7 +9,7 @@ from flask_jwt_extended import create_access_token, create_refresh_token
 
 from app.extensions import db, get_redis
 from app.models.user import User
-from app.services import _sessions, service_notifications, service_sms
+from app.services import _sessions, service_notifications, service_sms, service_users
 from app.utils.config import Config
 from app.utils.cookies import attach_auth_cookies
 from werkzeug.security import generate_password_hash
@@ -241,6 +241,17 @@ def otp_complete(data: dict):
     )
     db.session.add(user)
     db.session.commit()
+
+    # The profile (display_name, avatar) lives in the users service now. Creating
+    # it is REQUIRED — an account with no profile is broken — so on failure roll
+    # back the just-created auth row and ask the user to retry (all-or-nothing
+    # from their side). This is the only synchronous outbound call at signup.
+    try:
+        service_users.create_profile(user.id, display_name)
+    except service_users.ProfileError:
+        db.session.delete(user)
+        db.session.commit()
+        return {"error": "signup is temporarily unavailable — please try again"}, 503
 
     # Mirror both SMS choices into the notifications service so /account reflects
     # what the user picked (and they can change it later). Transactional SMS
