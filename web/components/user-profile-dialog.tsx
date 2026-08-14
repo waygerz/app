@@ -5,8 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Beer } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { wagersApi, viewerSide, wagerPick, type Wager } from '@/lib/wagers';
+import { usersApi } from '@/lib/users';
 import { formatCredits } from '@/lib/wallet';
 import { UserAvatar } from '@/components/user-avatar';
+import { FavoriteTeamPills } from '@/components/favorite-teams';
 import {
   Dialog,
   DialogBody,
@@ -67,6 +69,15 @@ export function UserProfileDialog({
     staleTime: 30_000,
   });
 
+  // Public profile (name, avatar, favorite teams) for the viewed user.
+  const profileQ = useQuery({
+    queryKey: ['user-profile', userId],
+    queryFn: () => usersApi.getUserProfile(userId),
+    enabled: open && !!userId,
+    staleTime: 60_000,
+  });
+  const favorites = profileQ.data?.profile.favorite_teams ?? [];
+
   const bets = useMemo(
     () =>
       (wagersQ.data ?? []).filter(
@@ -124,6 +135,15 @@ export function UserProfileDialog({
         </DialogHeader>
 
         <DialogBody>
+          {favorites.length > 0 && (
+            <div className="mb-4">
+              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Favorite teams
+              </div>
+              <FavoriteTeamPills teams={favorites} />
+            </div>
+          )}
+
           <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Bets between you
           </div>

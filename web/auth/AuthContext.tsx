@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { authApi, tryRefreshSession, type AuthUser, type SignupConsent } from '@/lib/auth';
-import { usersApi } from '@/lib/users';
+import { usersApi, type FavoriteTeamInput } from '@/lib/users';
 import { hasSessionMarker } from '@/lib/session';
 
 /** Merge the profile (display name, avatar, favorites) from the users service
@@ -46,6 +46,8 @@ interface AuthState {
   setAvatar: (avatarKey: string | null) => Promise<void>;
   /** Update editable profile fields (currently display name). */
   updateProfile: (patch: { display_name?: string }) => Promise<void>;
+  /** Replace the whole ordered favorites list; merges the result into context. */
+  saveFavorites: (teams: FavoriteTeamInput[]) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -116,6 +118,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((u) => (u ? { ...u, display_name: profile.display_name, favorite_teams: profile.favorite_teams } : u));
   }
 
+  async function saveFavorites(teams: FavoriteTeamInput[]) {
+    const { favorite_teams } = await usersApi.saveFavorites(teams);
+    setUser((u) => (u ? { ...u, favorite_teams } : u));
+  }
+
   async function logout() {
     try {
       await authApi.logout();
@@ -127,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, startOtp, verifyOtp, completeProfile, setAvatar, updateProfile, logout }}
+      value={{ user, loading, startOtp, verifyOtp, completeProfile, setAvatar, updateProfile, saveFavorites, logout }}
     >
       {children}
     </AuthContext.Provider>

@@ -11,6 +11,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { ColorPicker } from '@/components/theme/color-picker';
 import { SurfacePicker } from '@/components/theme/surface-picker';
 import { NotificationsCard, PromotionsCard } from '@/components/account/notifications-card';
+import { FavoriteTeamsCard } from '@/components/account/favorite-teams-card';
 import { LegalLink } from '@/components/legal/legal-dialog';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -267,6 +268,9 @@ export default function AccountPage() {
             Your phone number is how you sign in and can’t be changed here yet.
           </p>
         </Card>
+
+        {/* Favorite teams — shown as brand pills on your profile */}
+        <FavoriteTeamsCard />
 
         {/* Appearance — ROYGBIV primary + accent colors */}
         <Card className="gap-4 p-5">

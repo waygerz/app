@@ -24,6 +24,12 @@ export interface UserProfile {
   favorite_teams: FavoriteTeam[];
 }
 
+/** A team snapshot to save (no position — order in the array is the order). */
+export type FavoriteTeamInput = Omit<FavoriteTeam, 'position'>;
+
+/** Max favorite teams per user — keep in sync with users FAVORITE_TEAMS_MAX. */
+export const MAX_FAVORITE_TEAMS = 6;
+
 export const usersApi = {
   /** The signed-in user's own profile (display name, avatar, favorites). */
   getMyProfile: () => apiJson<{ profile: UserProfile }>(`${USERS_URL}${API.users}/profile`),
@@ -39,4 +45,15 @@ export const usersApi = {
       method: 'PATCH',
       body: JSON.stringify({ avatar_key }),
     }),
+
+  /** Replace the whole ordered favorites list (first = primary, max 6). */
+  saveFavorites: (teams: FavoriteTeamInput[]) =>
+    apiJson<{ favorite_teams: FavoriteTeam[] }>(`${USERS_URL}${API.users}/favorites/teams`, {
+      method: 'PUT',
+      body: JSON.stringify({ teams }),
+    }),
+
+  /** Another user's public profile (name, avatar, favorite teams). */
+  getUserProfile: (userId: string) =>
+    apiJson<{ profile: UserProfile }>(`${USERS_URL}${API.users}/users/${encodeURIComponent(userId)}/profile`),
 };
