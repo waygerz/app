@@ -21,10 +21,6 @@ def _auth_headers():
     return {"X-Internal-Token": current_app.config["INTERNAL_TOKEN"]}
 
 
-def _auth_base():
-    return current_app.config["AUTH_URL"]
-
-
 def resolve_users_full(ids) -> dict:
     """id -> profile dict ({id, display_name, avatar_key}) from the users service."""
     ids = list({str(i) for i in ids})

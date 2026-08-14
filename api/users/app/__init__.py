@@ -58,4 +58,34 @@ def create_app(config_class=Config):
         db.session.commit()
         print(f"backfilled {n} profiles")
 
+    @app.cli.command("reconcile-profiles")
+    def reconcile_profiles():
+        """Safety net: seed a placeholder profile for any auth account that has
+        no profile row — e.g. a hard crash between the auth-row commit and the
+        profile create at signup, or a best-effort CLI-created user. Works before
+        OR after the display_name column is dropped (it only needs the id list),
+        so unlike backfill it can't recover the real name — it seeds 'Player',
+        which the user can edit. Idempotent."""
+        schema = app.config["DB_SCHEMA"]
+        rows = db.session.execute(
+            text(
+                'SELECT id FROM auth.users WHERE id NOT IN '
+                f'(SELECT user_id FROM "{schema}".profiles)'
+            )
+        ).fetchall()
+        n = 0
+        for r in rows:
+            db.session.execute(
+                text(
+                    f'INSERT INTO "{schema}".profiles '
+                    "(user_id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'Player', now(), now()) "
+                    "ON CONFLICT (user_id) DO NOTHING"
+                ),
+                {"id": r.id},
+            )
+            n += 1
+        db.session.commit()
+        print(f"reconciled {n} missing profiles")
+
     return app

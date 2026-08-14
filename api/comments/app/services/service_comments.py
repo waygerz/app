@@ -18,10 +18,6 @@ def _leagues_base():
     return current_app.config["LEAGUES_URL"]
 
 
-def _auth_base():
-    return current_app.config["AUTH_URL"]
-
-
 def resolve_users(ids) -> dict:
     ids = list({str(i) for i in ids if i})
     if not ids:

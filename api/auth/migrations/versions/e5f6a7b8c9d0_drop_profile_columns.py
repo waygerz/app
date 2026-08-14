@@ -6,8 +6,10 @@ Create Date: 2026-08-14 00:00:00.000000
 
 Contract phase of the auth->users split. display_name/avatar_key have been
 backfilled into users.profiles and every reader now sources them from the users
-service, so drop them from auth.users. Run ONLY after the backfill + read
-migration are deployed and verified.
+service, so drop them from auth.users. Run ONLY after every auth instance is on
+the new (identity-only) image — the nullable step d7e8f9a0b1c2 covers the
+rolling-deploy window; this final drop is safe once no old image references the
+columns. Re-run backfill-profiles just before this to sweep interim signups.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -15,7 +17,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'e5f6a7b8c9d0'
-down_revision = 'd4e5f6a7b8c9'
+down_revision = 'd7e8f9a0b1c2'
 branch_labels = None
 depends_on = None
 

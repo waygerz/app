@@ -170,25 +170,48 @@ Chosen approach (no true distributed txn, tiny scale):
 
 ---
 
-## Data migration + rollout (expand → migrate → contract; no flag day)
-Never break prod. Three deploys:
+## Deploy runbook (BUILT + audited — exact ordering matters)
+All the CODE is on one `main` HEAD (commits `b114813` A1, `f6d20cf` A2, `3afc1d7`
+A3, plus the migration-split fix). Because auth runs ~3 instances, the **deploy
+order is what enforces expand→migrate→contract** without breaking prod. The
+column-drop was **split into nullable-then-drop** (migration `d7e8f9a0b1c2` then
+`e5f6a7b8c9d0`) precisely so old + new auth images can coexist during the roll —
+a single drop would break one or the other mid-roll (audit-confirmed).
 
-**1. Expand** — stand up `users` (schema, tables), **backfill** `profiles` from
-`auth.users` (copy `id→user_id, display_name, avatar_key`) via a one-off
-`run-task`. `users` serves `/profile` + `/internal/profiles`. **auth still owns
-and serves its columns** (nothing repointed yet). Signup **dual-writes** (auth
-row + `users.profiles`). Web still reads profile off auth `/me`. Verify parity.
+**Infra prereqs (AWS, one-time):** ECR repo `waygerz/users`; ECS service `users`
++ task def (real `DATABASE_URL`, shared `JWT_SECRET_KEY` + `INTERNAL_TOKEN`);
+confirm the users DB role has `SELECT` on `auth.users` (backfill needs it).
 
-**2. Migrate reads** — repoint the 5 consumers + web (`AuthContext` merge) to
-`users`. Writes go to `users` (auth stops mutating profile). Deploy + verify all
-surfaces (cards, account edit, avatar, member lists).
+**Ordered rollout:**
+1. **Deploy `users`** → `flask init-schema` + `flask db upgrade` (creates schema +
+   `profiles`/`favorite_teams`) → `flask backfill-profiles` (copy from
+   `auth.users`). Auth untouched — still serves profile.
+2. **Deploy the 5 consumers + `webui`** (A2 reads) with `INTERNAL_USERS_URL` set.
+   Auth still on its OLD image, still serving profile as the fallback while reads
+   move to `users`. Verify cards, avatars, member lists, account edit.
+3. **Run migration `d7e8f9a0b1c2`** (make `auth.users.display_name` nullable).
+   Safe: the still-live OLD auth image keeps setting it; the NEW image will omit
+   it (nullable accepts that). **Then roll the new `auth` image** (+
+   `INTERNAL_USERS_URL`). Signup now dual-writes; profile is fully on `users`.
+4. **Re-run `flask backfill-profiles`** (sweeps any signups that happened on the
+   old image during steps 1–2 — idempotent), then **run migration
+   `e5f6a7b8c9d0`** (drop the columns). Only the new image runs now, so the drop
+   is safe.
+5. **`flask reconcile-profiles`** (optional safety net) — seeds a placeholder
+   profile for any auth id still missing one (e.g. a crash between the auth commit
+   and the profile create at signup). Run anytime after step 4.
 
-**3. Contract** — drop `display_name`/`avatar_key` from `auth.users` (final
-migration); trim auth's `/internal/users` to `{id, phone}`; remove auth's profile
-routes. Deploy.
+Rollback stays safe throughout: columns aren't dropped until step 4, after reads
+are proven on `users`; each earlier step is independently revertible.
 
-Rollback: each phase is independently revertible; the columns aren't dropped
-until phase 3, after reads are proven on `users`.
+### Prod env checklist (audit-flagged — silent failures if wrong)
+- `INTERNAL_USERS_URL` = `https://waygerz.com/v1/platform/users` on **auth + all 5
+  consumers**. If unset, it falls back to the compose DNS `http://users:8000/...`
+  which doesn't resolve in ECS → signup + all name/avatar resolution silently fail.
+- `JWT_SECRET_KEY` and `INTERNAL_TOKEN` must be **set and identical** on `users`
+  and everything it talks to — a mismatch 401s every profile read / 403s signup
+  profile creation (which then rolls back the new account).
+- `AVATAR_KEY_PREFIX` on `users` must equal what media mints (`members/avatars/`).
 
 ---
 
@@ -207,6 +230,17 @@ fold the `favorite_teams` table into the phase-1 `users` schema from the start.
 - **Biggest risk is the data migration + signup dual-write** — a user created
   between phases must land in both stores; the expand-phase dual-write covers new
   signups, the backfill covers existing users. Verify counts match.
+- **Signup orphan window (audit-flagged, low-probability):** a hard crash between
+  auth's row-commit and the `create_profile` call leaves an auth account with no
+  profile — the handled `ProfileError` path rolls back cleanly, but a SIGKILL
+  mid-call doesn't. `reconcile-profiles` (step 5) seeds a placeholder for these;
+  a periodic reconcile is the longer-term fix if signup volume grows.
+- **Mobile (Flutter) follow-up (not now):** `mobile/lib/models.dart` +
+  `auth_api.dart` read `display_name`/`avatar_key` straight off auth's `/me` +
+  login response, and there's no `users` client. Post-split auth no longer
+  returns those, so mobile would get `''`/`null`. Mobile isn't built yet — when it
+  is, it needs a `users`-profile fetch + merge mirroring web's `withProfile`. No
+  action required now.
 - **Latency**: two bootstrap fetches (auth + users) instead of one — parallel,
   negligible on mobile; keeps auth fully decoupled from profile (no auth→users
   hop on reads).
