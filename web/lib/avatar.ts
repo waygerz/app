@@ -1,8 +1,8 @@
 /** Stable per-user avatar fallback colors (derived from user id). */
 
-export function userInitials(name: string): string {
+export function userInitials(name: string | null | undefined): string {
   return (
-    name
+    (name ?? '')
       .split(/\s+/)
       .map((p) => p[0])
       .filter(Boolean)

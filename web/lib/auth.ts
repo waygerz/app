@@ -63,19 +63,10 @@ export const authApi = {
       skipAuthRetry: true,
     }),
 
+  // /me returns identity/credentials only now (id, phone, created_at, tos_*);
+  // display_name/avatar are fetched from the users service and merged in
+  // AuthContext. Profile writes live on usersApi (see lib/users.ts).
   me: () => apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/me`),
-
-  setAvatar: (avatar_key: string | null) =>
-    apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/me/avatar`, {
-      method: 'PATCH',
-      body: JSON.stringify({ avatar_key }),
-    }),
-
-  updateProfile: (patch: { display_name?: string }) =>
-    apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/me`, {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    }),
 
   refresh: () =>
     apiJson<{ message: string }>(`${AUTH_URL}${API.auth}/refresh`, {

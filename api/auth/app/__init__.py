@@ -51,7 +51,7 @@ def create_app(config_class=Config):
         if existing:
             print(f"phone {phone} already exists (id={existing.id})")
             return
-        user = User(phone=phone, pin_hash=hash_pin(pin), display_name=name)
+        user = User(phone=phone, pin_hash=hash_pin(pin))
         db.session.add(user)
         db.session.commit()
 

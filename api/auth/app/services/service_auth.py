@@ -233,7 +233,6 @@ def otp_complete(data: dict):
 
     user = User(
         phone=phone,
-        display_name=display_name,
         tos_accepted_at=datetime.utcnow(),
         tos_version=tos_version,
         sms_transactional_consent=bool(data.get("sms_transactional")),
@@ -273,30 +272,5 @@ def me(user_id: str) -> tuple[dict, int]:
     return {"user": user.to_dict()}, 200
 
 
-def set_avatar(user_id: str, data: dict) -> tuple[dict, int]:
-    """Set (or clear) the caller's avatar to an uploaded S3 key."""
-    key = (data.get("avatar_key") or "").strip() or None
-    if key is not None and not key.startswith("members/avatars/"):
-        return {"error": "invalid avatar key"}, 400
-    user = db.session.get(User, user_id)
-    if not user:
-        return {"error": "user not found"}, 404
-    user.avatar_key = key
-    db.session.commit()
-    return {"user": user.to_dict()}, 200
-
-
-def update_profile(user_id: str, data: dict) -> tuple[dict, int]:
-    """Update editable profile fields (currently display_name)."""
-    user = db.session.get(User, user_id)
-    if not user:
-        return {"error": "user not found"}, 404
-    if "display_name" in data:
-        name = (data.get("display_name") or "").strip()
-        if not name:
-            return {"error": "display_name is required"}, 400
-        if len(name) > 64:
-            return {"error": "display_name must be 64 characters or fewer"}, 400
-        user.display_name = name
-    db.session.commit()
-    return {"user": user.to_dict()}, 200
+# NOTE: set_avatar / update_profile moved to the users (profile) service in the
+# split's contract phase (A3). Auth no longer stores or edits profile fields.

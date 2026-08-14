@@ -15,10 +15,8 @@ class User(db.Model):
     # Legacy: passwordless (phone + OTP) auth no longer sets or checks a PIN.
     # Kept nullable so existing rows retain their hash; new users have none.
     pin_hash = db.Column(db.String(255), nullable=True)
-    display_name = db.Column(db.String(64), nullable=False)
-    # S3 object key for the user's avatar (members/avatars/...), or null for the
-    # generated initials avatar. Resolved to a presigned URL by the webui.
-    avatar_key = db.Column(db.String(512), nullable=True)
+    # NOTE: display_name + avatar_key moved to the users (profile) service in the
+    # split's contract phase (A3). Auth is now identity/credentials only.
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     # Consent captured on the create-account step (see service_auth.otp_complete).
@@ -35,8 +33,6 @@ class User(db.Model):
         return {
             "id": self.id,
             "phone": self.phone,
-            "display_name": self.display_name,
-            "avatar_key": self.avatar_key,
             "created_at": self.created_at.isoformat() + "Z",
             # Read-only consent record surfaced on the account page. The live SMS
             # opt-ins are managed in the notifications service, not from these.
