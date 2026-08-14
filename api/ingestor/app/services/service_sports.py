@@ -28,7 +28,11 @@ _ESPN_LEAGUE_SLUG = {
 # service_combat (MMA fights -> home/away). `slug` matches the (sport, league)
 # used at ingest time so catalog_id() lines up. Keep in sync with
 # service_combat.COMBAT_SPORTS and the *_TOURS config.
-EXTRA_SPORTS = [
+# TEMPORARILY DISABLED: golf/racing/MMA are hidden from list_sports/list_leagues
+# (the league-create picker and the /sports browse) for now. Re-enable by setting
+# EXTRA_SPORTS = _EXTRA_SPORTS_DISABLED below. Keep in sync with the *_TOURS
+# config allowlists (also emptied) so ingestion and surfacing toggle together.
+_EXTRA_SPORTS_DISABLED = [
     {
         "slug": "mma",
         "name": "MMA",
@@ -54,6 +58,7 @@ EXTRA_SPORTS = [
         ],
     },
 ]
+EXTRA_SPORTS = []
 
 
 def _extra_sport(sport):

@@ -98,17 +98,22 @@ class Config:
     ODDS_QUOTA_FLOOR = int(os.environ.get("ODDS_QUOTA_FLOOR", 25))
     ODDS_TIMEOUT = int(os.environ.get("ODDS_TIMEOUT", 10))
     # Leagues/tours per ESPN sport (slug lists).
-    GOLF_TOURS = [t.strip() for t in os.environ.get("GOLF_TOURS", "pga").split(",") if t.strip()]
+    # TEMPORARILY DISABLED (default ""): golf, racing, MMA and cricket ingestion
+    # is turned off for now — empty allowlists make service_field/service_combat
+    # ticks and the cricket endpoint no-op. Re-enable by restoring the former
+    # defaults (golf: "pga"; racing: "f1,nascar-premier,irl"; mma: "ufc,pfl";
+    # cricket: "8039,8048,8044,8037,8040,8041,8043,8050") or setting the env vars.
+    GOLF_TOURS = [t.strip() for t in os.environ.get("GOLF_TOURS", "").split(",") if t.strip()]
     RACING_TOURS = [
-        t.strip() for t in os.environ.get("RACING_TOURS", "f1,nascar-premier,irl").split(",") if t.strip()
+        t.strip() for t in os.environ.get("RACING_TOURS", "").split(",") if t.strip()
     ]
-    MMA_TOURS = [t.strip() for t in os.environ.get("MMA_TOURS", "ufc,pfl").split(",") if t.strip()]
+    MMA_TOURS = [t.strip() for t in os.environ.get("MMA_TOURS", "").split(",") if t.strip()]
     # ESPN cricket has no leagues-list endpoint — league IDs are numeric + curated
     # (verified via scan): 8039 World Cup, 8048 IPL, 8044 Big Bash, 8037 Champions
     # Trophy, 8040 T20 WC Qualifier, 8041 SuperSport, 8043 Sheffield Shield, 8050 Ranji.
     CRICKET_LEAGUES = [
         t.strip()
-        for t in os.environ.get("CRICKET_LEAGUES", "8039,8048,8044,8037,8040,8041,8043,8050").split(",")
+        for t in os.environ.get("CRICKET_LEAGUES", "").split(",")
         if t.strip()
     ]
 

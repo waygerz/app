@@ -7,13 +7,12 @@ const INGESTOR_API = `${process.env.NEXT_PUBLIC_API_URL ?? ''}${API.ingestor}`;
 
 export type EspnShape = 'field' | '1v1' | 'team';
 
-/** Sports served by the ESPN ingester, and their shape. */
-export const ESPN_SPORTS: Record<string, EspnShape> = {
-  golf: 'field',
-  racing: 'field',
-  mma: '1v1',
-  cricket: 'team',
-};
+/** Sports served by the ESPN ingester, and their shape.
+ *  TEMPORARILY DISABLED: golf/racing/MMA/cricket are turned off for now, so
+ *  isEspnSport() is false for them and /sports/<slug> won't render the ESPN
+ *  browse (they're also removed from the backend catalog). Re-enable by
+ *  restoring the entries: golf:'field', racing:'field', mma:'1v1', cricket:'team'. */
+export const ESPN_SPORTS: Record<string, EspnShape> = {};
 
 export function isEspnSport(sport: string): boolean {
   return sport in ESPN_SPORTS;
