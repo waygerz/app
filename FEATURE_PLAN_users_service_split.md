@@ -148,8 +148,11 @@ fetch**. So the only web ripple is the signed-in user's own object:
 - **New config keys**: `USERS_URL` in the 5 consumer services + web
   `api-paths.ts`; `users` needs `INTERNAL_*` (for signup-time creation callback
   is inbound only) and the media avatar prefix.
-- ECR repo `waygerz/users` + ECS service + `users/taskdef.json` (CI `all` +
-  service list).
+- ECR repo `waygerz/users` + ECS service (CI `all` + service dropdown already
+  list `users`). Backend task defs are **not** committed to the repo (only
+  `web/` has a `taskdef.json`); the `users` task def is registered inline by
+  `create-users-service.sh`, and env changes on existing consumers are applied
+  by `wire-users-rollout.sh` (both scripts at repo root, git-excluded).
 
 ---
 
@@ -208,6 +211,11 @@ are proven on `users`; each earlier step is independently revertible.
 - `INTERNAL_USERS_URL` = `https://waygerz.com/v1/platform/users` on **auth + all 5
   consumers**. If unset, it falls back to the compose DNS `http://users:8000/...`
   which doesn't resolve in ECS → signup + all name/avatar resolution silently fail.
+- `USERS_URL` = `https://waygerz.com/v1/platform/users` on **scheduler** (else the
+  no-favorites nudge tick can't reach users in prod — log noise, non-critical).
+- These 7 env vars are applied + rolled by `wire-users-rollout.sh` (read-modify-
+  write on the live task defs) — run it as the final rollout step, after CI has
+  pushed the Track-A images for those 7 services.
 - `JWT_SECRET_KEY` and `INTERNAL_TOKEN` must be **set and identical** on `users`
   and everything it talks to — a mismatch 401s every profile read / 403s signup
   profile creation (which then rolls back the new account).
