@@ -165,9 +165,10 @@ periodic tick (scheduler → new `users` `/internal/tick`) for accounts older th
 never repeats. It naturally stops mattering once they add a team. Frequency
 (once vs a gentle re-nudge) is a minor open detail — **default: once**.
 
-## Bet recommendations from favorites (the payoff — 🗄️ SHELVED; design kept)
-**Parked for now** (revisit after favorites ship) — the design + audit below are
-retained so it's ready when we pick it up. Favorites aren't a profile badge; the
+## Bet recommendations from favorites (the payoff — ▶ MOVED to its own plan)
+**Now planned in `FEATURE_PLAN_bet_recommendations.md`** (refined to a live
+per-viewer pull section + notification push, no personal-feed storage). The
+original design + audit below are retained for reference. Favorites aren't a profile badge; the
 point is to **match rivals for head-to-head bets**. When an upcoming event pits
 Team A vs Team B and one league member favors A while another favors B, recommend
 a wager between them.
