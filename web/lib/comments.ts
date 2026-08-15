@@ -1,5 +1,6 @@
 import { apiJson } from '@/lib/http';
 import { API } from './api-paths';
+import type { ReactionKey } from './reactions';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 const COMMENTS_API = API.comments;
@@ -18,9 +19,27 @@ export type Comment = {
 };
 
 export type PostEngagement = {
-  like_count: number;
-  liked_by_me: boolean;
+  reactions: Partial<Record<ReactionKey, number>>;
+  total_reactions: number;
+  my_reaction: ReactionKey | null;
   comment_count: number;
+  // Back-compat fields the API still returns; unused by the reactions UI.
+  like_count?: number;
+  liked_by_me?: boolean;
+};
+
+export type ReactionSummary = {
+  post_id: string;
+  reactions: Partial<Record<ReactionKey, number>>;
+  total_reactions: number;
+  my_reaction: ReactionKey | null;
+};
+
+export type Reactor = {
+  user_id: string;
+  reaction: ReactionKey;
+  display_name: string | null;
+  avatar_key: string | null;
 };
 
 function req<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
@@ -46,8 +65,17 @@ export const commentsApi = {
   delete: (commentId: string) =>
     req(`${COMMENTS_API}/comments/${commentId}`, { method: 'DELETE' }),
 
-  toggleLike: (postId: string) =>
-    req<{ liked: boolean; like_count: number }>(`${COMMENTS_API}/posts/${postId}/like`, {
-      method: 'POST',
+  setReaction: (postId: string, reaction: ReactionKey) =>
+    req<ReactionSummary>(`${COMMENTS_API}/posts/${postId}/reaction`, {
+      method: 'PUT',
+      body: JSON.stringify({ reaction }),
     }),
+
+  removeReaction: (postId: string) =>
+    req<ReactionSummary>(`${COMMENTS_API}/posts/${postId}/reaction`, { method: 'DELETE' }),
+
+  reactors: (postId: string) =>
+    req<{ reactors: Reactor[] }>(`${COMMENTS_API}/posts/${postId}/reactions`).then(
+      (d) => d.reactors ?? [],
+    ),
 };

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Bell, Swords, Trophy, TrendingDown, UserPlus, UserCheck, Ticket, BarChart3, Check,
+  Bell, Swords, Trophy, TrendingDown, UserPlus, UserCheck, Ticket, BarChart3, Check, SmilePlus,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ function notifMeta(n: FeedNotification): Meta {
     case 'wager_alert': return { Icon: Swords, tint: bet, tone: 'default', action: null };
     case 'friend_request': return { Icon: UserPlus, tint: friend, tone: 'default', action: null };
     case 'league_invite': return { Icon: Ticket, tint: invite, tone: 'default', action: null };
+    case 'reaction': return { Icon: SmilePlus, tint: 'text-rose-500 bg-rose-500/15', tone: 'default', action: null };
     case 'weekly_digest': return { Icon: BarChart3, tint: digest, tone: 'default', action: null };
   }
   return { Icon: Bell, tint: 'text-muted-foreground bg-muted', tone: 'default', action: null };

@@ -31,6 +31,7 @@ export type NotificationCategory =
   | 'wager_alert'
   | 'league_invite'
   | 'friend_request'
+  | 'reaction'
   | 'weekly_digest'
   | 'marketing';
 export type NotificationChannel = 'sms' | 'inapp';

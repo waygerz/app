@@ -22,6 +22,7 @@ const CATEGORIES: { key: NotificationCategory; title: string; desc: string }[] =
   { key: 'wager_alert', title: 'Wager alerts', desc: 'Bets proposed, accepted, or settled.' },
   { key: 'league_invite', title: 'League invites', desc: 'When someone invites you to a league.' },
   { key: 'friend_request', title: 'Friend requests', desc: 'New and accepted friend requests.' },
+  { key: 'reaction', title: 'Reactions', desc: 'When someone reacts to your post.' },
   { key: 'weekly_digest', title: 'Weekly digest', desc: 'A weekly recap of your leagues.' },
 ];
 

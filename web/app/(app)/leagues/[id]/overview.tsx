@@ -36,7 +36,12 @@ import { Rss } from 'lucide-react';
 import { UserAvatar } from '@/components/user-avatar';
 import { FeedPostCard } from './feed-post';
 
-const EMPTY_ENGAGEMENT = { like_count: 0, liked_by_me: false, comment_count: 0 };
+const EMPTY_ENGAGEMENT = {
+  reactions: {},
+  total_reactions: 0,
+  my_reaction: null,
+  comment_count: 0,
+};
 
 export function LeagueOverview() {
   const lg = useLeague();

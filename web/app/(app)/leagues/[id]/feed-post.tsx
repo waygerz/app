@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import {
   Activity,
   CalendarClock,
-  Heart,
   Megaphone,
   MessageCircle,
   PartyPopper,
@@ -17,6 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { commentsApi, type Comment, type PostEngagement } from '@/lib/comments';
+import { ReactionControl } from '@/components/reactions/reaction-control';
 import type { FeedItem } from '@/lib/leagues';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -162,31 +162,12 @@ function PostHeader({
 }
 
 export function FeedPostCard({ item, engagement, currentUserId, engagementKey, authorAvatarKey, avatarFor }: FeedPostCardProps) {
-  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-
-  const like = useMutation({
-    mutationFn: () => commentsApi.toggleLike(item.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['feed-engagement', engagementKey] }),
-    onError: (e: Error) => toast.error(e.message),
-  });
 
   const isWinner = item.event_type === 'period_final';
 
-  const likeButton = (
-    <Button
-      variant="ghost"
-      size="sm"
-      className={cn('h-8 gap-1.5 px-2.5 text-xs text-muted-foreground', engagement.liked_by_me && 'text-primary')}
-      disabled={like.isPending}
-      onClick={(e) => {
-        e.stopPropagation();
-        like.mutate();
-      }}
-    >
-      <Heart className={cn('size-4', engagement.liked_by_me && 'fill-current')} />
-      {engagement.like_count > 0 ? `${engagement.like_count} Like${engagement.like_count === 1 ? '' : 's'}` : 'Like'}
-    </Button>
+  const reactionControl = (
+    <ReactionControl postId={item.id} engagement={engagement} engagementKey={engagementKey} />
   );
 
   return (
@@ -211,7 +192,7 @@ export function FeedPostCard({ item, engagement, currentUserId, engagementKey, a
           authorAvatarKey={authorAvatarKey}
           footer={
             <div className="flex items-center gap-1 border-t border-dashed border-border pt-3">
-              {likeButton}
+              {reactionControl}
               <Button
                 variant="ghost"
                 size="sm"
@@ -241,7 +222,7 @@ export function FeedPostCard({ item, engagement, currentUserId, engagementKey, a
             avatarFor={avatarFor}
             currentUserId={currentUserId}
             engagementKey={engagementKey}
-            likeButton={likeButton}
+            reactionControl={reactionControl}
             open={open}
           />
         </DialogContent>
@@ -257,7 +238,7 @@ function PostContent({
   avatarFor,
   currentUserId,
   engagementKey,
-  likeButton,
+  reactionControl,
   open,
 }: {
   item: FeedItem;
@@ -265,7 +246,7 @@ function PostContent({
   avatarFor?: (userId: string) => string | null | undefined;
   currentUserId: string;
   engagementKey: string;
-  likeButton: ReactNode;
+  reactionControl: ReactNode;
   open: boolean;
 }) {
   const qc = useQueryClient();
@@ -311,7 +292,7 @@ function PostContent({
           item={item}
           authorAvatarKey={authorAvatarKey}
           className="pe-10"
-          footer={<div className="flex items-center gap-1 border-t border-dashed border-border pt-3">{likeButton}</div>}
+          footer={<div className="flex items-center gap-1 border-t border-dashed border-border pt-3">{reactionControl}</div>}
         />
         <div className="border-t border-border px-5 py-4">
           {list.length > 0 && (
