@@ -20,9 +20,26 @@ def delete_comment(comment_id):
     return ctrl.delete_comment(comment_id)
 
 
+# Backward-compat alias: old webui toggles a 'like'. Kept so an un-rolled webui
+# still works mid-deploy; new webui uses PUT/DELETE /reaction below.
 @comments_bp.post("/posts/<uuid:post_id>/like")
 def toggle_post_like(post_id):
     return ctrl.toggle_post_like(post_id)
+
+
+@comments_bp.put("/posts/<uuid:post_id>/reaction")
+def set_reaction(post_id):
+    return ctrl.set_reaction(post_id)
+
+
+@comments_bp.delete("/posts/<uuid:post_id>/reaction")
+def remove_reaction(post_id):
+    return ctrl.remove_reaction(post_id)
+
+
+@comments_bp.get("/posts/<uuid:post_id>/reactions")
+def list_reactions(post_id):
+    return ctrl.list_reactions(post_id)
 
 
 @comments_bp.post("/posts/engagement")

@@ -52,6 +52,12 @@ class Config:
     # internal-URL footgun as every other cross-service call).
     USERS_URL = os.environ.get("INTERNAL_USERS_URL", "http://users:8000/v1/platform/users")
     LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000")
+    # Reactions notify the post author. Same internal-URL footgun: the compose
+    # default resolves via Service Connect; prod may pin the ALB form. Full /v1
+    # prefix because the notify endpoint is /internal/notify under it.
+    NOTIFICATIONS_URL = os.environ.get(
+        "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
+    )
 
     MAX_COMMENT_BODY = int(os.environ.get("MAX_COMMENT_BODY", 2000))
 

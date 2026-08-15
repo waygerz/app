@@ -31,6 +31,26 @@ def toggle_post_like(post_id):
 
 
 @jwt_required(locations=["cookies", "headers"])
+def set_reaction(post_id):
+    body, status = service.set_reaction(
+        post_id, get_jwt_identity(), request.get_json(silent=True) or {}
+    )
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def remove_reaction(post_id):
+    body, status = service.remove_reaction(post_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
+def list_reactions(post_id):
+    body, status = service.list_reactions(post_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def posts_engagement():
     body, status = service.posts_engagement(
         get_jwt_identity(), request.get_json(silent=True) or {}

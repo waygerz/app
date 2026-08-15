@@ -26,6 +26,8 @@ CHANNEL_DEFAULTS = {
     "wager_alert": {"sms": True, "inapp": True, "push": True},
     "league_invite": {"sms": True, "inapp": True, "push": True},
     "friend_request": {"sms": True, "inapp": True, "push": True},
+    # Post reactions — in-app only (never SMS/push), on by default, mutable.
+    "reaction": {"sms": False, "inapp": True, "push": False},
     "weekly_digest": {"sms": False, "inapp": False, "push": False},
     # Promotional / marketing. Off by default — express opt-in only (TCPA), and
     # the toggle on /account is where users grant or withdraw that consent.
