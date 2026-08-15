@@ -347,6 +347,11 @@ def _leagues_from_db(sport):
     ]
 
 
+def _allowed_sport_slugs():
+    raw = current_app.config.get("SPORTS_CATALOG_ALLOWLIST", "") or ""
+    return {s.strip() for s in raw.split(",") if s.strip()}
+
+
 def list_sports():
     try:
         data = list(fetch_sports())
@@ -355,6 +360,10 @@ def list_sports():
     data.extend(_extra_sports_payload())
     if not data:
         return {"error": "sports catalog unavailable"}, 502
+    allow = _allowed_sport_slugs()
+    if allow:
+        # Hide unsupported sports (cricket/golf/rugby/etc.) from the pickers.
+        data = [s for s in data if (s.get("slug") or s.get("id")) in allow]
     return {"sports": data, "quota": quota_status()}, 200
 
 

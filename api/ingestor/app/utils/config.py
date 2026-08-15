@@ -56,6 +56,12 @@ class Config:
     # until quota reset, but never wait longer than this between live calls (so a
     # huge remaining budget still refreshes the catalog on a sane cadence).
     SPORTS_MAX_INTERVAL = int(os.environ.get("SPORTS_MAX_INTERVAL", 3600))  # 1h cap
+    # Only surface these sport slugs from the catalog (the pickers). RTS returns
+    # ~17 sports; we only support these for betting, so hide cricket/golf/rugby/
+    # etc. Empty string = no filter (show everything). Comma-separated slugs.
+    SPORTS_CATALOG_ALLOWLIST = os.environ.get(
+        "SPORTS_CATALOG_ALLOWLIST", "football,basketball,baseball,hockey,soccer"
+    )
 
     DEFAULT_SPORT = os.environ.get("DEFAULT_SPORT", "basketball")
     DEFAULT_LEAGUE = os.environ.get("DEFAULT_LEAGUE", "nba")
