@@ -42,12 +42,20 @@ class Config:
     )
     # Mock mode serves seeded fixtures instead of calling the API (protects quota).
     SPORTS_API_MOCK = _bool(os.environ.get("SPORTS_API_MOCK"), default=True)
-    # Short-TTL Redis cache for raw API responses (seconds).
+    # Short-TTL Redis cache for raw API responses (seconds). Used for volatile
+    # paths (events); the near-static catalog uses SPORTS_CATALOG_TTL instead.
     SPORTS_CACHE_TTL = int(os.environ.get("SPORTS_CACHE_TTL", 15))
+    # The sports/leagues/teams catalog barely changes, so cache it long — this is
+    # what stops the picker from hitting the metered API on every open.
+    SPORTS_CATALOG_TTL = int(os.environ.get("SPORTS_CATALOG_TTL", 21600))  # 6h
     # Odds move fast and are fetched per-event on demand, so cache them briefly.
     SPORTS_ODDS_TTL = int(os.environ.get("SPORTS_ODDS_TTL", 5))
     # Stop calling the API once our tracked monthly remaining hits this floor.
     SPORTS_QUOTA_FLOOR = int(os.environ.get("SPORTS_QUOTA_FLOOR", 5))
+    # Adaptive governor: spread the remaining monthly budget across the time left
+    # until quota reset, but never wait longer than this between live calls (so a
+    # huge remaining budget still refreshes the catalog on a sane cadence).
+    SPORTS_MAX_INTERVAL = int(os.environ.get("SPORTS_MAX_INTERVAL", 3600))  # 1h cap
 
     DEFAULT_SPORT = os.environ.get("DEFAULT_SPORT", "basketball")
     DEFAULT_LEAGUE = os.environ.get("DEFAULT_LEAGUE", "nba")
