@@ -18,11 +18,18 @@ import { cn } from '@/lib/utils';
 const PREFS_KEY = ['notification-prefs'] as const;
 
 // Transactional / account categories — on by default (except the digest).
-const CATEGORIES: { key: NotificationCategory; title: string; desc: string }[] = [
+// `inAppOnly` categories never send SMS (the sender only ever fans out in-app),
+// so their SMS column shows a dash rather than a toggle that controls nothing.
+const CATEGORIES: {
+  key: NotificationCategory;
+  title: string;
+  desc: string;
+  inAppOnly?: boolean;
+}[] = [
   { key: 'wager_alert', title: 'Wager alerts', desc: 'Bets proposed, accepted, or settled.' },
   { key: 'league_invite', title: 'League invites', desc: 'When someone invites you to a league.' },
   { key: 'friend_request', title: 'Friend requests', desc: 'New and accepted friend requests.' },
-  { key: 'reaction', title: 'Reactions', desc: 'When someone reacts to your post.' },
+  { key: 'reaction', title: 'Reactions', desc: 'When someone reacts to your post.', inAppOnly: true },
   { key: 'weekly_digest', title: 'Weekly digest', desc: 'A weekly recap of your leagues.' },
 ];
 
@@ -173,6 +180,18 @@ export function NotificationsCard() {
                   <span className="text-xs text-muted-foreground">{cat.desc}</span>
                 </div>
                 {CHANNELS.map((ch) => {
+                  // In-app-only categories (e.g. reactions) never text — show a dash.
+                  if (ch.key === 'sms' && cat.inAppOnly) {
+                    return (
+                      <div
+                        key={ch.key}
+                        className="justify-self-center text-sm text-muted-foreground"
+                        aria-label={`${cat.title} — SMS not available`}
+                      >
+                        —
+                      </div>
+                    );
+                  }
                   // The Allow-SMS master pauses the SMS column only; in-app stays live.
                   const smsOff = ch.key === 'sms' && smsMuted;
                   return (
