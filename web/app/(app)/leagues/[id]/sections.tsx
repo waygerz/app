@@ -25,6 +25,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { EventCard, ScheduleBoard, TeamLogo, formatStart } from '@/components/event-card';
 import { Combobox } from '@/components/ui/combobox';
 import { Card } from '@/components/ui/card';
+import { CenterCard } from '@/components/ui/center-card';
 import { UserAvatar } from '@/components/user-avatar';
 import { useProfileDialog } from '@/components/profile-dialog-context';
 import { UserMiniCard } from '@/components/user-mini-card';
@@ -66,7 +67,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, Medal, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, ChevronRight, type LucideIcon } from 'lucide-react';
+import { Trophy, Medal, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, ChevronRight, Search, type LucideIcon } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import {
@@ -75,10 +76,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-function CenterCard({ children }: { children: ReactNode }) {
-  return <Card className="items-center gap-2 p-6 text-center sm:p-10">{children}</Card>;
-}
 
 // Scheduled games restricted to a league's own sport-leagues (so an NBA league
 // never shows college-football games). Pass the league's sport_league_ids.
@@ -3073,9 +3070,10 @@ export function LeagueMembers() {
       <h2 className="text-lg font-semibold text-foreground">Members ({lg.members.length})</h2>
       {showSearch && <ListSearch value={q} onChange={setQ} placeholder="Search members" />}
       {members.length === 0 ? (
-        <Card className="p-6 text-center text-sm text-muted-foreground">
-          No members match “{q.trim()}”.
-        </Card>
+        <CenterCard>
+          <Search className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">No members match “{q.trim()}”.</p>
+        </CenterCard>
       ) : (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {members.map((m) => {

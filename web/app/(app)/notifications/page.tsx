@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Bell, Swords, Trophy, TrendingDown, UserPlus, UserCheck, Ticket, BarChart3, Check, SmilePlus,
+  Bell, BellOff, Swords, Trophy, TrendingDown, UserPlus, UserCheck, Ticket, BarChart3, Check, SmilePlus,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { CenterCard } from '@/components/ui/center-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { notificationsApi, type FeedNotification } from '@/lib/notifications';
 import { actOnCode } from '@/lib/invites';
 import { friendsApi } from '@/lib/friends';
@@ -180,14 +183,30 @@ export default function NotificationsPage() {
           )}
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          {feedQ.isLoading ? (
-            <p className="px-4 py-10 text-center text-sm text-muted-foreground">Loading…</p>
-          ) : items.length === 0 ? (
-            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-              You&apos;re all caught up.
-            </p>
-          ) : (
+        {feedQ.isLoading ? (
+          <Card className="overflow-hidden">
+            <div className="flex flex-col">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 border-b border-border px-4 py-3 last:border-b-0"
+                >
+                  <Skeleton className="size-9 shrink-0 rounded-full" />
+                  <div className="flex flex-1 flex-col gap-1.5 py-0.5">
+                    <Skeleton className="h-3.5 w-3/4" />
+                    <Skeleton className="h-3 w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : items.length === 0 ? (
+          <CenterCard>
+            <BellOff className="size-6 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">You&apos;re all caught up.</p>
+          </CenterCard>
+        ) : (
+          <Card className="overflow-hidden">
             <div className="flex flex-col">
               {items.map((n) => {
                 const meta = notifMeta(n);
@@ -294,8 +313,8 @@ export default function NotificationsPage() {
                 );
               })}
             </div>
-          )}
-        </div>
+          </Card>
+        )}
       </div>
     </div>
   );

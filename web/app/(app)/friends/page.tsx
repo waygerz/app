@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Share2, MessageCircle, EllipsisVertical, UserMinus } from 'lucide-react';
+import { Share2, MessageCircle, EllipsisVertical, UserMinus, Users, Search } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { friendsApi, type Friend, type FriendRequest } from '@/lib/friends';
 import { myFriendCode, inviteUrl } from '@/lib/invites';
 import { messagingApi } from '@/lib/messaging';
 import { shareLink } from '@/lib/share';
-import { Card } from '@/components/ui/card';
+import { CenterCard } from '@/components/ui/center-card';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -156,13 +156,17 @@ export default function FriendsPage() {
         {friends.isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : allFriends.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-muted-foreground">
-            No friends yet — share your link or add someone from a league members page.
-          </Card>
+          <CenterCard>
+            <Users className="size-6 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              No friends yet — share your link or add someone from a league members page.
+            </p>
+          </CenterCard>
         ) : shownFriends.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-muted-foreground">
-            No friends match “{q.trim()}”.
-          </Card>
+          <CenterCard>
+            <Search className="size-6 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No friends match “{q.trim()}”.</p>
+          </CenterCard>
         ) : (
           <div className={GRID}>
             {shownFriends.map((f: Friend) => (

@@ -8,9 +8,10 @@ import { isEspnSport } from '@/lib/espn';
 import { EspnSportList } from '@/components/espn/sport-list';
 import { useFavorites, toggleFavorite } from '@/lib/favorites';
 import { Card } from '@/components/ui/card';
+import { CenterCard } from '@/components/ui/center-card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Star } from 'lucide-react';
+import { Star, Trophy } from 'lucide-react';
 
 export default function SportPage() {
   const { slug = '' } = useParams<{ slug: string }>();
@@ -53,7 +54,10 @@ function TeamLeagues({ slug }: { slug: string }) {
       )}
 
       {!isLoading && !isError && leagues?.length === 0 && (
-        <div className="text-sm text-muted-foreground">No leagues found for this sport.</div>
+        <CenterCard>
+          <Trophy className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">No leagues found for this sport.</p>
+        </CenterCard>
       )}
 
       <div className="grid grid-cols-1 gap-4">

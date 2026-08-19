@@ -5,8 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Users } from 'lucide-react';
+import { Users, MessagesSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { CenterCard } from '@/components/ui/center-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/user-avatar';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { cn } from '@/lib/utils';
@@ -145,14 +148,29 @@ export default function MessagesPage() {
 
   function renderBody() {
     if (convsQ.isLoading) {
-      return <p className="px-4 py-10 text-center text-sm text-muted-foreground">Loading…</p>;
+      return (
+        <Card className="overflow-hidden">
+          <div className="flex flex-col">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-4 py-3">
+                <Skeleton className="size-[46px] shrink-0 rounded-full" />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-3.5 w-2/5" />
+                  <Skeleton className="h-3 w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      );
     }
     if (conversations.length === 0) {
       return (
-        <div className="flex flex-col gap-3 px-4 py-8">
-          <p className="text-center text-sm text-muted-foreground">No conversations yet.</p>
+        <CenterCard>
+          <MessagesSquare className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">No conversations yet.</p>
           {(leaguesQ.data ?? []).length > 0 && (
-            <div className="flex flex-col gap-2">
+            <div className="mt-2 flex w-full flex-col gap-2">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Start a league chat
               </span>
@@ -170,12 +188,13 @@ export default function MessagesPage() {
               ))}
             </div>
           )}
-        </div>
+        </CenterCard>
       );
     }
     return (
-      <div className="flex flex-col divide-y divide-border/60">
-        {groups.unread.length > 0 && (
+      <Card className="overflow-hidden">
+        <div className="flex flex-col divide-y divide-border/60">
+          {groups.unread.length > 0 && (
           <div className="flex flex-col">
             <GroupHeader
               label={`Unread · ${groups.unread.length}`}
@@ -199,7 +218,8 @@ export default function MessagesPage() {
             {groups.earlier.map((c) => <ConversationRow key={c.id} conv={c} />)}
           </div>
         )}
-      </div>
+        </div>
+      </Card>
     );
   }
 
@@ -209,9 +229,7 @@ export default function MessagesPage() {
     <div className="container py-5 sm:py-8">
       <div className="mx-auto w-full max-w-2xl">
         <h1 className="mb-4 hidden text-2xl font-bold text-foreground lg:block">Messages</h1>
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          {renderBody()}
-        </div>
+        {renderBody()}
       </div>
     </div>
   );

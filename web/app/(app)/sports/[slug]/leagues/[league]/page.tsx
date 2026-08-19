@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { fetchLeagueEvents, type SportEvent } from '@/lib/ingestor';
 import { EventCard } from '@/components/event-card';
+import { CenterCard } from '@/components/ui/center-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CalendarOff } from 'lucide-react';
 
 export default function LeaguePage() {
   const { slug = '', league = '' } = useParams<{ slug: string; league: string }>();
@@ -41,9 +43,12 @@ export default function LeaguePage() {
       )}
 
       {!isLoading && !isError && events?.length === 0 && (
-        <div className="text-sm text-muted-foreground">
-          No events right now — this league may be between seasons.
-        </div>
+        <CenterCard>
+          <CalendarOff className="size-6 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            No events right now — this league may be between seasons.
+          </p>
+        </CenterCard>
       )}
 
       <div className="grid grid-cols-1 gap-4">

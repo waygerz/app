@@ -10,7 +10,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { leaguesApi } from '@/lib/leagues';
 import { cancelLocked, groupWagers, wagersApi, type WagerGroup } from '@/lib/wagers';
 import { fetchEvent, type SportEvent } from '@/lib/ingestor';
-import { Card } from '@/components/ui/card';
+import { CenterCard } from '@/components/ui/center-card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
@@ -186,7 +186,7 @@ export default function BetsView() {
       )}
 
       {!wagersQ.isLoading && rows.length === 0 && (
-        <Card className="items-center gap-2 p-8 text-center">
+        <CenterCard>
           <Ticket className="size-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             {activeFilter === 'all' ? 'No bets yet.' : `No ${meta.label.toLowerCase()} bets.`}
@@ -197,7 +197,7 @@ export default function BetsView() {
               <Link href="/" className="text-sm text-primary hover:underline">Browse leagues to place a bet</Link>
             </>
           )}
-        </Card>
+        </CenterCard>
       )}
 
       {/* One continuous table of every bet in the current filter, newest first
