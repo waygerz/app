@@ -114,7 +114,7 @@ export default function NewLeaguePage() {
   return (
     <div className="container py-5 sm:py-8">
       <div className="mx-auto w-full max-w-2xl">
-      <h1 className="mb-6 text-xl font-bold text-foreground sm:text-2xl">Create a league</h1>
+      <h1 className="mb-6 hidden text-2xl font-bold text-foreground lg:block">Create a league</h1>
 
       <form
         className="flex flex-col gap-6"

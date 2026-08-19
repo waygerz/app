@@ -4,13 +4,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 // Page title shown next to the logo in the top bar on mobile (desktop uses the
-// Navbar links instead). League detail / new-league keep their own in-page
-// headers, so they return null here.
+// Navbar links instead). League detail and the message thread keep their own
+// in-page headers, so they return null here.
 function pageTitle(pathname: string): string | null {
   if (pathname === '/') return 'My Leagues';
   if (pathname === '/bets' || pathname.startsWith('/bets/')) return 'My Bets';
   if (pathname === '/account') return 'Account';
   if (pathname === '/friends') return 'Friends';
+  if (pathname === '/sports') return 'Pick a sport';
+  if (pathname === '/leagues/new') return 'Create a league';
   // The message thread renders its own in-thread header (avatar + name), so
   // suppress the generic title there — same as league detail.
   if (pathname === '/messages') return 'Messages';

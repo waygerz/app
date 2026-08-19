@@ -3219,7 +3219,7 @@ function EditLeagueDetails({ lg }: { lg: LeagueDetail }) {
 
   return (
     <Card className="gap-5 p-6">
-      <h2 className="text-base font-semibold text-foreground">League details</h2>
+      <h2 className="text-base font-semibold text-foreground sm:text-lg">League details</h2>
 
       <div className="flex flex-col gap-2">
         <Label>Logo</Label>
@@ -3395,7 +3395,7 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
     <Card className="gap-5 p-6">
       <div className="flex items-center gap-2">
         <Settings className="size-5 text-muted-foreground" />
-        <h2 className="text-base font-semibold text-foreground">Rules</h2>
+        <h2 className="text-base font-semibold text-foreground sm:text-lg">Rules</h2>
       </div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="flex flex-col gap-6">
@@ -3519,7 +3519,7 @@ function LeagueManageInner() {
             <RulesForm lg={lg} />
           ) : (
             <Card className="gap-5 p-6">
-              <div className="flex items-center gap-2"><Settings className="size-5 text-muted-foreground" /><h2 className="text-base font-semibold text-foreground">Rules</h2></div>
+              <div className="flex items-center gap-2"><Settings className="size-5 text-muted-foreground" /><h2 className="text-base font-semibold text-foreground sm:text-lg">Rules</h2></div>
               <p className="text-sm text-muted-foreground">Pick’em leagues have no wager rules.</p>
             </Card>
           )}
@@ -3531,7 +3531,7 @@ function LeagueManageInner() {
         {lg.status === 'active' && lg.period_type === 'weekly' && (
           <div id="manage-period" className="scroll-mt-6">
             <Card className="gap-3 p-6">
-              <h2 className="text-base font-semibold text-foreground">Period</h2>
+              <h2 className="text-base font-semibold text-foreground sm:text-lg">Period</h2>
               <p className="text-sm text-muted-foreground">
                 Current: {lg.current_period ? `${lg.current_period.label} (${lg.current_period.status})` : '—'}
               </p>
@@ -3548,7 +3548,7 @@ function LeagueManageInner() {
         {/* Danger zone */}
         <div id="manage-danger" className="scroll-mt-6">
           <Card className="gap-3 p-6">
-            <h2 className="text-base font-semibold text-foreground">Danger zone</h2>
+            <h2 className="text-base font-semibold text-foreground sm:text-lg">Danger zone</h2>
             <p className="text-sm text-muted-foreground">Archiving removes the league from everyone’s dashboard. Balances and history are preserved.</p>
             <Button
               variant="outline" className="mt-1 self-start text-destructive" disabled={archive.isPending}

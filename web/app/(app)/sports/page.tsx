@@ -18,7 +18,7 @@ export default function SportsPage() {
   return (
     <div className="container py-5 sm:py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Pick a sport</h1>
+        <h1 className="hidden text-2xl font-bold text-foreground lg:block">Pick a sport</h1>
         <p className="text-sm text-muted-foreground">
           Choose a sport to browse events and bet your friends.
         </p>

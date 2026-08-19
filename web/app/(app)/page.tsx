@@ -59,7 +59,7 @@ export default function HomePage() {
   return (
     <div className="container py-5 sm:py-8">
       {/* Header — the mobile page title lives in the navbar. */}
-      <h1 className="mb-6 hidden text-xl font-bold tracking-tight sm:text-2xl lg:block">My Leagues</h1>
+      <h1 className="mb-6 hidden text-2xl font-bold tracking-tight text-foreground lg:block">My Leagues</h1>
 
       {/* A failed invites fetch would otherwise just hide the section silently. */}
       {invites.isError && (
