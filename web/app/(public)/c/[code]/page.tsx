@@ -91,15 +91,17 @@ function CodeContent({ code }: { code: string }) {
   });
 
   if (resolved.isLoading) {
+    // Bare content — the default export already wraps this in the outer Card,
+    // so returning another Card here would nest (doubled border/padding).
     return (
-      <Card className="w-full max-w-md gap-5 p-6">
+      <>
         <div className="flex flex-col items-center gap-3">
           <Skeleton className="size-16 rounded-full" />
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-4 w-56" />
         </div>
         <Skeleton className="h-10 w-full rounded-lg" />
-      </Card>
+      </>
     );
   }
 
