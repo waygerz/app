@@ -3535,12 +3535,27 @@ function LeagueManageInner() {
               <p className="text-sm text-muted-foreground">
                 Current: {lg.current_period ? `${lg.current_period.label} (${lg.current_period.status})` : '—'}
               </p>
-              <Button
-                variant="outline" className="mt-1 self-start" disabled={advance.isPending}
-                onClick={() => { if (confirm('Close the current period now and open the next?')) advance.mutate(); }}
-              >
-                {advance.isPending ? 'Advancing…' : 'Advance period'}
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="mt-1 self-start" disabled={advance.isPending}>
+                    {advance.isPending ? 'Advancing…' : 'Advance period'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Advance to the next period?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This closes the current week now and opens the next one. Open bets settle as usual.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={advance.isPending}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction disabled={advance.isPending} onClick={() => advance.mutate()}>
+                      Advance period
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </Card>
           </div>
         )}
@@ -3550,12 +3565,31 @@ function LeagueManageInner() {
           <Card className="gap-3 p-6">
             <h2 className="text-base font-semibold text-foreground sm:text-lg">Danger zone</h2>
             <p className="text-sm text-muted-foreground">Archiving removes the league from everyone’s dashboard. Balances and history are preserved.</p>
-            <Button
-              variant="outline" className="mt-1 self-start text-destructive" disabled={archive.isPending}
-              onClick={() => { if (confirm(`Archive "${lg.name}"? It will disappear from dashboards.`)) archive.mutate(); }}
-            >
-              {archive.isPending ? 'Archiving…' : 'Archive league'}
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" className="mt-1 self-start text-destructive" disabled={archive.isPending}>
+                  {archive.isPending ? 'Archiving…' : 'Archive league'}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Archive “{lg.name}”?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    It disappears from everyone’s dashboard. Balances and history are preserved.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={archive.isPending}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={archive.isPending}
+                    onClick={() => archive.mutate()}
+                    className="bg-destructive text-white hover:bg-destructive/90"
+                  >
+                    Archive league
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </Card>
         </div>
       </div>
