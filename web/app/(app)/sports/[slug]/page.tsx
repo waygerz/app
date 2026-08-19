@@ -43,7 +43,7 @@ function TeamLeagues({ slug }: { slug: string }) {
       </Link>
 
       <div className="mt-4 mb-6">
-        <h1 className="text-2xl font-bold capitalize text-foreground">{title}</h1>
+        <h1 className="hidden text-2xl font-bold capitalize text-foreground lg:block">{title}</h1>
         <p className="text-sm text-muted-foreground">Pick a league to browse events.</p>
       </div>
 

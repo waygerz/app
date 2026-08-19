@@ -24,12 +24,17 @@ Four commits landed the bulk of the punch list (not yet deployed):
   h2s → `text-base sm:text-lg`.
 - `5f3e308` — **§E**: `/manage` Advance-period + Archive-league native `confirm()` → `AlertDialog`.
 
-**Still open** (deliberately not in this pass): §1.5 remaining text loaders on
-`/friends` list + `/c/[code]` interstitial; §1.3 add a section heading to `/results`
-(additive change in a type-branched component); §1.2 `/bets` layout heading is
-desktop-only via a wrapper (functionally compliant); §1.2 dynamic-title sports
-subpages kept as documented always-visible exceptions; §F touch-target spot-check
-across the remaining pages.
+**Follow-up — the five deferred items are now closed:**
+
+- **§1.5** — `/friends` list + `/c/[code]` interstitial text loaders → `Skeleton`.
+- **§1.3** — `/results` gains a "Results" section `h2` in both the Pick'em and H2H branches.
+- **§1.2** — `/bets` layout heading moved onto the `h1` itself (`hidden … lg:block`).
+- **§1.2** — dynamic sports subpages (`/sports/[slug]`, `…/leagues/[league]`) now use
+  desktop-only `h1`s; `header-logo` derives the mobile title from the slug (ESPN sports,
+  which render their own `EspnSportList` header, return null and keep it).
+- **§F** — touch-target spot-check: primary controls compliant (16px+ inputs, thread
+  controls at 44px); the member-actions menu trigger raised 32→40px. Remaining secondary
+  menu triggers and inline confirm/reaction icons left compact by design (adequate spacing).
 
 ---
 

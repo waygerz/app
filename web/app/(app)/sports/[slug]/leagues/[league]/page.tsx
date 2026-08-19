@@ -30,7 +30,7 @@ export default function LeaguePage() {
       </Link>
 
       <div className="mt-4 mb-6">
-        <h1 className="text-2xl font-bold uppercase text-foreground">
+        <h1 className="hidden text-2xl font-bold uppercase text-foreground lg:block">
           {league.replace(/-/g, ' ')}
         </h1>
         <p className="text-sm text-muted-foreground">Events you can bet on.</p>

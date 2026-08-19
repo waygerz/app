@@ -1853,6 +1853,7 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <h2 className="text-base font-semibold text-foreground sm:text-lg">Results</h2>
       <Combobox
         ariaLabel="Select week"
         className="w-full max-w-[220px]"
@@ -2091,6 +2092,7 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <h2 className="text-base font-semibold text-foreground sm:text-lg">Results</h2>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Combobox
           ariaLabel="Select week"
@@ -2936,7 +2938,7 @@ function MemberActionsMenu({
           <body> when it closes to open the AlertDialog, freezing the page. */}
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
-          <Button size="icon" variant="outline" className="size-8 shrink-0" aria-label="Member actions">
+          <Button size="icon" variant="outline" className="size-10 shrink-0" aria-label="Member actions">
             <EllipsisVertical className="size-4" />
           </Button>
         </DropdownMenuTrigger>

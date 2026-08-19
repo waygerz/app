@@ -22,6 +22,7 @@ import { AuthRedirectIfGuest } from '@/auth/AuthRedirectIfGuest';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -90,7 +91,16 @@ function CodeContent({ code }: { code: string }) {
   });
 
   if (resolved.isLoading) {
-    return <p className="text-center text-sm text-muted-foreground">Loading invite…</p>;
+    return (
+      <Card className="w-full max-w-md gap-5 p-6">
+        <div className="flex flex-col items-center gap-3">
+          <Skeleton className="size-16 rounded-full" />
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-56" />
+        </div>
+        <Skeleton className="h-10 w-full rounded-lg" />
+      </Card>
+    );
   }
 
   const data = resolved.data;

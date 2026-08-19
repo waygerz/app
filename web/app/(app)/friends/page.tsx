@@ -11,6 +11,7 @@ import { myFriendCode, inviteUrl } from '@/lib/invites';
 import { messagingApi } from '@/lib/messaging';
 import { shareLink } from '@/lib/share';
 import { CenterCard } from '@/components/ui/center-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -154,7 +155,17 @@ export default function FriendsPage() {
           <ListSearch value={q} onChange={setQ} placeholder="Search friends" className="mb-3" />
         )}
         {friends.isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <div className={GRID}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
+                <Skeleton className="size-11 shrink-0 rounded-full" />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-3 w-1/3" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : allFriends.length === 0 ? (
           <CenterCard>
             <Users className="size-6 text-muted-foreground" />

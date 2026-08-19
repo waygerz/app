@@ -25,9 +25,7 @@ export default function BetsLayout({ children }: { children: ReactNode }) {
   return (
     <div className="container min-w-0 w-full py-5 sm:py-8">
       {/* Title rides in the top bar on mobile; keep it in-page on desktop. */}
-      <div className="mb-6 hidden items-center gap-3 lg:flex">
-        <h1 className="text-2xl font-bold text-foreground">My Bets</h1>
-      </div>
+      <h1 className="mb-6 hidden text-2xl font-bold text-foreground lg:block">My Bets</h1>
 
       <nav className="mb-6 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {FILTERS.map((f) => {

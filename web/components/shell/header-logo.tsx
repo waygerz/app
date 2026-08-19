@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { isEspnSport } from '@/lib/espn';
+
+const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
 // Page title shown next to the logo in the top bar on mobile (desktop uses the
 // Navbar links instead). League detail and the message thread keep their own
@@ -18,6 +21,18 @@ function pageTitle(pathname: string): string | null {
   if (pathname === '/messages') return 'Messages';
   if (pathname.startsWith('/messages/')) return null;
   if (pathname === '/notifications') return 'Notifications';
+  // Dynamic sports pages mirror their slug-derived in-page title so the mobile
+  // top bar carries it. ESPN sports render their own header (EspnSportList), so
+  // return null for those and let that view own the title.
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts[0] === 'sports') {
+    if (parts.length === 2) {
+      return isEspnSport(parts[1]) ? null : titleCase(parts[1].replace(/-/g, ' '));
+    }
+    if (parts.length === 4 && parts[2] === 'leagues') {
+      return parts[3].replace(/-/g, ' ').toUpperCase();
+    }
+  }
   return null;
 }
 
