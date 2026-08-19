@@ -16,7 +16,7 @@ export default function SportsPage() {
   } = useQuery({ queryKey: ['sports'], queryFn: fetchSports });
 
   return (
-    <div className="container py-8">
+    <div className="container py-5 sm:py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Pick a sport</h1>
         <p className="text-sm text-muted-foreground">

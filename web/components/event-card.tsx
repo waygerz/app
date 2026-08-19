@@ -374,7 +374,10 @@ export function ScheduleBoard({
 }) {
   const head = 'w-[4.5rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-28';
   return (
-    <div>
+    // Defensive h-scroll guard (§1.9): the row shrinks/truncates today, but keep
+    // the board in an overflow-x-auto wrapper so it never breaks the page width
+    // on narrow phones if a market/label ever grows. Covers both sports pages.
+    <div className="overflow-x-auto">
       {/* "Winner" labels the team column (the team line is the straight-up pick);
           Spread/Total head the two fixed columns. Gaps match ScheduleGameRow's. */}
       <div className="flex items-center gap-2 pb-2 sm:gap-3">

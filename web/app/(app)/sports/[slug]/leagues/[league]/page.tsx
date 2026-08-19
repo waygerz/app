@@ -22,7 +22,7 @@ export default function LeaguePage() {
   });
 
   return (
-    <div className="container py-8">
+    <div className="container py-5 sm:py-8">
       <Link href={`/sports/${slug}`} className="text-sm text-primary hover:underline">
         ← {slug.replace(/-/g, ' ')}
       </Link>

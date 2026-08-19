@@ -36,7 +36,7 @@ function TeamLeagues({ slug }: { slug: string }) {
   });
 
   return (
-    <div className="container py-8">
+    <div className="container py-5 sm:py-8">
       <Link href="/sports" className="text-sm text-primary hover:underline">
         ← All sports
       </Link>
