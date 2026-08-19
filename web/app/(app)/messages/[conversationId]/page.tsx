@@ -235,7 +235,7 @@ export default function ThreadPage() {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-border">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-2.5 px-3 py-2">
-          <Button variant="ghost" size="icon" className="size-8 shrink-0" aria-label="Back to inbox"
+          <Button variant="ghost" size="icon" className="size-11 shrink-0" aria-label="Back to inbox"
             onClick={() => router.push('/messages')}>
             <ArrowLeft className="size-4" />
           </Button>
@@ -287,12 +287,12 @@ export default function ThreadPage() {
             }}
             onBlur={() => { if (conversationId) messagingApi.sendTyping(conversationId, false).catch(() => {}); }}
             placeholder="Type a message…"
-            className="h-10 text-base"
+            className="h-11 text-base"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && draft.trim() && !sendMsg.isPending) sendMsg.mutate();
             }}
           />
-          <Button size="icon" className="size-10 shrink-0" disabled={sendMsg.isPending || !draft.trim()}
+          <Button size="icon" className="size-11 shrink-0" disabled={sendMsg.isPending || !draft.trim()}
             aria-label="Send message" onClick={() => sendMsg.mutate()}>
             <Send className="size-4" />
           </Button>
