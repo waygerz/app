@@ -9,6 +9,30 @@ Status column: ✅ compliant · ⚠️ minor drift · 🔧 needs work · ➖ N/A
 
 ---
 
+## Progress log (2026-08-19)
+
+Four commits landed the bulk of the punch list (not yet deployed):
+
+- `cd3d3eb` — **§1.9 + §1.1**: `overflow-x-auto` guard added at `ScheduleBoard`'s
+  root (covers both sports pages in one fix); friends + all sports pages → `container py-5 sm:py-8`.
+- `1375239` — **§1.4–1.6**: `CenterCard` promoted to `components/ui/center-card.tsx`;
+  notifications + messages hand-rolled boxes → `Card`, bare empties → `CenterCard`,
+  text loaders → `Skeleton`; sports empties → `CenterCard`; friends/members empties
+  got icons; bets empty folded into `CenterCard`.
+- `d4b350d` — **§1.2–1.3**: `/sports` + `/leagues/new` registered in `header-logo`,
+  their h1s switched to desktop-only; home h1 → canonical `text-2xl`; manage section
+  h2s → `text-base sm:text-lg`.
+- `5f3e308` — **§E**: `/manage` Advance-period + Archive-league native `confirm()` → `AlertDialog`.
+
+**Still open** (deliberately not in this pass): §1.5 remaining text loaders on
+`/friends` list + `/c/[code]` interstitial; §1.3 add a section heading to `/results`
+(additive change in a type-branched component); §1.2 `/bets` layout heading is
+desktop-only via a wrapper (functionally compliant); §1.2 dynamic-title sports
+subpages kept as documented always-visible exceptions; §F touch-target spot-check
+across the remaining pages.
+
+---
+
 ## Part 1 — Standardization decisions to lock
 
 Each row is a dimension of the page contract. "Canonical" is the recommended
