@@ -9,11 +9,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 gateway + a poll-loop scheduler**, all on a single host (`t4g.small`, 2 GB RAM).
 Images are built for `linux/arm64` and deployed to AWS ECS/ECR.
 
-> **Doc drift warning:** `AGENTS.md` describes an `app/<name>/` directory layout
-> and calls webui a "React + Vite SPA". It is stale. The backend services now
-> live under **`api/`** and webui is **Next.js SSR on `:3000`** at the repo root
-> (**`web/`**). Trust `api/docker-compose.yml` and
-> `api/gateway/conf.d/default.conf` over that doc.
+> **Ground truth:** `AGENTS.md` is the concise service map and agrees with this
+> file (`api/` backend, `web/` Next.js SSR, `mobile/` Flutter). If any doc ever
+> disagrees with the running stack, trust `api/docker-compose.yml` and
+> `api/gateway/conf.d/default.conf` over prose.
 
 ## Layout
 
