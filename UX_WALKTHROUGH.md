@@ -6,8 +6,8 @@
 > `(public)/c/[code]`, `components/messages-sheet.tsx`). Companion to the
 > gap-to-ship plans — where a screen is missing or half-built, it's flagged
 > inline as **[gap → PICKEM Gx]** / **[gap → H2H Bx]** pointing at
-> [`PICKEM_BUILD_PLAN.md`](./PICKEM_BUILD_PLAN.md) and
-> [`H2H_BUILD_PLAN.md`](./H2H_BUILD_PLAN.md).
+> [`PICKEM_BUILD_PLAN.md`](./.docs/PICKEM_BUILD_PLAN.md) and
+> [`H2H_BUILD_PLAN.md`](./.docs/H2H_BUILD_PLAN.md).
 >
 > The two modes share one container and one setup flow (**Part 1**); they diverge
 > only at the play/results/money surfaces (**Part 2** Pick'em, **Part 3** H2H).

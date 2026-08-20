@@ -7,7 +7,7 @@
 > web. These four tasks turn "stable architecture" into "stable contract."
 >
 > Companions: [`API_ENDPOINTS.md`](./API_ENDPOINTS.md) (the surface),
-> [`H2H_BUILD_PLAN.md`](./H2H_BUILD_PLAN.md), [`PICKEM_BUILD_PLAN.md`](./PICKEM_BUILD_PLAN.md).
+> [`H2H_BUILD_PLAN.md`](./.docs/H2H_BUILD_PLAN.md), [`PICKEM_BUILD_PLAN.md`](./.docs/PICKEM_BUILD_PLAN.md).
 
 ## Task list
 
