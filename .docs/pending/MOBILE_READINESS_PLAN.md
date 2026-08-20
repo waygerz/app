@@ -6,8 +6,8 @@
 > can't be hot-fixed, so silent API-contract drift is far more dangerous than on
 > web. These four tasks turn "stable architecture" into "stable contract."
 >
-> Companions: [`API_ENDPOINTS.md`](../API_ENDPOINTS.md) (the surface),
-> [`H2H_BUILD_PLAN.md`](../.docs/H2H_BUILD_PLAN.md), [`PICKEM_BUILD_PLAN.md`](../.docs/PICKEM_BUILD_PLAN.md).
+> Companions: [`API_ENDPOINTS.md`](../complete/API_ENDPOINTS.md) (the surface),
+> [`H2H_BUILD_PLAN.md`](../complete/H2H_BUILD_PLAN.md), [`PICKEM_BUILD_PLAN.md`](../complete/PICKEM_BUILD_PLAN.md).
 
 ## Task list
 

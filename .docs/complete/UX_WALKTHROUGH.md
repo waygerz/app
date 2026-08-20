@@ -10,8 +10,8 @@
 >
 > **Building the app?** The engineering companion is
 > [`DEV_WALKTHROUGH.md`](./DEV_WALKTHROUGH.md) (same journeys, mapped to code and
-> gaps); route-by-route QA lives in `LAUNCH_CHECKLIST.md`; the deep mechanics are
-> the build plans in `.docs/`.
+> gaps); route-by-route QA lives in `.docs/pending/LAUNCH_CHECKLIST.md`; the deep mechanics are
+> the build plans in `.docs/complete/`.
 
 ---
 

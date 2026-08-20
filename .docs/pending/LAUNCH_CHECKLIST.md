@@ -25,7 +25,7 @@ Route access is gated by `web/proxy.ts`:
 
 These are the global gates. The per-route tables below say *what* each page
 renders; this list says *how* to judge it. Source of truth is the shipped
-standardization pass (`.docs/UI_AUDIT.md`) plus the standing product rules.
+standardization pass (`../complete/UI_AUDIT.md`) plus the standing product rules.
 Walk each route against these before ticking its box.
 
 **Four states — every data-backed screen must show all four:**

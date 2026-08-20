@@ -4,7 +4,7 @@
 > [`UX_WALKTHROUGH.md`](./UX_WALKTHROUGH.md) — same journeys, but mapped to the
 > code that renders each screen and the gaps that tie back to the build plans.
 > **Reading as a user?** Use `UX_WALKTHROUGH.md` instead. **Doing launch QA?**
-> Use `LAUNCH_CHECKLIST.md`. When a flow changes, update this doc *and*
+> Use `../pending/LAUNCH_CHECKLIST.md`. When a flow changes, update this doc *and*
 > `UX_WALKTHROUGH.md` together.
 >
 > **What this is.** A screen-by-screen, state-by-state narration of the actual
@@ -16,8 +16,8 @@
 > For the deep gameplay mechanics it stays companion to the gap-to-ship plans —
 > where a screen is missing or half-built it's flagged inline as
 > **[gap → PICKEM Gx]** / **[gap → H2H Bx]** pointing at
-> [`PICKEM_BUILD_PLAN.md`](./.docs/PICKEM_BUILD_PLAN.md) and
-> [`H2H_BUILD_PLAN.md`](./.docs/H2H_BUILD_PLAN.md).
+> [`PICKEM_BUILD_PLAN.md`](./PICKEM_BUILD_PLAN.md) and
+> [`H2H_BUILD_PLAN.md`](./H2H_BUILD_PLAN.md).
 >
 > **Map:** Part 1 gets you in (onboarding). Part 2 is *you* (profile, avatar,
 > colors, notifications). Part 3 is *people* (friends + messaging). Parts 4–6 are
@@ -142,7 +142,7 @@ green check.
 ### 2.3 Favorite teams — the profile brand pills
 
 A **FavoriteTeamsCard** shows your chosen teams as brand-colored pills (spec in
-`.docs/FEATURE_PLAN_favorite_teams.md`). Server-persisted via
+`FEATURE_PLAN_favorite_teams.md`). Server-persisted via
 `usersApi.getMyProfile` / `saveFavorites` (replace-all).
 
 - **+ Add team** opens a bottom-sheet **TeamPicker** that drills **sport → league
@@ -555,7 +555,7 @@ A grid of **`EventCard`s** for the league's upcoming games
   replayed back here afterward.
 - **Feed + comments** — the league's social spine; system activity
   (joins, period open/final, wager accepted/settled) and member announcements,
-  each commentable and with **reactions** (`.docs/FEATURE_PLAN_reactions.md`).
+  each commentable and with **reactions** (`FEATURE_PLAN_reactions.md`).
 
 ---
 
