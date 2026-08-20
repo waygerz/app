@@ -152,7 +152,7 @@ fetch**. So the only web ripple is the signed-in user's own object:
   list `users`). Backend task defs are **not** committed to the repo (only
   `web/` has a `taskdef.json`); the `users` task def is registered inline by
   `create-users-service.sh`, and env changes on existing consumers are applied
-  by `wire-users-rollout.sh` (both scripts at repo root, git-excluded).
+  by `wire-users-rollout.sh` (both scripts in `.scripts/`, git-excluded).
 
 ---
 
