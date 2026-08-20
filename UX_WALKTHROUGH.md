@@ -6,8 +6,12 @@
 > head-to-head, and browsing sports.
 >
 > Where something isn't finished yet, you'll see a **Heads up** note so there are
-> no surprises. (For the engineering view of every route, see
-> `LAUNCH_CHECKLIST.md`; for the deep mechanics, the build plans in `.docs/`.)
+> no surprises.
+>
+> **Building the app?** The engineering companion is
+> [`DEV_WALKTHROUGH.md`](./DEV_WALKTHROUGH.md) (same journeys, mapped to code and
+> gaps); route-by-route QA lives in `LAUNCH_CHECKLIST.md`; the deep mechanics are
+> the build plans in `.docs/`.
 
 ---
 
