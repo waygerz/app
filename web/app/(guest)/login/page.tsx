@@ -12,13 +12,15 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { LegalLink } from '@/components/legal/legal-dialog';
-import { LEGAL_VERSION, SMS_TRANSACTIONAL_CONSENT, SMS_MARKETING_CONSENT } from '@/components/legal/legal-content';
+import { LEGAL_VERSION, SMS_ACCOUNT_CONSENT, SMS_MARKETING_CONSENT } from '@/components/legal/legal-content';
 import { cn } from '@/lib/utils';
 
-// The new-account flow is split into three focused steps so the name field
-// (previously buried above a wall of consent text) can't be missed:
-//   name → terms (required) → sms opt-ins (optional).
-type Step = 'phone' | 'code' | 'name' | 'terms' | 'sms';
+// Flow (see the login walkthrough):
+//   phone → (existing number) code → logged in
+//   phone → (new number) consent → code → name → terms → account created
+// A NEW number never gets a text until it opts in on the consent card — the
+// one-time code is itself an SMS, so consent must precede it.
+type Step = 'phone' | 'consent' | 'code' | 'name' | 'terms';
 
 export default function LoginPage() {
   const { startOtp, verifyOtp, completeProfile } = useAuth();
@@ -30,11 +32,13 @@ export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [displayName, setDisplayName] = useState('');
+  // SMS consent, collected up-front on the consent card (new numbers only).
+  // smsAccount is REQUIRED (gates the code send); smsMarketing is optional.
+  const [smsAccount, setSmsAccount] = useState(false);
+  const [smsMarketing, setSmsMarketing] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const agreedLegal = agreeTerms && agreePrivacy;
-  const [smsTx, setSmsTx] = useState(false);
-  const [smsMkt, setSmsMkt] = useState(false);
   const [ticket, setTicket] = useState('');
   const [devOtp, setDevOtp] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
@@ -52,13 +56,31 @@ export default function LoginPage() {
     }
   }
 
+  function goToCode(devCode?: string) {
+    setDevOtp(devCode);
+    if (devCode) setOtp(devCode); // testing mode: prefill the revealed code
+    setStep('code');
+  }
+
+  // Phone step: existing number → code sent now; new number → consent card first.
   const onSendCode = (e: React.FormEvent) => {
     e.preventDefault();
     run(async () => {
-      const code = await startOtp(phone);
-      setDevOtp(code);
-      if (code) setOtp(code); // testing mode: prefill the revealed code
-      setStep('code');
+      const res = await startOtp(phone);
+      if (res.consentRequired) {
+        setStep('consent');
+        return;
+      }
+      goToCode(res.devOtp);
+    });
+  };
+
+  // Consent card (new number): opt in, then the code is sent.
+  const onAgreeConsent = (e: React.FormEvent) => {
+    e.preventDefault();
+    run(async () => {
+      const res = await startOtp(phone, true);
+      goToCode(res.devOtp);
     });
   };
 
@@ -81,14 +103,13 @@ export default function LoginPage() {
       await completeProfile(ticket, displayName, {
         tos_version: LEGAL_VERSION,
         tos_accepted: agreedLegal,
-        sms_transactional: smsTx,
-        sms_marketing: smsMkt,
+        sms_transactional: smsAccount,
+        sms_marketing: smsMarketing,
       });
       router.push(next);
     });
   };
 
-  // Profile sub-steps carry their own step indicator + heading, so no subtitle.
   const subtitle =
     step === 'phone'
       ? 'Sign in or create your account'
@@ -135,24 +156,95 @@ export default function LoginPage() {
               className="h-14 text-base"
               disabled={busy || !phone.trim()}
             >
-              {busy ? 'Sending…' : 'Text me a code'}
+              {busy ? 'Continuing…' : 'Continue'}
             </Button>
-            {/* Complete, branded SMS opt-in notice. This is the screen (Waygerz
-                logo + phone field + full consent) captured for Toll-Free
-                Verification — keep every CTIA element: message types, frequency,
-                rates, STOP/HELP, and links to Terms & Privacy. */}
-            <div className="flex flex-col gap-2 text-center">
-              <p className="text-sm leading-relaxed text-foreground">
-                We’ll text you a one-time code to sign in — no password needed. New here? This creates
-                your account.
+            <p className="text-center text-sm leading-relaxed text-foreground">
+              We’ll text you a one-time code to sign in — no password needed. New here? This creates your
+              account and we’ll confirm your text consent first.
+            </p>
+          </form>
+        )}
+
+        {/* Consent card — NEW numbers only. Carries the phone field + explicit SMS
+            opt-in + branding + disclosure on one screen; the code is not sent
+            until the required box is checked. */}
+        {step === 'consent' && (
+          <form onSubmit={onAgreeConsent} className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1 text-center">
+              <h2 className="text-lg font-semibold text-foreground">Create your account</h2>
+              <p className="text-sm text-muted-foreground">
+                Agree to receive texts and we’ll send your sign-in code.
               </p>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                By tapping “Text me a code,” you agree that <span className="font-medium text-foreground">Waygerz</span> may send
-                account text messages — including one-time sign-in codes and bet alerts — to the number
-                above. Message frequency varies. Message and data rates may apply. Reply STOP to opt out,
-                HELP for help. See our <LegalLink doc="terms">Terms</LegalLink> and{' '}
-                <LegalLink doc="privacy">Privacy Policy</LegalLink>.
-              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="consent-phone" className="text-center text-base">
+                Your mobile number
+              </Label>
+              <Input
+                id="consent-phone"
+                variant="lg"
+                className="h-14 text-lg"
+                value={phone}
+                onChange={(e) => setPhone(formatUsPhone(e.target.value))}
+                placeholder="(904) 555-1234"
+                autoComplete="tel"
+                inputMode="tel"
+                maxLength={14}
+              />
+            </div>
+            <div className="flex flex-col gap-4 rounded-lg border border-input p-4">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="consent-sms-account"
+                  size="md"
+                  checked={smsAccount}
+                  onCheckedChange={(v) => setSmsAccount(v === true)}
+                  className="mt-0.5"
+                />
+                <label htmlFor="consent-sms-account" className="text-sm leading-relaxed text-foreground">
+                  {SMS_ACCOUNT_CONSENT}
+                </label>
+              </div>
+              <div className="flex items-start gap-3 border-t border-border pt-4">
+                <Checkbox
+                  id="consent-sms-mkt"
+                  size="md"
+                  checked={smsMarketing}
+                  onCheckedChange={(v) => setSmsMarketing(v === true)}
+                  className="mt-0.5"
+                />
+                <label htmlFor="consent-sms-mkt" className="text-sm leading-relaxed text-foreground">
+                  {SMS_MARKETING_CONSENT}
+                </label>
+              </div>
+            </div>
+            <p className="text-center text-xs leading-relaxed text-muted-foreground">
+              By continuing you also agree to our <LegalLink doc="terms">Terms</LegalLink> and{' '}
+              <LegalLink doc="privacy">Privacy Policy</LegalLink>.
+            </p>
+            {error && <div className="text-base text-destructive">{error}</div>}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="lg"
+                className="h-14"
+                onClick={() => {
+                  setStep('phone');
+                  setError(null);
+                }}
+              >
+                ← Back
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                className="h-14 flex-1 text-base"
+                disabled={busy || !smsAccount || !phone.trim()}
+              >
+                {busy ? 'Sending…' : 'Agree & text me my code'}
+              </Button>
             </div>
           </form>
         )}
@@ -201,7 +293,7 @@ export default function LoginPage() {
           </form>
         )}
 
-        {/* Step 1 — Name. On its own screen so it can't be missed. */}
+        {/* New signup, after the code — Step 1 of 2: Name. */}
         {step === 'name' && (
           <form
             onSubmit={(e) => {
@@ -237,25 +329,16 @@ export default function LoginPage() {
           </form>
         )}
 
-        {/* Step 2 — Terms & Privacy (required). */}
+        {/* New signup — Step 2 of 2: Terms & Privacy (required). */}
         {step === 'terms' && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setError(null);
-              if (agreedLegal) setStep('sms');
-            }}
-            className="flex flex-col gap-5"
-          >
+          <form onSubmit={onCreate} className="flex flex-col gap-5">
             <StepProgress current={2} />
             <div className="flex flex-col gap-1 text-center">
               <h2 className="text-lg font-semibold text-foreground">Agree to continue</h2>
-              <p className="text-sm text-muted-foreground">
-                Please accept both to create your account.
-              </p>
+              <p className="text-sm text-muted-foreground">Please accept both to create your account.</p>
             </div>
-            {/* Two separate agreements. Kept as divs (not labels) — a label would
-                toggle the box when tapping the Terms / Privacy links. */}
+            {/* Kept as divs (not labels) — a label would toggle the box when
+                tapping the Terms / Privacy links. */}
             <div className="flex flex-col gap-4 rounded-lg border border-input p-4">
               <div className="flex items-start gap-3">
                 <Checkbox
@@ -267,7 +350,7 @@ export default function LoginPage() {
                   aria-label="I agree to the Terms of Service"
                 />
                 <span className="text-sm leading-relaxed text-foreground">
-                  I agree to the <LegalLink doc="terms">TOS</LegalLink>.
+                  I agree to the <LegalLink doc="terms">Terms of Service</LegalLink>.
                 </span>
               </div>
               <div className="flex items-start gap-3 border-t border-border pt-4">
@@ -284,57 +367,9 @@ export default function LoginPage() {
                 </span>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="lg" className="h-14" onClick={() => setStep('name')}>
-                ← Back
-              </Button>
-              <Button type="submit" size="lg" className="h-14 flex-1 text-base" disabled={!agreedLegal}>
-                Next
-              </Button>
-            </div>
-          </form>
-        )}
-
-        {/* Step 3 — SMS opt-ins (optional, standalone from the agreement). */}
-        {step === 'sms' && (
-          <form onSubmit={onCreate} className="flex flex-col gap-5">
-            <StepProgress current={3} />
-            <div className="flex flex-col gap-1 text-center">
-              <h2 className="text-lg font-semibold text-foreground">Text alerts (optional)</h2>
-              <p className="text-sm text-muted-foreground">
-                Totally optional — you can create and use your account without these, and your sign-in
-                codes are texted either way.
-              </p>
-            </div>
-            <div className="flex flex-col gap-4 rounded-lg border border-input p-4">
-              <div className="flex items-start gap-3">
-                <Checkbox
-                  id="consent-sms-tx"
-                  size="md"
-                  checked={smsTx}
-                  onCheckedChange={(v) => setSmsTx(v === true)}
-                  className="mt-0.5"
-                />
-                <label htmlFor="consent-sms-tx" className="text-sm leading-relaxed text-foreground">
-                  {SMS_TRANSACTIONAL_CONSENT}
-                </label>
-              </div>
-              <div className="flex items-start gap-3 border-t border-border pt-4">
-                <Checkbox
-                  id="consent-sms-mkt"
-                  size="md"
-                  checked={smsMkt}
-                  onCheckedChange={(v) => setSmsMkt(v === true)}
-                  className="mt-0.5"
-                />
-                <label htmlFor="consent-sms-mkt" className="text-sm leading-relaxed text-foreground">
-                  {SMS_MARKETING_CONSENT}
-                </label>
-              </div>
-            </div>
             {error && <div className="text-base text-destructive">{error}</div>}
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="lg" className="h-14" onClick={() => setStep('terms')}>
+              <Button type="button" variant="ghost" size="lg" className="h-14" onClick={() => setStep('name')}>
                 ← Back
               </Button>
               <Button
@@ -365,16 +400,15 @@ export default function LoginPage() {
   );
 }
 
-// Step indicator for the 3-step new-account flow: a "Step N of 3" label + three
-// dots, the current one elongated.
+// Step indicator for the post-code signup (name → terms).
 function StepProgress({ current }: { current: number }) {
   return (
     <div className="flex flex-col items-center gap-2">
       <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Step {current} of 3
+        Step {current} of 2
       </span>
       <div className="flex items-center gap-1.5" aria-hidden>
-        {[1, 2, 3].map((n) => (
+        {[1, 2].map((n) => (
           <span
             key={n}
             className={cn(

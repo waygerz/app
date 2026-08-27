@@ -36,7 +36,10 @@ def test_otp_login_existing_user_sets_cookies(client, user, device_uuid):
 
 def test_signup_new_user_flow(client, device_uuid):
     phone_raw = "9042398485"  # valid US number, not yet registered
-    start = client.post("/v1/platform/auth/otp/start", json={"phone": phone_raw})
+    # New number → must opt into SMS before the first message (the code) is sent.
+    start = client.post(
+        "/v1/platform/auth/otp/start", json={"phone": phone_raw, "sms_consent": True}
+    )
     assert start.status_code == 200
     code = start.get_json()["dev_otp"]
 
@@ -68,6 +71,17 @@ def test_signup_new_user_flow(client, device_uuid):
     assert any(access_name in c for c in done.headers.getlist("Set-Cookie"))
 
 
+def test_new_number_requires_sms_consent_before_code(client):
+    """A new number gets NO text until it opts in: otp/start without sms_consent
+    returns consent_required + is_new and sends no code (no dev_otp)."""
+    res = client.post("/v1/platform/auth/otp/start", json={"phone": "9042398490"})
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body.get("consent_required") is True
+    assert body.get("is_new") is True
+    assert "dev_otp" not in body  # nothing was sent
+
+
 def test_verify_rejects_wrong_code(client, user, device_uuid):
     client.post("/v1/platform/auth/otp/start", json={"phone": user["phone"]})
     bad = client.post(
@@ -93,7 +107,9 @@ def test_complete_rejects_bad_ticket(client, device_uuid):
 def test_complete_requires_consent(client, device_uuid):
     """Signing up without agreeing to the Terms/Privacy is rejected."""
     phone_raw = "9042398486"  # distinct unregistered number
-    start = client.post("/v1/platform/auth/otp/start", json={"phone": phone_raw})
+    start = client.post(
+        "/v1/platform/auth/otp/start", json={"phone": phone_raw, "sms_consent": True}
+    )
     code = start.get_json()["dev_otp"]
     verify = client.post(
         "/v1/platform/auth/otp/verify",
@@ -127,7 +143,9 @@ def test_complete_allows_declining_sms(client, device_uuid, monkeypatch):
     )
 
     phone_raw = "9042398487"  # distinct unregistered number
-    start = client.post("/v1/platform/auth/otp/start", json={"phone": phone_raw})
+    start = client.post(
+        "/v1/platform/auth/otp/start", json={"phone": phone_raw, "sms_consent": True}
+    )
     code = start.get_json()["dev_otp"]
     verify = client.post(
         "/v1/platform/auth/otp/verify",

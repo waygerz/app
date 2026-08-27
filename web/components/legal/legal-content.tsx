@@ -25,6 +25,13 @@ export const LEGAL_CONTACT = 'support@waygerz.com';
 // sign-in codes are their own flow (described at the phone-entry step and the
 // account page), and both alert opt-ins below are optional — not a condition of
 // creating or using an account.
+// Account/service SMS consent, collected on the pre-code consent card for NEW
+// numbers. Because the one-time sign-in code is itself a text, we don't send
+// anything until the user agrees here — so this is REQUIRED to create a phone
+// account (transactional/service messages, not marketing — TCPA allows requiring
+// consent for the messages inherent to the service the user is signing up for).
+export const SMS_ACCOUNT_CONSENT =
+  `I agree to receive text messages from Waygerz at this number — including one-time sign-in codes and account & bet alerts (challenges, results, and reminders). Message frequency varies. Message and data rates may apply. Reply STOP to opt out, HELP for help, or email ${LEGAL_CONTACT}.`;
 export const SMS_TRANSACTIONAL_CONSENT =
   `I agree to receive account and bet-related text messages from Waygerz — bet challenges, results, and reminders — at the number provided. These alerts are optional and not a condition of using Waygerz. Message and data rates may apply. Message frequency varies. Reply STOP to opt out, HELP for help, or email ${LEGAL_CONTACT}.`;
 export const SMS_MARKETING_CONSENT =

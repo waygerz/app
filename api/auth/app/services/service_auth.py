@@ -154,11 +154,23 @@ def _issue_auth_response(user, *, device_uuid: str | None, status: int = 200):
 
 
 def otp_start(data: dict) -> tuple[dict, int]:
-    """Send a login/signup code. Same response for new and existing numbers."""
+    """Send a login/signup code.
+
+    Existing numbers get a code immediately (they consented at signup). A NEW
+    number must opt in to SMS first — because the one-time code is itself a text,
+    we do NOT send anything until `sms_consent` is set: an un-consented new number
+    returns {is_new: True, consent_required: True} so the client shows the consent
+    screen before any message goes out.
+    """
     try:
         phone = normalize_phone(data.get("phone"))
     except InvalidPhone:
         return {"error": "invalid phone number"}, 400
+
+    is_new = User.query.filter_by(phone=phone).first() is None
+    if is_new and not bool(data.get("sms_consent")):
+        return {"phone": phone, "is_new": True, "consent_required": True}, 200
+
     r = get_redis()
     if r.get(_otp_cooldown_key(phone)):
         return {"error": "a code was just sent — wait a moment before requesting another"}, 429
@@ -166,7 +178,7 @@ def otp_start(data: dict) -> tuple[dict, int]:
     r.setex(_otp_cooldown_key(phone), current_app.config["AUTH_OTP_RESEND_COOLDOWN_SECONDS"], "1")
     r.delete(_otp_attempts_key(phone))
     service_sms.send_otp(phone, code)
-    resp = {"message": "code sent", "phone": phone}
+    resp = {"message": "code sent", "phone": phone, "is_new": is_new}
     if _reveal_otp():
         resp["dev_otp"] = code
     return resp, 200

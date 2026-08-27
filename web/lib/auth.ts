@@ -40,12 +40,18 @@ export interface SignupConsent {
 }
 
 export const authApi = {
-  otpStart: (phone: string) =>
-    apiJson<{ message: string; phone: string; dev_otp?: string }>(`${AUTH_URL}${API.auth}/otp/start`, {
-      method: 'POST',
-      body: JSON.stringify({ phone }),
-      skipAuthRetry: true,
-    }),
+  // New numbers must opt into SMS before the first message (the code) is sent:
+  // without `smsConsent`, a new number comes back `consent_required` and NO code
+  // is sent. Existing numbers (and consented new ones) get `message: 'code sent'`.
+  otpStart: (phone: string, smsConsent?: boolean) =>
+    apiJson<{ message?: string; phone: string; is_new?: boolean; consent_required?: boolean; dev_otp?: string }>(
+      `${AUTH_URL}${API.auth}/otp/start`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ phone, sms_consent: !!smsConsent }),
+        skipAuthRetry: true,
+      },
+    ),
 
   otpVerify: (phone: string, otp: string) =>
     apiJson<OtpVerifyResult>(`${AUTH_URL}${API.auth}/otp/verify`, {

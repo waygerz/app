@@ -33,11 +33,21 @@ interface VerifyResult {
   ticket?: string;
 }
 
+interface StartOtpResult {
+  /** Revealed code (dev/testing only), present only when a code was actually sent. */
+  devOtp?: string;
+  /** True when the number isn't registered yet (new signup). */
+  isNew: boolean;
+  /** True when a new number must opt into SMS before the code is sent (no code sent yet). */
+  consentRequired: boolean;
+}
+
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
-  /** Send an OTP; returns the code only when the backend reveals it (dev/testing). */
-  startOtp: (phone: string) => Promise<string | undefined>;
+  /** Send an OTP (login) or, for a new number, gate on consent first. Pass
+   *  `smsConsent: true` once the user has opted in on the consent card. */
+  startOtp: (phone: string, smsConsent?: boolean) => Promise<StartOtpResult>;
   /** Verify the OTP. Existing user → logged in; new user → needsProfile + ticket. */
   verifyOtp: (phone: string, otp: string) => Promise<VerifyResult>;
   /** Finish a new signup with the ticket + display name + consent record. */
@@ -87,9 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     Promise.race([bootstrap(), cap]).finally(() => setLoading(false));
   }, []);
 
-  async function startOtp(phone: string) {
-    const res = await authApi.otpStart(phone);
-    return res.dev_otp;
+  async function startOtp(phone: string, smsConsent?: boolean): Promise<StartOtpResult> {
+    const res = await authApi.otpStart(phone, smsConsent);
+    return {
+      devOtp: res.dev_otp,
+      isNew: !!res.is_new,
+      consentRequired: !!res.consent_required,
+    };
   }
 
   async function verifyOtp(phone: string, otp: string): Promise<VerifyResult> {
