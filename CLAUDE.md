@@ -67,10 +67,15 @@ Conventions that matter across all services:
   login/verify/complete/refresh to receive `access_token` + `refresh_token` in
   the JSON body instead (refresh accepts the token from the body too); every
   service already verifies `Authorization: Bearer` via `locations=["cookies","headers"]`.
-- **Internal endpoints are private to the compose network.** Routes under
-  `/internal/*` (and wagers `/admin/*`) are guarded by the `X-Internal-Token`
-  header (`app/utils/guards.py::internal_only`) and are **deliberately not routed
-  by the gateway**. The `scheduler` reaches them over the compose network.
+- **Internal endpoints are token-guarded.** Routes under `/internal/*` (and
+  wagers `/admin/*`) are guarded by the `X-Internal-Token` header
+  (`app/utils/guards.py::internal_only`). The service `location` blocks in the
+  gateway are prefix matches, so they *would* forward `/api/.../internal/*` too —
+  the gateway therefore has an explicit regex that **404s any `/internal` or
+  `/admin` subpath at the edge** (defense in depth). In prod, `/v1/*` is routed by
+  the **ALB directly** (no gateway container), so the same deny must exist as an
+  ALB rule — see `.docs/complete/INTERNAL_SERVICE_CONNECT.md`. The `scheduler`
+  reaches internal endpoints over the mesh (`http://<svc>:8000`).
 - Login is currently **OTP-only with no SMS provider** — `AUTH_REVEAL_OTP=true`
   returns the OTP in the API response. There is no real phone verification while
   this flag is on.

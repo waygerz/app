@@ -48,7 +48,6 @@ class Config:
     REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
-    AUTH_URL = os.environ.get("INTERNAL_AUTH_URL", "http://auth:8000")
     # Profiles (display_name/avatar) moved to the users service (split A2). Full
     # /v1 prefix in the default so Service Connect resolves it. Internal calls use
     # the mesh name http://users:8000 (Cloud Map namespace "waygerz"), like every
@@ -56,8 +55,10 @@ class Config:
     # on ALB rotation and time out. Leave INTERNAL_USERS_URL unset in prod so this
     # default applies (users must be registered in Service Connect).
     USERS_URL = os.environ.get("INTERNAL_USERS_URL", "http://users:8000/v1/platform/users")
-    FRIENDS_URL = os.environ.get("INTERNAL_FRIENDS_URL", "http://friends:8000")
-    LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000")
+    # Full /v1/{group}/{svc} suffix — callers append /internal/...; a bare
+    # host:8000 default 404s. Prod leaves these unset (Service Connect mesh).
+    FRIENDS_URL = os.environ.get("INTERNAL_FRIENDS_URL", "http://friends:8000/v1/social/friends")
+    LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000/v1/gameplay/leagues")
 
     MAX_MESSAGE_BODY = int(os.environ.get("MAX_MESSAGE_BODY", 4000))
     SSE_POLL_SECONDS = int(os.environ.get("SSE_POLL_SECONDS", 15))

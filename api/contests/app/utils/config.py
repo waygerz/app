@@ -49,7 +49,6 @@ class Config:
 
     # Service-to-service (docker network) + shared internal secret.
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
-    AUTH_URL = os.environ.get("INTERNAL_AUTH_URL", "http://auth:8000")
     # Profiles (display_name/avatar) moved to the users service (split A2). Full
     # /v1 prefix in the default so Service Connect resolves it. Internal calls use
     # the mesh name http://users:8000 (Cloud Map namespace "waygerz"), like every
@@ -57,10 +56,14 @@ class Config:
     # on ALB rotation and time out. Leave INTERNAL_USERS_URL unset in prod so this
     # default applies (users must be registered in Service Connect).
     USERS_URL = os.environ.get("INTERNAL_USERS_URL", "http://users:8000/v1/platform/users")
-    FRIENDS_URL = os.environ.get("INTERNAL_FRIENDS_URL", "http://friends:8000")
-    WALLET_URL = os.environ.get("INTERNAL_WALLET_URL", "http://wallet:8000")
-    INGESTOR_URL = os.environ.get("INTERNAL_INGESTOR_URL", "http://ingestor:8000")
-    LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000")
+    # Full /v1/{group}/{svc} suffix in every default — callers append /internal/...
+    # (and ingestor /events/...) onto these, and each service mounts internal
+    # blueprints at api_prefix()+"/internal". A bare host:8000 default 404s. Prod
+    # leaves these unset so the mesh default applies (Service Connect namespace).
+    FRIENDS_URL = os.environ.get("INTERNAL_FRIENDS_URL", "http://friends:8000/v1/social/friends")
+    WALLET_URL = os.environ.get("INTERNAL_WALLET_URL", "http://wallet:8000/v1/gameplay/wallet")
+    INGESTOR_URL = os.environ.get("INTERNAL_INGESTOR_URL", "http://ingestor:8000/v1/platform/ingestor")
+    LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000/v1/gameplay/leagues")
     # Notifications fan-out (in-app feed + SMS). Base incl. the /v1/... prefix;
     # the /internal/notify path is appended.
     NOTIFICATIONS_URL = os.environ.get(

@@ -45,7 +45,6 @@ class Config:
     ]
 
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
-    AUTH_URL = os.environ.get("INTERNAL_AUTH_URL", "http://auth:8000")
     # Profiles (display_name/avatar) moved to the users service (split A2). Full
     # /v1 prefix in the default so Service Connect resolves it. Internal calls use
     # the mesh name http://users:8000 (Cloud Map namespace "waygerz"), like every
@@ -53,7 +52,9 @@ class Config:
     # on ALB rotation and time out. Leave INTERNAL_USERS_URL unset in prod so this
     # default applies (users must be registered in Service Connect).
     USERS_URL = os.environ.get("INTERNAL_USERS_URL", "http://users:8000/v1/platform/users")
-    LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000")
+    # Full /v1/gameplay/leagues suffix — the caller appends /internal/...; a bare
+    # host:8000 default 404s. Prod leaves this unset (Service Connect mesh).
+    LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000/v1/gameplay/leagues")
     # Reactions notify the post author. Same internal-URL footgun: the compose
     # default resolves via Service Connect; prod may pin the ALB form. Full /v1
     # prefix because the notify endpoint is /internal/notify under it.
