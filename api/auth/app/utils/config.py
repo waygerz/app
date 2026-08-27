@@ -63,9 +63,11 @@ class Config:
     )
     # Profiles (display_name/avatar) now live in the users service; auth creates
     # the profile row at signup. Base incl. the /v1/... prefix; the
-    # /internal/profiles/upsert path is appended. In prod this MUST be the
-    # https://waygerz.com ALB form, not the compose default, or signup can't
-    # create profiles (same internal-URL footgun as notifications).
+    # /internal/profiles/upsert path is appended. Internal calls use the Service
+    # Connect mesh name http://users:8000 (namespace "waygerz") like every other
+    # service — NOT the https://waygerz.com ALB, whose private-zone IPs drift on
+    # ALB rotation. Leave INTERNAL_USERS_URL unset in prod so this default applies
+    # (users must be registered in Service Connect).
     INTERNAL_USERS_URL = os.environ.get(
         "INTERNAL_USERS_URL", "http://users:8000/v1/platform/users"
     )

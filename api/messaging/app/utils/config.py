@@ -50,9 +50,11 @@ class Config:
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
     AUTH_URL = os.environ.get("INTERNAL_AUTH_URL", "http://auth:8000")
     # Profiles (display_name/avatar) moved to the users service (split A2). Full
-    # /v1 prefix in the default so the compose network resolves it; prod taskdefs
-    # must set INTERNAL_USERS_URL to the https://waygerz.com ALB form (same
-    # internal-URL footgun as every other cross-service call).
+    # /v1 prefix in the default so Service Connect resolves it. Internal calls use
+    # the mesh name http://users:8000 (Cloud Map namespace "waygerz"), like every
+    # other service — NOT the https://waygerz.com ALB, whose private-zone IPs drift
+    # on ALB rotation and time out. Leave INTERNAL_USERS_URL unset in prod so this
+    # default applies (users must be registered in Service Connect).
     USERS_URL = os.environ.get("INTERNAL_USERS_URL", "http://users:8000/v1/platform/users")
     FRIENDS_URL = os.environ.get("INTERNAL_FRIENDS_URL", "http://friends:8000")
     LEAGUES_URL = os.environ.get("INTERNAL_LEAGUES_URL", "http://leagues:8000")

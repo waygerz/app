@@ -145,21 +145,30 @@ def resolve_users(ids) -> dict:
 
 
 def resolve_users_full(ids) -> dict:
-    """id -> profile dict ({id, display_name, avatar_key}) from the users service."""
+    """id -> profile dict ({id, display_name, avatar_key}) from the users service.
+
+    Best-effort: if the users service is unreachable (e.g. internal DNS drift),
+    return {} so callers fall back to placeholder names rather than 500ing the
+    whole league. Mirrors contests_league_record's degrade-gracefully pattern.
+    """
     ids = list({str(i) for i in ids if i})
     if not ids:
         return {}
-    r = requests.post(
-        f"{current_app.config['USERS_URL']}/internal/profiles",
-        json={"ids": ids},
-        headers=_headers(),
-        timeout=10,
-    )
-    r.raise_for_status()
-    return {
-        p["user_id"]: {"id": p["user_id"], "display_name": p.get("display_name"), "avatar_key": p.get("avatar_key")}
-        for p in r.json().get("profiles", [])
-    }
+    try:
+        r = requests.post(
+            f"{current_app.config['USERS_URL']}/internal/profiles",
+            json={"ids": ids},
+            headers=_headers(),
+            timeout=10,
+        )
+        r.raise_for_status()
+        return {
+            p["user_id"]: {"id": p["user_id"], "display_name": p.get("display_name"), "avatar_key": p.get("avatar_key")}
+            for p in r.json().get("profiles", [])
+        }
+    except Exception:  # noqa: BLE001
+        current_app.logger.warning("resolve_users_full: users service unreachable, using fallbacks")
+        return {}
 
 
 def ingestor_warm_cache(sport_league_ids) -> dict:

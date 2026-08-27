@@ -59,5 +59,10 @@ that builds a service (or `all`) for `linux/arm64`, pushes to ECR
 unversioned (`waygerz/<service>`, service `<service>`), independent of the
 `/v1/{group}/{service}` API path prefix.
 
+Internal (east-west) service calls use **ECS Service Connect** mesh names
+(`http://<service>:8000`, namespace `waygerz`) — never the public
+`https://waygerz.com` ALB, whose private-zone IPs drift on ALB rotation. New
+services must join the mesh. Mobile/web (north-south) clients are unaffected.
+
 See `CLAUDE.md` for the full architecture (JWT auth model, schema isolation, API
-prefix contract, gateway routing, internal-token guards).
+prefix contract, gateway routing, internal-token guards, Service Connect).

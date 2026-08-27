@@ -75,6 +75,24 @@ Conventions that matter across all services:
   returns the OTP in the API response. There is no real phone verification while
   this flag is on.
 
+### Internal service networking (east-west)
+
+Service-to-service (east-west) calls go over **ECS Service Connect** using the
+**mesh name** `http://<service>:8000/...` (Cloud Map namespace `waygerz`) — the
+same short name that resolves in local compose. This is the default in every
+service's `Config` (`INTERNAL_*_URL`), so **leave those env vars unset in prod**
+and the default just works. A new service MUST be registered in Service Connect
+(namespace `waygerz`, its port named `http`) before anything can call it.
+
+> **Do NOT point an internal caller at `https://waygerz.com`.** That public-ALB
+> path is resolved inside the VPC by a **private hosted zone whose A record pins
+> the ALB's private IPs**, and those **drift on ALB node rotation** — every
+> internal call then times out until the record is re-pinned. This has bitten us
+> repeatedly (`users` was the last straggler; now on the mesh). North-south
+> clients (**web browser and the Flutter mobile apps**) are unaffected — they hit
+> the *public* zone's ALB record and never touch the mesh. See
+> `.docs/complete/INTERNAL_SERVICE_CONNECT.md`.
+
 ### Scheduler
 
 `scheduler/scheduler.py` is a DB-less poll loop that `POST`s `/internal/tick` to

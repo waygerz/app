@@ -16,7 +16,8 @@ JOBS = (
     ("leagues", f"{os.environ.get('LEAGUES_URL', 'http://leagues:8000')}/internal/tick"),
     ("ingestor", f"{os.environ.get('INGESTOR_URL', 'http://ingestor:8000')}/internal/tick"),
     # users owns the no-favorites nudge. Its /internal/tick is under the /v1
-    # prefix, so the default carries it; prod sets USERS_URL to the ALB form.
+    # prefix, so the default carries it. Uses the Service Connect mesh name
+    # http://users:8000 like the others — leave USERS_URL unset in prod.
     ("users", f"{os.environ.get('USERS_URL', 'http://users:8000/v1/platform/users')}/internal/tick"),
 )
 
