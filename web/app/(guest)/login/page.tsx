@@ -137,12 +137,23 @@ export default function LoginPage() {
             >
               {busy ? 'Sending…' : 'Text me a code'}
             </Button>
-            <p className="text-center text-sm leading-relaxed text-muted-foreground">
-              We’ll text you a one-time code to sign in — no password needed. New here? This creates
-              your account. Message and data rates may apply. By continuing you agree to our{' '}
-              <LegalLink doc="terms">Terms</LegalLink> and{' '}
-              <LegalLink doc="privacy">Privacy Policy</LegalLink>.
-            </p>
+            {/* Complete, branded SMS opt-in notice. This is the screen (Waygerz
+                logo + phone field + full consent) captured for Toll-Free
+                Verification — keep every CTIA element: message types, frequency,
+                rates, STOP/HELP, and links to Terms & Privacy. */}
+            <div className="flex flex-col gap-2 text-center">
+              <p className="text-sm leading-relaxed text-foreground">
+                We’ll text you a one-time code to sign in — no password needed. New here? This creates
+                your account.
+              </p>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                By tapping “Text me a code,” you agree that <span className="font-medium text-foreground">Waygerz</span> may send
+                account text messages — including one-time sign-in codes and bet alerts — to the number
+                above. Message frequency varies. Message and data rates may apply. Reply STOP to opt out,
+                HELP for help. See our <LegalLink doc="terms">Terms</LegalLink> and{' '}
+                <LegalLink doc="privacy">Privacy Policy</LegalLink>.
+              </p>
+            </div>
           </form>
         )}
 
@@ -304,7 +315,7 @@ export default function LoginPage() {
                   onCheckedChange={(v) => setSmsTx(v === true)}
                   className="mt-0.5"
                 />
-                <label htmlFor="consent-sms-tx" className="text-sm leading-relaxed text-muted-foreground">
+                <label htmlFor="consent-sms-tx" className="text-sm leading-relaxed text-foreground">
                   {SMS_TRANSACTIONAL_CONSENT}
                 </label>
               </div>
@@ -316,7 +327,7 @@ export default function LoginPage() {
                   onCheckedChange={(v) => setSmsMkt(v === true)}
                   className="mt-0.5"
                 />
-                <label htmlFor="consent-sms-mkt" className="text-sm leading-relaxed text-muted-foreground">
+                <label htmlFor="consent-sms-mkt" className="text-sm leading-relaxed text-foreground">
                   {SMS_MARKETING_CONSENT}
                 </label>
               </div>
