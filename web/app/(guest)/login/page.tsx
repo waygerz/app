@@ -133,9 +133,6 @@ export default function LoginPage() {
         {step === 'phone' && (
           <form onSubmit={onSendCode} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="phone" className="text-center text-base">
-                Phone number
-              </Label>
               <Input
                 id="phone"
                 variant="lg"
@@ -146,6 +143,7 @@ export default function LoginPage() {
                 autoComplete="tel"
                 inputMode="tel"
                 maxLength={14}
+                aria-label="Phone number"
               />
             </div>
             {error && <div className="text-base text-destructive">{error}</div>}
@@ -177,9 +175,6 @@ export default function LoginPage() {
               </p>
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="consent-phone" className="text-center text-base">
-                Your mobile number
-              </Label>
               <Input
                 id="consent-phone"
                 variant="lg"
@@ -190,6 +185,7 @@ export default function LoginPage() {
                 autoComplete="tel"
                 inputMode="tel"
                 maxLength={14}
+                aria-label="Your mobile number"
               />
             </div>
             <div className="flex flex-col gap-4 rounded-lg border border-input p-4">
@@ -252,9 +248,6 @@ export default function LoginPage() {
         {step === 'code' && (
           <form onSubmit={onVerify} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="otp" className="text-center text-base">
-                Enter your code
-              </Label>
               {phone && (
                 <p className="text-center text-sm text-muted-foreground">
                   We sent a 6-digit code to <span className="font-medium text-foreground">{phone}</span>.
@@ -270,6 +263,7 @@ export default function LoginPage() {
                 inputMode="numeric"
                 maxLength={6}
                 placeholder="••••••"
+                aria-label="Enter your code"
               />
             </div>
             {error && <div className="text-base text-destructive">{error}</div>}
