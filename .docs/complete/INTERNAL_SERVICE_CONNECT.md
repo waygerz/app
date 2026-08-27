@@ -145,11 +145,31 @@ done
 # 'ConnectTimeout ... /internal/profiles'.
 ```
 
-### Step 4 — retire the drift mechanism (after Step 3 is clean)
+### Step 4 — retire the drift mechanism (NOT yet — precondition below)
 
-Confirm nothing internal still resolves `waygerz.com`, then delete the private
-override so there's no pinned record left to drift. Get the exact current record
-first, then delete it verbatim:
+> **2026-08-27 finding — do not delete the zone yet.** A fleet-wide sweep after
+> the `users` migration found **residual `INTERNAL_*_URL=https://waygerz.com`** on
+> **auth, friends, ingestor, wallet, media, notifications** (e.g. auth's
+> `INTERNAL_LEAGUES_URL`/`WALLET`/`CONTESTS`/`INGESTOR`/`FRIENDS`). They log **zero**
+> `ConnectTimeout` even though the pinned record is currently stale, so they read
+> as **vestigial/unused** — but that's not proof a rarely-fired path (media, a
+> specific notification) never uses one. **Precondition for deletion:** repoint (or
+> remove) those residual URLs to mesh names across all six services first, then
+> re-run the fleet sweep until it's clean:
+> ```bash
+> for s in auth users friends comments messaging ingestor wallet contests leagues media notifications scheduler webui; do
+>   TD=$(aws ecs describe-services --cluster waygerz-prod --services "$s" --query 'services[0].taskDefinition' --output text)
+>   H=$(aws ecs describe-task-definition --task-definition "$TD" --query "taskDefinition.containerDefinitions[0].environment[?starts_with(name,'INTERNAL_') && contains(value,'waygerz.com')].name" --output text)
+>   [ -n "$H" ] && echo "$s: $H"
+> done   # <- must print nothing
+> ```
+> (CORS_ALLOWED_ORIGINS / AUTH_COOKIE_DOMAIN keep `waygerz.com` — those are correct
+> and unrelated.) The Step-2 jq (drop `INTERNAL_*_URL` so the mesh default applies)
+> is the pattern to reuse for the sweep. Until then, **leave the private zone as
+> is** — it's harmless because nothing resolves it.
+
+Once that sweep is clean, delete the private override so there's no pinned record
+left to drift. Get the exact current record first, then delete it verbatim:
 
 ```bash
 aws route53 list-resource-record-sets --hosted-zone-id Z01771832FTXE4Q0ZGFLB \
