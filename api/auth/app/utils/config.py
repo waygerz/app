@@ -50,6 +50,10 @@ class Config:
     # always reveals; in prod this flag turns it on for testing until real SMS is
     # wired. WARNING: while on, there is no real phone verification.
     AUTH_REVEAL_OTP = os.environ.get("AUTH_REVEAL_OTP", "false").lower() in ("1", "true", "yes")
+    # The toll-free number that sends codes (and takes STOP/START). Shown to an
+    # opted-out user so they know where to text START. Same number as the
+    # notifications TWILIO_FROM; kept as its own env so the copy can't drift.
+    AUTH_SMS_SENDER = os.environ.get("AUTH_SMS_SENDER", "+18335885058")
     # Anti-abuse for OTP-only auth.
     AUTH_OTP_RESEND_COOLDOWN_SECONDS = int(os.environ.get("AUTH_OTP_RESEND_COOLDOWN_SECONDS", 30))
     AUTH_OTP_MAX_ATTEMPTS = int(os.environ.get("AUTH_OTP_MAX_ATTEMPTS", 5))

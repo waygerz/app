@@ -44,7 +44,7 @@ export const authApi = {
   // without `smsConsent`, a new number comes back `consent_required` and NO code
   // is sent. Existing numbers (and consented new ones) get `message: 'code sent'`.
   otpStart: (phone: string, smsConsent?: boolean) =>
-    apiJson<{ message?: string; phone: string; is_new?: boolean; consent_required?: boolean; dev_otp?: string }>(
+    apiJson<{ message?: string; phone: string; is_new?: boolean; consent_required?: boolean; opted_out?: boolean; dev_otp?: string }>(
       `${AUTH_URL}${API.auth}/otp/start`,
       {
         method: 'POST',

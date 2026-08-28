@@ -12,10 +12,15 @@ _URL = "http://notifications:8000/v1/platform/notifications"
 
 
 class _Resp:
-    def __init__(self, ok, status_code=200, text=""):
+    def __init__(self, ok, status_code=200, text="", payload=None):
         self.ok = ok
         self.status_code = status_code
         self.text = text
+        self._payload = payload
+        self.content = b"{}" if payload is not None else b""
+
+    def json(self):
+        return self._payload or {}
 
 
 def test_send_posts_to_notifications(monkeypatch):
@@ -27,7 +32,7 @@ def test_send_posts_to_notifications(monkeypatch):
         return _Resp(True)
 
     monkeypatch.setattr(service_sms.requests, "post", fake_post)
-    service_sms.send_otp("+15551112222", "123456")
+    assert service_sms.send_otp("+15551112222", "123456") is False
     assert calls["url"] == f"{_URL}/internal/send"
     assert calls["json"] == {
         "to": "+15551112222",
@@ -36,6 +41,17 @@ def test_send_posts_to_notifications(monkeypatch):
         "context": {"code": "123456"},
     }
     assert "X-Internal-Token" in calls["headers"]
+
+
+def test_send_returns_opted_out_on_21610(monkeypatch):
+    """notifications returns {opted_out: true} when Twilio reports 21610 (STOP);
+    send_otp surfaces that so the login flow can tell the user to text START."""
+    monkeypatch.setattr(Config, "INTERNAL_NOTIFICATIONS_URL", _URL)
+    monkeypatch.setattr(
+        service_sms.requests, "post",
+        lambda *a, **k: _Resp(True, payload={"opted_out": True}),
+    )
+    assert service_sms.send_otp("+15551112222", "123456") is True
 
 
 def test_falls_back_to_log_on_http_error(monkeypatch, caplog):

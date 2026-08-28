@@ -67,6 +67,10 @@ export default function LoginPage() {
     e.preventDefault();
     run(async () => {
       const res = await startOtp(phone);
+      if (res.optedOut) {
+        setError(res.message ?? 'You’ve opted out of texts. Text START to get your login code.');
+        return;
+      }
       if (res.consentRequired) {
         setStep('consent');
         return;
@@ -80,6 +84,10 @@ export default function LoginPage() {
     e.preventDefault();
     run(async () => {
       const res = await startOtp(phone, true);
+      if (res.optedOut) {
+        setError(res.message ?? 'You’ve opted out of texts. Text START to get your login code.');
+        return;
+      }
       goToCode(res.devOtp);
     });
   };

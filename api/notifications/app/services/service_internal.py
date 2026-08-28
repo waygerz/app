@@ -8,7 +8,7 @@ from flask import current_app
 from app.extensions import db
 from app.models.channel_pref import NotificationChannelPref
 from app.models.device_token import DeviceToken
-from app.models.message import FAILED, SENT, Message
+from app.models.message import FAILED, OPTED_OUT, SENT, Message
 from app.models.notification import Notification
 from app.models.preference import NotificationPreference
 from app.models.template import NotificationTemplate
@@ -302,6 +302,17 @@ def send(data: dict) -> tuple[dict, int]:
         msg.provider_msg_id = get_provider().send(to, body)
         msg.status = SENT
     except Exception as exc:  # noqa: BLE001
+        # Twilio 21610 = the recipient has opted out (texted STOP). Because the
+        # OTP line is the same number, a STOP also blocks login codes — surface
+        # this distinctly (200 + opted_out) so the caller can tell the user to
+        # text START, instead of a generic 502 that reads as an outage.
+        # NOTE: only the Twilio provider raises this; AwsProvider/LogProvider do
+        # not, so this opt-out signal is Twilio-specific (the prod provider).
+        if getattr(exc, "code", None) in (21610, "21610"):
+            msg.status = OPTED_OUT
+            db.session.commit()
+            logger.info("sms opted_out (21610) to=%s category=%s", to, category)
+            return {"opted_out": True, "message": msg.to_dict()}, 200
         msg.status = FAILED
         db.session.commit()
         return {"error": f"send failed: {exc}", "message": msg.to_dict()}, 502

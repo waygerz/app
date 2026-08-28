@@ -177,7 +177,26 @@ def otp_start(data: dict) -> tuple[dict, int]:
     code = _generate_otp(phone)
     r.setex(_otp_cooldown_key(phone), current_app.config["AUTH_OTP_RESEND_COOLDOWN_SECONDS"], "1")
     r.delete(_otp_attempts_key(phone))
-    service_sms.send_otp(phone, code)
+    opted_out = service_sms.send_otp(phone, code)
+    # When the code is revealed on-screen (dev / no real SMS), don't block on an
+    # opt-out — the user can still read the code and proceed. Only short-circuit
+    # when we actually depend on SMS delivery.
+    if opted_out and not _reveal_otp():
+        # Same number sends codes and takes STOP, so an opted-out user can't get a
+        # login code until they re-subscribe. Clear the just-set resend cooldown so
+        # they can retry immediately after texting START (otherwise the next tap
+        # returns a false "a code was just sent" 429), and tell them what to do.
+        r.delete(_otp_cooldown_key(phone))
+        sender = current_app.config["AUTH_SMS_SENDER"]
+        return {
+            "phone": phone,
+            "is_new": is_new,
+            "opted_out": True,
+            "message": (
+                f"You've opted out of Waygerz texts. Text START to {sender}, then "
+                "tap Continue again to get a new code."
+            ),
+        }, 200
     resp = {"message": "code sent", "phone": phone, "is_new": is_new}
     if _reveal_otp():
         resp["dev_otp"] = code

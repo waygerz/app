@@ -19,7 +19,10 @@ from app.utils.config import Config
 logger = logging.getLogger(__name__)
 
 
-def send_otp(phone: str, code: str) -> None:
+def send_otp(phone: str, code: str) -> bool:
+    """Deliver the OTP via notifications. Returns True if the recipient has opted
+    out of SMS (texted STOP) — the same toll-free number sends codes, so a STOP
+    blocks login codes too, and the caller must tell the user to text START."""
     url = Config.INTERNAL_NOTIFICATIONS_URL
     if url:
         try:
@@ -35,8 +38,12 @@ def send_otp(phone: str, code: str) -> None:
                 timeout=10,
             )
             if resp.ok:
+                body = resp.json() if resp.content else {}
+                if body.get("opted_out"):
+                    logger.info("auth_otp_send opted_out phone=%s", phone)
+                    return True
                 logger.info("auth_otp_send (notifications) phone=%s", phone)
-                return
+                return False
             logger.warning(
                 "auth_otp_send notifications %s: %s", resp.status_code, resp.text[:200]
             )
@@ -45,3 +52,4 @@ def send_otp(phone: str, code: str) -> None:
     # Fallback: no notifications URL configured, or the call failed. Log the
     # code; with AUTH_REVEAL_OTP on it's still returned in the API response.
     logger.info("auth_otp_send (fallback log) phone=%s code=%s", phone, code)
+    return False

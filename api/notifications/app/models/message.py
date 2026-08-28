@@ -9,6 +9,10 @@ QUEUED = "queued"
 SENT = "sent"
 DELIVERED = "delivered"
 FAILED = "failed"
+# Recipient has opted out of SMS (Twilio error 21610). Distinct from FAILED so a
+# STOP'd user isn't logged/paged as a delivery outage — and so the OTP path can
+# tell the difference (see service_internal.send).
+OPTED_OUT = "opted_out"
 
 
 class Message(db.Model):

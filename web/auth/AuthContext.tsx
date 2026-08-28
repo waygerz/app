@@ -40,6 +40,10 @@ interface StartOtpResult {
   isNew: boolean;
   /** True when a new number must opt into SMS before the code is sent (no code sent yet). */
   consentRequired: boolean;
+  /** True when the number has opted out of SMS (texted STOP) — no code delivered; user must text START. */
+  optedOut: boolean;
+  /** A human-readable message to show the user (e.g. the opted-out instructions). */
+  message?: string;
 }
 
 interface AuthState {
@@ -103,6 +107,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       devOtp: res.dev_otp,
       isNew: !!res.is_new,
       consentRequired: !!res.consent_required,
+      optedOut: !!res.opted_out,
+      message: res.message,
     };
   }
 
