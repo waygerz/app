@@ -28,9 +28,14 @@ from twilio.twiml.voice_response import Dial, Gather, VoiceResponse
 from app.extensions import get_redis
 from app.utils.config import Config
 
-# Whisper = Say (~2-3s) + Gather(timeout=5), so a voicemail leg can stay
-# "answered" for up to ~8s. Only used as the Redis-down degrade threshold.
-_WHISPER_GRACE_SECS = 9
+# A voicemail leg stays "answered" for roughly Say(~4s) + Gather(VOICE_SCREEN_TIMEOUT)
+# while it sits through the whisper. Past that it's a real, bridged call. Only used
+# as the Redis-down degrade threshold (the accept marker is authoritative otherwise).
+_WHISPER_SAY_SECS = 4
+
+
+def _whisper_grace() -> int:
+    return _WHISPER_SAY_SECS + int(current_app.config["VOICE_SCREEN_TIMEOUT"])
 
 
 def _base() -> str:
@@ -116,7 +121,12 @@ def build_screen(digits: str | None, call_sid: str | None) -> str:
     action = f"{_base()}/voice/screen"
     if call_sid:
         action += f"?call={quote(call_sid)}"
-    g = Gather(num_digits=1, timeout=5, action=action, method="POST")
+    g = Gather(
+        num_digits=1,
+        timeout=current_app.config["VOICE_SCREEN_TIMEOUT"],
+        action=action,
+        method="POST",
+    )
     g.say("Waygerz call. Press 1 to accept.")
     resp.append(g)
     resp.hangup()                       # no input (voicemail) -> drop this leg
@@ -137,7 +147,7 @@ def build_after(call_sid: str | None, dial_status: str | None, dial_duration: st
             bridged = int(dial_duration or 0)
         except (TypeError, ValueError):
             bridged = 0
-        grace = _WHISPER_GRACE_SECS if cfg["VOICE_SCREEN"] else 2
+        grace = _whisper_grace() if cfg["VOICE_SCREEN"] else 2
         connected = dial_status == "completed" and bridged >= grace
 
     if not connected:

@@ -76,6 +76,10 @@ class Config:
     SMS_BRAND_PREFIX = os.environ.get("SMS_BRAND_PREFIX", "Waygerz")
     VOICE_SCREEN = _as_bool(os.environ.get("VOICE_SCREEN"), True)
     VOICE_TIMEOUT = _as_int("VOICE_TIMEOUT", 20)
+    # Seconds the answering party has to press 1 to accept (the whisper Gather).
+    # Longer = more forgiving for a distracted human, but a voicemail leg also
+    # sits "answered" this much longer — VOICE_SCREEN_GRACE below tracks it.
+    VOICE_SCREEN_TIMEOUT = _as_int("VOICE_SCREEN_TIMEOUT", 5)
     # How long the "human pressed 1" accept marker lives — must outlast the call
     # so /voice/after can still read it after the parties hang up.
     VOICE_ACCEPT_TTL = _as_int("VOICE_ACCEPT_TTL", 3600)
