@@ -1,3 +1,5 @@
+import logging
+
 from flask import Flask
 
 from app.utils.config import Config
@@ -7,6 +9,11 @@ from app.extensions import init_redis
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # Flask/gunicorn default the app logger to WARNING, which would swallow the
+    # per-call voice INFO lines (the whole point of the dial logging). Raise it to
+    # INFO; Flask's default stderr handler is captured by the ECS awslogs driver.
+    app.logger.setLevel(logging.INFO)
 
     # Fail fast on missing prod config: without the https base every callback URL
     # becomes "None/voice/…" (callbacks + validation break silently); without the

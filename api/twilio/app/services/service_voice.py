@@ -42,6 +42,14 @@ def _base() -> str:
     return current_app.config["TWILIO_WEBHOOK_BASE_URL"]
 
 
+def _mask(num: str | None) -> str:
+    """Log staff/caller numbers as ***1234 — enough to identify a leg without
+    writing full personal numbers into CloudWatch."""
+    if not num:
+        return "?"
+    return "***" + num[-4:]
+
+
 def _accept_key(call_sid: str) -> str:
     return f"twilio:accepted:{call_sid}"
 
@@ -79,12 +87,16 @@ def _consume_accepted(call_sid: str | None):
         return None
 
 
-def build_incoming(call_sid: str | None) -> str:
+def build_incoming(call_sid: str | None, caller: str | None = None) -> str:
     """TwiML for POST /voice: dial all destinations simultaneously."""
     cfg = current_app.config
     resp = VoiceResponse()
     roster = Config.forward_to()
     if not roster:
+        current_app.logger.warning(
+            "voice incoming call=%s from=%s -> EMPTY roster, speaking fallback",
+            call_sid, _mask(caller),
+        )
         resp.say("Sorry, no one is available right now. Please text us instead.")
         resp.hangup()
         return str(resp)
@@ -103,6 +115,12 @@ def build_incoming(call_sid: str | None) -> str:
         else:
             dial.number(entry["number"])
     resp.append(dial)
+    current_app.logger.info(
+        "voice incoming call=%s from=%s simulring %d: [%s] timeout=%ss screen=%s(%ss)",
+        call_sid, _mask(caller), len(roster),
+        ", ".join(_mask(e["number"]) for e in roster),
+        cfg["VOICE_TIMEOUT"], cfg["VOICE_SCREEN"], cfg["VOICE_SCREEN_TIMEOUT"],
+    )
     return str(resp)
 
 
@@ -114,10 +132,13 @@ def build_screen(digits: str | None, call_sid: str | None) -> str:
     resp = VoiceResponse()
     if digits == "1":
         _mark_accepted(call_sid)
+        current_app.logger.info("voice screen call=%s digit=1 -> ACCEPTED, bridging", call_sid)
         return "<Response/>"            # accepted -> bridge
     if digits:
+        current_app.logger.info("voice screen call=%s digit=%s -> wrong key, dropping leg", call_sid, digits)
         resp.hangup()                   # wrong key -> drop this leg
         return str(resp)
+    current_app.logger.info("voice screen call=%s no-digit -> prompting to press 1", call_sid)
     action = f"{_base()}/voice/screen"
     if call_sid:
         action += f"?call={quote(call_sid)}"
@@ -141,7 +162,9 @@ def build_after(call_sid: str | None, dial_status: str | None, dial_duration: st
     cfg = current_app.config
     resp = VoiceResponse()
 
-    connected = _consume_accepted(call_sid) if cfg["VOICE_SCREEN"] else None
+    marker = _consume_accepted(call_sid) if cfg["VOICE_SCREEN"] else None
+    connected = marker
+    basis = "accept-marker"
     if connected is None:
         try:
             bridged = int(dial_duration or 0)
@@ -149,7 +172,14 @@ def build_after(call_sid: str | None, dial_status: str | None, dial_duration: st
             bridged = 0
         grace = _whisper_grace() if cfg["VOICE_SCREEN"] else 2
         connected = dial_status == "completed" and bridged >= grace
+        basis = f"duration-degrade(dur={bridged}>=grace={grace})"
 
+    current_app.logger.info(
+        "voice after call=%s dial_status=%s duration=%s marker=%s basis=%s -> %s",
+        call_sid, dial_status, dial_duration,
+        "hit" if marker else ("miss" if marker is False else "n/a"),
+        basis, "BRIDGED (no fallback)" if connected else "FALLBACK (no one accepted)",
+    )
     if not connected:
         resp.say("Sorry, no one is available right now. Please text us instead.")
     resp.hangup()

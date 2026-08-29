@@ -52,6 +52,17 @@ def test_voice_dials_all_screened(client):
     assert 'action="https://test.example/v1/platform/twilio/voice/after"' in body
 
 
+def test_voice_incoming_logs_simulring(client, caplog):
+    # the dial logging must actually emit at INFO (Flask defaults to WARNING) so
+    # the per-call line shows up in CloudWatch — guard against that regressing.
+    import logging
+    with caplog.at_level(logging.INFO):
+        client.post(f"{PREFIX}/voice", data={"From": "+15559998888", "CallSid": "CA1"})
+    line = next((r.message for r in caplog.records if "voice incoming" in r.message), "")
+    assert "simulring" in line and "CA1" in line
+    assert "+15559998888" not in line  # caller is masked, not written in full
+
+
 def test_voice_no_screen_when_disabled(app, client):
     app.config["VOICE_SCREEN"] = False
     body = client.post(f"{PREFIX}/voice", data={"From": "+1"}).get_data(as_text=True)
