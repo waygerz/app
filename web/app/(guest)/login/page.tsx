@@ -179,7 +179,8 @@ export default function LoginPage() {
             <div className="flex flex-col gap-1 text-center">
               <h2 className="text-lg font-semibold text-foreground">Create your account</h2>
               <p className="text-sm text-muted-foreground">
-                Agree to receive texts and we’ll send your sign-in code.
+                Both boxes start unchecked. You must check the first one to agree to
+                texts before we can send your sign-in code.
               </p>
             </div>
             <div className="flex flex-col gap-2">
