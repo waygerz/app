@@ -3498,20 +3498,8 @@ function LeagueManageInner() {
     onError: onErr,
   });
 
-  const sections = [
-    { id: 'manage-details', label: 'League details' },
-    { id: 'manage-rules', label: 'Rules' },
-    ...(lg.status === 'active' && lg.period_type === 'weekly'
-      ? [{ id: 'manage-period', label: 'Period' }]
-      : []),
-    { id: 'manage-danger', label: 'Danger zone' },
-  ];
-
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-      <ManageSidebar sections={sections} />
-
-      <div className="flex min-w-0 flex-1 flex-col gap-6">
+    <div className="flex flex-col gap-6">
         <div id="manage-details" className="scroll-mt-6">
           <EditLeagueDetails lg={lg} />
         </div>
@@ -3594,60 +3582,7 @@ function LeagueManageInner() {
             </AlertDialog>
           </Card>
         </div>
-      </div>
     </div>
-  );
-}
-
-/** Sticky, scrollspy-highlighted section nav for the Manage page — the
- *  Metronic settings-sidebar layout, built with an IntersectionObserver.
- *  Hidden on mobile (the cards stack full-width). */
-function ManageSidebar({ sections }: { sections: { id: string; label: string }[] }) {
-  const idsKey = sections.map((s) => s.id).join(',');
-  const [active, setActive] = useState(sections[0]?.id ?? '');
-
-  useEffect(() => {
-    const ids = idsKey.split(',').filter(Boolean);
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActive(visible[0].target.id);
-      },
-      { rootMargin: '-15% 0px -75% 0px' },
-    );
-    ids.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, [idsKey]);
-
-  return (
-    <nav className="hidden shrink-0 lg:block lg:w-56">
-      <div className="sticky top-6 flex flex-col gap-1">
-        {sections.map((s) => (
-          <a
-            key={s.id}
-            href={`#${s.id}`}
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              setActive(s.id);
-            }}
-            className={cn(
-              'rounded-lg px-3 py-2 text-sm transition-colors',
-              active === s.id
-                ? 'bg-primary/10 font-medium text-primary'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            {s.label}
-          </a>
-        ))}
-      </div>
-    </nav>
   );
 }
 
