@@ -5,7 +5,6 @@ import jwt
 from flask import jsonify, make_response
 from flask_jwt_extended import create_access_token, create_refresh_token, decode_token
 
-from app.extensions import get_redis
 from app.services import _sessions
 from app.utils.config import Config
 from app.utils.cookies import attach_auth_cookies, auth_cookie_names, clear_auth_cookies
@@ -90,9 +89,8 @@ def _rotate_refresh_token(refresh_token: str, device_uuid: str) -> tuple[str, st
     access_token = create_access_token(identity=user_uuid, additional_claims=claims)
     new_refresh = create_refresh_token(identity=user_uuid, additional_claims=claims)
     ttl = _refresh_ttl()
+    # touch_session rotates the stored hash and slides the expiry in one write —
+    # the durable Postgres store needs no separate index/TTL bookkeeping.
     _sessions.touch_session(device_uuid, _sessions.hash_refresh_token(new_refresh), ttl)
-    redis = get_redis()
-    redis.zadd(_sessions.user_sessions_key(user_uuid), {device_uuid: _sessions.utc_now_ts()})
-    redis.expire(_sessions.auth_session_key(device_uuid), ttl)
 
     return user_uuid, phone, access_token, new_refresh

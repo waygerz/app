@@ -1,15 +1,25 @@
-"""Redis-backed auth sessions (device_uuid → refresh hash + metadata)."""
+"""Durable auth sessions in Postgres (device_uuid -> refresh hash + metadata).
+
+Sessions were previously in Redis, where a memory-capped, ``allkeys-lru``,
+no-persistence instance could evict or lose them — silently logging users out on
+their next token refresh. The session store must be durable, so it lives in
+Postgres now (see app/models/session.py). Ephemeral auth state (OTP codes, resend
+cooldowns, reg tickets) still lives in Redis (see service_auth), where losing a
+key just means the user requests a new code.
+
+The public functions keep their previous names/signatures so callers
+(service_auth, service_refresh, service_logout) are unchanged.
+"""
 from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from app.extensions import get_redis
+from app.extensions import db
+from app.models.session import AuthSession
 
 SESSION_STATUS_ACTIVE = "active"
-_RK_AUTH_SESSIONS = "auth:sessions"
-_RK_USERS_SESSIONS = "users:sessions"
 
 
 def is_valid_uuid(value: str | None) -> bool:
@@ -30,14 +40,6 @@ def utc_now_ts() -> int:
     return int(datetime.now(timezone.utc).timestamp())
 
 
-def auth_session_key(device_uuid: str) -> str:
-    return f"{_RK_AUTH_SESSIONS}:{device_uuid}"
-
-
-def user_sessions_key(user_uuid: str) -> str:
-    return f"{_RK_USERS_SESSIONS}:{user_uuid}"
-
-
 def hash_refresh_token(refresh_token: str) -> str:
     return hashlib.sha256(refresh_token.encode()).hexdigest()
 
@@ -51,9 +53,7 @@ def build_session_fields(
     return {
         "user_uuid": user_uuid,
         "phone": phone,
-        "status": SESSION_STATUS_ACTIVE,
         "refresh_token_hash": refresh_token_hash,
-        "last_seen": utc_now_iso(),
     }
 
 
@@ -64,33 +64,55 @@ def upsert_session(
     session_fields: dict[str, str],
     ttl: int,
 ) -> None:
-    redis = get_redis()
-    key = auth_session_key(device_uuid)
-    redis.hset(key, mapping=session_fields)
-    redis.expire(key, ttl)
-    redis.zadd(user_sessions_key(user_uuid), {device_uuid: utc_now_ts()})
+    """Create or replace the session row for a device (login / re-login)."""
+    now = datetime.utcnow()
+    row = db.session.get(AuthSession, device_uuid)
+    if row is None:
+        row = AuthSession(device_uuid=device_uuid, created_at=now)
+        db.session.add(row)
+    row.user_uuid = session_fields.get("user_uuid", user_uuid)
+    row.phone = session_fields["phone"]
+    row.refresh_token_hash = session_fields["refresh_token_hash"]
+    row.status = SESSION_STATUS_ACTIVE
+    row.last_seen = now
+    row.expires_at = now + timedelta(seconds=ttl)
+    db.session.commit()
 
 
 def touch_session(device_uuid: str, refresh_token_hash: str, ttl: int) -> None:
-    redis = get_redis()
-    key = auth_session_key(device_uuid)
-    redis.hset(key, mapping={"refresh_token_hash": refresh_token_hash, "last_seen": utc_now_iso()})
-    redis.expire(key, ttl)
+    """Rotate the stored refresh hash and slide the expiry (on refresh)."""
+    now = datetime.utcnow()
+    row = db.session.get(AuthSession, device_uuid)
+    if row is None:
+        return
+    row.refresh_token_hash = refresh_token_hash
+    row.last_seen = now
+    row.expires_at = now + timedelta(seconds=ttl)
+    db.session.commit()
 
 
 def get_session_fields(device_uuid: str, fields: list[str]) -> list[str | None]:
-    redis = get_redis()
-    values = redis.hmget(auth_session_key(device_uuid), fields)
-    return list(values)
+    """Read selected columns for a device. A missing OR expired row reads as all
+    None — same contract the Redis version had when a key was gone/expired."""
+    row = db.session.get(AuthSession, device_uuid)
+    if row is None or row.expires_at <= datetime.utcnow():
+        return [None] * len(fields)
+    return [getattr(row, name, None) for name in fields]
 
 
 def delete_session(device_uuid: str) -> str | None:
-    redis = get_redis()
-    key = auth_session_key(device_uuid)
-    user_uuid = redis.hget(key, "user_uuid")
-    redis.delete(key)
+    """Delete a device's session; return the user_uuid it belonged to (or None)."""
+    row = db.session.get(AuthSession, device_uuid)
+    if row is None:
+        return None
+    user_uuid = row.user_uuid
+    db.session.delete(row)
+    db.session.commit()
     return user_uuid
 
 
 def zrem_user_session(user_uuid: str, device_uuid: str) -> None:
-    get_redis().zrem(user_sessions_key(user_uuid), device_uuid)
+    """No-op. In the Redis model this removed the device from a per-user set;
+    with the Postgres table the row itself is the session, and delete_session
+    removes it. Kept so callers don't change."""
+    return None
