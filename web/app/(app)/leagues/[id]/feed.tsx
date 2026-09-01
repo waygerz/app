@@ -42,7 +42,7 @@ const EMPTY_ENGAGEMENT = {
   comment_count: 0,
 };
 
-export function LeagueOverview() {
+export function LeagueFeed() {
   const lg = useLeague();
   const { user } = useAuth();
   const router = useRouter();

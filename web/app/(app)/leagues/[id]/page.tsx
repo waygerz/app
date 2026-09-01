@@ -1,1 +1,1 @@
-export { LeagueOverview as default } from './overview';
+export { LeagueFeed as default } from './feed';

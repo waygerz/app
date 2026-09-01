@@ -70,7 +70,7 @@ export function HeaderLogo() {
         <span className="hidden text-lg font-extrabold tracking-tight text-white lg:inline">Waygerz</span>
       </Link>
       {leagueId ? (
-        // Mobile only: the league's avatar + name, tapping through to its overview.
+        // Mobile only: the league's avatar + name, tapping through to its Feed.
         <Link href={`/leagues/${leagueId}`} className="flex min-w-0 items-center gap-2 lg:hidden">
           <LeagueAvatar
             name={league.data?.name ?? 'League'}
