@@ -130,7 +130,9 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
           </button>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold text-foreground sm:text-2xl">{lg.name}</h1>
+              {/* Mobile shows the league name in the fixed top bar (HeaderLogo);
+                  keep the big heading on desktop, where the bar shows nav links. */}
+              <h1 className="hidden text-xl font-bold text-foreground sm:text-2xl lg:block">{lg.name}</h1>
               <LeagueTypeBadge type={lg.league_type} responsive />
               {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
             </div>

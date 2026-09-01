@@ -2,13 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { leaguesApi } from '@/lib/leagues';
 import { isEspnSport } from '@/lib/espn';
 
 const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
 // Page title shown next to the logo in the top bar on mobile (desktop uses the
-// Navbar links instead). League detail and the message thread keep their own
-// in-page headers, so they return null here.
+// Navbar links instead). The message thread keeps its own in-thread header, so
+// it returns null. League detail also returns null here — its title is the
+// league name, filled in from the league query in HeaderLogo (the path only
+// carries the id, not the name).
 function pageTitle(pathname: string): string | null {
   if (pathname === '/') return 'My Leagues';
   if (pathname === '/bets' || pathname.startsWith('/bets/')) return 'My Bets';
@@ -38,7 +42,22 @@ function pageTitle(pathname: string): string | null {
 
 export function HeaderLogo() {
   const pathname = usePathname();
-  const title = pageTitle(pathname);
+
+  // On a league detail path (/leagues/<id> and its sub-tabs), the mobile top bar
+  // carries the league NAME. The fixed header stays pinned as the page scrolls,
+  // so this keeps league context visible after the in-page header scrolls away.
+  // Read from the same ['league', id] cache the league layout populates (shared,
+  // so no extra fetch); show a neutral "League" until it resolves on a cold open.
+  const parts = pathname.split('/').filter(Boolean);
+  const leagueId = parts[0] === 'leagues' && parts[1] && parts[1] !== 'new' ? parts[1] : null;
+  const league = useQuery({
+    queryKey: ['league', leagueId],
+    queryFn: () => leaguesApi.get(leagueId as string),
+    enabled: !!leagueId,
+    staleTime: 30_000,
+  });
+
+  const title = leagueId ? (league.data?.name ?? 'League') : pageTitle(pathname);
 
   return (
     <div className="flex min-w-0 shrink items-center gap-2 sm:gap-5 lg:w-[200px]">
