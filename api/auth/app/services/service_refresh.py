@@ -26,15 +26,7 @@ def refresh_access_token(request):
     token = request.cookies.get(refresh_name) or body.get("refresh_token")
     device_uuid = request.headers.get("X-Device-UUID") or body.get("device_uuid")
 
-    # TEMP DIAGNOSTICS (message-level so it survives the log formatter): what did
-    # the request actually carry? device ids are random, not sensitive.
-    logger.info(
-        "refresh_attempt has_token=%s device=%s client=%s",
-        bool(token), device_uuid, request.headers.get("X-Client-Type", "web"),
-    )
-
     if not token or not device_uuid:
-        logger.info("refresh_missing has_token=%s has_device=%s", bool(token), bool(device_uuid))
         return make_response(jsonify({"error": "missing refresh token or device_uuid"}), 401)
 
     if not _sessions.is_valid_uuid(device_uuid):
