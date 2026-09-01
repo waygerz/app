@@ -46,10 +46,6 @@ class Config:
         if o.strip()
     ]
     OTP_TTL_SECONDS = int(os.environ.get("AUTH_OTP_TTL_SECONDS", 300))
-    # Reveal the OTP in the API response (shown beneath the login card). Non-prod
-    # always reveals; in prod this flag turns it on for testing until real SMS is
-    # wired. WARNING: while on, there is no real phone verification.
-    AUTH_REVEAL_OTP = os.environ.get("AUTH_REVEAL_OTP", "false").lower() in ("1", "true", "yes")
     # The toll-free number that sends codes (and takes STOP/START). Shown to an
     # opted-out user so they know where to text START. Same number as the
     # notifications TWILIO_FROM; kept as its own env so the copy can't drift.
@@ -61,7 +57,7 @@ class Config:
     AUTH_REG_TICKET_TTL_SECONDS = int(os.environ.get("AUTH_REG_TICKET_TTL_SECONDS", 900))
     # OTP is delivered by the notifications service (see service_sms). Points at
     # its API base incl. the /v1/... prefix; the send path is appended. Empty
-    # falls back to log-only (with AUTH_REVEAL_OTP surfacing the code).
+    # falls back to log-only (the code is written to the auth logs).
     INTERNAL_NOTIFICATIONS_URL = os.environ.get(
         "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
     )

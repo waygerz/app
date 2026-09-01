@@ -40,7 +40,6 @@ export default function LoginPage() {
   const [agreePrivacy, setAgreePrivacy] = useState(false);
   const agreedLegal = agreeTerms && agreePrivacy;
   const [ticket, setTicket] = useState('');
-  const [devOtp, setDevOtp] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -56,12 +55,6 @@ export default function LoginPage() {
     }
   }
 
-  function goToCode(devCode?: string) {
-    setDevOtp(devCode);
-    if (devCode) setOtp(devCode); // testing mode: prefill the revealed code
-    setStep('code');
-  }
-
   // Phone step: existing number → code sent now; new number → consent card first.
   const onSendCode = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +68,7 @@ export default function LoginPage() {
         setStep('consent');
         return;
       }
-      goToCode(res.devOtp);
+      setStep('code');
     });
   };
 
@@ -88,7 +81,7 @@ export default function LoginPage() {
         setError(res.message ?? 'You’ve opted out of texts. Text START to get your login code.');
         return;
       }
-      goToCode(res.devOtp);
+      setStep('code');
     });
   };
 
@@ -287,7 +280,6 @@ export default function LoginPage() {
               onClick={() => {
                 setStep('phone');
                 setOtp('');
-                setDevOtp(undefined);
                 setError(null);
               }}
             >
@@ -387,17 +379,6 @@ export default function LoginPage() {
           </form>
         )}
       </Card>
-
-      {devOtp && step === 'code' && (
-        <div className="w-full max-w-md rounded-lg border border-dashed border-primary/50 bg-primary/5 p-4 text-center">
-          <p className="text-base text-foreground">
-            Testing code: <strong className="text-lg tracking-widest">{devOtp}</strong>
-          </p>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            Temporary — SMS delivery isn’t set up yet, so your one-time code shows here instead of a text message.
-          </p>
-        </div>
-      )}
       </div>
     </div>
   );

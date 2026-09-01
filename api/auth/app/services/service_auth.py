@@ -66,13 +66,6 @@ def _verify_otp(phone: str, code: str) -> bool:
     return True
 
 
-def _reveal_otp() -> bool:
-    return (
-        current_app.config["APP_ENV"] != "production"
-        or current_app.config.get("AUTH_REVEAL_OTP", False)
-    )
-
-
 def _issue_reg_ticket(phone: str) -> str:
     token = secrets.token_urlsafe(32)
     get_redis().setex(
@@ -178,10 +171,7 @@ def otp_start(data: dict) -> tuple[dict, int]:
     r.setex(_otp_cooldown_key(phone), current_app.config["AUTH_OTP_RESEND_COOLDOWN_SECONDS"], "1")
     r.delete(_otp_attempts_key(phone))
     opted_out = service_sms.send_otp(phone, code)
-    # When the code is revealed on-screen (dev / no real SMS), don't block on an
-    # opt-out — the user can still read the code and proceed. Only short-circuit
-    # when we actually depend on SMS delivery.
-    if opted_out and not _reveal_otp():
+    if opted_out:
         # Same number sends codes and takes STOP, so an opted-out user can't get a
         # login code until they re-subscribe. Clear the just-set resend cooldown so
         # they can retry immediately after texting START (otherwise the next tap
@@ -197,10 +187,7 @@ def otp_start(data: dict) -> tuple[dict, int]:
                 "tap Continue again to get a new code."
             ),
         }, 200
-    resp = {"message": "code sent", "phone": phone, "is_new": is_new}
-    if _reveal_otp():
-        resp["dev_otp"] = code
-    return resp, 200
+    return {"message": "code sent", "phone": phone, "is_new": is_new}, 200
 
 
 def otp_verify(data: dict):

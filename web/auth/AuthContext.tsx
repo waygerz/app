@@ -34,8 +34,6 @@ interface VerifyResult {
 }
 
 interface StartOtpResult {
-  /** Revealed code (dev/testing only), present only when a code was actually sent. */
-  devOtp?: string;
   /** True when the number isn't registered yet (new signup). */
   isNew: boolean;
   /** True when a new number must opt into SMS before the code is sent (no code sent yet). */
@@ -104,7 +102,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function startOtp(phone: string, smsConsent?: boolean): Promise<StartOtpResult> {
     const res = await authApi.otpStart(phone, smsConsent);
     return {
-      devOtp: res.dev_otp,
       isNew: !!res.is_new,
       consentRequired: !!res.consent_required,
       optedOut: !!res.opted_out,

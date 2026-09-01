@@ -9,19 +9,19 @@ def _cookie_value(set_cookie_headers: list[str], name: str) -> str | None:
     return None
 
 
-def _login(client, user, device_uuid):
-    """Existing user: start → verify (returns cookies). dev_otp is revealed in tests."""
+def _login(client, user, device_uuid, read_otp):
+    """Existing user: start → verify (returns cookies). The code is read from Redis."""
     start = client.post("/v1/platform/auth/otp/start", json={"phone": user["phone"]})
     assert start.status_code == 200
-    code = start.get_json()["dev_otp"]
+    code = read_otp(user["phone"])
     return client.post(
         "/v1/platform/auth/otp/verify",
         json={"phone": user["phone"], "otp": code, "device_uuid": device_uuid},
     )
 
 
-def test_otp_login_existing_user_sets_cookies(client, user, device_uuid):
-    res = _login(client, user, device_uuid)
+def test_otp_login_existing_user_sets_cookies(client, user, device_uuid, read_otp):
+    res = _login(client, user, device_uuid, read_otp)
     assert res.status_code == 200
     data = res.get_json()
     assert "access_token" not in data
@@ -34,14 +34,14 @@ def test_otp_login_existing_user_sets_cookies(client, user, device_uuid):
     assert any(SESSION_MARKER_COOKIE in c for c in cookies)
 
 
-def test_signup_new_user_flow(client, device_uuid):
+def test_signup_new_user_flow(client, device_uuid, read_otp):
     phone_raw = "9042398485"  # valid US number, not yet registered
     # New number → must opt into SMS before the first message (the code) is sent.
     start = client.post(
         "/v1/platform/auth/otp/start", json={"phone": phone_raw, "sms_consent": True}
     )
     assert start.status_code == 200
-    code = start.get_json()["dev_otp"]
+    code = read_otp(phone_raw)
 
     verify = client.post(
         "/v1/platform/auth/otp/verify",
@@ -71,15 +71,20 @@ def test_signup_new_user_flow(client, device_uuid):
     assert any(access_name in c for c in done.headers.getlist("Set-Cookie"))
 
 
-def test_new_number_requires_sms_consent_before_code(client):
+def test_new_number_requires_sms_consent_before_code(client, read_otp):
     """A new number gets NO text until it opts in: otp/start without sms_consent
-    returns consent_required + is_new and sends no code (no dev_otp)."""
+    returns consent_required + is_new and sends no code."""
     res = client.post("/v1/platform/auth/otp/start", json={"phone": "9042398490"})
     assert res.status_code == 200
     body = res.get_json()
     assert body.get("consent_required") is True
     assert body.get("is_new") is True
-    assert "dev_otp" not in body  # nothing was sent
+    assert body.get("message") != "code sent"  # nothing was sent
+    from app.services.service_auth import _otp_key, normalize_phone
+    from app.extensions import get_redis
+
+    with client.application.app_context():
+        assert get_redis().get(_otp_key(normalize_phone("9042398490"))) is None
 
 
 def test_verify_rejects_wrong_code(client, user, device_uuid):
@@ -104,13 +109,13 @@ def test_complete_rejects_bad_ticket(client, device_uuid):
     assert res.status_code == 400
 
 
-def test_complete_requires_consent(client, device_uuid):
+def test_complete_requires_consent(client, device_uuid, read_otp):
     """Signing up without agreeing to the Terms/Privacy is rejected."""
     phone_raw = "9042398486"  # distinct unregistered number
     start = client.post(
         "/v1/platform/auth/otp/start", json={"phone": phone_raw, "sms_consent": True}
     )
-    code = start.get_json()["dev_otp"]
+    code = read_otp(phone_raw)
     verify = client.post(
         "/v1/platform/auth/otp/verify",
         json={"phone": phone_raw, "otp": code, "device_uuid": device_uuid},
@@ -124,7 +129,7 @@ def test_complete_requires_consent(client, device_uuid):
     assert res.status_code == 400
 
 
-def test_complete_allows_declining_sms(client, device_uuid, monkeypatch):
+def test_complete_allows_declining_sms(client, device_uuid, monkeypatch, read_otp):
     """Transactional/marketing SMS are optional: a user can sign up with both
     declined, and declining transactional opts them out in notifications so
     /account doesn't show SMS on (and we don't text a non-consenter)."""
@@ -146,7 +151,7 @@ def test_complete_allows_declining_sms(client, device_uuid, monkeypatch):
     start = client.post(
         "/v1/platform/auth/otp/start", json={"phone": phone_raw, "sms_consent": True}
     )
-    code = start.get_json()["dev_otp"]
+    code = read_otp(phone_raw)
     verify = client.post(
         "/v1/platform/auth/otp/verify",
         json={"phone": phone_raw, "otp": code, "device_uuid": device_uuid},
@@ -171,8 +176,8 @@ def test_complete_allows_declining_sms(client, device_uuid, monkeypatch):
     assert not any(kind == "mkt" for kind, _ in calls)
 
 
-def test_me_accepts_access_cookie(client, user, device_uuid):
-    res = _login(client, user, device_uuid)
+def test_me_accepts_access_cookie(client, user, device_uuid, read_otp):
+    res = _login(client, user, device_uuid, read_otp)
     access_name, refresh_name = auth_cookie_names()
     access_token = _cookie_value(res.headers.getlist("Set-Cookie"), access_name)
     refresh_token = _cookie_value(res.headers.getlist("Set-Cookie"), refresh_name)
@@ -196,8 +201,8 @@ def test_me_accepts_bearer_header(client, app, user, device_uuid):
     assert me.get_json()["user"]["id"] == user["id"]
 
 
-def test_refresh_rotates_tokens(client, user, device_uuid):
-    res = _login(client, user, device_uuid)
+def test_refresh_rotates_tokens(client, user, device_uuid, read_otp):
+    res = _login(client, user, device_uuid, read_otp)
     _, refresh_name = auth_cookie_names()
     refresh_cookie = _cookie_value(res.headers.getlist("Set-Cookie"), refresh_name)
     assert refresh_cookie
@@ -212,10 +217,11 @@ def test_refresh_rotates_tokens(client, user, device_uuid):
     assert any(refresh_name in c for c in refreshed.headers.getlist("Set-Cookie"))
 
 
-def test_mobile_login_returns_body_tokens(client, user, device_uuid):
+def test_mobile_login_returns_body_tokens(client, user, device_uuid, read_otp):
     """X-Client-Type: mobile → access + refresh tokens in the body, usable as Bearer."""
     start = client.post("/v1/platform/auth/otp/start", json={"phone": user["phone"]})
-    code = start.get_json()["dev_otp"]
+    assert start.status_code == 200
+    code = read_otp(user["phone"])
     res = client.post(
         "/v1/platform/auth/otp/verify",
         json={"phone": user["phone"], "otp": code, "device_uuid": device_uuid},
@@ -234,11 +240,11 @@ def test_mobile_login_returns_body_tokens(client, user, device_uuid):
     assert me.get_json()["user"]["id"] == user["id"]
 
 
-def test_mobile_refresh_via_body_rotates(client, user, device_uuid):
+def test_mobile_refresh_via_body_rotates(client, user, device_uuid, read_otp):
     """Native refresh: no cookie — the refresh token comes from the body, and the
     rotated pair is returned in the body."""
     start = client.post("/v1/platform/auth/otp/start", json={"phone": user["phone"]})
-    code = start.get_json()["dev_otp"]
+    code = read_otp(user["phone"])
     login = client.post(
         "/v1/platform/auth/otp/verify",
         json={"phone": user["phone"], "otp": code, "device_uuid": device_uuid},
@@ -257,8 +263,8 @@ def test_mobile_refresh_via_body_rotates(client, user, device_uuid):
     assert data["refresh_token"] != old_refresh  # rotated
 
 
-def test_logout_clears_session(client, user, device_uuid):
-    res = _login(client, user, device_uuid)
+def test_logout_clears_session(client, user, device_uuid, read_otp):
+    res = _login(client, user, device_uuid, read_otp)
     access_name, refresh_name = auth_cookie_names()
     access_token = _cookie_value(res.headers.getlist("Set-Cookie"), access_name)
     refresh_cookie = _cookie_value(res.headers.getlist("Set-Cookie"), refresh_name)

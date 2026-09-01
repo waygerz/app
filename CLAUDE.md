@@ -76,9 +76,10 @@ Conventions that matter across all services:
   the **ALB directly** (no gateway container), so the same deny must exist as an
   ALB rule — see `.docs/complete/INTERNAL_SERVICE_CONNECT.md`. The `scheduler`
   reaches internal endpoints over the mesh (`http://<svc>:8000`).
-- Login is currently **OTP-only with no SMS provider** — `AUTH_REVEAL_OTP=true`
-  returns the OTP in the API response. There is no real phone verification while
-  this flag is on.
+- Login is **OTP-only**, delivered by real SMS through the notifications service
+  (Twilio in prod; `SMS_PROVIDER=log` locally writes the code to the notifications
+  log). The code is **never** returned in the API response. Outside production,
+  auth's log-only fallback also prints the code if notifications is unreachable.
 
 ### Internal service networking (east-west)
 

@@ -92,10 +92,6 @@ services:
       SERVICE_GROUP: platform
       SERVICE_NAME: auth
       DB_SCHEMA: auth
-      # TEMPORARY: reveal the OTP in the API response (shown beneath the login
-      # card) for testing until real SMS delivery is confirmed. While "true"
-      # there is NO real phone verification. Set to "false" once live.
-      AUTH_REVEAL_OTP: "true"
       # OTP is delivered by the notifications service (see auth service_sms).
       INTERNAL_NOTIFICATIONS_URL: "http://notifications:8000/v1/platform/notifications"
       # Profiles live in the users service; auth creates the profile row at signup.

@@ -41,6 +41,24 @@ def device_uuid():
 
 
 @pytest.fixture()
+def read_otp(app):
+    """Read the just-issued OTP straight from Redis (its source of truth).
+
+    The API never returns the code — it's an SMS-only secret — so tests fetch it
+    the same way a real delivery would: by the phone's `otp:{e164}` key.
+    """
+    from app.services.service_auth import _otp_key
+
+    def _read(phone: str) -> str:
+        with app.app_context():
+            code = get_redis().get(_otp_key(normalize_phone(phone)))
+        assert code, f"no OTP stored for {phone}"
+        return code
+
+    return _read
+
+
+@pytest.fixture()
 def user(app):
     with app.app_context():
         phone = normalize_phone("9042398484")

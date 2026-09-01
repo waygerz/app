@@ -56,8 +56,8 @@ flutter run
 flutter run --dart-define=API_BASE_URL=https://staging.waygerz.com
 ```
 
-Login is OTP-based. While `AUTH_REVEAL_OTP=true` on the backend, the code is
-returned as `dev_otp` and shown on the verify screen for testing.
+Login is OTP-based. The code is delivered by real SMS (Twilio) and entered on
+the verify screen; it is never returned in the API response.
 
 ## Auth model
 

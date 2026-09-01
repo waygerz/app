@@ -6,13 +6,14 @@ whatever provider is configured there (log / AWS / Twilio). This keeps a single
 SMS path and one place to manage templates, providers, and compliance.
 
 If the notifications call fails for any reason (service down, template not
-seeded, network) we log the code so the login flow never breaks; with
-AUTH_REVEAL_OTP on it's also returned in the API response for testing. Turn
-AUTH_REVEAL_OTP off once real delivery through notifications is confirmed.
+seeded, network) we log the failure so it can be diagnosed. The code itself is
+never returned to the client — it's an SMS-only secret — and is logged only
+outside production (where the log-provider path is how a developer reads it).
 """
 import logging
 
 import requests
+from flask import current_app
 
 from app.utils.config import Config
 
@@ -49,7 +50,11 @@ def send_otp(phone: str, code: str) -> bool:
             )
         except Exception:  # noqa: BLE001
             logger.exception("auth_otp_send notifications call failed phone=%s", phone)
-    # Fallback: no notifications URL configured, or the call failed. Log the
-    # code; with AUTH_REVEAL_OTP on it's still returned in the API response.
-    logger.info("auth_otp_send (fallback log) phone=%s code=%s", phone, code)
+    # Fallback: no notifications URL configured, or the call failed. Outside
+    # production, log the code so a developer can still complete login; in
+    # production never log the secret — just record that delivery failed.
+    if current_app.config.get("APP_ENV") != "production":
+        logger.info("auth_otp_send (fallback log) phone=%s code=%s", phone, code)
+    else:
+        logger.warning("auth_otp_send (fallback, undelivered) phone=%s", phone)
     return False
