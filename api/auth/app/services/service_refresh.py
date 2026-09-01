@@ -26,7 +26,15 @@ def refresh_access_token(request):
     token = request.cookies.get(refresh_name) or body.get("refresh_token")
     device_uuid = request.headers.get("X-Device-UUID") or body.get("device_uuid")
 
+    # TEMP DIAGNOSTICS (message-level so it survives the log formatter): what did
+    # the request actually carry? device ids are random, not sensitive.
+    logger.info(
+        "refresh_attempt has_token=%s device=%s client=%s",
+        bool(token), device_uuid, request.headers.get("X-Client-Type", "web"),
+    )
+
     if not token or not device_uuid:
+        logger.info("refresh_missing has_token=%s has_device=%s", bool(token), bool(device_uuid))
         return make_response(jsonify({"error": "missing refresh token or device_uuid"}), 401)
 
     if not _sessions.is_valid_uuid(device_uuid):
@@ -35,7 +43,7 @@ def refresh_access_token(request):
     try:
         user_uuid, phone, access_token, new_refresh = _rotate_refresh_token(token, device_uuid)
     except _TOKEN_FAILURES as exc:
-        logger.warning("refresh_rejected", extra={"device_uuid": device_uuid, "reason": str(exc)})
+        logger.warning("refresh_rejected device=%s reason=%s", device_uuid, exc)
         try:
             deleted_user = _sessions.delete_session(device_uuid)
             if deleted_user:
@@ -66,8 +74,10 @@ def _rotate_refresh_token(refresh_token: str, device_uuid: str) -> tuple[str, st
     phone = (decoded.get("phone") or "").strip()
     token_device = decoded.get("device_uuid")
 
-    if not user_uuid or not phone or token_device != device_uuid:
-        raise ValueError("invalid token payload")
+    if not user_uuid or not phone:
+        raise ValueError(f"token missing sub/phone (sub={bool(user_uuid)} phone={bool(phone)})")
+    if token_device != device_uuid:
+        raise ValueError(f"device mismatch: token={token_device} request={device_uuid}")
 
     status, expected_hash, session_user = _sessions.get_session_fields(
         device_uuid, ["status", "refresh_token_hash", "user_uuid"]
