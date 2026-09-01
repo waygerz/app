@@ -129,11 +129,17 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
             <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={80} />
           </button>
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Mobile shows the league name in the fixed top bar (HeaderLogo);
-                  keep the big heading on desktop, where the bar shows nav links. */}
-              <h1 className="hidden text-xl font-bold text-foreground sm:text-2xl lg:block">{lg.name}</h1>
-              <LeagueTypeBadge type={lg.league_type} responsive />
+            {/* Desktop keeps the big name + inline badges (the top bar shows nav
+                links, not the name). */}
+            <div className="hidden flex-wrap items-center gap-2 lg:flex">
+              <h1 className="text-2xl font-bold text-foreground">{lg.name}</h1>
+              <LeagueTypeBadge type={lg.league_type} />
+              {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
+            </div>
+            {/* Mobile: the name rides in the fixed top bar (HeaderLogo), so lead
+                with a labeled type pill (+ Draft) instead of an orphaned icon. */}
+            <div className="flex flex-wrap items-center gap-2 lg:hidden">
+              <LeagueTypeBadge type={lg.league_type} />
               {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
             </div>
             {isMoney && (

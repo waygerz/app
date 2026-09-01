@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { leaguesApi } from '@/lib/leagues';
+import { LeagueAvatar } from '@/components/league-avatar';
+import { cn } from '@/lib/utils';
 import { isEspnSport } from '@/lib/espn';
 
 const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -61,14 +63,26 @@ export function HeaderLogo() {
 
   return (
     <div className="flex min-w-0 shrink items-center gap-2 sm:gap-5 lg:w-[200px]">
-      {/* Brand — links home */}
-      <Link href="/" className="flex items-center gap-2">
+      {/* Brand — links home. On a league page, mobile swaps this for the league's
+          own avatar + name (below); desktop always keeps the brand + wordmark. */}
+      <Link href="/" className={cn('items-center gap-2', leagueId ? 'hidden lg:flex' : 'flex')}>
         <img src="/logo-64.png" alt="Waygerz" className="size-9 shrink-0" />
         <span className="hidden text-lg font-extrabold tracking-tight text-white lg:inline">Waygerz</span>
       </Link>
-      {/* Mobile: the page title rides in the top bar (desktop shows the Navbar). */}
-      {title && (
-        <span className="min-w-0 truncate text-lg font-bold text-white lg:hidden">{title}</span>
+      {leagueId ? (
+        // Mobile only: the league's avatar + name, tapping through to its overview.
+        <Link href={`/leagues/${leagueId}`} className="flex min-w-0 items-center gap-2 lg:hidden">
+          <LeagueAvatar
+            name={league.data?.name ?? 'League'}
+            logoUrl={league.data?.logo_url ?? null}
+            id={leagueId}
+            size={32}
+          />
+          <span className="min-w-0 truncate text-lg font-bold text-white">{title}</span>
+        </Link>
+      ) : (
+        // Mobile: the page title rides in the top bar (desktop shows the Navbar).
+        title && <span className="min-w-0 truncate text-lg font-bold text-white lg:hidden">{title}</span>
       )}
     </div>
   );
