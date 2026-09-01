@@ -1257,10 +1257,10 @@ export function LeagueSports() {
   );
 }
 
-// Compact upcoming-games board for the Overview aside: the next N games across
-// the league's sports as tap-to-bet cards, reusing the same EventCard + wager
-// dialogs as the Sports hub. Desktop-only (the aside stacks under the feed on
-// mobile, where the Sports tab already covers this).
+// The Upcoming tab (own page): the next N games across the league's sports as
+// tap-to-bet cards, reusing the same EventCard + wager dialogs as the Sports
+// hub. Rendered on all breakpoints — it's a standalone page now, split out from
+// the Overview feed.
 export function LeagueUpcomingGames() {
   const lg = useLeague();
   const { user } = useAuth();
@@ -1283,7 +1283,7 @@ export function LeagueUpcomingGames() {
   if (lg.sports.length === 0) return null;
 
   return (
-    <Card className="hidden gap-3 p-4 lg:flex">
+    <Card className="gap-3 p-4">
       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         Upcoming games
       </span>

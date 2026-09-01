@@ -8,7 +8,6 @@ import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext';
 import { commentsApi } from '@/lib/comments';
 import { leaguesApi } from '@/lib/leagues';
-import { LeagueUpcomingGames } from './sections';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -101,9 +100,6 @@ export function LeagueOverview() {
           <p className="break-words text-sm text-foreground">{lg.description}</p>
         </Card>
       )}
-
-      {/* Head-to-head: tap-to-bet board. Pick'em leagues render nothing here. */}
-      <LeagueUpcomingGames />
 
       <section>
           {canModerate && (

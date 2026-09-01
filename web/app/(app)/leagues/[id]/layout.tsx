@@ -80,11 +80,13 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   const isMoney = lg.league_type !== 'pickem';
   const commish = lg.members.find((m) => m.role === 'commissioner');
 
-  // Overview, then Sports (money-only), then the play tab (My Bets / My Picks)
-  // up front, followed by Results → Standings, Wallet (money-only), Members and
-  // admin. Pick'em drops Sports/Wallet, so its play tab sits right after Overview.
+  // Overview (feed), then Upcoming games + Sports (both money-only), then the
+  // play tab (My Bets / My Picks), followed by Results → Standings, Wallet
+  // (money-only), Members and admin. Pick'em drops Upcoming/Sports/Wallet, so
+  // its play tab sits right after Overview.
   const tabs = [
     { to: `/leagues/${id}`, label: 'Overview', end: true },
+    ...(isMoney ? [{ to: `/leagues/${id}/upcoming`, label: 'Upcoming', end: false }] : []),
     ...(isMoney ? [{ to: `/leagues/${id}/sports`, label: 'Sports', end: false }] : []),
     { to: `/leagues/${id}/play`, label: PLAY_TAB[lg.league_type], end: false },
     { to: `/leagues/${id}/results`, label: 'Results', end: false },
