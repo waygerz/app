@@ -10,14 +10,22 @@ const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = 'system' } = useTheme();
 
   return (
+    // Each toast is filled from the semantic status palette (styles/globals.css):
+    // success=green, error=red, warning=amber, info=blue — fixed across light and
+    // dark, readable, and brand-exact (no sonner richColors). icon/title/description
+    // inherit the toast's foreground so they stay visible on the filled surface.
     <Sonner
       theme={theme as ToasterProps['theme']}
-      className="group toaster [&_[data-type=success]>[data-icon]]:text-success [&_[data-type=success]_[data-title]]:text-success [&_[data-type=info]_[data-title]]:text-info [&_[data-type=error]>[data-icon]]:text-destructive [&_[data-type=error]_[data-title]]:text-destructive"
+      className="toaster group"
       toastOptions={{
         classNames: {
-          toast:
-            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground! group-[.toaster]:border-border group-[.toaster]:shadow-lg has-[[role=alert]]:border-0! has-[[role=alert]]:shadow-none! has-[[role=alert]]:bg-transparent!',
-          description: 'group-[.toast]:text-muted-foreground',
+          success: 'group-[.toaster]:bg-success group-[.toaster]:text-success-foreground group-[.toaster]:border-success',
+          error: 'group-[.toaster]:bg-destructive group-[.toaster]:text-destructive-foreground group-[.toaster]:border-destructive',
+          warning: 'group-[.toaster]:bg-warning group-[.toaster]:text-warning-foreground group-[.toaster]:border-warning',
+          info: 'group-[.toaster]:bg-info group-[.toaster]:text-info-foreground group-[.toaster]:border-info',
+          icon: 'group-[.toast]:text-current',
+          title: 'group-[.toast]:text-current',
+          description: 'group-[.toast]:text-current group-[.toast]:opacity-90',
           actionButton: 'group-[.toast]:rounded-md! group-[.toast]:bg-primary group-[.toast]:text-primary-foreground!',
           cancelButton:
             'group-[.toast]:rounded-md! group-[.toast]:bg-secondary group-[.toast]:text-secondary-foreground!',
