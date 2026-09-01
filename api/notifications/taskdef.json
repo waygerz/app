@@ -1,0 +1,108 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "notifications",
+      "image": "882781856019.dkr.ecr.us-east-1.amazonaws.com/waygerz/notifications:latest",
+      "cpu": 96,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 0,
+          "protocol": "tcp",
+          "name": "http",
+          "appProtocol": "http"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "SERVICE_GROUP",
+          "value": "platform"
+        },
+        {
+          "name": "SERVICE_NAME",
+          "value": "notifications"
+        },
+        {
+          "name": "CORS_ALLOWED_ORIGINS",
+          "value": "https://waygerz.com,https://www.waygerz.com"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "APP_ENV",
+          "value": "production"
+        },
+        {
+          "name": "TWILIO_FROM",
+          "value": "+18335885058"
+        },
+        {
+          "name": "SMS_PROVIDER",
+          "value": "twilio"
+        },
+        {
+          "name": "AUTH_COOKIE_DOMAIN",
+          "value": ".waygerz.com"
+        },
+        {
+          "name": "DB_SCHEMA",
+          "value": "notifications"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "/waygerz/SECRET_KEY"
+        },
+        {
+          "name": "JWT_SECRET_KEY",
+          "valueFrom": "/waygerz/JWT_SECRET_KEY"
+        },
+        {
+          "name": "INTERNAL_TOKEN",
+          "valueFrom": "/waygerz/INTERNAL_TOKEN"
+        },
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "/waygerz/DATABASE_URL"
+        },
+        {
+          "name": "REDIS_URL",
+          "valueFrom": "/waygerz/REDIS_URL"
+        },
+        {
+          "name": "TWILIO_ACCOUNT_SID",
+          "valueFrom": "/waygerz/TWILIO_ACCOUNT_SID"
+        },
+        {
+          "name": "TWILIO_AUTH_TOKEN",
+          "valueFrom": "/waygerz/TWILIO_AUTH_TOKEN"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/waygerz/notifications",
+          "awslogs-create-group": "true",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "waygerz-notifications",
+  "executionRoleArn": "arn:aws:iam::882781856019:role/waygerz-ecs-task-execution-role",
+  "networkMode": "bridge",
+  "volumes": [],
+  "placementConstraints": [],
+  "requiresCompatibilities": [
+    "EC2"
+  ],
+  "memory": "320"
+}

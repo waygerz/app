@@ -57,7 +57,9 @@ class Config:
     # No-favorites nudge (scheduler-driven /internal/tick). A user with zero
     # favorites this long after signup gets a one-time in-app notification. The
     # notifications base includes the /v1/... prefix; /internal/notify is
-    # appended. In prod this MUST be the https://waygerz.com ALB form.
+    # appended. Leave INTERNAL_NOTIFICATIONS_URL UNSET in prod so this mesh
+    # (Service Connect) default applies — do NOT use the https://waygerz.com ALB
+    # form for east-west calls; its private-zone IPs drift on ALB rotation.
     NOTIFICATIONS_URL = os.environ.get(
         "INTERNAL_NOTIFICATIONS_URL", "http://notifications:8000/v1/platform/notifications"
     )
