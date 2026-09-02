@@ -84,7 +84,7 @@ def handle_inbound(form) -> str:
     for entry in destinations:
         try:
             client.messages.create(
-                to=entry["number"], from_=cfg["TWILIO_FROM"], body=out_body
+                to=entry["number"], from_=cfg["FORWARD_FROM"], body=out_body
             )
             sent += 1
         except Exception:  # noqa: BLE001 - best-effort; one bad number != drop all

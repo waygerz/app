@@ -63,7 +63,16 @@ class Config:
     # The auth token doubles as the webhook signature key AND the REST send key.
     TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
     TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    # TWILIO_FROM is the shared account line (the notifications/OTP sender, also
+    # used by the notifications service). FORWARD_FROM is the human help line the
+    # simulring/fan-out present as — kept separate so pointing forwarding at a new
+    # number never disturbs the notifications sender. Falls back to TWILIO_FROM so
+    # a single-number deployment behaves exactly as before.
     TWILIO_FROM = normalize_e164(os.environ.get("TWILIO_FROM", ""))
+    FORWARD_FROM = normalize_e164(os.environ.get("FORWARD_FROM", "")) or TWILIO_FROM
+    # Support/help number spoken + texted by the /notify auto-attendant. Display
+    # form (e.g. "(833) 588-8330"); defaults to the FORWARD_FROM digits.
+    SUPPORT_NUMBER = os.environ.get("SUPPORT_NUMBER", "").strip()
 
     # --- Signature validation --------------------------------------------------
     # Twilio signs the exact public URL it called; behind the ALB Flask can't see
@@ -119,8 +128,9 @@ class Config:
         """Parse a roster string (SSM JSON) into normalized entries:
         [{"number": "+1…", "name": "Sam"|None}]. Accepts a JSON array of objects,
         a JSON array of bare number strings, or a comma-separated string. Numbers
-        are E.164-normalized; the main line (TWILIO_FROM) is excluded so a forward
-        can never loop back to itself. Empty/invalid entries are dropped."""
+        are E.164-normalized; our own lines (the forwarding line FORWARD_FROM and
+        the notifications line TWILIO_FROM) are excluded so a forward can never
+        loop back to one of our own numbers. Empty/invalid entries are dropped."""
         raw = (raw or "").strip()
         if not raw:
             return []
@@ -146,7 +156,7 @@ class Config:
             else:
                 continue
             e164 = normalize_e164(number)
-            if not e164 or e164 == cls.TWILIO_FROM:
+            if not e164 or e164 in (cls.FORWARD_FROM, cls.TWILIO_FROM):
                 continue
             entries.append({"number": e164, "name": name})
         # de-dupe by number, preserve order

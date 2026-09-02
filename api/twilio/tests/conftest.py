@@ -54,6 +54,12 @@ class FakeRedis:
         self.store[key] = val
         return True
 
+    def set(self, key, val, nx=False, ex=None):
+        if nx and key in self.store:
+            return None
+        self.store[key] = val
+        return True
+
     def get(self, key):
         return self.store.get(key)
 
@@ -72,6 +78,19 @@ def no_redis(monkeypatch):
 def fake_redis(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr("app.services.service_sms.get_redis", lambda: fake)
+    return fake
+
+
+@pytest.fixture()
+def notify_no_redis(monkeypatch):
+    """Notify auto-reply with no Redis — the dedupe guard fails open (replies)."""
+    monkeypatch.setattr("app.services.service_notify.get_redis", lambda: None)
+
+
+@pytest.fixture()
+def notify_redis(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr("app.services.service_notify.get_redis", lambda: fake)
     return fake
 
 

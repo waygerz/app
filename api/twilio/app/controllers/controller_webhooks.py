@@ -2,7 +2,7 @@
 (text/xml), never JSON."""
 from flask import Response, request
 
-from app.services import service_sms, service_voice
+from app.services import service_notify, service_sms, service_voice
 
 _XML = "text/xml"
 
@@ -35,3 +35,13 @@ def voice_after() -> Response:
 
 def incoming_sms() -> Response:
     return _xml(service_sms.handle_inbound(request.form))
+
+
+def notify_voice() -> Response:
+    # Inbound call to the notifications line: announce the help number, hang up.
+    return _xml(service_notify.announce_voice())
+
+
+def notify_sms() -> Response:
+    # Inbound text to the notifications line: auto-reply with the help number.
+    return _xml(service_notify.announce_sms(request.form))

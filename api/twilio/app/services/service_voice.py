@@ -104,7 +104,7 @@ def build_incoming(call_sid: str | None, caller: str | None = None) -> str:
         timeout=cfg["VOICE_TIMEOUT"],
         answer_on_bridge=True,          # caller hears ringback, not silence
         action=f"{_base()}/voice/after",
-        caller_id=cfg["TWILIO_FROM"],   # show the main Waygerz number, not the caller
+        caller_id=cfg["FORWARD_FROM"],  # show the help line, not the caller
     )
     screen_url = f"{_base()}/voice/screen"
     if call_sid:                        # correlate the screen callbacks to this call
