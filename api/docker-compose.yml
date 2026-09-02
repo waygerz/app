@@ -170,7 +170,8 @@ services:
       TWILIO_AUTH_TOKEN: "dummy_auth_token_replace_me"
       TWILIO_FROM: "+18335885058"        # notifications/OTP sender (shared account line)
       # FORWARD_FROM: the human help line the simulring/fan-out present as (its
-      # Twilio voice/sms webhooks point at /voice + /sms). Defaults to TWILIO_FROM.
+      # Twilio voice/sms webhooks point at /corp/voice + /corp/sms). Defaults to
+      # TWILIO_FROM.
       # SUPPORT_NUMBER: display form spoken/texted by the /notify auto-attendant
       # on the notifications line (defaults to FORWARD_FROM's digits).
       # FORWARD_FROM: "+18335888330"

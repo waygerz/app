@@ -69,3 +69,21 @@ def test_forward_from_is_sms_from(app, client, no_redis, sent_messages):
     client.post("/v1/platform/twilio/sms", data={"From": "+15559990000", "Body": "yo"})
     assert sent_messages, "expected a fan-out send"
     assert all(m["from_"] == "+18335888330" for m in sent_messages)
+
+
+def test_corp_voice_simulrings_like_bare_voice(app, client):
+    # The corporate/help namespace runs the same forwarding as /voice.
+    app.config["FORWARD_FROM"] = "+18335888330"
+    r = client.post("/v1/platform/twilio/corp/voice", data={"From": "+15551230000", "CallSid": "CA1"})
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert "<Dial" in body
+    assert 'callerId="+18335888330"' in body  # presents as the help line
+
+
+def test_corp_sms_fans_out_like_bare_sms(app, client, no_redis, sent_messages):
+    app.config["FORWARD_FROM"] = "+18335888330"
+    r = client.post("/v1/platform/twilio/corp/sms", data={"From": "+15559990000", "Body": "yo"})
+    assert r.status_code == 200
+    assert sent_messages, "expected a fan-out send"
+    assert all(m["from_"] == "+18335888330" for m in sent_messages)
