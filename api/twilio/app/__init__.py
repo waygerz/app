@@ -38,16 +38,20 @@ def create_app(config_class=Config):
                 "TWILIO_VALIDATE_SIGNATURE is on"
             )
 
-    # Validate the FORWARD_TO roster at boot: non-empty and within the cap, so a
-    # misconfigured roster is a startup error, not a silent runtime surprise.
-    roster = Config.forward_to()
-    if not roster:
-        app.logger.warning("FORWARD_TO is empty — calls/texts have nowhere to go")
-    elif len(roster) > app.config["FORWARD_MAX"]:
-        raise RuntimeError(
-            f"FORWARD_TO has {len(roster)} numbers, over FORWARD_MAX="
-            f"{app.config['FORWARD_MAX']}; raise the cap or trim the roster"
-        )
+    # Validate both channel rosters at boot: non-empty and within the cap, so a
+    # misconfigured roster is a startup error, not a silent runtime surprise. Each
+    # channel falls back to the shared FORWARD_TO when its override is unset, so
+    # this also covers the single-roster (pre-split) case.
+    fmax = app.config["FORWARD_MAX"]
+    for channel, roster in (("voice", Config.forward_to_voice()),
+                            ("sms", Config.forward_to_sms())):
+        if not roster:
+            app.logger.warning("%s roster is empty — that channel has nowhere to go", channel)
+        elif len(roster) > fmax:
+            raise RuntimeError(
+                f"{channel} roster has {len(roster)} numbers, over FORWARD_MAX="
+                f"{fmax}; raise the cap or trim the roster"
+            )
 
     init_redis(app)
 

@@ -91,7 +91,7 @@ def build_incoming(call_sid: str | None, caller: str | None = None) -> str:
     """TwiML for POST /voice: dial all destinations simultaneously."""
     cfg = current_app.config
     resp = VoiceResponse()
-    roster = Config.forward_to()
+    roster = Config.forward_to_voice()
     if not roster:
         current_app.logger.warning(
             "voice incoming call=%s from=%s -> EMPTY roster, speaking fallback",

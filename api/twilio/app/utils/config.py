@@ -94,12 +94,34 @@ class Config:
 
     @classmethod
     def forward_to(cls) -> list[dict]:
-        """Parse the FORWARD_TO roster (SSM JSON) into normalized entries:
+        """The shared/default roster from FORWARD_TO. Used for both channels
+        unless a channel-specific override is set (see forward_to_voice /
+        forward_to_sms)."""
+        return cls._parse_roster(os.environ.get("FORWARD_TO", ""))
+
+    @classmethod
+    def forward_to_voice(cls) -> list[dict]:
+        """Who gets *called* on an inbound voice call. Reads FORWARD_TO_VOICE if
+        set, else falls back to the shared FORWARD_TO roster (so an unset override
+        preserves the pre-split single-roster behavior)."""
+        raw = os.environ.get("FORWARD_TO_VOICE", "").strip()
+        return cls._parse_roster(raw) if raw else cls.forward_to()
+
+    @classmethod
+    def forward_to_sms(cls) -> list[dict]:
+        """Who gets *texted* on an inbound SMS. Reads FORWARD_TO_SMS if set, else
+        falls back to the shared FORWARD_TO roster."""
+        raw = os.environ.get("FORWARD_TO_SMS", "").strip()
+        return cls._parse_roster(raw) if raw else cls.forward_to()
+
+    @classmethod
+    def _parse_roster(cls, raw: str) -> list[dict]:
+        """Parse a roster string (SSM JSON) into normalized entries:
         [{"number": "+1…", "name": "Sam"|None}]. Accepts a JSON array of objects,
         a JSON array of bare number strings, or a comma-separated string. Numbers
         are E.164-normalized; the main line (TWILIO_FROM) is excluded so a forward
         can never loop back to itself. Empty/invalid entries are dropped."""
-        raw = os.environ.get("FORWARD_TO", "").strip()
+        raw = (raw or "").strip()
         if not raw:
             return []
         entries: list[dict] = []
@@ -110,7 +132,7 @@ class Config:
             try:
                 parsed = json.loads(raw)
             except json.JSONDecodeError:
-                logger.error("FORWARD_TO is not valid JSON; treating roster as empty")
+                logger.error("roster env var is not valid JSON; treating roster as empty")
                 return []
             if isinstance(parsed, dict):
                 parsed = [parsed]

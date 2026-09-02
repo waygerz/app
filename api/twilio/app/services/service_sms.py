@@ -64,7 +64,7 @@ def handle_inbound(form) -> str:
     if num_media > 0:
         body = (body + " [media omitted]").strip()
 
-    roster = Config.forward_to()
+    roster = Config.forward_to_sms()
     # Group behavior: a reply from a roster number goes to the *others*, not back
     # to the sender (no self-echo).
     destinations = [e for e in roster if e["number"] != sender][: cfg["FORWARD_MAX"]]

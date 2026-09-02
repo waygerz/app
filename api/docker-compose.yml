@@ -173,7 +173,12 @@ services:
       TWILIO_VALIDATE_SIGNATURE: "false"
       VOICE_SCREEN: "true"
       # Roster of phones a call/text fans out to (JSON: [{number, name?}]).
+      # FORWARD_TO is the shared default; set FORWARD_TO_VOICE / FORWARD_TO_SMS
+      # to give calls and texts separate rosters (each falls back to FORWARD_TO
+      # when unset). Same format for all three.
       FORWARD_TO: "[]"
+      # FORWARD_TO_VOICE: "[]"
+      # FORWARD_TO_SMS: "[]"
     depends_on:
       redis: { condition: service_healthy }
     deploy:
