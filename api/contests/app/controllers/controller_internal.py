@@ -11,3 +11,8 @@ def league_record():
 def tick():
     body, status = service.tick()
     return jsonify(body), status
+
+
+def purge_user():
+    body, status = service.purge_user()
+    return jsonify(body), status

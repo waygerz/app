@@ -16,3 +16,8 @@ def notify():
 def set_preferences():
     body, status = svc.set_preferences(request.get_json(silent=True) or {})
     return jsonify(body), status
+
+
+def purge_user():
+    body, status = svc.purge_user(request.get_json(silent=True) or {})
+    return jsonify(body), status

@@ -3,6 +3,7 @@ from flask import Blueprint, current_app, jsonify
 from app.utils.config import Config
 
 from app.routes.route_comments import comments_bp
+from app.routes.route_internal import comments_internal_bp
 
 service_bp = Blueprint(Config.SERVICE_NAME, __name__)
 
@@ -18,3 +19,4 @@ for bp in [comments_bp]:
 
 def register_blueprints(app):
     app.register_blueprint(service_bp, url_prefix=Config.api_prefix())
+    app.register_blueprint(comments_internal_bp, url_prefix=Config.api_prefix() + "/internal")

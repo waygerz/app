@@ -23,6 +23,9 @@ class StorageBackend:
     def read_header(self, *, bucket: str, key: str, length: int = 16) -> bytes:
         raise NotImplementedError
 
+    def delete_object(self, *, bucket: str, key: str) -> None:
+        raise NotImplementedError
+
 
 class MockStorage(StorageBackend):
     def presign_put(self, *, bucket: str, key: str, content_type: str, byte_size: int) -> dict:
@@ -41,6 +44,9 @@ class MockStorage(StorageBackend):
 
     def read_header(self, *, bucket: str, key: str, length: int = 16) -> bytes:
         return b"\x89PNG\r\n\x1a\n"
+
+    def delete_object(self, *, bucket: str, key: str) -> None:
+        return None
 
 
 class S3Storage(StorageBackend):
@@ -96,6 +102,16 @@ class S3Storage(StorageBackend):
             return resp["Body"].read()
         except Exception as exc:
             raise StorageError("could not read object header") from exc
+
+    def delete_object(self, *, bucket: str, key: str) -> None:
+        # S3 delete is idempotent — deleting a missing key succeeds — so a purge
+        # retry after the row is gone is harmless, and deleting the object before
+        # the DB row means a failure here never orphans the object.
+        client = self._client()
+        try:
+            client.delete_object(Bucket=bucket, Key=key)
+        except Exception as exc:  # noqa: BLE001
+            raise StorageError("could not delete object") from exc
 
 
 def get_storage() -> StorageBackend:

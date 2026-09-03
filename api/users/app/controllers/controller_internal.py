@@ -17,3 +17,8 @@ def upsert_profile():
 def tick():
     body, status = service_tick.tick()
     return jsonify(body), status
+
+
+def purge_user():
+    body, status = svc.purge_user(request.get_json(silent=True) or {})
+    return jsonify(body), status

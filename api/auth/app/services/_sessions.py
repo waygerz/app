@@ -116,3 +116,12 @@ def zrem_user_session(user_uuid: str, device_uuid: str) -> None:
     with the Postgres table the row itself is the session, and delete_session
     removes it. Kept so callers don't change."""
     return None
+
+
+def delete_user_sessions(user_uuid: str) -> int:
+    """Delete every session row for a user (account deletion). Idempotent."""
+    deleted = AuthSession.query.filter(AuthSession.user_uuid == str(user_uuid)).delete(
+        synchronize_session=False
+    )
+    db.session.commit()
+    return deleted

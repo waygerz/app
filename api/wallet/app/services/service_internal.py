@@ -1,4 +1,5 @@
 """Internal wallet ops (service-to-service)."""
+from app.extensions import db
 from app.models.balance import Balance
 from app.services.service_wallet import (
     InsufficientFunds,
@@ -7,6 +8,24 @@ from app.services.service_wallet import (
     payout,
     refund,
 )
+
+
+def purge_user(data: dict) -> tuple[dict, int]:
+    """Account deletion in the wallet service.
+
+    Deletes the user's per-league `balances` rows (personal play-money holdings).
+    The `transactions` ledger is an append-only financial record and is NEVER
+    deleted — it stays for reconciliation, referencing the now-gone user id.
+    Call this AFTER contests has refunded the user's live wagers so no stake is
+    stranded. Idempotent.
+    """
+    try:
+        uid = str(data["user_id"])
+    except (KeyError, ValueError, TypeError):
+        return {"error": "user_id is required"}, 400
+    balances = Balance.query.filter(Balance.user_id == uid).delete(synchronize_session=False)
+    db.session.commit()
+    return {"purged": {"balances": balances}}, 200
 
 
 def _internal_op(data: dict, op) -> tuple[dict, int]:

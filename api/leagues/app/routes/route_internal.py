@@ -58,3 +58,15 @@ def feed_posts_access():
 @internal_only
 def add_activity(league_id):
     return ctrl.add_activity(league_id)
+
+
+@leagues_internal_bp.post("/commissioned-leagues")
+@internal_only
+def commissioned_leagues():
+    return ctrl.commissioned_leagues()
+
+
+@leagues_internal_bp.post("/purge-user")
+@internal_only
+def purge_user():
+    return ctrl.purge_user()

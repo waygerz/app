@@ -1,7 +1,7 @@
 // Client for the Waygerz auth service (passwordless phone + OTP, cookie sessions).
 import { API } from './api-paths';
 import { getDeviceUuid } from './device';
-import { apiJson } from './http';
+import { apiFetch, apiJson } from './http';
 import type { FavoriteTeam } from './users';
 
 const AUTH_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -89,7 +89,49 @@ export const authApi = {
       device: true,
       skipAuthRetry: true,
     }),
+
+  // Permanently delete the signed-in account (cross-service purge). On success
+  // the server clears the auth cookies. A 409 `owns_leagues` carries the blocking
+  // leagues in `.data.leagues`; the thrown error exposes `status` + `data` so the
+  // caller can surface them.
+  deleteAccount: async (): Promise<DeleteAccountResult> => {
+    const res = await apiFetch(`${AUTH_URL}${API.auth}/account`, {
+      method: 'DELETE',
+      device: true,
+      skipAuthRetry: true,
+    });
+    const data = (await res.json().catch(() => ({}))) as DeleteAccountResult & {
+      error?: string;
+      message?: string;
+    };
+    if (!res.ok) {
+      const err = new Error(
+        data.message || data.error || `Request failed (${res.status})`,
+      ) as DeleteAccountError;
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  },
 };
+
+export interface BlockingLeague {
+  id: string;
+  name: string;
+  status: string;
+  member_count: number;
+}
+
+export interface DeleteAccountResult {
+  message?: string;
+  leagues?: BlockingLeague[];
+}
+
+export interface DeleteAccountError extends Error {
+  status?: number;
+  data?: DeleteAccountResult & { error?: string; message?: string };
+}
 
 /** Proactive refresh when the session marker is present (best-effort). */
 export async function tryRefreshSession(): Promise<boolean> {

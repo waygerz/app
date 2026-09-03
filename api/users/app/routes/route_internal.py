@@ -22,3 +22,9 @@ def upsert_profile():
 @internal_only
 def tick():
     return ctrl.tick()
+
+
+@users_internal_bp.post("/purge-user")
+@internal_only
+def purge_user():
+    return ctrl.purge_user()

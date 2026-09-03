@@ -31,3 +31,8 @@ def internal_payout():
 def internal_refund():
     body, status = svc.internal_refund(request.get_json(silent=True) or {})
     return jsonify(body), status
+
+
+def purge_user():
+    body, status = svc.purge_user(request.get_json(silent=True) or {})
+    return jsonify(body), status

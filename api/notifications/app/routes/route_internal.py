@@ -22,3 +22,9 @@ def notify():
 @internal_only
 def set_preferences():
     return ctrl.set_preferences()
+
+
+@notifications_internal_bp.post("/purge-user")
+@internal_only
+def purge_user():
+    return ctrl.purge_user()

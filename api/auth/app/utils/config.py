@@ -71,6 +71,33 @@ class Config:
     INTERNAL_USERS_URL = os.environ.get(
         "INTERNAL_USERS_URL", "http://users:8000/v1/platform/users"
     )
+    # Fan-out targets for account deletion (DELETE /account orchestrator). Each is
+    # a base incl. the /v1/<group>/<service> prefix; "/internal/purge-user" is
+    # appended. Note the group is NOT uniform — gameplay/social/platform — so the
+    # defaults are spelled out per service. Like the URLs above these use the
+    # Service Connect mesh name (http://<svc>:8000); leave them UNSET in prod so
+    # the mesh default applies (never the drifting ALB private zone).
+    INTERNAL_CONTESTS_URL = os.environ.get(
+        "INTERNAL_CONTESTS_URL", "http://contests:8000/v1/gameplay/contests"
+    )
+    INTERNAL_WALLET_URL = os.environ.get(
+        "INTERNAL_WALLET_URL", "http://wallet:8000/v1/gameplay/wallet"
+    )
+    INTERNAL_LEAGUES_URL = os.environ.get(
+        "INTERNAL_LEAGUES_URL", "http://leagues:8000/v1/gameplay/leagues"
+    )
+    INTERNAL_FRIENDS_URL = os.environ.get(
+        "INTERNAL_FRIENDS_URL", "http://friends:8000/v1/social/friends"
+    )
+    INTERNAL_MESSAGING_URL = os.environ.get(
+        "INTERNAL_MESSAGING_URL", "http://messaging:8000/v1/social/messaging"
+    )
+    INTERNAL_COMMENTS_URL = os.environ.get(
+        "INTERNAL_COMMENTS_URL", "http://comments:8000/v1/social/comments"
+    )
+    INTERNAL_MEDIA_URL = os.environ.get(
+        "INTERNAL_MEDIA_URL", "http://media:8000/v1/platform/media"
+    )
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 
     @classmethod

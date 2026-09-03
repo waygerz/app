@@ -462,3 +462,53 @@ def set_preferences(data: dict) -> tuple[dict, int]:
     """Internal (service-to-service) entrypoint — user_id comes from the body."""
     matrix = set_preferences_matrix(str(data.get("user_id", "")), data)
     return {"preferences": matrix}, 200
+
+
+def purge_user(data: dict) -> tuple[dict, int]:
+    """Account deletion in the notifications service.
+
+    Everything owned by the user (feed rows, the outbound SMS/push audit
+    `messages`, device tokens, and both preference tables) is personal —
+    hard-deleted. Separately, rows where the deleted user was the *actor* on
+    SOMEONE ELSE's notification are KEPT but scrubbed: `actor_name` and
+    `actor_avatar_key` are denormalized snapshots that would otherwise keep
+    showing the real name (the pre-rendered `body` is left as-is). Idempotent.
+    """
+    try:
+        uid = str(data["user_id"])
+    except (KeyError, ValueError, TypeError):
+        return {"error": "user_id is required"}, 400
+
+    feed = Notification.query.filter(Notification.user_id == uid).delete(
+        synchronize_session=False
+    )
+    messages = Message.query.filter(Message.user_id == uid).delete(synchronize_session=False)
+    tokens = DeviceToken.query.filter(DeviceToken.user_id == uid).delete(
+        synchronize_session=False
+    )
+    prefs = NotificationPreference.query.filter(
+        NotificationPreference.user_id == uid
+    ).delete(synchronize_session=False)
+    chan = NotificationChannelPref.query.filter(
+        NotificationChannelPref.user_id == uid
+    ).delete(synchronize_session=False)
+
+    # Anonymize kept rows where this user was the actor on another user's feed.
+    scrubbed = (
+        Notification.query.filter(Notification.actor_id == uid).update(
+            {Notification.actor_name: "Deleted user", Notification.actor_avatar_key: None},
+            synchronize_session=False,
+        )
+    )
+
+    db.session.commit()
+    return {
+        "purged": {
+            "notifications": feed,
+            "messages": messages,
+            "device_tokens": tokens,
+            "preferences": prefs,
+            "channel_prefs": chan,
+        },
+        "scrubbed": {"actor_rows": scrubbed},
+    }, 200

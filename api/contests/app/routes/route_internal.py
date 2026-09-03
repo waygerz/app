@@ -16,3 +16,9 @@ def league_record():
 @internal_only
 def tick():
     return ctrl.tick()
+
+
+@contests_internal_bp.post("/purge-user")
+@internal_only
+def purge_user():
+    return ctrl.purge_user()

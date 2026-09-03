@@ -5,6 +5,10 @@ from app.models.wager import REFUNDED, SETTLED, Wager
 from app.services import service_wagers as wager_service
 
 
+def purge_user():
+    return wager_service.purge_user(request.get_json(silent=True) or {})
+
+
 def league_record():
     data = request.get_json(silent=True) or {}
     league_id = str(data.get("league_id", ""))

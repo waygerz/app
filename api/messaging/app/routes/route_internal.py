@@ -10,3 +10,9 @@ messaging_internal_bp = Blueprint("internal", __name__)
 @internal_only
 def post_message():
     return ctrl.post_message()
+
+
+@messaging_internal_bp.post("/purge-user")
+@internal_only
+def purge_user():
+    return ctrl.purge_user()

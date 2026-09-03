@@ -40,3 +40,9 @@ def internal_payout():
 @internal_only
 def internal_refund():
     return ctrl.internal_refund()
+
+
+@wallet_internal_bp.post("/purge-user")
+@internal_only
+def purge_user():
+    return ctrl.purge_user()

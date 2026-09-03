@@ -23,3 +23,8 @@ def otp_complete():
 @auth_bp.get("/me")
 def me():
     return ctrl.me()
+
+
+@auth_bp.delete("/account")
+def delete_account():
+    return ctrl.delete_account()

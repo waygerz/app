@@ -6,7 +6,10 @@ called by auth at signup (and by its create-user CLI) to create the profile row
 alongside the credential row.
 """
 from app.extensions import db
+from app.models.favorite_team import FavoriteTeam
 from app.models.profile import Profile
+
+TOMBSTONE_NAME = "Deleted user"
 
 
 def resolve_profiles(data: dict) -> tuple[dict, int]:
@@ -41,3 +44,32 @@ def upsert_profile(data: dict) -> tuple[dict, int]:
             p.avatar_key = data.get("avatar_key") or None
     db.session.commit()
     return {"profile": p.to_dict()}, 200
+
+
+def purge_user(data: dict) -> tuple[dict, int]:
+    """Account deletion in the users service.
+
+    The profile row is the tombstone every other service resolves a name/avatar
+    through, so it is KEPT but ANONYMIZED: display_name -> "Deleted user",
+    avatar_key -> null. Favorite teams are personal and hard-deleted. Idempotent
+    (re-running just re-sets the same tombstone). If the profile is already gone
+    there's nothing to anonymize.
+    """
+    try:
+        uid = str(data["user_id"])
+    except (KeyError, ValueError, TypeError):
+        return {"error": "user_id is required"}, 400
+    favorites = FavoriteTeam.query.filter(FavoriteTeam.user_id == uid).delete(
+        synchronize_session=False
+    )
+    p = Profile.query.filter_by(user_id=uid).first()
+    anonymized = False
+    if p is not None:
+        p.display_name = TOMBSTONE_NAME
+        p.avatar_key = None
+        anonymized = True
+    db.session.commit()
+    return {
+        "purged": {"favorite_teams": favorites},
+        "anonymized": {"profile": anonymized},
+    }, 200

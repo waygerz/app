@@ -10,3 +10,9 @@ friends_internal_bp = Blueprint("internal", __name__)
 @internal_only
 def are_friends():
     return ctrl.are_friends()
+
+
+@friends_internal_bp.post("/purge-user")
+@internal_only
+def purge_user():
+    return ctrl.purge_user()

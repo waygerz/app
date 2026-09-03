@@ -12,6 +12,7 @@ import { ColorPicker } from '@/components/theme/color-picker';
 import { SurfacePicker } from '@/components/theme/surface-picker';
 import { NotificationsCard, PromotionsCard } from '@/components/account/notifications-card';
 import { FavoriteTeamsCard } from '@/components/account/favorite-teams-card';
+import { DeleteAccountCard } from '@/components/account/delete-account-card';
 import { LegalLink } from '@/components/legal/legal-dialog';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -305,6 +306,9 @@ export default function AccountPage() {
             </p>
           )}
         </Card>
+
+        {/* Danger zone — permanent account deletion */}
+        <DeleteAccountCard />
       </div>
     </div>
   );

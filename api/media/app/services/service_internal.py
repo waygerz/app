@@ -1,7 +1,11 @@
 """Service-to-service asset verification for comments/messaging."""
+import logging
+
 from app.extensions import db
 from app.models.asset import ALLOWED_PURPOSES, STATUS_READY, Asset
-from app.services.service_storage import get_storage
+from app.services.service_storage import StorageError, get_storage
+
+logger = logging.getLogger(__name__)
 
 
 def verify_assets(data: dict) -> tuple[dict, int]:
@@ -39,3 +43,34 @@ def verify_assets(data: dict) -> tuple[dict, int]:
         assets_out.append(row.to_dict(download_url=url))
 
     return {"assets": assets_out}, 200
+
+
+def purge_user(data: dict) -> tuple[dict, int]:
+    """Account deletion in the media service: remove the user's owned assets.
+
+    For each asset the DELETE ORDER is deliberate — the S3 object is deleted
+    FIRST, then the DB row. S3 delete is idempotent (a missing key succeeds), so
+    a retry is safe; deleting the row first and then failing the S3 call would
+    orphan the object with no row left to find it from. If any object delete
+    fails hard, we abort with 500 (leaving that row) so the orchestrator can
+    retry — no row is dropped for an object that wasn't removed. Idempotent.
+    """
+    try:
+        uid = str(data["user_id"])
+    except (KeyError, ValueError, TypeError):
+        return {"error": "user_id is required"}, 400
+
+    storage = get_storage()
+    rows = Asset.query.filter(Asset.owner_id == uid).all()
+    deleted = 0
+    for row in rows:
+        try:
+            storage.delete_object(bucket=row.s3_bucket, key=row.s3_key)
+        except StorageError:
+            logger.exception("purge: S3 delete failed asset=%s", row.id)
+            db.session.rollback()
+            return {"error": "storage delete failed", "deleted": deleted}, 500
+        db.session.delete(row)
+        deleted += 1
+    db.session.commit()
+    return {"purged": {"assets": deleted}}, 200

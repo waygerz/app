@@ -61,6 +61,9 @@ interface AuthState {
   /** Replace the whole ordered favorites list; merges the result into context. */
   saveFavorites: (teams: FavoriteTeamInput[]) => Promise<void>;
   logout: () => Promise<void>;
+  /** Permanently delete the account (cross-service purge). Throws on failure
+   *  (a 409 carries the blocking leagues in `.data.leagues`). */
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -149,9 +152,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  async function deleteAccount() {
+    // Let a failure (incl. a 409 owns_leagues) propagate so the caller can show
+    // it; only drop local user state once the server confirms the delete.
+    await authApi.deleteAccount();
+    setUser(null);
+  }
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, startOtp, verifyOtp, completeProfile, setAvatar, updateProfile, saveFavorites, logout }}
+      value={{ user, loading, startOtp, verifyOtp, completeProfile, setAvatar, updateProfile, saveFavorites, logout, deleteAccount }}
     >
       {children}
     </AuthContext.Provider>

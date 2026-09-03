@@ -756,6 +756,81 @@ def _void_refund(wager, account, headline):
     _post_settled_activity(wager, headline)
 
 
+def purge_user(data: dict) -> tuple[dict, int]:
+    """Account deletion in the contests service.
+
+    Resolves every MONEY-HELD wager the user is a party to so no stake is left
+    stranded, then hard-deletes the user's own bet invite codes. Terminal wagers
+    (settled / declined / cancelled / refunded) are KEPT as shared history — the
+    counterparty's record stays intact and names resolve live to the tombstone.
+
+    Each wager is `_lock`ed and its status re-checked UNDER the lock before we
+    decide what to do, so a concurrent scheduler `/internal/tick` settling the
+    same wager cannot race us into a double money-move (refund and payout are
+    different ledger `type`s and are NOT deduped against each other). Every money
+    op is idempotent on the wager ref, so a re-run after a partial failure is
+    safe. If ANY wager fails to resolve we return 500 (leaving it money-held) so
+    the orchestrator retries the whole purge — already-resolved wagers are now
+    terminal and skipped.
+    """
+    from sqlalchemy import or_
+
+    try:
+        uid = str(data["user_id"])
+    except (KeyError, ValueError, TypeError):
+        return {"error": "user_id is required"}, 400
+
+    resolved = {"cancelled": 0, "refunded": 0, "settled": 0}
+    failed = 0
+    live = Wager.query.filter(
+        or_(Wager.proposer_id == uid, Wager.acceptor_id == uid),
+        Wager.status.in_([OPEN, ACCEPTED, COMPLETED]),
+    ).all()
+    for wager in live:
+        try:
+            _lock(wager)
+            account = _account(wager.league_id)
+            if wager.status == OPEN:
+                # Only the proposer staked money on an unaccepted offer. Refund
+                # and cancel — no feed post (mirrors a manual cancel).
+                refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
+                wager.status = CANCELLED
+                db.session.commit()
+                resolved["cancelled"] += 1
+            elif wager.status == ACCEPTED:
+                _void_refund(wager, account, "A player left — bet voided, stakes returned")
+                resolved["refunded"] += 1
+            elif wager.status == COMPLETED:
+                # Decided-but-unclaimed: pay the winner rather than reverse a
+                # result the remaining member relies on. Only void if the winner
+                # is genuinely unresolvable.
+                winner = wager.winner_user_id
+                if winner:
+                    payout(account, winner, wager.amount_cents * 2, _ref(wager.id))
+                    wager.status = SETTLED
+                    wager.settled_at = datetime.utcnow()
+                    db.session.commit()
+                    _notify_settled(wager)
+                    resolved["settled"] += 1
+                else:
+                    _void_refund(wager, account, "A player left — bet voided, stakes returned")
+                    resolved["refunded"] += 1
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
+            failed += 1
+            continue
+
+    if failed:
+        return {"error": "some wagers could not be resolved", "resolved": resolved,
+                "failed": failed}, 500
+
+    codes = WagerInviteCode.query.filter(WagerInviteCode.created_by == uid).delete(
+        synchronize_session=False
+    )
+    db.session.commit()
+    return {"resolved": resolved, "purged": {"wager_invite_codes": codes}}, 200
+
+
 def settle_one(wager):
     """Advance an accepted wager once its event is over.
 

@@ -1,15 +1,22 @@
 """Internal leagues endpoints for cross-service calls."""
+from sqlalchemy import or_
+
 from flask import request
 
 from app.extensions import db
-from app.models.league import League
+from app.models.league import ARCHIVED, League
 from app.models.member import ACTIVE, LeagueMember
 from app.models.sport import LeagueSport
 from app.models import feed as feed_model
 from app.models.feed import LeagueFeed
+from app.models.feed_read import LeagueFeedRead
+from app.models.invite import LeagueInvite
+from app.models.invite_code import LeagueInviteCode
 from app.services.service_leagues import (
     add_feed, current_period, grade_open_periods, reconcile_recent_finals, rollover_periods, _reannounce_winners,
 )
+
+TOMBSTONE_NAME = "Deleted user"
 
 
 def are_comembers():
@@ -205,3 +212,86 @@ def add_activity(league_id):
     )
     db.session.commit()
     return {"ok": True, "id": item.id}, 200
+
+def commissioned_leagues():
+    """Preflight for account deletion: the non-archived leagues this user
+    commissions. A non-empty result BLOCKS deletion — the user must transfer
+    ownership or archive each first (both are existing member/league endpoints).
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        uid = str(data["user_id"])
+    except (KeyError, ValueError, TypeError):
+        return {"error": "user_id is required"}, 400
+    rows = League.query.filter(
+        League.commissioner_id == uid, League.status != ARCHIVED
+    ).all()
+    out = []
+    for lg in rows:
+        members = LeagueMember.query.filter(
+            LeagueMember.league_id == lg.id, LeagueMember.status == ACTIVE
+        ).count()
+        out.append(
+            {"id": lg.id, "name": lg.name, "status": lg.status, "member_count": members}
+        )
+    return {"leagues": out}, 200
+
+
+def purge_user():
+    """Account deletion in the leagues service.
+
+    Deletes the user's PERSONAL rows (membership, feed read-cursor, invite codes
+    they created, and league invites they sent or received). KEPT as shared
+    history: their picks, pick confirmations, and feed posts. The one kept row
+    that freezes their name in text is the `member_joined` system post — its
+    `author_id` is null, so it's located via `meta->>'user_id'` and its
+    title/body are rewritten to the "Deleted user" tombstone. Idempotent.
+
+    NOTE: relies on the caller's preflight (`commissioned_leagues`) having already
+    blocked deletion while the user commissions any non-archived league, so we
+    never orphan a live league here.
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        uid = str(data["user_id"])
+    except (KeyError, ValueError, TypeError):
+        return {"error": "user_id is required"}, 400
+
+    members = LeagueMember.query.filter(LeagueMember.user_id == uid).delete(
+        synchronize_session=False
+    )
+    reads = LeagueFeedRead.query.filter(LeagueFeedRead.user_id == uid).delete(
+        synchronize_session=False
+    )
+    codes = LeagueInviteCode.query.filter(LeagueInviteCode.created_by == uid).delete(
+        synchronize_session=False
+    )
+    invites = LeagueInvite.query.filter(
+        or_(LeagueInvite.inviter_id == uid, LeagueInvite.invitee_id == uid)
+    ).delete(synchronize_session=False)
+
+    # Scrub the deleted user's name out of the kept `member_joined` system post
+    # (author_id is null on system activity, so match on meta->>'user_id').
+    scrubbed = (
+        LeagueFeed.query.filter(
+            LeagueFeed.event_type == "member_joined",
+            LeagueFeed.meta["user_id"].astext == uid,
+        ).update(
+            {
+                LeagueFeed.title: f"{TOMBSTONE_NAME} joined",
+                LeagueFeed.body: f"{TOMBSTONE_NAME} joined the league.",
+            },
+            synchronize_session=False,
+        )
+    )
+
+    db.session.commit()
+    return {
+        "purged": {
+            "league_members": members,
+            "feed_reads": reads,
+            "invite_codes": codes,
+            "league_invites": invites,
+        },
+        "scrubbed": {"member_joined_feed": scrubbed},
+    }, 200

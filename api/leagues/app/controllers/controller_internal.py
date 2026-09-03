@@ -46,3 +46,13 @@ def feed_post_access():
 def add_activity(league_id):
     body, status = service.add_activity(league_id)
     return jsonify(body), status
+
+
+def commissioned_leagues():
+    body, status = service.commissioned_leagues()
+    return jsonify(body), status
+
+
+def purge_user():
+    body, status = service.purge_user()
+    return jsonify(body), status
