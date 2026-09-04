@@ -1,0 +1,170 @@
+<title>Bet Surfaces — board grid</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { colors: {
+      background: 'rgb(var(--background) / <alpha-value>)',
+      foreground: 'rgb(var(--foreground) / <alpha-value>)',
+      card: 'rgb(var(--card) / <alpha-value>)',
+      primary: 'rgb(var(--primary) / <alpha-value>)',
+      'primary-foreground': 'rgb(var(--primary-foreground) / <alpha-value>)',
+      secondary: 'rgb(var(--secondary) / <alpha-value>)',
+      'secondary-foreground': 'rgb(var(--secondary-foreground) / <alpha-value>)',
+      muted: 'rgb(var(--muted) / <alpha-value>)',
+      'muted-foreground': 'rgb(var(--muted-foreground) / <alpha-value>)',
+      border: 'rgb(var(--border) / <alpha-value>)',
+      input: 'rgb(var(--input) / <alpha-value>)',
+    } } },
+  };
+</script>
+<style type="text/tailwindcss">
+  :root {
+    --background: 255 255 255; --foreground: 9 9 11; --card: 255 255 255;
+    --primary: 124 58 237; --primary-foreground: 255 255 255;
+    --secondary: 244 244 245; --secondary-foreground: 24 24 27;
+    --muted: 244 244 245; --muted-foreground: 113 113 122;
+    --border: 236 236 238; --input: 228 228 231;
+  }
+  .dark {
+    --background: 14 15 20; --foreground: 250 250 250; --card: 25 27 36;
+    --primary: 139 92 246; --primary-foreground: 255 255 255;
+    --secondary: 38 41 53; --secondary-foreground: 250 250 250;
+    --muted: 34 36 46; --muted-foreground: 113 113 122;
+    --border: 46 48 64; --input: 46 48 64;
+  }
+  .logo { @apply flex shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-black/10 text-[10px] font-bold; }
+  .ava  { @apply flex shrink-0 items-center justify-center rounded-full text-white font-semibold; }
+  .team { @apply flex items-center gap-2.5 rounded-md border border-border bg-background px-2.5; }
+  .cell { @apply flex flex-col items-center justify-center rounded-md border border-border bg-background text-xs font-semibold leading-tight tabular-nums; }
+  .win  { @apply border-transparent bg-muted/60; }
+  .k-win  { @apply border-transparent bg-green-500/15 text-green-500; }
+  .k-loss { @apply border-transparent bg-red-500/15 text-red-500; }
+  .k-open { @apply border-transparent bg-primary/15 text-primary; }
+  .pill { @apply inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums whitespace-nowrap; }
+  .drow { @apply flex items-center justify-between border-b border-border/60 py-2 text-sm last:border-0; }
+  .lbl  { @apply text-muted-foreground; }
+  .btn-primary { @apply rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground; }
+  .btn-outline { @apply rounded-md border border-input px-4 py-2.5 text-sm font-medium hover:bg-muted; }
+  h2 { @apply text-sm font-semibold; }
+  .t-mut { @apply min-w-0 flex-1 truncate text-sm text-muted-foreground; }
+  .t-win { @apply min-w-0 flex-1 truncate text-sm font-semibold; }
+</style>
+
+<div id="root" class="dark min-h-dvh bg-background text-foreground antialiased [font-family:ui-sans-serif,system-ui,-apple-system,Segoe_UI,Roboto,sans-serif]">
+<div class="mx-auto max-w-5xl px-4 py-8">
+  <div class="mb-6 flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">Bet surfaces on the board grid</h1>
+      <p class="mt-1 text-sm text-muted-foreground">Proposed board-grid treatments for the three views the list card doesn't cover yet.</p>
+    </div>
+    <button id="themeToggle" class="shrink-0 rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted"><span class="dark:hidden">🌙</span><span class="hidden dark:inline">☀️</span></button>
+  </div>
+
+  <!-- ============ 1. DETAILS DIALOG — two variants ============ -->
+  <div class="mb-3"><h2 class="text-base">1 · Bet details dialog (tap a card)</h2><p class="text-xs text-muted-foreground">Expanded view of the same bet. Two takes.</p></div>
+  <div class="mb-10 grid gap-6 sm:grid-cols-2">
+
+    <!-- A1: grid + labeled rows -->
+    <div>
+      <div class="mb-2 text-xs font-semibold text-muted-foreground">Variant A — grid + detail rows</div>
+      <div class="relative rounded-xl border border-border bg-card p-5 shadow-2xl">
+        <button class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="mb-3 flex items-center justify-between gap-2 pr-6 text-xs">
+          <span class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-green-500"></span><span class="text-muted-foreground">Fri, Sep 6 · 7:10 PM · Final</span></span>
+          <span class="font-semibold text-green-500">Won</span>
+        </div>
+        <div class="grid grid-cols-[minmax(0,1fr)_3.5rem_5.25rem] gap-1.5">
+          <div class="team h-12"><span class="logo size-7 text-indigo-700">NYM</span><span class="t-mut">New York Mets</span><span class="text-sm font-bold tabular-nums text-muted-foreground">2</span></div>
+          <div class="cell h-12"><span class="text-muted-foreground">+1.5</span></div>
+          <div class="cell k-win row-span-2 !h-auto self-stretch"><span class="text-xl font-bold">+$10</span></div>
+          <div class="team win h-12"><span class="logo size-7 text-slate-700">TB</span><span class="t-win">Tampa Bay Rays</span><span class="text-sm font-bold tabular-nums">6</span></div>
+          <div class="cell k-win h-12"><span>−1.5</span></div>
+        </div>
+        <div class="mt-4">
+          <div class="drow"><span class="lbl">Market</span><span class="font-medium">Spread · Rays −1.5</span></div>
+          <div class="drow"><span class="lbl">Stake</span><span class="font-medium">$10</span></div>
+          <div class="drow"><span class="lbl">Opponent</span><span class="flex items-center gap-2 font-medium"><span class="ava size-6 bg-gradient-to-br from-rose-500 to-orange-500 text-[10px]">C</span>Chris Bates</span></div>
+          <div class="drow"><span class="lbl">Settled</span><span class="font-medium">Sat, Sep 6 · 11:04 PM</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A2: grid + minimal -->
+    <div>
+      <div class="mb-2 text-xs font-semibold text-muted-foreground">Variant B — grid + minimal (no redundant rows)</div>
+      <div class="relative rounded-xl border border-border bg-card p-5 shadow-2xl">
+        <button class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="mb-3 flex items-center gap-2.5 pr-6">
+          <span class="ava size-9 bg-gradient-to-br from-rose-500 to-orange-500 text-sm">C</span>
+          <div class="min-w-0"><div class="truncate text-sm font-semibold">vs Chris Bates</div><div class="text-xs text-muted-foreground">Fri, Sep 6 · 7:10 PM</div></div>
+          <span class="ml-auto pill k-win border-green-600/40">Won +$10</span>
+        </div>
+        <div class="grid grid-cols-[minmax(0,1fr)_3.5rem_5.25rem] gap-1.5">
+          <div class="team h-12"><span class="logo size-7 text-indigo-700">NYM</span><span class="t-mut">New York Mets</span><span class="text-sm font-bold tabular-nums text-muted-foreground">2</span></div>
+          <div class="cell h-12"><span class="text-muted-foreground">+1.5</span></div>
+          <div class="cell k-win row-span-2 !h-auto self-stretch"><span class="text-xl font-bold">+$10</span></div>
+          <div class="team win h-12"><span class="logo size-7 text-slate-700">TB</span><span class="t-win">Tampa Bay Rays</span><span class="text-sm font-bold tabular-nums">6</span></div>
+          <div class="cell k-win h-12"><span>−1.5</span></div>
+        </div>
+        <div class="mt-3 text-center text-xs text-muted-foreground">Spread · staked $10 · beat Chris Bates</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2. PROFILE — shared bets ============ -->
+  <div class="mb-3"><h2 class="text-base">2 · Profile dialog · shared bets</h2><p class="text-xs text-muted-foreground">Mini board rows in someone's head-to-head history.</p></div>
+  <div class="mb-10 max-w-sm rounded-xl border border-border bg-card p-4 shadow-2xl">
+    <div class="mb-3 flex items-center gap-3">
+      <span class="ava size-11 bg-gradient-to-br from-emerald-500 to-teal-600">F</span>
+      <div><div class="text-base font-semibold">Farrell</div><div class="text-xs text-muted-foreground">Head-to-head · <span class="font-medium text-foreground">3–1</span> · +$25</div></div>
+    </div>
+    <div class="flex flex-col divide-y divide-border">
+      <div class="flex items-center gap-2.5 py-2.5">
+        <div class="flex shrink-0 -space-x-1.5"><span class="logo size-6 text-orange-600 ring-2 ring-card">MIA</span><span class="logo size-6 text-red-700 ring-2 ring-card">STAN</span></div>
+        <div class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold">Miami</span> <span class="text-muted-foreground">vs Stanford</span></div>
+        <span class="pill k-win border-green-600/40">−21.5</span>
+        <span class="w-12 text-right text-sm font-bold text-green-500">+$5</span>
+      </div>
+      <div class="flex items-center gap-2.5 py-2.5">
+        <div class="flex shrink-0 -space-x-1.5"><span class="logo size-6 text-red-700 ring-2 ring-card">BCU</span><span class="logo size-6 text-amber-600 ring-2 ring-card">UCF</span></div>
+        <div class="min-w-0 flex-1 truncate text-sm">BCU <span class="text-muted-foreground">vs UCF</span></div>
+        <span class="pill k-loss border-red-600/40">U 57.5</span>
+        <span class="w-12 text-right text-sm font-bold text-red-500">−$10</span>
+      </div>
+      <div class="flex items-center gap-2.5 py-2.5">
+        <div class="flex shrink-0 -space-x-1.5"><span class="logo size-6 text-blue-700 ring-2 ring-card">DET</span><span class="logo size-6 text-red-700 ring-2 ring-card">CLE</span></div>
+        <div class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold">Tigers</span> <span class="text-muted-foreground">vs Guardians</span></div>
+        <span class="pill k-open border-primary/50">ML</span>
+        <span class="w-12 text-right text-xs font-medium text-primary">Live</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 3. INVITE PREVIEW /c/<code> ============ -->
+  <div class="mb-3"><h2 class="text-base">3 · Invite preview · /c/&lt;code&gt;</h2><p class="text-xs text-muted-foreground">The "you've been challenged" deep-link, as a board matchup.</p></div>
+  <div class="max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl">
+    <div class="mb-4 flex flex-col items-center gap-2 text-center">
+      <span class="ava size-12 bg-gradient-to-br from-indigo-500 to-violet-600 text-lg">M</span>
+      <div><div class="text-base font-semibold">Marcus challenged you</div><div class="text-xs text-muted-foreground">Free for All · Sun, Sep 7 · 1:00 PM</div></div>
+    </div>
+    <div class="grid grid-cols-[minmax(0,1fr)_5.25rem] gap-1.5">
+      <div class="team win h-12"><span class="logo size-7 text-emerald-700">PHI</span><span class="t-win">Philadelphia Eagles</span></div>
+      <div class="cell k-open h-12"><span class="text-[11px]">Your pick</span><span class="text-sm font-bold">ML</span></div>
+      <div class="team h-12"><span class="logo size-7 text-red-800">WSH</span><span class="t-mut">Commanders</span></div>
+      <div class="cell h-12"><span class="text-muted-foreground">—</span></div>
+    </div>
+    <div class="my-4 flex items-center justify-center gap-2 text-sm"><span class="text-muted-foreground">Stake</span><span class="rounded-full bg-secondary px-2.5 py-0.5 font-semibold text-secondary-foreground">$10 · Straight up</span></div>
+    <div class="flex gap-2">
+      <button class="btn-outline flex-1">Reject</button>
+      <button class="btn-primary flex-[2]">Accept — $10</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', () =>
+    document.getElementById('root').classList.toggle('dark'));
+</script>

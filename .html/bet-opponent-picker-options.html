@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Waygerz · Opponent picker options</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { colors: {
+      background: 'rgb(var(--background) / <alpha-value>)',
+      foreground: 'rgb(var(--foreground) / <alpha-value>)',
+      card: 'rgb(var(--card) / <alpha-value>)',
+      primary: 'rgb(var(--primary) / <alpha-value>)',
+      'primary-foreground': 'rgb(var(--primary-foreground) / <alpha-value>)',
+      secondary: 'rgb(var(--secondary) / <alpha-value>)',
+      'secondary-foreground': 'rgb(var(--secondary-foreground) / <alpha-value>)',
+      muted: 'rgb(var(--muted) / <alpha-value>)',
+      'muted-foreground': 'rgb(var(--muted-foreground) / <alpha-value>)',
+      border: 'rgb(var(--border) / <alpha-value>)',
+      input: 'rgb(var(--input) / <alpha-value>)',
+      destructive: 'rgb(var(--destructive) / <alpha-value>)',
+      brand: 'rgb(var(--brand) / <alpha-value>)',
+    } } },
+  };
+</script>
+<style type="text/tailwindcss">
+  :root {
+    --background: 255 255 255; --foreground: 9 9 11; --card: 255 255 255;
+    --primary: 124 58 237; --primary-foreground: 255 255 255;
+    --secondary: 244 244 245; --secondary-foreground: 24 24 27;
+    --muted: 244 244 245; --muted-foreground: 113 113 122;
+    --border: 236 236 238; --input: 228 228 231; --destructive: 220 38 38; --brand: 0 162 46;
+  }
+  .dark {
+    --background: 14 15 20; --foreground: 250 250 250; --card: 25 27 36;
+    --primary: 139 92 246; --primary-foreground: 255 255 255;
+    --secondary: 38 41 53; --secondary-foreground: 250 250 250;
+    --muted: 34 36 46; --muted-foreground: 113 113 122;
+    --border: 46 48 64; --input: 46 48 64; --destructive: 220 38 38; --brand: 0 194 58;
+  }
+  .logo { @apply flex shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-black/10 text-[11px] font-bold; }
+  .ava  { @apply flex shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white; }
+  .eyebrow { @apply text-[10px] font-semibold uppercase tracking-wider text-muted-foreground; }
+  /* selectable member row */
+  .row  { @apply flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors; }
+  .row-off { @apply border-border bg-card hover:bg-muted; }
+  .row-on  { @apply border-primary bg-primary/10; }
+  .tick { @apply flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors; }
+  .tick-off { @apply border-input; }
+  .tick-on  { @apply border-primary bg-primary text-primary-foreground; }
+  /* search box (mirrors ListSearch) */
+  .search { @apply h-11 w-full rounded-xl border border-input bg-background ps-9 pe-3 text-base outline-none placeholder:text-muted-foreground focus:border-primary; }
+</style>
+<style> body { background: rgb(var(--background)); } </style>
+</head>
+<body class="min-h-dvh text-foreground antialiased [font-family:ui-sans-serif,system-ui,-apple-system,Segoe_UI,Roboto,sans-serif]">
+
+<div class="mx-auto max-w-6xl px-4 py-10">
+  <div class="mb-8 flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">Send-a-bet · opponent step — options</h1>
+      <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
+        The "Challenge members" step, with a member search added and three ways to clean up the top summary.
+        Same bet in each: backing <span class="text-foreground">Florida Gators −26.5</span> · Spread · $10,
+        matchup <span class="text-foreground">FAU @ Florida</span>.
+      </p>
+    </div>
+    <button id="themeToggle" class="shrink-0 rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted"><span class="dark:hidden">🌙 Dark</span><span class="hidden dark:inline">☀️ Light</span></button>
+  </div>
+
+  <div class="grid items-start gap-8 lg:grid-cols-3">
+
+    <!-- ============ OPTION A — Summary card (shipped, refined) ============ -->
+    <div>
+      <div class="mb-3 flex items-baseline gap-2"><span class="text-sm font-semibold">Option A</span><span class="text-xs text-muted-foreground">Logo + "Backing" summary card</span></div>
+      <div class="relative w-full rounded-xl border border-border bg-card p-5 shadow-2xl">
+        <button class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+
+        <!-- summary card -->
+        <div class="mb-4 flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+          <span class="logo size-9 text-[#0021A5]">FLA</span>
+          <div class="min-w-0 flex-1">
+            <div class="eyebrow">Backing</div>
+            <div class="truncate text-sm font-semibold">Florida Gators −26.5</div>
+            <div class="truncate text-xs text-muted-foreground">Spread · $10 · FAU @ Florida</div>
+          </div>
+        </div>
+
+        <div class="mb-2 text-sm font-medium">Challenge members</div>
+        <div class="relative mb-3">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input class="search" placeholder="Search members" />
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <button class="row row-on"><span class="ava size-10 bg-gradient-to-br from-indigo-500 to-violet-600">M</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Marcus</span><span class="tick tick-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="size-3.5"><path d="M20 6 9 17l-5-5"/></svg></span></button>
+          <button class="row row-off"><span class="ava size-10 bg-gradient-to-br from-emerald-500 to-teal-600">F</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Farrell</span><span class="tick tick-off"></span></button>
+          <button class="row row-on"><span class="ava size-10 bg-gradient-to-br from-rose-500 to-orange-500">T</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Theo</span><span class="tick tick-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="size-3.5"><path d="M20 6 9 17l-5-5"/></svg></span></button>
+          <button class="row row-off"><span class="ava size-10 bg-gradient-to-br from-sky-500 to-blue-600">J</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Johnny</span><span class="tick tick-off"></span></button>
+          <button class="row row-off"><span class="ava size-10 bg-gradient-to-br from-fuchsia-500 to-purple-600">D</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Dana</span><span class="tick tick-off"></span></button>
+        </div>
+
+        <div class="mt-4 flex items-center justify-between gap-2">
+          <button class="rounded-md border border-input px-4 py-2.5 text-sm font-medium hover:bg-muted">Back</button>
+          <button class="rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">Bet (2)</button>
+        </div>
+      </div>
+      <p class="mt-2 text-xs text-muted-foreground">Closest to what's live. Compact, matchup on the subline.</p>
+    </div>
+
+    <!-- ============ OPTION B — Matchup banner ============ -->
+    <div>
+      <div class="mb-3 flex items-baseline gap-2"><span class="text-sm font-semibold">Option B</span><span class="text-xs text-muted-foreground">Full matchup banner, pick highlighted</span></div>
+      <div class="relative w-full rounded-xl border border-border bg-card p-5 shadow-2xl">
+        <button class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+
+        <!-- matchup banner: away @ home, backed side ringed -->
+        <div class="mb-4 rounded-lg border border-border bg-muted/40 p-3">
+          <div class="flex items-center justify-center gap-3">
+            <div class="flex flex-col items-center gap-1 opacity-70">
+              <span class="logo size-11 text-red-600">FAU</span>
+              <span class="text-[11px] font-medium text-muted-foreground">FAU</span>
+            </div>
+            <span class="text-xs font-semibold text-muted-foreground">@</span>
+            <div class="flex flex-col items-center gap-1">
+              <span class="logo size-11 text-[#0021A5] ring-2 ring-primary">FLA</span>
+              <span class="text-[11px] font-semibold text-foreground">Florida</span>
+            </div>
+          </div>
+          <div class="mt-3 flex items-center justify-center gap-2 border-t border-border pt-2.5 text-sm">
+            <span class="font-semibold">Florida Gators −26.5</span>
+            <span class="text-muted-foreground">·</span>
+            <span class="text-muted-foreground">Spread</span>
+            <span class="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary">$10</span>
+          </div>
+        </div>
+
+        <div class="mb-2 text-sm font-medium">Challenge members</div>
+        <div class="relative mb-3">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input class="search" value="jo" />
+          <button class="absolute right-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-muted"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <button class="row row-off"><span class="ava size-10 bg-gradient-to-br from-sky-500 to-blue-600">J</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Johnny</span><span class="tick tick-off"></span></button>
+          <button class="row row-off"><span class="ava size-10 bg-gradient-to-br from-amber-500 to-orange-600">J</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Jordan</span><span class="tick tick-off"></span></button>
+        </div>
+        <p class="mt-2 px-1 text-xs text-muted-foreground">Filtered by "jo" · 2 of 10 members</p>
+
+        <div class="mt-4 flex items-center justify-between gap-2">
+          <button class="rounded-md border border-input px-4 py-2.5 text-sm font-medium hover:bg-muted">Back</button>
+          <button class="rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">Bet</button>
+        </div>
+      </div>
+      <p class="mt-2 text-xs text-muted-foreground">Most visual — shows who's playing whom. Demonstrates the live search filter.</p>
+    </div>
+
+    <!-- ============ OPTION C — Compact bar + selected chips ============ -->
+    <div>
+      <div class="mb-3 flex items-baseline gap-2"><span class="text-sm font-semibold">Option C</span><span class="text-xs text-muted-foreground">One-line bar + selected chips</span></div>
+      <div class="relative w-full rounded-xl border border-border bg-card p-5 shadow-2xl">
+        <button class="absolute right-4 top-4 text-muted-foreground hover:text-foreground"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+
+        <!-- compact one-line summary -->
+        <div class="mb-1 flex items-center gap-2.5">
+          <span class="logo size-8 text-[#0021A5]">FLA</span>
+          <span class="min-w-0 flex-1 truncate text-sm font-semibold">Florida Gators −26.5</span>
+          <span class="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">Spread · $10</span>
+        </div>
+        <div class="mb-4 pl-[2.625rem] text-xs text-muted-foreground">FAU @ Florida · Sat 7:45p</div>
+
+        <div class="mb-2 text-sm font-medium">Challenge members <span class="text-muted-foreground">· 2 selected</span></div>
+        <!-- selected as removable chips -->
+        <div class="mb-3 flex flex-wrap gap-1.5">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-primary/15 py-1 pl-1 pr-2 text-xs font-medium text-primary"><span class="ava size-5 bg-gradient-to-br from-indigo-500 to-violet-600 text-[10px]">M</span>Marcus<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="size-3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-primary/15 py-1 pl-1 pr-2 text-xs font-medium text-primary"><span class="ava size-5 bg-gradient-to-br from-rose-500 to-orange-500 text-[10px]">C</span>Casey<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="size-3"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+        </div>
+        <div class="relative mb-3">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input class="search" placeholder="Search members" />
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <button class="row row-on"><span class="ava size-10 bg-gradient-to-br from-indigo-500 to-violet-600">M</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Marcus</span><span class="tick tick-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="size-3.5"><path d="M20 6 9 17l-5-5"/></svg></span></button>
+          <button class="row row-on"><span class="ava size-10 bg-gradient-to-br from-rose-500 to-orange-500">C</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Casey</span><span class="tick tick-on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="size-3.5"><path d="M20 6 9 17l-5-5"/></svg></span></button>
+          <button class="row row-off"><span class="ava size-10 bg-gradient-to-br from-emerald-500 to-teal-600">A</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Alex</span><span class="tick tick-off"></span></button>
+          <button class="row row-off"><span class="ava size-10 bg-gradient-to-br from-sky-500 to-blue-600">S</span><span class="min-w-0 flex-1 truncate text-sm font-medium">Sam</span><span class="tick tick-off"></span></button>
+        </div>
+
+        <div class="mt-4 flex items-center justify-between gap-2">
+          <button class="rounded-md border border-input px-4 py-2.5 text-sm font-medium hover:bg-muted">Back</button>
+          <button class="rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground">Send 2 bets</button>
+        </div>
+      </div>
+      <p class="mt-2 text-xs text-muted-foreground">Best for multi-select: picked members stay visible as chips even after you scroll/filter.</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', () =>
+    document.documentElement.classList.toggle('dark'));
+</script>
+</body>
+</html>

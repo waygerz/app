@@ -49,20 +49,30 @@ depends on the league's type:
 
 ## 1. Getting started — signing in
 
-There are no passwords. You sign in with your phone number:
+There are no passwords. You sign in with your phone number, and we text you a
+one-time code.
 
-1. **Enter your phone number** and tap **Text me a code**.
-2. **Type the 6-digit code** we send and tap **Continue**. Wrong number? Tap
+**If you already have an account:**
+
+1. **Enter your phone number** and tap **Continue**.
+2. **Type the 6-digit code** we text you and tap **Continue**. Wrong number? Tap
    **Use a different number** to start over.
-3. If you're new, you'll set up your account: **your name**, then agree to the
-   **Terms of Service** and **Privacy Policy**, and finally choose whether you
-   want **text alerts** and **promotional texts** (both optional — you can skip
-   and change them later).
 
 That's it — you're in.
 
-> **Heads up:** text messaging isn't switched on yet, so during this early period
-> your login code is shown right on the screen instead of being texted to you.
+**If you're new,** creating an account adds a couple of steps:
+
+1. **Enter your phone number** and tap **Continue**.
+2. **Agree to texts.** Because the sign-in code is itself a text, we confirm your
+   consent first. Check the box to receive **account & sign-in texts** — this one
+   is **required** (without it we can't text you the code). A second box for
+   **promotional texts** is **optional**. Tap **Agree & text me my code**.
+3. **Type the 6-digit code** and tap **Continue**.
+4. **Tell us your name** (Step 1 of 2), then **agree to the Terms of Service and
+   Privacy Policy** (Step 2 of 2 — both required). Tap **Create my account**.
+
+> **Heads up:** if you've previously texted **STOP** to opt out of our texts,
+> you'll need to text **START** first so we can send your sign-in code.
 
 **Opening a shared link before you're signed in.** If a friend sends you an
 invite (to a league, a bet, or to be friends) and you're not signed in yet,
@@ -126,6 +136,16 @@ Two separate cards let you control what reaches you by text and in the app:
 Your **Agreements** card shows the date you accepted the Terms and Privacy
 Policy, with links to re-read them. To sign out, open the **Profile menu** and
 tap **Sign out**.
+
+### Deleting your account
+
+At the bottom of **Account** is a **Delete account** option, set apart in a red
+"danger zone." Deleting is permanent: you confirm by typing **DELETE**, and then
+your profile and personal details are removed and you're signed out. Shared
+history that other people still see — past bets and messages — is kept but no
+longer shows your name. If you're the **commissioner of an active league**, you
+can't delete yet: the app lists those leagues and asks you to **hand them off or
+archive** them first.
 
 ---
 
@@ -397,19 +417,24 @@ come together as the apps land.
 ### Before you start
 - [ ] Two accounts / phone numbers ready (needed for friends, DMs, and both sides
       of a bet).
-- [ ] Login without SMS: the OTP appears in a dashed **"Testing code"** box **and
-      pre-fills** — just tap **Continue**.
+- [ ] The sign-in code now arrives by **real SMS** — the old on-screen **"Testing
+      code"** box is gone. Use a phone number that can receive texts.
 - [ ] Run each area at **mobile width** (bottom nav + header title) **and** desktop
       `lg+` (top bar + in-page heading).
 
 ### Signing in
 - [ ] `/` signed out → rewrites to the **/welcome** page; **Sign in / Get started**
-      → `/login`. ⚠ Landing/FAQ mention a join **"code"** that doesn't exist.
+      → `/login`.
 - [ ] `/signup` → redirects to `/login`.
-- [ ] Phone auto-formats `(904) 555-1234`; **Text me a code** → code step + Testing
-      box; **← Use a different number** resets.
-- [ ] New number → **Step 1 Name → Step 2 Terms → Step 3 SMS**. Terms needs **both**
-      boxes; SMS is optional. ⚠ First box literally reads **"I agree to the TOS."**
+- [ ] Phone auto-formats `(904) 555-1234`; **Continue** sends the code.
+- [ ] **Existing** number → straight to the **code** step; **← Use a different
+      number** resets.
+- [ ] **New** number → a **consent card first**: the **account & sign-in texts** box
+      is **required** (the **Agree & text me my code** button stays disabled until
+      it's checked); the **promotional texts** box is optional.
+- [ ] After the code, a new account → **Step 1 Name → Step 2 Terms & Privacy** (both
+      boxes required) → **Create my account**.
+- [ ] Opted-out number → error prompting to text **START** first.
 - [ ] Signed-out share link → `/login` with a banner ("Log in to join" / "…connect"
       / "…answer your bet"); after login you land on the link.
 
@@ -502,7 +527,10 @@ come together as the apps land.
       their detail pages render **"Not found."**
 
 ### Launch-risk spot-checks  ⚠
-- [ ] `/terms` still shows the placeholder **`[amount, e.g. USD $100]`** + "draft,
-      not reviewed by counsel"; entity reads **"Wagerz, Inc."** vs "Waygerz".
-- [ ] Confirm whether **in-app account deletion** exists (both app stores require
-      it) — not found in the audit.
+- [ ] `/terms` and `/privacy` render real copy under the **Waygerz** name — the old
+      `[amount, e.g. USD $100]` placeholder, the "draft, not reviewed by counsel"
+      banner, and the **"Wagerz, Inc."** entity typo are gone. (Final legal review
+      still pending.)
+- [ ] **In-app account deletion exists** (Account → **Delete account**): type-DELETE
+      confirm; blocked while you commission an active league (it lists them); then
+      purges your data and signs you out. (Both app stores require this.)

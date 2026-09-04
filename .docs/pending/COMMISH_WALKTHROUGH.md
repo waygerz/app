@@ -127,7 +127,9 @@ the league, but can't touch roles, Manage, or ownership.
 
 Members can leave any time. **You can't just leave** as commissioner — you have to
 **hand off ownership or archive** first. (The member's **Leave league** button is
-at the bottom of the **Overview** tab.)
+at the bottom of the **Overview** tab.) The same rule guards **account deletion**:
+while you commission an active league, deleting your account is blocked until you
+hand it off or archive it.
 
 ---
 

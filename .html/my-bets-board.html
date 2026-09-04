@@ -1,0 +1,177 @@
+<title>My Bets — board style</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { colors: {
+      background: 'rgb(var(--background) / <alpha-value>)',
+      foreground: 'rgb(var(--foreground) / <alpha-value>)',
+      card: 'rgb(var(--card) / <alpha-value>)',
+      primary: 'rgb(var(--primary) / <alpha-value>)',
+      'primary-foreground': 'rgb(var(--primary-foreground) / <alpha-value>)',
+      secondary: 'rgb(var(--secondary) / <alpha-value>)',
+      'secondary-foreground': 'rgb(var(--secondary-foreground) / <alpha-value>)',
+      muted: 'rgb(var(--muted) / <alpha-value>)',
+      'muted-foreground': 'rgb(var(--muted-foreground) / <alpha-value>)',
+      border: 'rgb(var(--border) / <alpha-value>)',
+      input: 'rgb(var(--input) / <alpha-value>)',
+      destructive: 'rgb(var(--destructive) / <alpha-value>)',
+    } } },
+  };
+</script>
+<style type="text/tailwindcss">
+  :root {
+    --background: 255 255 255; --foreground: 9 9 11; --card: 255 255 255;
+    --primary: 124 58 237; --primary-foreground: 255 255 255;
+    --secondary: 244 244 245; --secondary-foreground: 24 24 27;
+    --muted: 244 244 245; --muted-foreground: 113 113 122;
+    --border: 236 236 238; --input: 228 228 231; --destructive: 220 38 38;
+  }
+  .dark {
+    --background: 14 15 20; --foreground: 250 250 250; --card: 25 27 36;
+    --primary: 139 92 246; --primary-foreground: 255 255 255;
+    --secondary: 38 41 53; --secondary-foreground: 250 250 250;
+    --muted: 34 36 46; --muted-foreground: 113 113 122;
+    --border: 46 48 64; --input: 46 48 64; --destructive: 220 38 38;
+  }
+  .logo { @apply flex shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-black/10 text-[10px] font-bold; }
+  /* board-style stacked team cell */
+  .team { @apply flex h-11 items-center gap-2.5 rounded-md border border-border bg-background px-2.5; }
+  .team-win { @apply border-transparent bg-muted/60; }
+  .cell { @apply flex flex-col items-center justify-center gap-1 rounded-md border border-border bg-background px-2 py-1.5; }
+  .pill { @apply inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums whitespace-nowrap; }
+  .filter { @apply shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium; }
+  .filter-off { @apply border-input text-muted-foreground; }
+  .filter-on  { @apply border-primary bg-primary text-primary-foreground; }
+</style>
+
+<div id="root" class="dark min-h-dvh bg-background text-foreground antialiased [font-family:ui-sans-serif,system-ui,-apple-system,Segoe_UI,Roboto,sans-serif]">
+<div class="mx-auto max-w-xl px-4 py-8">
+
+  <div class="mb-5 flex items-center justify-between">
+    <h1 class="text-2xl font-bold tracking-tight">My Bets</h1>
+    <button id="themeToggle" class="rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted"><span class="dark:hidden">🌙</span><span class="hidden dark:inline">☀️</span></button>
+  </div>
+
+  <!-- filter pills -->
+  <div class="mb-5 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <button class="filter filter-on">All (42)</button>
+    <button class="filter filter-off">Active (5)</button>
+    <button class="filter filter-off">Pending</button>
+    <button class="filter filter-off">Closed (16)</button>
+    <button class="filter filter-off">Cancelled (21)</button>
+  </div>
+
+  <!-- tiny column header, echoing the Sports board -->
+  <div class="mb-1.5 flex items-center gap-3 px-1">
+    <span class="flex-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Matchup</span>
+    <span class="w-[7.5rem] text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Pick · Result</span>
+  </div>
+
+  <div class="flex flex-col divide-y divide-border">
+
+    <!-- ============ WON — payout in the details column ============ -->
+    <div class="flex items-start gap-3 py-3">
+      <span class="mt-4 size-2 shrink-0 rounded-full bg-green-500"></span>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-stretch gap-1.5">
+          <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div class="team"><span class="logo size-7 text-indigo-700">NYM</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">New York Mets</span><span class="text-sm font-bold tabular-nums text-muted-foreground">2</span></div>
+            <div class="team team-win"><span class="logo size-7 text-slate-700">TB</span><span class="min-w-0 flex-1 truncate text-sm font-semibold">Tampa Bay Rays</span><span class="text-sm font-bold tabular-nums">6</span></div>
+          </div>
+          <div class="cell w-[7.5rem]">
+            <span class="pill border-green-600/40 bg-green-500/10 text-green-500">TB −1.5</span>
+            <span class="text-base font-bold text-green-500">+$10</span>
+          </div>
+        </div>
+        <div class="mt-1.5 px-1 text-xs text-muted-foreground">Spread · beat Chris Bates · $10 · Sat, Sep 6</div>
+      </div>
+    </div>
+
+    <!-- ============ LOST — total bet, delete affordance ============ -->
+    <div class="flex items-start gap-3 py-3">
+      <span class="mt-4 size-2 shrink-0 rounded-full bg-red-500"></span>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-stretch gap-1.5">
+          <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div class="team"><span class="logo size-7 text-red-700">BCU</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">Bethune-Cookman</span><span class="text-sm font-bold tabular-nums text-muted-foreground">6</span></div>
+            <div class="team"><span class="logo size-7 text-amber-600">UCF</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">UCF Knights</span><span class="text-sm font-bold tabular-nums text-muted-foreground">73</span></div>
+          </div>
+          <div class="cell w-[7.5rem]">
+            <span class="pill border-red-600/40 bg-red-500/10 text-red-500">U 57.5</span>
+            <span class="text-sm font-semibold text-red-500">−$10</span>
+          </div>
+        </div>
+        <div class="mt-1.5 flex items-center justify-between px-1">
+          <span class="text-xs text-muted-foreground">Total · lost to Farrell · $10</span>
+          <button class="text-muted-foreground hover:text-red-500" aria-label="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="size-4"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ PENDING (moneyline) — Cancel in the details column ============ -->
+    <div class="flex items-start gap-3 py-3">
+      <span class="mt-4 size-2 shrink-0 rounded-full bg-primary"></span>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-stretch gap-1.5">
+          <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div class="team"><span class="logo size-7 text-red-800">WSH</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">Commanders</span></div>
+            <div class="team team-win"><span class="logo size-7 text-emerald-700">PHI</span><span class="min-w-0 flex-1 truncate text-sm font-semibold">Eagles</span></div>
+          </div>
+          <div class="cell w-[7.5rem] gap-1.5">
+            <span class="pill border-primary/50 bg-primary/10 text-primary">PHI</span>
+            <button class="rounded-md bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground hover:bg-muted">Cancel</button>
+          </div>
+        </div>
+        <div class="mt-1.5 px-1 text-xs text-muted-foreground">Straight up · vs Beast (Chris Hays) · awaiting reply</div>
+      </div>
+    </div>
+
+    <!-- ============ ACTIVE (spread) — accepted, in play ============ -->
+    <div class="flex items-start gap-3 py-3">
+      <span class="mt-4 size-2 shrink-0 rounded-full bg-primary"></span>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-stretch gap-1.5">
+          <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div class="team team-win"><span class="logo size-7 text-orange-600">MIA</span><span class="min-w-0 flex-1 truncate text-sm font-semibold">Miami Hurricanes</span></div>
+            <div class="team"><span class="logo size-7 text-red-700">STAN</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">Stanford</span></div>
+          </div>
+          <div class="cell w-[7.5rem] gap-1.5">
+            <span class="pill border-primary/50 bg-primary/10 text-primary">MIA −21.5</span>
+            <button class="rounded-md bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground hover:bg-muted">Cancel</button>
+          </div>
+        </div>
+        <div class="mt-1.5 px-1 text-xs text-muted-foreground">Spread · vs Farrell · $5 · locked in</div>
+      </div>
+    </div>
+
+    <!-- ============ CANCELLED — muted, refunded ============ -->
+    <div class="flex items-start gap-3 py-3 opacity-70">
+      <span class="mt-4 size-2 shrink-0 rounded-full bg-muted-foreground/50"></span>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-stretch gap-1.5">
+          <div class="flex min-w-0 flex-1 flex-col gap-1.5">
+            <div class="team"><span class="logo size-7 text-blue-700">DET</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">Detroit Tigers</span></div>
+            <div class="team"><span class="logo size-7 text-red-700">CLE</span><span class="min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground">Cleveland Guardians</span></div>
+          </div>
+          <div class="cell w-[7.5rem]">
+            <span class="pill border-border text-muted-foreground">O 8</span>
+            <span class="text-xs font-medium text-muted-foreground">Refunded</span>
+          </div>
+        </div>
+        <div class="mt-1.5 px-1 text-xs text-muted-foreground">Total · vs Gabe S · $10 · both sides cancelled</div>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="mt-6 text-center text-xs text-muted-foreground">
+    Same stacked-team layout as the Sports board · the pick, stake and result live where Spread / Total sat.
+  </p>
+</div>
+</div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', () =>
+    document.getElementById('root').classList.toggle('dark'));
+</script>

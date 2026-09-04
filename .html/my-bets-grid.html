@@ -1,0 +1,140 @@
+<title>My Bets — board grid</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { colors: {
+      background: 'rgb(var(--background) / <alpha-value>)',
+      foreground: 'rgb(var(--foreground) / <alpha-value>)',
+      card: 'rgb(var(--card) / <alpha-value>)',
+      primary: 'rgb(var(--primary) / <alpha-value>)',
+      'primary-foreground': 'rgb(var(--primary-foreground) / <alpha-value>)',
+      secondary: 'rgb(var(--secondary) / <alpha-value>)',
+      'secondary-foreground': 'rgb(var(--secondary-foreground) / <alpha-value>)',
+      muted: 'rgb(var(--muted) / <alpha-value>)',
+      'muted-foreground': 'rgb(var(--muted-foreground) / <alpha-value>)',
+      border: 'rgb(var(--border) / <alpha-value>)',
+      input: 'rgb(var(--input) / <alpha-value>)',
+    } } },
+  };
+</script>
+<style type="text/tailwindcss">
+  :root {
+    --background: 255 255 255; --foreground: 9 9 11; --card: 255 255 255;
+    --primary: 124 58 237; --primary-foreground: 255 255 255;
+    --secondary: 244 244 245; --secondary-foreground: 24 24 27;
+    --muted: 244 244 245; --muted-foreground: 113 113 122;
+    --border: 236 236 238; --input: 228 228 231;
+  }
+  .dark {
+    --background: 14 15 20; --foreground: 250 250 250; --card: 25 27 36;
+    --primary: 139 92 246; --primary-foreground: 255 255 255;
+    --secondary: 38 41 53; --secondary-foreground: 250 250 250;
+    --muted: 34 36 46; --muted-foreground: 113 113 122;
+    --border: 46 48 64; --input: 46 48 64;
+  }
+  .logo { @apply flex shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-black/10 text-[10px] font-bold; }
+  /* the board grid: team | pick | result, two rows per bet */
+  .bet { @apply grid grid-cols-[minmax(0,1fr)_3.75rem_5.25rem] gap-1.5; }
+  .team { @apply flex h-11 items-center gap-2.5 rounded-md border border-border bg-background px-2.5; }
+  .cell { @apply flex h-11 flex-col items-center justify-center rounded-md border border-border bg-background leading-tight; }
+  .win  { @apply border-transparent bg-muted/70; }             /* backed / winning team cell */
+  .k-win  { @apply border-transparent bg-green-500/15 text-green-500; }
+  .k-loss { @apply border-transparent bg-red-500/15 text-red-500; }
+  .k-open { @apply border-transparent bg-primary/15 text-primary; }
+  .colhdr { @apply text-[10px] font-semibold uppercase tracking-wider text-muted-foreground; }
+</style>
+
+<div id="root" class="dark min-h-dvh bg-background text-foreground antialiased [font-family:ui-sans-serif,system-ui,-apple-system,Segoe_UI,Roboto,sans-serif]">
+<div class="mx-auto max-w-md px-4 py-8">
+
+  <div class="mb-4 flex items-center justify-between">
+    <h1 class="text-2xl font-bold tracking-tight">My Bets</h1>
+    <button id="themeToggle" class="rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted"><span class="dark:hidden">🌙</span><span class="hidden dark:inline">☀️</span></button>
+  </div>
+
+  <!-- column headers, same three columns as the Sports board -->
+  <div class="bet mb-2">
+    <span class="colhdr self-end pl-1">Matchup</span>
+    <span class="colhdr text-center">Pick</span>
+    <span class="colhdr text-center">Stake · net</span>
+  </div>
+
+  <div class="flex flex-col gap-4">
+
+    <!-- ===== WON — spread ===== -->
+    <div>
+      <div class="mb-1.5 flex items-center justify-between px-0.5 text-xs">
+        <span class="text-muted-foreground">Fri, Sep 6 · 7:10 PM</span>
+        <span class="font-medium text-green-500">Beat Chris Bates</span>
+      </div>
+      <div class="bet">
+        <div class="team"><span class="logo size-7 text-indigo-700">NYM</span><span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">Mets</span><span class="text-sm font-bold tabular-nums text-muted-foreground">2</span></div>
+        <div class="cell"><span class="text-xs font-medium text-muted-foreground">+1.5</span></div>
+        <div class="cell"><span class="text-xs text-muted-foreground">$10</span></div>
+
+        <div class="team win"><span class="logo size-7 text-slate-700">TB</span><span class="min-w-0 flex-1 truncate text-sm font-semibold">Rays</span><span class="text-sm font-bold tabular-nums">6</span></div>
+        <div class="cell k-win"><span class="text-xs font-bold">−1.5</span></div>
+        <div class="cell k-win"><span class="text-sm font-bold">+$10</span></div>
+      </div>
+    </div>
+
+    <!-- ===== LOST — total ===== -->
+    <div>
+      <div class="mb-1.5 flex items-center justify-between px-0.5 text-xs">
+        <span class="text-muted-foreground">Fri, Sep 4 · 2:10 PM</span>
+        <span class="font-medium text-red-500">Lost to Farrell</span>
+      </div>
+      <div class="bet">
+        <div class="team"><span class="logo size-7 text-red-700">BCU</span><span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">Bethune-Cookman</span><span class="text-sm font-bold tabular-nums text-muted-foreground">6</span></div>
+        <div class="cell"><span class="text-xs font-medium text-muted-foreground">O 57.5</span></div>
+        <div class="cell"><span class="text-xs text-muted-foreground">$10</span></div>
+
+        <div class="team"><span class="logo size-7 text-amber-600">UCF</span><span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">UCF Knights</span><span class="text-sm font-bold tabular-nums text-muted-foreground">73</span></div>
+        <div class="cell k-loss"><span class="text-xs font-bold">U 57.5</span></div>
+        <div class="cell k-loss"><span class="text-sm font-bold">−$10</span></div>
+      </div>
+    </div>
+
+    <!-- ===== ACTIVE — spread, in play ===== -->
+    <div>
+      <div class="mb-1.5 flex items-center justify-between px-0.5 text-xs">
+        <span class="text-muted-foreground">Fri, Sep 4 · 6:10 PM</span>
+        <span class="font-medium text-primary">vs Farrell · locked in</span>
+      </div>
+      <div class="bet">
+        <div class="team win"><span class="logo size-7 text-orange-600">MIA</span><span class="min-w-0 flex-1 truncate text-sm font-semibold">Miami Hurricanes</span></div>
+        <div class="cell k-open"><span class="text-xs font-bold">−21.5</span></div>
+        <div class="cell row-span-2 !h-auto self-stretch"><span class="text-xs text-muted-foreground">$5</span><button class="mt-1 rounded bg-secondary px-2 py-0.5 text-[11px] font-semibold text-secondary-foreground hover:bg-muted">Cancel</button></div>
+
+        <div class="team"><span class="logo size-7 text-red-700">STAN</span><span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">Stanford</span></div>
+        <div class="cell"><span class="text-xs font-medium text-muted-foreground">+21.5</span></div>
+      </div>
+    </div>
+
+    <!-- ===== PENDING — moneyline, awaiting reply ===== -->
+    <div>
+      <div class="mb-1.5 flex items-center justify-between px-0.5 text-xs">
+        <span class="text-muted-foreground">Sun, Sep 7 · 1:00 PM</span>
+        <span class="font-medium text-primary">vs Beast (Chris Hays) · awaiting</span>
+      </div>
+      <div class="bet">
+        <div class="team"><span class="logo size-7 text-red-800">WSH</span><span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">Commanders</span></div>
+        <div class="cell"><span class="text-[11px] font-medium text-muted-foreground">ML</span></div>
+        <div class="cell row-span-2 !h-auto self-stretch"><span class="text-xs text-muted-foreground">$10</span><button class="mt-1 rounded bg-secondary px-2 py-0.5 text-[11px] font-semibold text-secondary-foreground hover:bg-muted">Cancel</button></div>
+
+        <div class="team win"><span class="logo size-7 text-emerald-700">PHI</span><span class="min-w-0 flex-1 truncate text-sm font-semibold">Eagles</span></div>
+        <div class="cell k-open"><span class="text-[11px] font-bold">ML ✓</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="mt-6 text-center text-xs text-muted-foreground">Same grid as Sports · <span class="text-foreground">Pick</span> takes the Spread column (your side highlighted), <span class="text-foreground">Stake·net</span> takes the Total column.</p>
+</div>
+</div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', () =>
+    document.getElementById('root').classList.toggle('dark'));
+</script>
