@@ -2224,7 +2224,7 @@ function MemberPicksDialog({
           <DialogTitle>{member?.display_name}&rsquo;s picks</DialogTitle>
           <DialogDescription>{periodLabel || 'Selected week'}</DialogDescription>
         </DialogHeader>
-        <DialogBody className="flex min-h-0 flex-col gap-2 overflow-y-auto py-2">
+        <DialogBody className="flex min-h-0 flex-col gap-4 overflow-y-auto py-2">
           {q.isLoading && <Skeleton className="h-24 rounded-xl" />}
           {q.isError && (
             <p className="text-sm text-muted-foreground">Picks are hidden until an hour before the first game.</p>
@@ -2234,15 +2234,12 @@ function MemberPicksDialog({
           )}
           {picks.map((p) => {
             const ev = p.event;
-            // The picked side carries the result: violet while the game is live,
-            // green once it's graded correct, red if wrong. No separate badge.
-            const tone = p.correct === null
-              ? 'bg-primary/10 ring-1 ring-inset ring-primary/60'
-              : p.correct
-                ? 'bg-brand/10 ring-1 ring-inset ring-brand/60'
-                : 'bg-destructive/10 ring-1 ring-inset ring-destructive/60';
+            // Picked side tinted by result: blue while ungraded, green correct,
+            // red wrong — matching the bet board and Pick'em play list.
+            const tone = p.correct === null ? 'bg-blue-500/20'
+              : p.correct ? 'bg-brand/20' : 'bg-destructive/20';
             return (
-              <div key={p.id ?? p.event_id} className="flex items-center gap-1.5 rounded-lg border border-border p-2">
+              <div key={p.id ?? p.event_id} className="flex flex-col gap-1.5">
                 <PickTeam
                   logo={ev?.away_logo}
                   label={ev?.away_abbr || ev?.away_team || '?'}
@@ -2250,7 +2247,6 @@ function MemberPicksDialog({
                   picked={p.pick_side === 'away'}
                   tone={tone}
                 />
-                <span className="shrink-0 px-0.5 text-xs font-medium text-muted-foreground">@</span>
                 <PickTeam
                   logo={ev?.home_logo}
                   label={ev?.home_abbr || ev?.home_team || '?'}
@@ -2296,12 +2292,12 @@ function PickTeam({
   return (
     <div
       className={cn(
-        'flex flex-1 items-center gap-2 rounded-md px-2 py-1.5',
-        picked ? tone : 'opacity-60',
+        'flex h-11 items-center gap-2.5 rounded-md px-2.5',
+        picked ? tone : 'bg-muted/60',
       )}
     >
       <TeamLogo src={logo} name={label} size="sm" />
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{label}</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{label}</span>
       {score !== null && score !== undefined && (
         <span className="text-sm font-bold tabular-nums text-foreground">{score}</span>
       )}
