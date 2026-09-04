@@ -654,17 +654,20 @@ function BetDetailsDialog({
   };
   const awayPk = pickForRow('away');
   const homePk = pickForRow('home');
-  const pickTone = iWon ? 'border-brand bg-brand/10 text-foreground'
-    : iLost ? 'border-destructive bg-destructive/10 text-foreground'
-    : decided ? 'border-border bg-muted/50 text-muted-foreground'
-    : 'border-primary bg-primary/10 text-foreground';
+  const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
+  const toneBorder = iWon ? 'border-brand' : iLost ? 'border-destructive'
+    : decided || voided ? 'border-muted-foreground/40' : 'border-blue-500';
+  const toneText = iWon ? 'text-brand' : iLost ? 'text-destructive'
+    : decided || voided ? 'text-muted-foreground' : 'text-blue-500';
   const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
   const teamBacked = (rowKey: 'home' | 'away') => !isTotal && rowKey === side;
   const rows = [
     { name: ev?.away_team ?? w.away_team, logo: ev?.away_logo ?? null, abbr: ev?.away_abbr ?? w.away_team, score: as, lost: awayLost, pk: awayPk },
     { name: ev?.home_team ?? w.home_team, logo: ev?.home_logo ?? null, abbr: ev?.home_abbr ?? w.home_team, score: hs, lost: homeLost, pk: homePk },
   ];
-  const cellBase = 'flex h-12 flex-col items-center justify-center rounded-md border text-sm font-semibold leading-tight tabular-nums';
+  const cellBase = 'flex h-12 flex-col items-center justify-center rounded-md text-sm font-semibold leading-tight tabular-nums';
+  const teamCls = (backed: boolean) => backed ? cn('border-2 bg-transparent', toneBorder) : 'border border-border bg-background';
+  const pickCls = (mine: boolean) => mine ? cn('border-2 bg-transparent', toneBorder, toneText) : 'border border-border bg-background text-muted-foreground';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -702,12 +705,12 @@ function BetDetailsDialog({
             </div>
           ) : (
             <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_5.5rem] gap-1.5">
-              <div className={cn('flex h-12 items-center gap-2.5 rounded-md border px-2.5', teamBacked('away') ? 'border-transparent bg-muted/60' : 'border-border bg-background')}>
+              <div className={cn('flex h-12 items-center gap-2.5 rounded-md px-2.5', teamCls(teamBacked('away')))}>
                 <TeamLogo src={rows[0].logo} name={rows[0].abbr} size="sm" />
                 <span className={cn('min-w-0 flex-1 truncate text-sm', rows[0].lost ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{rows[0].name}</span>
                 {started && rows[0].score != null && <span className={cn('text-base font-bold tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[0].score}</span>}
               </div>
-              <div className={cn(cellBase, awayPk.mine ? pickTone : 'border-border bg-background text-muted-foreground')}>{awayPk.label || '—'}</div>
+              <div className={cn(cellBase, pickCls(awayPk.mine))}>{awayPk.label || '—'}</div>
               <div className="row-span-2 flex flex-col items-center justify-center gap-1 self-stretch rounded-md border border-border bg-background px-1">
                 {decided ? (
                   <span className={cn('text-xl font-extrabold tabular-nums', resultTone)}><StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} /></span>
@@ -715,12 +718,12 @@ function BetDetailsDialog({
                   wagerStatusBadge(w, me)
                 )}
               </div>
-              <div className={cn('flex h-12 items-center gap-2.5 rounded-md border px-2.5', teamBacked('home') ? 'border-transparent bg-muted/60' : 'border-border bg-background')}>
+              <div className={cn('flex h-12 items-center gap-2.5 rounded-md px-2.5', teamCls(teamBacked('home')))}>
                 <TeamLogo src={rows[1].logo} name={rows[1].abbr} size="sm" />
                 <span className={cn('min-w-0 flex-1 truncate text-sm', rows[1].lost ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{rows[1].name}</span>
                 {started && rows[1].score != null && <span className={cn('text-base font-bold tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[1].score}</span>}
               </div>
-              <div className={cn(cellBase, homePk.mine ? pickTone : 'border-border bg-background text-muted-foreground')}>{homePk.label || '—'}</div>
+              <div className={cn(cellBase, pickCls(homePk.mine))}>{homePk.label || '—'}</div>
             </div>
           )}
           <div className="mt-3 text-center text-xs text-muted-foreground">
@@ -797,34 +800,29 @@ export function WagerBetCard({
   const awayPk = pickForRow('away');
   const homePk = pickForRow('home');
 
-  // Outcome colour, shared by the highlighted pick cell and the result.
-  const pickTone = iWon
-    ? 'border-brand bg-brand/10 text-foreground'
-    : iLost
-      ? 'border-destructive bg-destructive/10 text-foreground'
-      : decided
-        ? 'border-border bg-muted/50 text-muted-foreground'
-        : 'border-primary bg-primary/10 text-foreground';
-  const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
-
-  // State colour: won / lost / push once decided, muted for voided, else amber
-  // (open offer), blue (game live), violet (accepted).
+  // One outcome colour, shown as a BORDER on the backed team cell and the pick
+  // cell (fills removed — they read muddy): green win / red loss / blue in-flight
+  // (open, accepted, live) / grey for a settled-neutral push or a voided bet.
   const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
-  const railTone = iWon ? 'bg-brand'
-    : iLost ? 'bg-destructive'
-    : decided || voided ? 'bg-muted-foreground/50'
-    : w.status === 'open' ? 'bg-amber-500'
-    : started && !final ? 'bg-blue-500'
-    : 'bg-primary';
-  const outcomeTone = iWon ? 'text-brand' : iLost ? 'text-destructive'
-    : voided ? 'text-muted-foreground' : 'text-primary';
+  const toneBorder = iWon ? 'border-brand' : iLost ? 'border-destructive'
+    : decided || voided ? 'border-muted-foreground/40' : 'border-blue-500';
+  const toneText = iWon ? 'text-brand' : iLost ? 'text-destructive'
+    : decided || voided ? 'text-muted-foreground' : 'text-blue-500';
+  const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
+  const railTone = iWon ? 'bg-brand' : iLost ? 'bg-destructive'
+    : decided || voided ? 'bg-muted-foreground/50' : 'bg-blue-500';
+  const outcomeTone = toneText;
 
   // Highlight the team cell the viewer backed (spread / moneyline only).
   const teamBacked = (rowKey: 'home' | 'away') => !isTotal && rowKey === side;
   // Single opponent's name opens their profile; the card opens read-only details.
   const soloOpp = group.opponents.length === 1 ? group.opponents[0] : null;
   const when = ev?.start_time ? formatStart(ev.start_time) : null;
-  const cellBase = 'flex h-11 flex-col items-center justify-center rounded-md border text-xs font-semibold leading-tight tabular-nums';
+  const cellBase = 'flex h-11 flex-col items-center justify-center rounded-md text-xs font-semibold leading-tight tabular-nums';
+  const teamCls = (backed: boolean) =>
+    backed ? cn('border-2 bg-transparent', toneBorder) : 'border border-border bg-background';
+  const pickCls = (mine: boolean) =>
+    mine ? cn('border-2 bg-transparent', toneBorder, toneText) : 'border border-border bg-background text-muted-foreground';
 
   // What sits in the tall Result cell: interactive buttons when present, else the
   // net payout once decided, else a live/pending status badge.
@@ -893,25 +891,25 @@ export function WagerBetCard({
         ) : (
           <div className="grid grid-cols-[minmax(0,1fr)_3.25rem_5.25rem] gap-1.5">
             {/* away team */}
-            <div className={cn('flex h-11 items-center gap-2 rounded-md border px-2.5', teamBacked('away') ? 'border-transparent bg-muted/60' : 'border-border bg-background')}>
+            <div className={cn('flex h-11 items-center gap-2 rounded-md px-2.5', teamCls(teamBacked('away')))}>
               <TeamLogo src={rows[0].logo} name={rows[0].abbr} size="sm" />
               <span className={cn('min-w-0 flex-1 truncate text-sm', rows[0].lost ? 'text-muted-foreground' : 'font-medium text-foreground')}>{rows[0].name}</span>
               {started && rows[0].score != null && <span className={cn('text-sm font-bold tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[0].score}</span>}
             </div>
             {/* away pick */}
-            <div className={cn(cellBase, awayPk.mine ? pickTone : 'border-border bg-background text-muted-foreground')}>{awayPk.label || '—'}</div>
+            <div className={cn(cellBase, pickCls(awayPk.mine))}>{awayPk.label || '—'}</div>
             {/* result — spans both rows */}
             <div className="row-span-2 flex flex-col items-center justify-center gap-1 self-stretch rounded-md border border-border bg-background px-1">
               {resultInner}
             </div>
             {/* home team */}
-            <div className={cn('flex h-11 items-center gap-2 rounded-md border px-2.5', teamBacked('home') ? 'border-transparent bg-muted/60' : 'border-border bg-background')}>
+            <div className={cn('flex h-11 items-center gap-2 rounded-md px-2.5', teamCls(teamBacked('home')))}>
               <TeamLogo src={rows[1].logo} name={rows[1].abbr} size="sm" />
               <span className={cn('min-w-0 flex-1 truncate text-sm', rows[1].lost ? 'text-muted-foreground' : 'font-medium text-foreground')}>{rows[1].name}</span>
               {started && rows[1].score != null && <span className={cn('text-sm font-bold tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[1].score}</span>}
             </div>
             {/* home pick */}
-            <div className={cn(cellBase, homePk.mine ? pickTone : 'border-border bg-background text-muted-foreground')}>{homePk.label || '—'}</div>
+            <div className={cn(cellBase, pickCls(homePk.mine))}>{homePk.label || '—'}</div>
           </div>
         )}
       </div>
