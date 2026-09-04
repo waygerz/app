@@ -8,6 +8,7 @@ import { wagersApi, viewerSide, wagerPick, type Wager } from '@/lib/wagers';
 import { usersApi } from '@/lib/users';
 import { formatCredits } from '@/lib/wallet';
 import { UserAvatar } from '@/components/user-avatar';
+import { TeamLogo } from '@/components/event-card';
 import { FavoriteTeamPills } from '@/components/favorite-teams';
 import {
   Dialog,
@@ -167,14 +168,18 @@ export function UserProfileDialog({
                 return (
                   <li
                     key={w.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
+                    className="flex items-center gap-2.5 rounded-lg border border-border p-2.5"
                   >
-                    <div className="flex min-w-0 flex-col gap-0.5">
+                    <div className="flex shrink-0 gap-1">
+                      <TeamLogo src={null} name={w.away_team} size="xs" framed />
+                      <TeamLogo src={null} name={w.home_team} size="xs" framed />
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate text-sm font-medium text-foreground">
-                        {w.away_team} @ {w.home_team}
+                        {w.away_team} <span className="text-muted-foreground">vs</span> {w.home_team}
                       </span>
                       <span className="truncate text-xs text-muted-foreground">
-                        Your pick: {pick}
+                        Pick: {pick}
                         {w.league ? ` · ${w.league.toUpperCase()}` : ''}
                       </span>
                     </div>
@@ -184,7 +189,7 @@ export function UserProfileDialog({
                         {brag ? (
                           <>
                             <Beer aria-hidden className="size-3" />
-                            Bragging rights
+                            Beer
                           </>
                         ) : (
                           formatCredits(w.amount_cents)

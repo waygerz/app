@@ -621,9 +621,11 @@ function BetDetailsDialog({
   const w = group.rep;
   const side = group.viewerSide;
   const field = !!ev && isFieldSport(ev.sport);
+  const isTotal = w.bet_type === 'total';
   const settled = w.status === 'settled';
-  const iWon = settled && !!w.winner_user_id && w.winner_user_id === me;
-  const iLost = settled && !!w.winner_user_id && w.winner_user_id !== me;
+  const decided = settled || w.status === 'completed';
+  const iWon = decided && !!w.winner_user_id && w.winner_user_id === me;
+  const iLost = decided && !!w.winner_user_id && w.winner_user_id !== me;
   const started = !!ev && ev.status !== 'scheduled' && ev.status !== 'cancelled';
   const final = ev?.status === 'final';
   const hs = ev?.home_score ?? null;
@@ -632,16 +634,37 @@ function BetDetailsDialog({
   const homeLost = final && hs != null && as != null && as > hs;
   const betTypeLabel = w.bet_type === 'moneyline' ? 'Straight up' : w.bet_type === 'spread' ? 'Spread' : 'Total';
   const opp = group.opponents[0];
+  const names = group.opponents.map((o) => o.name);
 
-  const teamRow = (name: string, logo: string | null, score: number | null, lost: boolean) => (
-    <div className="flex items-center gap-3 py-2.5">
-      <TeamLogo src={logo} name={name} size="sm" framed />
-      <span className={cn('min-w-0 flex-1 truncate text-base font-semibold', lost ? 'text-muted-foreground' : 'text-foreground')}>{name}</span>
-      <span className={cn('text-lg font-bold tabular-nums', lost ? 'text-muted-foreground' : 'text-foreground')}>
-        {started && score != null ? score : '–'}
-      </span>
-    </div>
-  );
+  // Board grid, same rules as WagerBetCard but at dialog size. (Kept inline
+  // rather than shared — the card and the modal are separate surfaces.)
+  const spreadLn = w.line != null ? (side === w.proposer_side ? w.line : -w.line) : null;
+  const pickForRow = (rowKey: 'home' | 'away'): { label: string; mine: boolean } => {
+    if (isTotal) {
+      const mine = (rowKey === 'away' && side === 'over') || (rowKey === 'home' && side === 'under');
+      return { label: `${rowKey === 'away' ? 'O' : 'U'} ${w.line ?? ''}`.trim(), mine };
+    }
+    if (w.bet_type === 'spread' && spreadLn != null) {
+      const mine = rowKey === side;
+      const ln = mine ? spreadLn : -spreadLn;
+      return { label: `${ln > 0 ? '+' : ''}${ln}`, mine };
+    }
+    const mine = rowKey === side;
+    return { label: mine ? 'ML' : '', mine };
+  };
+  const awayPk = pickForRow('away');
+  const homePk = pickForRow('home');
+  const pickTone = iWon ? 'border-brand bg-brand/10 text-foreground'
+    : iLost ? 'border-destructive bg-destructive/10 text-foreground'
+    : decided ? 'border-border bg-muted/50 text-muted-foreground'
+    : 'border-primary bg-primary/10 text-foreground';
+  const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
+  const teamBacked = (rowKey: 'home' | 'away') => !isTotal && rowKey === side;
+  const rows = [
+    { name: ev?.away_team ?? w.away_team, logo: ev?.away_logo ?? null, abbr: ev?.away_abbr ?? w.away_team, score: as, lost: awayLost, pk: awayPk },
+    { name: ev?.home_team ?? w.home_team, logo: ev?.home_logo ?? null, abbr: ev?.home_abbr ?? w.home_team, score: hs, lost: homeLost, pk: homePk },
+  ];
+  const cellBase = 'flex h-12 flex-col items-center justify-center rounded-md border text-sm font-semibold leading-tight tabular-nums';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -649,52 +672,59 @@ function BetDetailsDialog({
         <DialogTitle className="sr-only">{field ? (w.event_name || 'Matchup') : `${w.away_team} @ ${w.home_team}`}</DialogTitle>
         <DialogDescription className="sr-only">Bet details</DialogDescription>
 
-        {/* opponent header — centered, large avatar; settled outcome sits here */}
-        <div className="flex flex-col items-center gap-2 text-center">
+        {/* opponent + outcome header */}
+        <div className="flex items-center gap-3">
           {opp && (
-            <UserAvatar userId={opp.id} name={opp.name} imageUrl={opp.avatar_key} className="size-16 shrink-0" fallbackClassName="text-xl" />
+            <UserAvatar userId={opp.id} name={opp.name} imageUrl={opp.avatar_key} className="size-11 shrink-0" />
           )}
-          <div>
-            <div className="text-lg font-semibold text-foreground">{opponentsLabel(group.opponents.map((o) => o.name))}</div>
-            <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="min-w-0">
+            <div className="truncate text-base font-semibold text-foreground">{opponentsLabel(names)}</div>
+            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               {group.iAmProposer ? 'You challenged' : 'Challenged you'}
             </div>
           </div>
-          {settled ? (
-            <div className="flex flex-col items-center gap-1.5">
-              <div className={cn('text-2xl font-extrabold tabular-nums', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground')}>
-                <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
-              </div>
+          <div className="ml-auto shrink-0">
+            {decided ? (
               <Badge size="sm" appearance="light" variant={iWon ? 'success' : iLost ? 'destructive' : 'secondary'}>
-                {iWon ? 'Won' : iLost ? 'Lost' : 'Push'}
+                {iWon ? 'Won ' : iLost ? 'Lost ' : 'Push'}
+                {(iWon || iLost) && <StakeText cents={w.amount_cents} sign={iWon ? '+' : '−'} />}
               </Badge>
-            </div>
-          ) : (
-            wagerStatusBadge(w, me)
-          )}
+            ) : (
+              wagerStatusBadge(w, me)
+            )}
+          </div>
         </div>
 
-        <DialogBody className="mt-5 flex flex-col">
-          {field && w.event_name && (
-            <div className="border-t border-border pt-3 text-center text-sm font-semibold text-foreground">{w.event_name}</div>
-          )}
-          {!field && (
-            <div className="flex flex-col divide-y divide-border border-t border-border">
-              {teamRow(ev?.away_team ?? w.away_team, ev?.away_logo ?? null, as, awayLost)}
-              {teamRow(ev?.home_team ?? w.home_team, ev?.home_logo ?? null, hs, homeLost)}
+        <DialogBody className="mt-4 flex flex-col">
+          {field ? (
+            <div className={cn('rounded-md border border-border bg-background px-3 py-3 text-center text-base font-semibold', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-foreground')}>
+              {wagerPick(w, side)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_5.5rem] gap-1.5">
+              <div className={cn('flex h-12 items-center gap-2.5 rounded-md border px-2.5', teamBacked('away') ? 'border-transparent bg-muted/60' : 'border-border bg-background')}>
+                <TeamLogo src={rows[0].logo} name={rows[0].abbr} size="sm" />
+                <span className={cn('min-w-0 flex-1 truncate text-sm', rows[0].lost ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{rows[0].name}</span>
+                {started && rows[0].score != null && <span className={cn('text-base font-bold tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[0].score}</span>}
+              </div>
+              <div className={cn(cellBase, awayPk.mine ? pickTone : 'border-border bg-background text-muted-foreground')}>{awayPk.label || '—'}</div>
+              <div className="row-span-2 flex flex-col items-center justify-center gap-1 self-stretch rounded-md border border-border bg-background px-1">
+                {decided ? (
+                  <span className={cn('text-xl font-extrabold tabular-nums', resultTone)}><StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} /></span>
+                ) : (
+                  wagerStatusBadge(w, me)
+                )}
+              </div>
+              <div className={cn('flex h-12 items-center gap-2.5 rounded-md border px-2.5', teamBacked('home') ? 'border-transparent bg-muted/60' : 'border-border bg-background')}>
+                <TeamLogo src={rows[1].logo} name={rows[1].abbr} size="sm" />
+                <span className={cn('min-w-0 flex-1 truncate text-sm', rows[1].lost ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{rows[1].name}</span>
+                {started && rows[1].score != null && <span className={cn('text-base font-bold tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[1].score}</span>}
+              </div>
+              <div className={cn(cellBase, homePk.mine ? pickTone : 'border-border bg-background text-muted-foreground')}>{homePk.label || '—'}</div>
             </div>
           )}
-
-          {/* pick + stake — borderless, split left/right */}
-          <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
-            <div className="min-w-0">
-              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Your pick · {betTypeLabel}</div>
-              <div className="mt-0.5 truncate text-base font-bold text-foreground">{wagerPick(w, side)}</div>
-            </div>
-            <div className="shrink-0 text-right">
-              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Stake</div>
-              <div className="mt-0.5 text-base font-bold tabular-nums text-foreground"><StakeText cents={w.amount_cents} /></div>
-            </div>
+          <div className="mt-3 text-center text-xs text-muted-foreground">
+            {betTypeLabel} · <StakeText cents={w.amount_cents} /> stake · {field && w.event_name ? w.event_name : `${w.away_team} @ ${w.home_team}`}
           </div>
         </DialogBody>
       </DialogContent>
@@ -747,30 +777,38 @@ export function WagerBetCard({
     { key: 'home', name: ev?.home_team ?? w.home_team, logo: ev?.home_logo ?? null, abbr: homeAbbr, score: hs, lost: homeLost },
   ];
 
-  // The viewer's pick, kept short enough for the cell.
-  const shortPick = () => {
-    // Totals are abbreviated to O/U for the compact chip ("O 8.5" / "U 8.5").
-    if (isTotal) return `${side === 'over' ? 'O' : 'U'} ${w.line ?? ''}`.trim();
-    const abbr = side === 'home' ? homeAbbr : awayAbbr;
-    if (w.bet_type === 'spread' && w.line != null) {
-      const ln = side === w.proposer_side ? w.line : -w.line;
-      return `${abbr} ${ln > 0 ? '+' : ''}${ln}`;
+  // Per-side pick line for the board's "Pick" column: the viewer's side shows
+  // their line, highlighted by outcome; the other side shows the opposing line,
+  // muted. Totals follow the board convention (Over on away, Under on home).
+  const spreadLn = w.line != null ? (side === w.proposer_side ? w.line : -w.line) : null;
+  const pickForRow = (rowKey: 'home' | 'away'): { label: string; mine: boolean } => {
+    if (isTotal) {
+      const mine = (rowKey === 'away' && side === 'over') || (rowKey === 'home' && side === 'under');
+      return { label: `${rowKey === 'away' ? 'O' : 'U'} ${w.line ?? ''}`.trim(), mine };
     }
-    return abbr;
+    if (w.bet_type === 'spread' && spreadLn != null) {
+      const mine = rowKey === side;
+      const ln = mine ? spreadLn : -spreadLn;
+      return { label: `${ln > 0 ? '+' : ''}${ln}`, mine };
+    }
+    const mine = rowKey === side; // moneyline — no number; the side is just marked
+    return { label: mine ? 'ML' : '', mine };
   };
-  // The viewer's pick chip carries the outcome: green won, red lost, muted push,
-  // else the accent (active/pending).
-  const pickCell = iWon
+  const awayPk = pickForRow('away');
+  const homePk = pickForRow('home');
+
+  // Outcome colour, shared by the highlighted pick cell and the result.
+  const pickTone = iWon
     ? 'border-brand bg-brand/10 text-foreground'
     : iLost
       ? 'border-destructive bg-destructive/10 text-foreground'
       : decided
-        ? 'border-border bg-muted/40 text-muted-foreground'
+        ? 'border-border bg-muted/50 text-muted-foreground'
         : 'border-primary bg-primary/10 text-foreground';
+  const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
 
-  // Dot colour encodes state at a glance: won / lost / push once decided, muted
-  // for voided (cancelled / declined / refunded), else amber (open offer), blue
-  // (game live), violet (accepted, awaiting).
+  // State colour: won / lost / push once decided, muted for voided, else amber
+  // (open offer), blue (game live), violet (accepted).
   const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
   const railTone = iWon ? 'bg-brand'
     : iLost ? 'bg-destructive'
@@ -778,14 +816,27 @@ export function WagerBetCard({
     : w.status === 'open' ? 'bg-amber-500'
     : started && !final ? 'bg-blue-500'
     : 'bg-primary';
+  const outcomeTone = iWon ? 'text-brand' : iLost ? 'text-destructive'
+    : voided ? 'text-muted-foreground' : 'text-primary';
 
-  // A small framed team logo (away) then "AWAY sc · HOME sc" as text — kept
-  // compact (xs) to match the ledger.
-  const teamTxt = (r: (typeof rows)[number]) =>
-    `${r.abbr}${started && r.score != null ? ` ${r.score}` : ''}`;
-  // Single opponent's name opens their profile (head-to-head record); the pick
-  // chip and settled outcome open the read-only bet details.
+  // Highlight the team cell the viewer backed (spread / moneyline only).
+  const teamBacked = (rowKey: 'home' | 'away') => !isTotal && rowKey === side;
+  // Single opponent's name opens their profile; the card opens read-only details.
   const soloOpp = group.opponents.length === 1 ? group.opponents[0] : null;
+  const when = ev?.start_time ? formatStart(ev.start_time) : null;
+  const cellBase = 'flex h-11 flex-col items-center justify-center rounded-md border text-xs font-semibold leading-tight tabular-nums';
+
+  // What sits in the tall Result cell: interactive buttons when present, else the
+  // net payout once decided, else a live/pending status badge.
+  const resultInner = actions ? (
+    <div className="flex w-full flex-col items-stretch gap-1" onClick={(e) => e.stopPropagation()}>{actions}</div>
+  ) : settled || decided ? (
+    <span className={cn('text-base font-extrabold tabular-nums', resultTone)}>
+      <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
+    </span>
+  ) : (
+    wagerStatusBadge(w, me)
+  );
 
   return (
     <>
@@ -799,45 +850,18 @@ export function WagerBetCard({
             setDetailsOpen(true);
           }
         }}
-        className="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-border px-4 py-3 last:border-b-0 hover:bg-muted/30"
+        className="cursor-pointer border-b border-border px-3 py-3 last:border-b-0 hover:bg-muted/20"
       >
-        {/* state dot — quiet status marker (was a rail) */}
-        <span className={cn('size-2.5 shrink-0 rounded-full', railTone)} />
-
-        {/* matchup + inline pick + context */}
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[15px] font-bold tracking-tight">
-            {field ? (
-              // Field sports have no matchup line — the pick is the headline, so
-              // colour it by outcome in place of a chip.
-              <span className={cn('min-w-0 truncate', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-foreground')}>
-                {wagerPick(w, side)}
-              </span>
-            ) : (
-              <>
-                <span className="flex min-w-0 shrink items-center gap-1.5 truncate">
-                  <TeamLogo src={rows[0].logo} name={rows[0].abbr} size="xs" framed />
-                  <span className={cn('tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[0])}</span>
-                  <span className="font-medium text-muted-foreground/60">·</span>
-                  <TeamLogo src={rows[1].logo} name={rows[1].abbr} size="xs" framed />
-                  <span className={cn('tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{teamTxt(rows[1])}</span>
-                </span>
-                {/* the viewer's pick — inline with the matchup, opens read-only details */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDetailsOpen(true);
-                  }}
-                  className={cn('flex h-6 shrink-0 items-center justify-center rounded-full border px-2.5 text-[11px] font-extrabold tabular-nums transition hover:brightness-110', pickCell)}
-                >
-                  <span className="max-w-[96px] truncate">{shortPick()}</span>
-                </button>
-              </>
-            )}
-          </div>
-          <div className="mt-1 truncate text-xs text-muted-foreground">
-            {leagueName && <span className="font-medium text-foreground/80">{leagueName} · </span>}
+        {/* caption: state dot + kickoff on the left, opponent + outcome on the right */}
+        <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5 text-xs">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className={cn('size-2 shrink-0 rounded-full', railTone)} />
+            <span className="truncate text-muted-foreground">
+              {leagueName && <span className="font-medium text-foreground/80">{leagueName} · </span>}
+              {when ?? (field && w.event_name ? w.event_name : 'Bet')}
+            </span>
+          </span>
+          <span className={cn('flex shrink-0 items-center gap-1 font-medium', outcomeTone)}>
             {verb}{' '}
             {soloOpp && profile ? (
               <button
@@ -846,42 +870,50 @@ export function WagerBetCard({
                   e.stopPropagation();
                   profile.openProfile({ userId: soloOpp.id, name: soloOpp.name, avatarKey: soloOpp.avatar_key });
                 }}
-                className="font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
+                className="underline-offset-2 hover:underline"
               >
                 {soloOpp.name}
               </button>
             ) : (
-              <span className="text-foreground/80">{opponentsLabel(names)}</span>
+              <span>{opponentsLabel(names)}</span>
             )}
-            {' · '}<StakeText cents={w.amount_cents} />
-            {field && w.event_name ? ` · ${w.event_name}` : ''}
-          </div>
+          </span>
         </div>
 
-        {/* trail: actions when interactive, else settled outcome (opens details), else live/pending status */}
-        <div className="flex min-w-[64px] items-center justify-end text-right">
-          {actions ? (
-            <div className="flex w-[84px] flex-col items-stretch gap-1" onClick={(e) => e.stopPropagation()}>{actions}</div>
-          ) : settled ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDetailsOpen(true);
-              }}
-              title={iWon ? 'Won' : iLost ? 'Lost' : 'Push'}
-              className={cn(
-                'text-base font-extrabold tabular-nums transition hover:opacity-80',
-                iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground',
-              )}
-            >
-              <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
-            </button>
-          ) : iWon || iLost ? null : (
-            // Win/loss is shown by the pick-chip border, so no badge here.
-            wagerStatusBadge(w, me)
-          )}
-        </div>
+        {field ? (
+          // Field sports (golf, racing) have no home/away matchup — pick is the headline.
+          <div className="grid grid-cols-[minmax(0,1fr)_5.25rem] gap-1.5">
+            <div className={cn('flex h-11 items-center rounded-md border border-border bg-background px-2.5 text-sm font-semibold', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-foreground')}>
+              <span className="min-w-0 truncate">{wagerPick(w, side)}</span>
+            </div>
+            <div className="flex h-11 flex-col items-center justify-center gap-1 rounded-md border border-border bg-background px-1">
+              {resultInner}
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-[minmax(0,1fr)_3.25rem_5.25rem] gap-1.5">
+            {/* away team */}
+            <div className={cn('flex h-11 items-center gap-2 rounded-md border px-2.5', teamBacked('away') ? 'border-transparent bg-muted/60' : 'border-border bg-background')}>
+              <TeamLogo src={rows[0].logo} name={rows[0].abbr} size="sm" />
+              <span className={cn('min-w-0 flex-1 truncate text-sm', rows[0].lost ? 'text-muted-foreground' : 'font-medium text-foreground')}>{rows[0].name}</span>
+              {started && rows[0].score != null && <span className={cn('text-sm font-bold tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[0].score}</span>}
+            </div>
+            {/* away pick */}
+            <div className={cn(cellBase, awayPk.mine ? pickTone : 'border-border bg-background text-muted-foreground')}>{awayPk.label || '—'}</div>
+            {/* result — spans both rows */}
+            <div className="row-span-2 flex flex-col items-center justify-center gap-1 self-stretch rounded-md border border-border bg-background px-1">
+              {resultInner}
+            </div>
+            {/* home team */}
+            <div className={cn('flex h-11 items-center gap-2 rounded-md border px-2.5', teamBacked('home') ? 'border-transparent bg-muted/60' : 'border-border bg-background')}>
+              <TeamLogo src={rows[1].logo} name={rows[1].abbr} size="sm" />
+              <span className={cn('min-w-0 flex-1 truncate text-sm', rows[1].lost ? 'text-muted-foreground' : 'font-medium text-foreground')}>{rows[1].name}</span>
+              {started && rows[1].score != null && <span className={cn('text-sm font-bold tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[1].score}</span>}
+            </div>
+            {/* home pick */}
+            <div className={cn(cellBase, homePk.mine ? pickTone : 'border-border bg-background text-muted-foreground')}>{homePk.label || '—'}</div>
+          </div>
+        )}
       </div>
 
       <BetDetailsDialog group={group} me={me} ev={ev} open={detailsOpen} onOpenChange={setDetailsOpen} />
@@ -2281,6 +2313,98 @@ function PickTeam({
 // Two-step bet flow opened from a Schedule game card. Step 1 configures the bet
 // (team, straight-up vs ATS + spread, amount); step 2 checks off which members
 // to challenge. Each checked member gets a head-to-head request via propose.
+// Shared opponent picker for the bet dialogs: the "Challenge members" list with
+// a search box once the league grows past eight members (matching the roster
+// convention). Each dialog owns its own selection; this renders + filters only.
+function MemberPicker({
+  opponents,
+  selected,
+  onToggle,
+}: {
+  opponents: LeagueDetail['members'];
+  selected: string[];
+  onToggle: (uid: string) => void;
+}) {
+  const [q, setQ] = useState('');
+  const needle = q.trim().toLowerCase();
+  const shown = needle
+    ? opponents.filter((m) => m.display_name.toLowerCase().includes(needle))
+    : opponents;
+  const selectedMembers = opponents.filter((m) => selected.includes(m.user_id));
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>
+        Challenge members
+        {selectedMembers.length > 0 && (
+          <span className="font-normal text-muted-foreground"> · {selectedMembers.length} selected</span>
+        )}
+      </Label>
+      {opponents.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No other members to challenge yet.</p>
+      ) : (
+        <>
+          {/* Selected members stay visible as removable chips, so they aren't lost
+              when the list scrolls or a search filters them out. */}
+          {selectedMembers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {selectedMembers.map((m) => (
+                <button
+                  key={m.user_id}
+                  type="button"
+                  onClick={() => onToggle(m.user_id)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 py-1 pl-1 pr-2 text-xs font-medium text-primary transition-colors hover:bg-primary/25"
+                  aria-label={`Remove ${m.display_name}`}
+                >
+                  <UserAvatar userId={m.user_id} name={m.display_name} imageUrl={m.avatar_key} className="size-5" />
+                  <span className="max-w-[9rem] truncate">{m.display_name}</span>
+                  <X className="size-3" />
+                </button>
+              ))}
+            </div>
+          )}
+          {opponents.length > 8 && (
+            <ListSearch value={q} onChange={setQ} placeholder="Search members" />
+          )}
+          <div className="flex flex-col gap-2">
+            {shown.map((m) => {
+              const on = selected.includes(m.user_id);
+              return (
+                <button
+                  key={m.user_id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => onToggle(m.user_id)}
+                  className={cn('flex items-center gap-3 px-3 py-2.5 text-left', pickBtn(on))}
+                >
+                  <UserAvatar
+                    userId={m.user_id}
+                    name={m.display_name}
+                    imageUrl={m.avatar_key}
+                    className="size-10 shrink-0"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.display_name}</span>
+                  <span
+                    className={cn(
+                      'flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
+                      on ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
+                    )}
+                    aria-hidden
+                  >
+                    {on && <Check className="size-3.5" />}
+                  </span>
+                </button>
+              );
+            })}
+            {needle && shown.length === 0 && (
+              <p className="text-sm text-muted-foreground">No members match “{q.trim()}”.</p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ScheduleBetDialog({
   lg, event, me, open, onOpenChange,
 }: {
@@ -2435,50 +2559,33 @@ function ScheduleBetDialog({
             </>
           ) : (
             <>
-              <div className="text-sm text-foreground">
-                {betType === 'total'
-                  ? <>Backing <span className="font-semibold">{side === 'over' ? 'Over' : 'Under'} {line}</span></>
-                  : <>Backing <span className="font-semibold">{teamName(side as 'home' | 'away')}</span>{betType === 'spread' ? ` ${sign(line ?? undefined)}` : ''}</>}
-                {' · '}{betType === 'moneyline' ? 'Straight up' : betType === 'spread' ? 'Spread' : 'Total'}
-                {' · '}<StakeSummary cents={Math.round(Number(credits) * 100)} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Challenge members</Label>
-                {opponents.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No other members to challenge yet.</p>
-                )}
-                <div className="flex flex-col gap-2">
-                  {opponents.map((m) => {
-                    const on = selected.includes(m.user_id);
-                    return (
-                      <button
-                        key={m.user_id}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => toggle(m.user_id)}
-                        className={cn('flex items-center gap-3 px-3 py-2.5 text-left', pickBtn(on))}
-                      >
-                        <UserAvatar
-                          userId={m.user_id}
-                          name={m.display_name}
-                          imageUrl={m.avatar_key}
-                          className="size-10 shrink-0"
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.display_name}</span>
-                        <span
-                          className={cn(
-                            'flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
-                            on ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
-                          )}
-                          aria-hidden
-                        >
-                          {on && <Check className="size-3.5" />}
-                        </span>
-                      </button>
-                    );
-                  })}
+              {/* Compact bet summary: pick + stake on one line, matchup + kickoff
+                  beneath (indent aligns under the pick, past the logo). */}
+              <div>
+                <div className="flex items-center gap-2.5">
+                  {betType !== 'total' && (
+                    <TeamLogo
+                      src={teamLogo(side as 'home' | 'away')}
+                      name={teamAbbr(side as 'home' | 'away') || teamName(side as 'home' | 'away')}
+                      size="sm"
+                    />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+                    {betType === 'total'
+                      ? <>{side === 'over' ? 'Over' : 'Under'} {line}</>
+                      : <>{teamName(side as 'home' | 'away')}{betType === 'spread' ? ` ${sign(line ?? undefined)}` : ''}</>}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
+                    {betType === 'moneyline' ? 'Straight up' : betType === 'spread' ? 'Spread' : 'Total'}
+                    {' · '}<StakeSummary cents={Math.round(Number(credits) * 100)} />
+                  </span>
+                </div>
+                <div className={cn('mt-1 truncate text-xs text-muted-foreground', betType !== 'total' && 'pl-[2.625rem]')}>
+                  {event.short_name || `${event.away_team} at ${event.home_team}`}
+                  {event.start_time ? ` · ${formatStart(event.start_time)}` : ''}
                 </div>
               </div>
+              <MemberPicker opponents={opponents} selected={selected} onToggle={toggle} />
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Button variant="outline" className="w-full sm:w-auto" onClick={() => setStep('config')}>Back</Button>
                 <Button className="w-full sm:w-auto" disabled={!canSubmit || propose.isPending} onClick={() => propose.mutate()}>
@@ -2607,43 +2714,7 @@ function MatchupBetDialog({
                 <span className="font-semibold">{myPick}</span> vs <span className="font-semibold">{theirPick}</span>
                 {' · '}<StakeSummary cents={Math.round(Number(credits) * 100)} />
               </div>
-              <div className="flex flex-col gap-2">
-                <Label>Challenge members</Label>
-                {opponents.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No other members to challenge yet.</p>
-                )}
-                <div className="flex flex-col gap-2">
-                  {opponents.map((m) => {
-                    const on = selected.includes(m.user_id);
-                    return (
-                      <button
-                        key={m.user_id}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => toggle(m.user_id)}
-                        className={cn('flex items-center gap-3 px-3 py-2.5 text-left', pickBtn(on))}
-                      >
-                        <UserAvatar
-                          userId={m.user_id}
-                          name={m.display_name}
-                          imageUrl={m.avatar_key}
-                          className="size-10 shrink-0"
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{m.display_name}</span>
-                        <span
-                          className={cn(
-                            'flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
-                            on ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
-                          )}
-                          aria-hidden
-                        >
-                          {on && <Check className="size-3.5" />}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <MemberPicker opponents={opponents} selected={selected} onToggle={toggle} />
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Button variant="outline" className="w-full sm:w-auto" onClick={() => setStep('config')}>Back</Button>
                 <Button className="w-full sm:w-auto" disabled={!canSubmit || propose.isPending} onClick={() => propose.mutate()}>
