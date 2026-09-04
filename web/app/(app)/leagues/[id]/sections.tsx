@@ -1362,10 +1362,7 @@ export function LeagueUpcomingGames() {
   if (lg.sports.length === 0) return null;
 
   return (
-    <Card className="gap-3 p-4">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Upcoming games
-      </span>
+    <div className="flex flex-col gap-3">
       {events.isLoading ? (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
@@ -1408,7 +1405,7 @@ export function LeagueUpcomingGames() {
           />
         </>
       )}
-    </Card>
+    </div>
   );
 }
 
