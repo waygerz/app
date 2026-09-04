@@ -1146,6 +1146,7 @@ export function LeagueSports() {
   // "Show next week" button bumps this; switching tabs restarts at one week.
   const [weeksShown, setWeeksShown] = useState(1);
   useEffect(() => { setWeeksShown(1); }, [tab]);
+  const [query, setQuery] = useState('');
 
   const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
   const evs = events.data ?? [];
@@ -1161,6 +1162,15 @@ export function LeagueSports() {
     (a.start_time ?? '').localeCompare(b.start_time ?? '');
   const ms = (e: SportEvent) => new Date(e.start_time ?? 0).getTime();
 
+  // Team-name filter. While active it searches the tab's full set (all fetched
+  // weeks) and suspends week paging, so a searched team's later games surface no
+  // matter how far out they are.
+  const q = query.trim().toLowerCase();
+  const matchesQuery = (e: SportEvent) =>
+    [e.home_team, e.away_team, e.home_abbr, e.away_abbr, e.name, e.short_name].some(
+      (v) => (v ?? '').toLowerCase().includes(q),
+    );
+
   // Per-sport tabs page a week at a time: show every game up to `weeksShown`
   // weeks past that sport's FIRST upcoming game. Anchoring to the first game
   // (not "now") means a sport whose next game is weeks out still fills week one
@@ -1170,11 +1180,13 @@ export function LeagueSports() {
   const windowEnd = sportSorted.length
     ? ms(sportSorted[0]) + weeksShown * 7 * 24 * 60 * 60 * 1000
     : 0;
-  const hasMoreWeeks = tab !== 'upcoming' && sportSorted.some((e) => ms(e) > windowEnd);
-  const shown =
-    tab === 'upcoming'
-      ? [...evs].sort(byStart).slice(0, UPCOMING_LIMIT)
-      : sportSorted.filter((e) => ms(e) <= windowEnd);
+  const hasMoreWeeks = !q && tab !== 'upcoming' && sportSorted.some((e) => ms(e) > windowEnd);
+  const base = tab === 'upcoming' ? [...evs].sort(byStart) : sportSorted;
+  const shown = q
+    ? base.filter(matchesQuery)
+    : tab === 'upcoming'
+      ? base.slice(0, UPCOMING_LIMIT)
+      : base.filter((e) => ms(e) <= windowEnd);
   const teamEvs = shown.filter((e) => !isFieldSport(e.sport));
   const fieldEvs = shown.filter((e) => isFieldSport(e.sport));
 
@@ -1202,6 +1214,7 @@ export function LeagueSports() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ListSearch value={query} onChange={setQuery} placeholder="Search teams" />
       {/* Scrollable pill tabs: Upcoming + each sport. */}
       <div className="w-full min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex w-max min-w-full gap-2">
@@ -1221,7 +1234,7 @@ export function LeagueSports() {
         </div>
       </div>
 
-      {tab === 'upcoming' && (
+      {tab === 'upcoming' && !q && (
         <p className="text-xs text-muted-foreground">
           The next {UPCOMING_LIMIT} games across all your sports{canBet ? ' · tap a game to bet' : ''}.
         </p>
@@ -1234,7 +1247,9 @@ export function LeagueSports() {
       ) : shown.length === 0 ? (
         <CenterCard>
           <CalendarDays className="size-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">No upcoming games right now.</p>
+          <p className="text-sm text-muted-foreground">
+            {q ? `No games match “${query.trim()}”.` : 'No upcoming games right now.'}
+          </p>
         </CenterCard>
       ) : (
         <div className="flex flex-col gap-4">
