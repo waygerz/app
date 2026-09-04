@@ -16,8 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
 import { WagerBetCard } from '@/app/(app)/leagues/[id]/sections';
 import { ListSearch } from '@/components/list-search';
-
-type SortKey = 'date-desc' | 'date-asc' | 'stake-desc';
+import { BetSortMenu, sortGroups, type SortKey } from '@/components/bet-sort-menu';
 
 export default function BetsView() {
   const { filter = 'all' } = useParams<{ filter: string }>();
@@ -58,12 +57,7 @@ export default function BetsView() {
           .join(' ').toLowerCase().includes(q),
       );
     }
-    const start = (g: WagerGroup) => new Date(g.rep.start_time ?? 0).getTime();
-    return [...gs].sort((a, b) =>
-      sort === 'stake-desc' ? b.rep.amount_cents - a.rep.amount_cents
-      : sort === 'date-asc' ? start(a) - start(b)
-      : start(b) - start(a),
-    );
+    return sortGroups(gs, sort);
   }, [rows, me, query, sort, leagueNames]);
 
   // Events behind the bets, for the live/final score line. Keyed on the full
@@ -208,16 +202,7 @@ export default function BetsView() {
       {!wagersQ.isLoading && (rows.length > 0 || query.trim()) && (
         <div className="mb-4 flex items-center gap-2">
           <ListSearch value={query} onChange={setQuery} placeholder="Search teams, opponents, leagues" className="flex-1" />
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            aria-label="Sort bets"
-            className="h-11 shrink-0 rounded-xl border border-input bg-background px-2.5 text-sm text-foreground sm:h-10"
-          >
-            <option value="date-desc">Newest game</option>
-            <option value="date-asc">Oldest game</option>
-            <option value="stake-desc">Biggest stake</option>
-          </select>
+          <BetSortMenu value={sort} onChange={setSort} />
         </div>
       )}
 

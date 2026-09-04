@@ -17,6 +17,7 @@ import {
 } from '@/lib/leagues';
 import { cancelLocked, groupWagers, opponentsLabel, wagerPick, wagersApi, type BetType, type Wager, type WagerGroup, type WagerSide } from '@/lib/wagers';
 import { FILTERS, filterWagers, type BetFilter } from '@/app/(app)/bets/bets-common';
+import { BetSortMenu, sortGroups, type SortKey } from '@/components/bet-sort-menu';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -948,10 +949,18 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   // than per-status sections. Closed and cancelled bets now surface here too
   // (previously only on the Results tab).
   const [filter, setFilter] = useState<BetFilter>('all');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('date-desc');
   const count = (f: BetFilter) => filterWagers(all, f).length;
-  const groups = groupWagers(filterWagers(all, filter), me ?? '').sort(
-    (a, b) => new Date(b.rep.start_time ?? 0).getTime() - new Date(a.rep.start_time ?? 0).getTime(),
-  );
+  const q = query.trim().toLowerCase();
+  let groups = groupWagers(filterWagers(all, filter), me ?? '');
+  if (q) {
+    groups = groups.filter((g) =>
+      [g.rep.home_team, g.rep.away_team, ...g.opponents.map((o) => o.name)]
+        .join(' ').toLowerCase().includes(q),
+    );
+  }
+  groups = sortGroups(groups, sort);
   const pill = (activePill: boolean) =>
     cn(
       'shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium',
@@ -1029,13 +1038,6 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold text-foreground sm:text-lg">My Bets</h2>
-        <Link href={`/leagues/${lg.id}/sports`} className="text-xs text-primary hover:underline">
-          Browse games →
-        </Link>
-      </div>
-
       {/* Filter pills — same set as the global Bets page. */}
       <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {FILTERS.map((f) => (
@@ -1045,17 +1047,26 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
         ))}
       </div>
 
+      {!bets.isLoading && all.length > 0 && (
+        <div className="flex items-center gap-2">
+          <ListSearch value={query} onChange={setQuery} placeholder="Search teams, opponents" className="flex-1" />
+          <BetSortMenu value={sort} onChange={setSort} />
+        </div>
+      )}
+
       {bets.isLoading ? (
         <Skeleton className="h-24 rounded-xl" />
       ) : groups.length === 0 ? (
         <CenterCard>
           <CalendarDays className="size-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            {filter === 'all'
-              ? 'No bets yet. Settled bets are on the Results tab.'
-              : `No ${FILTERS.find((f) => f.key === filter)!.label.toLowerCase()} bets.`}
+            {q
+              ? `No bets match “${query.trim()}”.`
+              : filter === 'all'
+                ? 'No bets yet. Settled bets are on the Results tab.'
+                : `No ${FILTERS.find((f) => f.key === filter)!.label.toLowerCase()} bets.`}
           </p>
-          {canBet && filter === 'all' && (
+          {canBet && filter === 'all' && !q && (
             <Button size="sm" variant="outline" onClick={() => router.push(`/leagues/${lg.id}/sports`)}>
               Browse games
             </Button>
