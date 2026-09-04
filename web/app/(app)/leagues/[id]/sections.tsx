@@ -936,7 +936,9 @@ function BetSection({
 }) {
   if (wagers.length === 0) return null;
   const style = BET_SECTION_TONE[tone];
-  const groups = groupWagers(wagers, me ?? '');
+  const groups = groupWagers(wagers, me ?? '').sort(
+    (a, b) => new Date(b.rep.start_time ?? 0).getTime() - new Date(a.rep.start_time ?? 0).getTime(),
+  );
   return (
     <section>
       <h3 className={cn('mb-3 text-sm font-semibold', style.header)}>

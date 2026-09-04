@@ -16,20 +16,15 @@ const ACTIVE_STATUSES: WagerStatus[] = ['accepted', 'completed'];
 const CLOSED_STATUSES: WagerStatus[] = ['settled', 'declined', 'refunded'];
 
 export function filterWagers(wagers: Wager[], filter: BetFilter): Wager[] {
-  switch (filter) {
-    case 'pending':
-      return wagers.filter((w) => w.status === 'open');
-    case 'active':
-      return wagers.filter((w) => ACTIVE_STATUSES.includes(w.status));
-    case 'closed':
-      return wagers.filter((w) => CLOSED_STATUSES.includes(w.status));
-    case 'cancelled':
-      return wagers.filter((w) => w.status === 'cancelled');
-    case 'all':
-      return [...wagers].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-    default:
-      return wagers;
-  }
+  const picked =
+    filter === 'pending' ? wagers.filter((w) => w.status === 'open')
+    : filter === 'active' ? wagers.filter((w) => ACTIVE_STATUSES.includes(w.status))
+    : filter === 'closed' ? wagers.filter((w) => CLOSED_STATUSES.includes(w.status))
+    : filter === 'cancelled' ? wagers.filter((w) => w.status === 'cancelled')
+    : wagers;
+  // Sort by the GAME date (event start), most recent / upcoming first — not by
+  // when the bet was placed. Unknown start times sort last.
+  return [...picked].sort(
+    (a, b) => new Date(b.start_time ?? 0).getTime() - new Date(a.start_time ?? 0).getTime(),
+  );
 }

@@ -200,12 +200,14 @@ export default function BetsView() {
         </CenterCard>
       )}
 
-      {/* One continuous table of every bet in the current filter, newest first
-          (filterWagers already ordered them) — no per-status grouping; each
-          card's own status badge carries its state. */}
+      {/* One continuous list of every bet in the current filter, ordered by game
+          date (most recent / upcoming first) — no per-status grouping; each card's
+          own status badge carries its state. */}
       {rows.length > 0 && (
         <div>
-          {groupWagers(rows, me).map((g) => (
+          {groupWagers(rows, me)
+            .sort((a, b) => new Date(b.rep.start_time ?? 0).getTime() - new Date(a.rep.start_time ?? 0).getTime())
+            .map((g) => (
             <WagerBetCard
               key={g.key}
               group={g}
