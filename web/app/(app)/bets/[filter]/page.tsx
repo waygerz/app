@@ -204,7 +204,7 @@ export default function BetsView() {
           (filterWagers already ordered them) — no per-status grouping; each
           card's own status badge carries its state. */}
       {rows.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div>
           {groupWagers(rows, me).map((g) => (
             <WagerBetCard
               key={g.key}

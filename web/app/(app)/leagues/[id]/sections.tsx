@@ -944,7 +944,7 @@ function BetSection({
       <h3 className={cn('mb-3 text-sm font-semibold', style.header)}>
         {title} ({wagers.length})
       </h3>
-      <div className="overflow-hidden rounded-xl border border-border">
+      <div>
         {groups.map((g) => (
           <WagerBetCard
             key={g.key}
@@ -1844,7 +1844,7 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
         </Card>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-border">
+      <div>
         {groupWagers(weekWagers, me).map((g) => (
           <WagerBetCard key={g.key} group={g} me={me} ev={eventMap[g.rep.event_id]} />
         ))}
