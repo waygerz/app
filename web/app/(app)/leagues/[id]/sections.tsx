@@ -332,60 +332,62 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
         <p className="text-sm text-muted-foreground">No games scheduled for this week.</p>
       )}
 
-      <div className="grid grid-cols-1 gap-3">
+      <div className="flex flex-col gap-4">
         {evs.map((ev) => {
           const g = graded.get(ev.external_id);
           const gradedLock = !!(g && g.correct !== null);
           const disabled = gradedLock || !canEdit;
           const cur = pick(ev.external_id);
           return (
-            <Card key={ev.external_id} className="gap-3 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
+            <div key={ev.external_id} className="flex flex-col gap-1.5">
+              {/* caption: kickoff + graded result, matching the bet board */}
+              <div className="flex items-center justify-between gap-2 px-0.5 text-xs">
+                <span className="text-muted-foreground">{formatStart(ev.start_time)}</span>
                 {gradedLock && (
                   <Badge size="sm" appearance="light" variant={g!.correct ? 'success' : 'destructive'}>
                     {g!.correct ? '✓ correct' : '✗ wrong'}
                   </Badge>
                 )}
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                {(['away', 'home'] as const).map((side) => {
-                  const isHome = side === 'home';
-                  const teamName = isHome ? ev.home_team : ev.away_team;
-                  const teamAbbr = isHome ? ev.home_abbr : ev.away_abbr;
-                  const teamLogo = isHome ? ev.home_logo : ev.away_logo;
-                  const active = cur === side;
-                  const isMyPick = gradedLock && g!.pick_side === side;
-                  const spread = sideSpread(ev, side);
-                  return (
+              {(['away', 'home'] as const).map((side) => {
+                const isHome = side === 'home';
+                const teamName = isHome ? ev.home_team : ev.away_team;
+                const teamAbbr = isHome ? ev.home_abbr : ev.away_abbr;
+                const teamLogo = isHome ? ev.home_logo : ev.away_logo;
+                const active = cur === side;
+                const isMyPick = gradedLock && g!.pick_side === side;
+                const picked = active || isMyPick;
+                const spread = sideSpread(ev, side);
+                // Tinted fill by state: green correct / red wrong once graded, blue
+                // for the current selection, neutral otherwise (like the bet board).
+                const tone = isMyPick
+                  ? (g!.correct ? 'bg-brand/20' : 'bg-destructive/20')
+                  : active ? 'bg-blue-500/20' : 'bg-muted/60';
+                return (
+                  <div key={side} className="grid grid-cols-[minmax(0,1fr)_3.75rem] gap-1.5">
                     <button
-                      key={side}
                       type="button"
                       disabled={disabled}
                       onClick={() => setSel((s) => ({ ...s, [ev.external_id]: side }))}
                       className={cn(
-                        'flex flex-1 items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-foreground transition-colors',
-                        active || isMyPick
-                          ? 'border-primary bg-primary/10'
-                          : 'border-input hover:border-foreground/30',
-                        disabled && 'cursor-not-allowed',
-                        disabled && !active && !isMyPick && 'opacity-60',
+                        'flex h-12 items-center gap-2.5 rounded-md px-2.5 text-left text-foreground transition',
+                        tone,
+                        disabled ? 'cursor-not-allowed' : 'hover:brightness-110',
+                        disabled && !picked && 'opacity-60',
                       )}
                     >
-                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} size="lg" />
-                      <span className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{teamName}</span>
-                      {spread && (
-                        <span className="shrink-0 text-sm font-semibold tabular-nums text-muted-foreground" title="Point spread">
-                          {spread}
-                        </span>
-                      )}
-                      {isMyPick && <Check className="size-4 shrink-0 text-primary" />}
+                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} size="sm" />
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{teamName}</span>
+                      {picked && <Check className="size-4 shrink-0 text-foreground/70" />}
                     </button>
-                  );
-                })}
-              </div>
+                    <div className="flex h-12 items-center justify-center rounded-md bg-muted/60 text-xs font-semibold tabular-nums text-muted-foreground">
+                      {spread || '—'}
+                    </div>
+                  </div>
+                );
+              })}
               {ev.external_id === lastGameId && (
-                <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+                <div className="mt-1 flex flex-wrap items-center gap-2 px-0.5">
                   <span className="text-sm font-bold text-foreground">Tie-breaker · total points</span>
                   <Input
                     type="number"
@@ -400,7 +402,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                   />
                 </div>
               )}
-            </Card>
+            </div>
           );
         })}
       </div>
