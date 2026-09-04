@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Beer } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { wagersApi, viewerSide, wagerPick, type Wager } from '@/lib/wagers';
 import { usersApi } from '@/lib/users';
@@ -188,7 +187,7 @@ export function UserProfileDialog({
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
                         {brag ? (
                           <>
-                            <Beer aria-hidden className="size-3" />
+                            <span aria-hidden className="text-sm leading-none">🍺</span>
                             Beer
                           </>
                         ) : (

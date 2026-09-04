@@ -67,7 +67,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, Medal, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, Beer, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, ChevronRight, Search, type LucideIcon } from 'lucide-react';
+import { Trophy, Medal, CalendarDays, Wallet, Settings, X, UserPlus, UserCheck, UserMinus, Clock, EllipsisVertical, MessageCircle, Check, CircleCheckBig, ImagePlus, Trash2, Lock, ArrowUpRight, ArrowDownRight, RotateCcw, Flag, ChevronRight, Search, type LucideIcon } from 'lucide-react';
 import { friendsApi } from '@/lib/friends';
 import { messagingApi } from '@/lib/messaging';
 import {
@@ -489,7 +489,7 @@ function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) 
           onClick={() => pick('0')}
           className={cn(chip(brag), 'gap-1.5 px-3 py-2 text-sm')}
         >
-          <Beer aria-hidden className="size-4" /> Beer
+          <span aria-hidden className="text-base leading-none">🍺</span> Beer
         </button>
         {STAKE_PRESETS.map((amt) => {
           const on = !custom && val === amt;
@@ -578,7 +578,7 @@ export function StatusIcon({ icon: Icon, label }: { icon: typeof Lock; label: st
 // of a dollar figure on the compact cards; real stakes render the signed amount.
 function StakeText({ cents, sign }: { cents: number; sign?: string }) {
   if (cents === 0) {
-    return <Beer aria-label="Beer — loser buys the round" className="inline-block size-[1em] align-[-0.15em]" />;
+    return <span role="img" aria-label="Beer — loser buys the round">🍺</span>;
   }
   return (
     <>
@@ -594,7 +594,7 @@ function StakeSummary({ cents }: { cents: number }) {
   if (cents === 0) {
     return (
       <span className="inline-flex items-center gap-1">
-        <Beer aria-hidden className="size-[1em] align-[-0.15em]" />
+        <span aria-hidden>🍺</span>
         Beer <span className="text-muted-foreground">(loser buys the round)</span>
       </span>
     );
@@ -1728,7 +1728,7 @@ function BeerDelta({ count }: { count: number }) {
   return (
     <span className={cn('inline-flex items-center gap-0.5 font-semibold tabular-nums', up ? 'text-brand' : 'text-destructive')}>
       {up ? '+' : '−'}{Math.abs(count)}
-      <Beer aria-hidden className="size-[1em] align-[-0.15em]" />
+      <span aria-hidden>🍺</span>
     </span>
   );
 }
