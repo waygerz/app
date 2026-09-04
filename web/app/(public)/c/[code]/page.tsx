@@ -289,20 +289,20 @@ function CodeContent({ code }: { code: string }) {
                     key={rk}
                     className={cn(
                       'flex h-12 items-center gap-2.5 rounded-md px-2.5',
-                      backed ? 'border-2 border-blue-500/70' : 'border border-border bg-card',
+                      backed ? 'bg-muted/60 border-2 border-blue-500/50' : 'bg-muted/60',
                     )}
                   >
                     <TeamLogo src={null} name={name} size="sm" />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{name}</span>
                     {backed && (
-                      <span className="shrink-0 rounded-full border border-blue-500/70 px-2 py-0.5 text-[11px] font-semibold text-blue-500">Your pick</span>
+                      <span className="shrink-0 rounded-full border border-blue-500/50 px-2 py-0.5 text-[11px] font-semibold text-blue-500">Your pick</span>
                     )}
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div className="rounded-md border border-border px-3 py-3 text-center text-sm font-semibold text-foreground">
+            <div className="rounded-md bg-muted/60 px-3 py-3 text-center text-sm font-semibold text-foreground">
               {w.event_name || 'Matchup'}
             </div>
           )}
