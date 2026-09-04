@@ -578,7 +578,7 @@ export function StatusIcon({ icon: Icon, label }: { icon: typeof Lock; label: st
 // of a dollar figure on the compact cards; real stakes render the signed amount.
 function StakeText({ cents, sign }: { cents: number; sign?: string }) {
   if (cents === 0) {
-    return <span role="img" aria-label="Beer — loser buys the round" className="inline-block align-[-0.1em] text-[1.8em] leading-none">🍺</span>;
+    return <span role="img" aria-label="Beer — loser buys the round" className="inline-block align-[-0.1em] text-[2.2em] leading-none">🍺</span>;
   }
   return (
     <>
@@ -655,8 +655,8 @@ function BetDetailsDialog({
   const awayPk = pickForRow('away');
   const homePk = pickForRow('home');
   const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
-  const toneBorder = iWon ? 'border-brand/50' : iLost ? 'border-destructive/50'
-    : decided || voided ? 'border-muted-foreground/25' : 'border-blue-500/50';
+  const toneBg = iWon ? 'bg-brand/20' : iLost ? 'bg-destructive/20'
+    : decided || voided ? 'bg-muted/60' : 'bg-blue-500/20';
   const toneText = iWon ? 'text-brand' : iLost ? 'text-destructive'
     : decided || voided ? 'text-muted-foreground' : 'text-blue-500';
   const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
@@ -666,8 +666,8 @@ function BetDetailsDialog({
     { name: ev?.home_team ?? w.home_team, logo: ev?.home_logo ?? null, abbr: ev?.home_abbr ?? w.home_team, score: hs, lost: homeLost, pk: homePk },
   ];
   const cellBase = 'flex h-12 flex-col items-center justify-center rounded-md text-sm font-semibold leading-tight tabular-nums';
-  const teamCls = (backed: boolean) => backed ? cn('bg-muted/60 border-2', toneBorder) : 'bg-muted/60';
-  const pickCls = (mine: boolean) => mine ? cn('bg-muted/60 border-2', toneBorder, toneText) : 'bg-muted/60 text-muted-foreground';
+  const teamCls = (backed: boolean) => backed ? toneBg : 'bg-muted/60';
+  const pickCls = (mine: boolean) => mine ? cn(toneBg, toneText) : 'bg-muted/60 text-muted-foreground';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -804,8 +804,8 @@ export function WagerBetCard({
   // cell (fills removed — they read muddy): green win / red loss / blue in-flight
   // (open, accepted, live) / grey for a settled-neutral push or a voided bet.
   const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
-  const toneBorder = iWon ? 'border-brand/50' : iLost ? 'border-destructive/50'
-    : decided || voided ? 'border-muted-foreground/25' : 'border-blue-500/50';
+  const toneBg = iWon ? 'bg-brand/20' : iLost ? 'bg-destructive/20'
+    : decided || voided ? 'bg-muted/60' : 'bg-blue-500/20';
   const toneText = iWon ? 'text-brand' : iLost ? 'text-destructive'
     : decided || voided ? 'text-muted-foreground' : 'text-blue-500';
   const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
@@ -820,9 +820,9 @@ export function WagerBetCard({
   const when = ev?.start_time ? formatStart(ev.start_time) : null;
   const cellBase = 'flex h-11 flex-col items-center justify-center rounded-md text-xs font-semibold leading-tight tabular-nums';
   const teamCls = (backed: boolean) =>
-    backed ? cn('bg-muted/60 border-2', toneBorder) : 'bg-muted/60';
+    backed ? toneBg : 'bg-muted/60';
   const pickCls = (mine: boolean) =>
-    mine ? cn('bg-muted/60 border-2', toneBorder, toneText) : 'bg-muted/60 text-muted-foreground';
+    mine ? cn(toneBg, toneText) : 'bg-muted/60 text-muted-foreground';
 
   // What sits in the tall Result cell: interactive buttons when present, else the
   // net payout once decided, else a live/pending status badge.
