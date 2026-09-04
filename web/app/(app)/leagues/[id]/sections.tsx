@@ -578,7 +578,7 @@ export function StatusIcon({ icon: Icon, label }: { icon: typeof Lock; label: st
 // of a dollar figure on the compact cards; real stakes render the signed amount.
 function StakeText({ cents, sign }: { cents: number; sign?: string }) {
   if (cents === 0) {
-    return <span role="img" aria-label="Beer — loser buys the round">🍺</span>;
+    return <span role="img" aria-label="Beer — loser buys the round" className="inline-block align-[-0.1em] text-[1.4em] leading-none">🍺</span>;
   }
   return (
     <>
@@ -655,8 +655,8 @@ function BetDetailsDialog({
   const awayPk = pickForRow('away');
   const homePk = pickForRow('home');
   const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
-  const toneBorder = iWon ? 'border-brand' : iLost ? 'border-destructive'
-    : decided || voided ? 'border-muted-foreground/40' : 'border-blue-500';
+  const toneBorder = iWon ? 'border-brand/70' : iLost ? 'border-destructive/70'
+    : decided || voided ? 'border-muted-foreground/30' : 'border-blue-500/70';
   const toneText = iWon ? 'text-brand' : iLost ? 'text-destructive'
     : decided || voided ? 'text-muted-foreground' : 'text-blue-500';
   const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
@@ -804,8 +804,8 @@ export function WagerBetCard({
   // cell (fills removed — they read muddy): green win / red loss / blue in-flight
   // (open, accepted, live) / grey for a settled-neutral push or a voided bet.
   const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
-  const toneBorder = iWon ? 'border-brand' : iLost ? 'border-destructive'
-    : decided || voided ? 'border-muted-foreground/40' : 'border-blue-500';
+  const toneBorder = iWon ? 'border-brand/70' : iLost ? 'border-destructive/70'
+    : decided || voided ? 'border-muted-foreground/30' : 'border-blue-500/70';
   const toneText = iWon ? 'text-brand' : iLost ? 'text-destructive'
     : decided || voided ? 'text-muted-foreground' : 'text-blue-500';
   const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
