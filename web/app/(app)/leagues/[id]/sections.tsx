@@ -16,6 +16,7 @@ import {
   type WeeklyResultRow,
 } from '@/lib/leagues';
 import { cancelLocked, groupWagers, opponentsLabel, wagerPick, wagersApi, type BetType, type Wager, type WagerGroup, type WagerSide } from '@/lib/wagers';
+import { FILTERS, filterWagers, type BetFilter } from '@/app/(app)/bets/bets-common';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -428,27 +429,6 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
   );
 }
 
-type BetSectionTone = 'pending' | 'awaiting' | 'active' | 'history';
-
-const BET_SECTION_TONE: Record<BetSectionTone, { accent: string; header: string }> = {
-  pending: {
-    accent: 'border-l-amber-500 bg-amber-500/5',
-    header: 'text-amber-700 dark:text-amber-400',
-  },
-  awaiting: {
-    accent: 'border-l-blue-500 bg-blue-500/5',
-    header: 'text-blue-700 dark:text-blue-400',
-  },
-  active: {
-    accent: 'border-l-green-600 bg-green-500/5',
-    header: 'text-green-700 dark:text-green-400',
-  },
-  history: {
-    accent: 'border-l-border bg-muted/30',
-    header: 'text-muted-foreground',
-  },
-};
-
 // ---- Standard state colors for betting / results cards ----
 // selection (your pick) = primary · win = brand green · loss/push = muted · idle = unselected
 const STATE = {
@@ -802,9 +782,9 @@ export function WagerBetCard({
   const awayPk = pickForRow('away');
   const homePk = pickForRow('home');
 
-  // One outcome colour, shown as a BORDER on the backed team cell and the pick
-  // cell (fills removed — they read muddy): green win / red loss / blue in-flight
-  // (open, accepted, live) / grey for a settled-neutral push or a voided bet.
+  // One outcome colour, shown as a muted background tint on the backed team cell
+  // and the pick cell: green win / red loss / blue in-flight (open, accepted,
+  // live) / grey for a settled-neutral push or a voided bet.
   const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
   const toneBg = iWon ? 'bg-brand/20' : iLost ? 'bg-destructive/20'
     : decided || voided ? 'bg-muted/60' : 'bg-blue-500/20';
@@ -921,46 +901,6 @@ export function WagerBetCard({
   );
 }
 
-function BetSection({
-  title,
-  tone,
-  wagers,
-  me,
-  eventMap,
-  actions,
-}: {
-  title: string;
-  tone: BetSectionTone;
-  wagers: Wager[];
-  me?: string;
-  eventMap: Record<string, SportEvent>;
-  actions?: (g: WagerGroup) => ReactNode;
-}) {
-  if (wagers.length === 0) return null;
-  const style = BET_SECTION_TONE[tone];
-  const groups = groupWagers(wagers, me ?? '').sort(
-    (a, b) => new Date(b.rep.start_time ?? 0).getTime() - new Date(a.rep.start_time ?? 0).getTime(),
-  );
-  return (
-    <section>
-      <h3 className={cn('mb-3 text-sm font-semibold', style.header)}>
-        {title} ({wagers.length})
-      </h3>
-      <div>
-        {groups.map((g) => (
-          <WagerBetCard
-            key={g.key}
-            group={g}
-            me={me}
-            ev={eventMap[g.rep.event_id]}
-            actions={actions?.(g)}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 // ---- Head-to-head: "My Bets" — games you've bet against friends. Placing a
 // bet now happens from the Schedule tab (tap a game), so this is the list view.
 function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
@@ -1004,50 +944,64 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   });
 
   const all = bets.data ?? [];
-  // Live bets live here; settled ones live on the Results tab (grouped by week).
-  const pending = all.filter((w) => w.status === 'open');
-  const active = all.filter((w) => w.status === 'accepted');
-  const awaiting = all.filter((w) => w.status === 'completed');
-  const liveCount = pending.length + active.length + awaiting.length;
+  // Filter pills mirror the global /bets page: one filtered, sorted list rather
+  // than per-status sections. Closed and cancelled bets now surface here too
+  // (previously only on the Results tab).
+  const [filter, setFilter] = useState<BetFilter>('all');
+  const count = (f: BetFilter) => filterWagers(all, f).length;
+  const groups = groupWagers(filterWagers(all, filter), me ?? '').sort(
+    (a, b) => new Date(b.rep.start_time ?? 0).getTime() - new Date(a.rep.start_time ?? 0).getTime(),
+  );
+  const pill = (activePill: boolean) =>
+    cn(
+      'shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium',
+      activePill ? 'border-primary bg-primary text-primary-foreground' : 'border-input text-muted-foreground',
+    );
 
-  // Active wagers hold both stakes, so calling one off takes both sides: one
-  // requests, the other approves. Locks 10 minutes before kickoff. The status
-  // badge carries the state, so the buttons stay terse for the compact column.
-  const cancelActions = (g: WagerGroup) => {
+  // One consolidated per-group action set (mirrors the global /bets page). The
+  // status badge on the card carries the state, so the buttons stay terse.
+  const actionsFor = (g: WagerGroup) => {
     const w = g.rep;
     const ids = g.wagers.map((x) => x.id);
-    if (w.proposer_id !== me && w.acceptor_id !== me) return null;
-    // Game started — cancelling is closed, so show no action (the status carries it).
-    if (cancelLocked(w)) return null;
-    if (!w.cancel_requested_by) {
+    const mine = w.proposer_id === me || w.acceptor_id === me;
+    // Score-decided: only the winner claims the pot; everyone else just reads it.
+    if (w.status === 'completed' && mine) {
+      return w.winner_user_id === me ? (
+        <Button size="sm" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate(ids)}>Confirm</Button>
+      ) : null;
+    }
+    // Accepted wagers hold both stakes, so calling one off takes both sides: one
+    // requests, the other approves. Locks 10 minutes before kickoff.
+    if (w.status === 'accepted' && mine) {
+      if (cancelLocked(w)) return null;
+      if (!w.cancel_requested_by) {
+        return (
+          <Button size="sm" variant="outline" className="w-full" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(ids)}>Cancel</Button>
+        );
+      }
+      if (w.cancel_requested_by === me) {
+        return <span className="text-center text-[11px] text-muted-foreground">Requested</span>;
+      }
       return (
-        <Button size="sm" variant="outline" className="w-full" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(ids)}>
-          Cancel
-        </Button>
+        <>
+          <Button size="sm" className="w-full" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(ids)}>Approve</Button>
+          <Button size="sm" variant="ghost" className="w-full" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(ids)}>Reject</Button>
+        </>
       );
     }
-    if (w.cancel_requested_by === me) {
-      return <span className="text-center text-[11px] text-muted-foreground">Requested</span>;
+    if (w.status !== 'open') return null;
+    if (w.acceptor_id === me) {
+      return (
+        <>
+          <Button size="sm" className="w-full" disabled={acceptM.isPending} onClick={() => acceptM.mutate(ids)}>Accept</Button>
+          <Button size="sm" variant="outline" className="w-full" disabled={declineM.isPending} onClick={() => declineM.mutate(ids)}>Decline</Button>
+        </>
+      );
     }
-    return (
-      <>
-        <Button size="sm" className="w-full" disabled={approveCancelM.isPending} onClick={() => approveCancelM.mutate(ids)}>Approve</Button>
-        <Button size="sm" variant="ghost" className="w-full" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(ids)}>Reject</Button>
-      </>
-    );
-  };
-
-  const confirmActions = (g: WagerGroup) => {
-    const w = g.rep;
-    const ids = g.wagers.map((x) => x.id);
-    // Only the score-decided winner claims the pot; everyone else just sees the
-    // result in the badge.
-    if (w.winner_user_id !== me) return null;
-    return (
-      <Button size="sm" className="w-full" disabled={confirmM.isPending} onClick={() => confirmM.mutate(ids)}>
-        Confirm
-      </Button>
-    );
+    if (w.proposer_id === me && !cancelLocked(w)) {
+      return <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>Cancel</Button>;
+    }
+    return null;
   };
 
   const eventIds = Array.from(new Set(all.map((w) => w.event_id)));
@@ -1074,57 +1028,45 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
   const eventMap = eventsQ.data ?? {};
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold text-foreground sm:text-lg">My Bets</h2>
         <Link href={`/leagues/${lg.id}/sports`} className="text-xs text-primary hover:underline">
           Browse games →
         </Link>
       </div>
-      <BetSection
-        title="Pending"
-        tone="pending"
-        wagers={pending}
-        me={me}
-        eventMap={eventMap}
-        actions={(g) => {
-          const w = g.rep;
-          const ids = g.wagers.map((x) => x.id);
-          return w.acceptor_id === me ? (
-            <>
-              <Button size="sm" className="w-full" disabled={acceptM.isPending} onClick={() => acceptM.mutate(ids)}>Accept</Button>
-              <Button size="sm" variant="outline" className="w-full" disabled={declineM.isPending} onClick={() => declineM.mutate(ids)}>Decline</Button>
-            </>
-          ) : w.proposer_id === me && !cancelLocked(w) ? (
-            <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>
-              Cancel
-            </Button>
-          ) : null;
-        }}
-      />
-      <BetSection
-        title="Active"
-        tone="active"
-        wagers={active}
-        me={me}
-        eventMap={eventMap}
-        actions={cancelActions}
-      />
-      <BetSection title="Awaiting result" tone="awaiting" wagers={awaiting} me={me} eventMap={eventMap} actions={confirmActions} />
 
-      {bets.isLoading && <Skeleton className="h-24 rounded-xl" />}
-      {!bets.isLoading && liveCount === 0 && (
+      {/* Filter pills — same set as the global Bets page. */}
+      <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {FILTERS.map((f) => (
+          <button key={f.key} type="button" onClick={() => setFilter(f.key)} className={pill(filter === f.key)}>
+            {f.label} ({count(f.key)})
+          </button>
+        ))}
+      </div>
+
+      {bets.isLoading ? (
+        <Skeleton className="h-24 rounded-xl" />
+      ) : groups.length === 0 ? (
         <CenterCard>
           <CalendarDays className="size-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            No active bets yet. Settled bets are on the Results tab.
+            {filter === 'all'
+              ? 'No bets yet. Settled bets are on the Results tab.'
+              : `No ${FILTERS.find((f) => f.key === filter)!.label.toLowerCase()} bets.`}
           </p>
-          {canBet && (
+          {canBet && filter === 'all' && (
             <Button size="sm" variant="outline" onClick={() => router.push(`/leagues/${lg.id}/sports`)}>
               Browse games
             </Button>
           )}
         </CenterCard>
+      ) : (
+        <div>
+          {groups.map((g) => (
+            <WagerBetCard key={g.key} group={g} me={me} ev={eventMap[g.rep.event_id]} actions={actionsFor(g)} />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -2217,6 +2159,26 @@ function MemberPicksDialog({
   });
   const picks = q.data ?? [];
 
+  // PickEventInfo carries no kickoff time, so pull it from the ingestor per game
+  // (the same source the Picks list uses) and caption each matchup with it.
+  const eventIds = Array.from(new Set(picks.map((p) => p.event_id).filter(Boolean)));
+  const startsQ = useQuery({
+    queryKey: ['member-pick-starts', lg.id, periodId, [...eventIds].sort().join(',')],
+    queryFn: async () => {
+      const m: Record<string, string> = {};
+      await Promise.all(
+        eventIds.map(async (id) => {
+          const ev = await fetchEvent(id);
+          if (ev?.start_time) m[id] = ev.start_time;
+        }),
+      );
+      return m;
+    },
+    enabled: open && eventIds.length > 0,
+    staleTime: 5 * 60_000,
+  });
+  const starts = startsQ.data ?? {};
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85dvh]">
@@ -2240,6 +2202,9 @@ function MemberPicksDialog({
               : p.correct ? 'bg-brand/20' : 'bg-destructive/20';
             return (
               <div key={p.id ?? p.event_id} className="flex flex-col gap-1.5">
+                {starts[p.event_id] && (
+                  <span className="px-0.5 text-xs text-muted-foreground">{formatStart(starts[p.event_id])}</span>
+                )}
                 <PickTeam
                   logo={ev?.away_logo}
                   label={ev?.away_abbr || ev?.away_team || '?'}

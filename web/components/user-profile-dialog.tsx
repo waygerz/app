@@ -19,28 +19,32 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-// The outcome/status shown per bet, and its accent tone.
-function outcome(w: Wager, me: string): { label: string; tone: string } {
+// The outcome/status shown per bet, with the board-grid colour vocabulary:
+// brand win / destructive loss / blue in-flight / muted void — shown as a
+// tinted pill (`text` + `tint`) to match the bet cards.
+function outcome(w: Wager, me: string): { label: string; text: string; tint: string } {
   if (w.winner_user_id) {
     return w.winner_user_id === me
-      ? { label: 'Won', tone: 'text-green-600 dark:text-green-500' }
-      : { label: 'Lost', tone: 'text-destructive' };
+      ? { label: 'Won', text: 'text-brand', tint: 'bg-brand/20' }
+      : { label: 'Lost', text: 'text-destructive', tint: 'bg-destructive/20' };
   }
+  const inFlight = { text: 'text-blue-500', tint: 'bg-blue-500/20' };
+  const voided = { text: 'text-muted-foreground', tint: 'bg-muted/60' };
   switch (w.status) {
     case 'open':
-      return { label: 'Pending', tone: 'text-muted-foreground' };
+      return { label: 'Pending', ...inFlight };
     case 'accepted':
-      return { label: 'Active', tone: 'text-primary' };
+      return { label: 'Active', ...inFlight };
     case 'completed':
-      return { label: 'Awaiting result', tone: 'text-muted-foreground' };
+      return { label: 'Awaiting result', ...inFlight };
     case 'declined':
-      return { label: 'Declined', tone: 'text-muted-foreground' };
+      return { label: 'Declined', ...voided };
     case 'cancelled':
-      return { label: 'Cancelled', tone: 'text-muted-foreground' };
+      return { label: 'Cancelled', ...voided };
     case 'refunded':
-      return { label: 'Refunded', tone: 'text-muted-foreground' };
+      return { label: 'Refunded', ...voided };
     default:
-      return { label: w.status, tone: 'text-muted-foreground' };
+      return { label: w.status, ...voided };
   }
 }
 
@@ -167,7 +171,7 @@ export function UserProfileDialog({
                 return (
                   <li
                     key={w.id}
-                    className="flex items-center gap-2.5 rounded-lg border border-border p-2.5"
+                    className="flex items-center gap-2.5 rounded-md bg-muted/60 p-2.5"
                   >
                     <div className="flex shrink-0 gap-1">
                       <TeamLogo src={null} name={w.away_team} size="xs" framed />
@@ -182,8 +186,10 @@ export function UserProfileDialog({
                         {w.league ? ` · ${w.league.toUpperCase()}` : ''}
                       </span>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-0.5">
-                      <span className={cn('text-sm font-semibold', o.tone)}>{o.label}</span>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', o.text, o.tint)}>
+                        {o.label}
+                      </span>
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
                         {brag ? (
                           <>
