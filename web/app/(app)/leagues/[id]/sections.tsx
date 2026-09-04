@@ -86,12 +86,19 @@ import {
 // whose next game is weeks away (NFL opens in August, NHL in September). That
 // left their tabs empty even though the schedule was there. Per-sport fetches
 // guarantee every configured sport gets its own upcoming list.
+//
+// Each sport-league is fetched deep (up to 400 upcoming games) because the
+// Sports tab pages through them a week at a time (see LeagueSports): this cap is
+// the furthest-out horizon a viewer can reach with the "Next week" button, not a
+// one-screen limit. 400 ≈ ~4 college-football weeks (a single CFB week runs 60+
+// games) while staying under the ingestor's 500 ceiling. The old flat 50-cap
+// truncated a busy CFB weekend and dropped later games entirely.
 function useScheduled(sportLeagueIds: string[]) {
   return useQuery({
     queryKey: ['schedule', [...sportLeagueIds].sort()],
     queryFn: async () => {
       const lists = await Promise.all(
-        sportLeagueIds.map((id) => fetchUpcomingEvents(50, [id])),
+        sportLeagueIds.map((id) => fetchUpcomingEvents(400, [id])),
       );
       return lists.flat();
     },
@@ -1135,6 +1142,10 @@ export function LeagueSports() {
   const canBet = lg.status === 'active';
   const [tab, setTab] = useState<string>('upcoming'); // 'upcoming' | sport_league_id
   const [selected, setSelected] = useState<SportEvent | null>(null);
+  // How many weeks of a sport's schedule to reveal (per-sport tabs only). The
+  // "Show next week" button bumps this; switching tabs restarts at one week.
+  const [weeksShown, setWeeksShown] = useState(1);
+  useEffect(() => { setWeeksShown(1); }, [tab]);
 
   const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
   const evs = events.data ?? [];
@@ -1148,10 +1159,22 @@ export function LeagueSports() {
 
   const byStart = (a: SportEvent, b: SportEvent) =>
     (a.start_time ?? '').localeCompare(b.start_time ?? '');
+  const ms = (e: SportEvent) => new Date(e.start_time ?? 0).getTime();
+
+  // Per-sport tabs page a week at a time: show every game up to `weeksShown`
+  // weeks past that sport's FIRST upcoming game. Anchoring to the first game
+  // (not "now") means a sport whose next game is weeks out still fills week one
+  // instead of showing an empty screen. `hasMoreWeeks` drives the button below.
+  const sportSorted =
+    tab === 'upcoming' ? [] : evs.filter((e) => e.sport_league_id === tab).sort(byStart);
+  const windowEnd = sportSorted.length
+    ? ms(sportSorted[0]) + weeksShown * 7 * 24 * 60 * 60 * 1000
+    : 0;
+  const hasMoreWeeks = tab !== 'upcoming' && sportSorted.some((e) => ms(e) > windowEnd);
   const shown =
     tab === 'upcoming'
       ? [...evs].sort(byStart).slice(0, UPCOMING_LIMIT)
-      : evs.filter((e) => e.sport_league_id === tab).sort(byStart);
+      : sportSorted.filter((e) => ms(e) <= windowEnd);
   const teamEvs = shown.filter((e) => !isFieldSport(e.sport));
   const fieldEvs = shown.filter((e) => isFieldSport(e.sport));
 
@@ -1231,6 +1254,15 @@ export function LeagueSports() {
                 />
               ))}
             </div>
+          )}
+          {hasMoreWeeks && (
+            <Button
+              variant="outline"
+              className="h-12 w-full"
+              onClick={() => setWeeksShown((w) => w + 1)}
+            >
+              Show next week
+            </Button>
           )}
         </div>
       )}
