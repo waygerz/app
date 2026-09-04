@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { redirect, useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,6 +15,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
 import { WagerBetCard } from '@/app/(app)/leagues/[id]/sections';
+import { ListSearch } from '@/components/list-search';
+
+type SortKey = 'date-desc' | 'date-asc' | 'stake-desc';
 
 export default function BetsView() {
   const { filter = 'all' } = useParams<{ filter: string }>();
@@ -39,6 +42,29 @@ export default function BetsView() {
     () => filterWagers(wagersQ.data ?? [], activeFilter),
     [wagersQ.data, activeFilter],
   );
+
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('date-desc');
+
+  // Group siblings, then apply the client-side search (team / opponent / league)
+  // and the chosen sort. Search and sort operate on the current filter's bets.
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let gs = groupWagers(rows, me);
+    if (q) {
+      gs = gs.filter((g) =>
+        [g.rep.home_team, g.rep.away_team, leagueNames.get(g.rep.league_id) ?? '',
+          ...g.opponents.map((o) => o.name)]
+          .join(' ').toLowerCase().includes(q),
+      );
+    }
+    const start = (g: WagerGroup) => new Date(g.rep.start_time ?? 0).getTime();
+    return [...gs].sort((a, b) =>
+      sort === 'stake-desc' ? b.rep.amount_cents - a.rep.amount_cents
+      : sort === 'date-asc' ? start(a) - start(b)
+      : start(b) - start(a),
+    );
+  }, [rows, me, query, sort, leagueNames]);
 
   // Events behind the bets, for the live/final score line. Keyed on the full
   // wager set (not the filtered rows) so switching tabs reuses the same cache.
@@ -179,19 +205,37 @@ export default function BetsView() {
 
   return (
     <div>
+      {!wagersQ.isLoading && (rows.length > 0 || query.trim()) && (
+        <div className="mb-4 flex items-center gap-2">
+          <ListSearch value={query} onChange={setQuery} placeholder="Search teams, opponents, leagues" className="flex-1" />
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            aria-label="Sort bets"
+            className="h-11 shrink-0 rounded-xl border border-input bg-background px-2.5 text-sm text-foreground sm:h-10"
+          >
+            <option value="date-desc">Newest game</option>
+            <option value="date-asc">Oldest game</option>
+            <option value="stake-desc">Biggest stake</option>
+          </select>
+        </div>
+      )}
+
       {wagersQ.isLoading && (
         <div className="flex flex-col gap-2">
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
         </div>
       )}
 
-      {!wagersQ.isLoading && rows.length === 0 && (
+      {!wagersQ.isLoading && groups.length === 0 && (
         <CenterCard>
           <Ticket className="size-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            {activeFilter === 'all' ? 'No bets yet.' : `No ${meta.label.toLowerCase()} bets.`}
+            {query.trim()
+              ? `No bets match “${query.trim()}”.`
+              : activeFilter === 'all' ? 'No bets yet.' : `No ${meta.label.toLowerCase()} bets.`}
           </p>
-          {activeFilter === 'pending' && (
+          {activeFilter === 'pending' && !query.trim() && (
             <>
               <p className="text-xs text-muted-foreground">Incoming and outgoing proposals show up here.</p>
               <Link href="/" className="text-sm text-primary hover:underline">Browse leagues to place a bet</Link>
@@ -200,14 +244,11 @@ export default function BetsView() {
         </CenterCard>
       )}
 
-      {/* One continuous list of every bet in the current filter, ordered by game
-          date (most recent / upcoming first) — no per-status grouping; each card's
-          own status badge carries its state. */}
-      {rows.length > 0 && (
+      {/* One continuous list for the current filter, searched + sorted; each
+          card's own status badge carries its state. */}
+      {groups.length > 0 && (
         <div>
-          {groupWagers(rows, me)
-            .sort((a, b) => new Date(b.rep.start_time ?? 0).getTime() - new Date(a.rep.start_time ?? 0).getTime())
-            .map((g) => (
+          {groups.map((g) => (
             <WagerBetCard
               key={g.key}
               group={g}
