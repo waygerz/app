@@ -195,10 +195,10 @@ export default function ThreadPage() {
       const opp = w.proposer_id === me ? w.acceptor_id : w.proposer_id;
       if (opp === otherUserId && w.event_id) ids.add(w.event_id);
     }
-    return [...ids];
+    return Array.from(ids);
   }, [betsQ.data, me, otherUserId]);
   const scoresQ = useQuery({
-    queryKey: ['thread-bet-events', [...betEventIds].sort().join(',')],
+    queryKey: ['thread-bet-events', betEventIds.slice().sort().join(',')],
     queryFn: async () => {
       const out: SportEvent[] = [];
       await Promise.all(betEventIds.map(async (id) => { const ev = await fetchEvent(id); if (ev) out.push(ev); }));
