@@ -266,7 +266,9 @@ function CodeContent({ code }: { code: string }) {
     const otherName = iAmProposer ? w.acceptor_name : w.proposer_name;
     const otherId = iAmProposer ? w.acceptor_id : w.proposer_id;
     const otherAvatar = iAmProposer ? w.acceptor_avatar_key : w.proposer_avatar_key;
-    const myTurn = !!data.viewer.my_turn;
+    // Fall back to the acceptor check if my_turn is absent (an old backend during a
+    // deploy window) so the acceptor never loses their Accept button.
+    const myTurn = data.viewer.my_turn ?? rel === 'acceptor';
     const countered = (w.stake_round ?? 0) > 0;
     const canAct = myTurn && data.actions.includes('accept');
     return (
