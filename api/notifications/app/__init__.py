@@ -37,4 +37,21 @@ def create_app(config_class=Config):
         db.session.commit()
         print(f"seeded {len(STARTER_TEMPLATES)} templates")
 
+    @app.cli.command("enable-all-sms")
+    def enable_all_sms():
+        """Turn SMS on for EVERY user: lift the account-level SMS master
+        (opted_out) and drop any per-category SMS opt-out rows so the on-by-
+        default alert categories deliver again. For test data / all-consenting
+        users only — never override real users' SMS consent."""
+        from app.models.preference import NotificationPreference
+        from app.models.channel_pref import NotificationChannelPref
+        lifted = NotificationPreference.query.filter_by(opted_out=True).update(
+            {NotificationPreference.opted_out: False}, synchronize_session=False
+        )
+        removed = NotificationChannelPref.query.filter_by(channel="sms", enabled=False).delete(
+            synchronize_session=False
+        )
+        db.session.commit()
+        print(f"SMS enabled for all: lifted {lifted} opted_out flags, removed {removed} sms opt-out rows", flush=True)
+
     return app
