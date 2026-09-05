@@ -469,6 +469,15 @@ def _format_stake(amount_cents):
     return f"${dollars:.0f}" if amount_cents % 100 == 0 else f"${dollars:.2f}"
 
 
+def _wager_link(wager):
+    """The bet's public /c/<code> deep link — every notification points here so the
+    recipient lands on the scored bet view (after login). Every wager is minted a
+    code at propose time; fall back to the bets list if one is somehow missing so
+    the {{link}} template var is always a valid URL."""
+    row = WagerInviteCode.query.filter_by(wager_id=wager.id).first()
+    return f"https://waygerz.com/c/{row.code}" if row else "https://waygerz.com/bets/all"
+
+
 def _opponent_phrase(names):
     """"Johnny" / "Johnny and Richard" / "Johnny, Richard and 2 others"."""
     n = len(names)
@@ -579,6 +588,7 @@ def accept(wager, user_id):
             "other_name": _name(user_id),
             "matchup": _matchup(wager),
             "league": wager.league or "your league",
+            "link": _wager_link(wager),
         },
         actor_uid=user_id,
         ref_id=wager.id,
@@ -691,6 +701,7 @@ def counter(wager, user_id, amount_cents, line=None):
             "was": _format_stake(old_amount),
             "matchup": _matchup(wager),
             "league": wager.league or "your league",
+            "link": _wager_link(wager),
         },
         actor_uid=user_id,
         ref_id=wager.id,
@@ -1200,15 +1211,18 @@ def _notify_settled(wager):
         return
     loser = wager.acceptor_id if winner == wager.proposer_id else wager.proposer_id
     matchup, league = _matchup(wager), (wager.league or "your league")
+    winner_name, loser_name = _name(winner), _name(loser)
+    link = _wager_link(wager)
     _notify(
         winner, "wager_settled_win", "You won!",
-        {"amount": _format_stake(wager.amount_cents), "matchup": matchup, "league": league},
+        {"other_name": loser_name, "amount": _format_stake(wager.amount_cents),
+         "matchup": matchup, "league": league, "link": link},
         ref_id=wager.id, deep_link="/bets/active",
         dedup_key=f"wager_settled:{wager.id}:{winner}",
     )
     _notify(
         loser, "wager_settled_loss", "Tough luck",
-        {"matchup": matchup, "league": league},
+        {"other_name": winner_name, "matchup": matchup, "league": league, "link": link},
         ref_id=wager.id, deep_link="/bets/closed",
         dedup_key=f"wager_settled:{wager.id}:{loser}",
     )

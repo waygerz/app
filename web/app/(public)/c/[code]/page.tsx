@@ -17,6 +17,7 @@ import {
 import { leagueTypeLabel } from '@/lib/leagues';
 import { wagerPick } from '@/lib/wagers';
 import { formatCredits } from '@/lib/wallet';
+import { fetchEvent } from '@/lib/ingestor';
 import { clearPendingLink } from '@/lib/pending-link';
 import { AuthRedirectIfGuest } from '@/auth/AuthRedirectIfGuest';
 import { LeagueAvatar } from '@/components/league-avatar';
@@ -65,6 +66,20 @@ function CodeContent({ code }: { code: string }) {
     queryKey: ['invite-code', code],
     queryFn: () => resolveCode(code),
     retry: false,
+  });
+
+  // Live/final scores behind a bet code — same source + live-poll as the bets
+  // page, so the shared link shows the game the way the in-app bet card does.
+  const betEventId =
+    resolved.data?.type === 'bet'
+      ? (resolved.data.preview as BetCodePreview | null)?.wager.event_id
+      : undefined;
+  const eventQ = useQuery({
+    queryKey: ['c-bet-event', betEventId ?? ''],
+    queryFn: () => fetchEvent(betEventId!),
+    enabled: !!betEventId,
+    staleTime: 5 * 60_000,
+    refetchInterval: (q) => (q.state.data?.status === 'live' ? 30_000 : false),
   });
 
   const act = useMutation({
@@ -271,6 +286,35 @@ function CodeContent({ code }: { code: string }) {
     const myTurn = data.viewer.my_turn ?? rel === 'acceptor';
     const countered = (w.stake_round ?? 0) > 0;
     const canAct = myTurn && data.actions.includes('accept');
+
+    // Live/final game scores (from the ingestor event behind the bet), rendered
+    // the same way the in-app bet card does so the shared link shows the game.
+    const ev = eventQ.data ?? null;
+    const started = !!ev && ev.status !== 'scheduled' && ev.status !== 'cancelled';
+    const final = ev?.status === 'final';
+    const hs = ev?.home_score ?? null;
+    const as = ev?.away_score ?? null;
+    const awayLost = final && hs != null && as != null && hs > as;
+    const homeLost = final && hs != null && as != null && as > hs;
+    // Outcome, from the viewer's side. Known once the game is final (completed)
+    // or the payout has settled.
+    const decided = w.status === 'completed' || w.status === 'settled';
+    const myId = iAmProposer ? w.proposer_id : w.acceptor_id;
+    const iWon = involved && decided && !!w.winner_user_id && w.winner_user_id === myId;
+    const iLost = involved && decided && !!w.winner_user_id && w.winner_user_id !== myId;
+    const stakeText = w.amount_cents ? formatCredits(w.amount_cents) : '';
+    const headline = decided
+      ? iWon
+        ? `You beat ${otherName}`
+        : iLost
+          ? `${otherName} beat you`
+          : 'Push'
+      : myTurn
+        ? `${otherName} ${countered ? 'countered your bet' : 'sent you a bet'}`
+        : involved
+          ? `Waiting on ${otherName}`
+          : `${w.proposer_name}'s bet`;
+
     return (
       <>
         <div className="flex flex-col items-center gap-3 text-center">
@@ -282,14 +326,15 @@ function CodeContent({ code }: { code: string }) {
             fallbackClassName="text-xl"
           />
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {myTurn
-                ? `${otherName} ${countered ? 'countered your bet' : 'sent you a bet'}`
-                : involved
-                  ? `Waiting on ${otherName}`
-                  : `${w.proposer_name}'s bet`}
-            </h1>
+            <h1 className="text-2xl font-bold text-foreground">{headline}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{w.league || 'Head-to-head'}</p>
+            {decided && involved && !!w.winner_user_id && (
+              <div className="mt-2 flex justify-center">
+                <Badge size="sm" appearance="light" variant={iWon ? 'success' : 'destructive'}>
+                  {iWon ? `Won${stakeText ? ` +${stakeText}` : ''}` : `Lost${stakeText ? ` −${stakeText}` : ''}`}
+                </Badge>
+              </div>
+            )}
           </div>
         </div>
 
@@ -297,7 +342,11 @@ function CodeContent({ code }: { code: string }) {
           {w.away_team && w.home_team ? (
             <div className="flex flex-col gap-1.5">
               {(['away', 'home'] as const).map((rk) => {
-                const name = rk === 'away' ? w.away_team : w.home_team;
+                const isAway = rk === 'away';
+                const name = (isAway ? ev?.away_team : ev?.home_team) ?? (isAway ? w.away_team : w.home_team);
+                const logo = (isAway ? ev?.away_logo : ev?.home_logo) ?? null;
+                const score = isAway ? as : hs;
+                const lost = isAway ? awayLost : homeLost;
                 // Highlight the viewer's own team (spread / moneyline). Totals are
                 // over/under, so mySide never matches a team row.
                 const backed = involved && mySide === rk;
@@ -309,10 +358,14 @@ function CodeContent({ code }: { code: string }) {
                       backed ? 'bg-blue-500/20' : 'bg-muted/60',
                     )}
                   >
-                    <TeamLogo src={null} name={name} size="sm" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{name}</span>
-                    {backed && (
-                      <span className="shrink-0 rounded-full bg-blue-500/20 px-2 py-0.5 text-[11px] font-semibold text-blue-500">Your pick</span>
+                    <TeamLogo src={logo} name={name} size="sm" />
+                    <span className={cn('min-w-0 flex-1 truncate text-sm', lost ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{name}</span>
+                    {started && score != null ? (
+                      <span className={cn('shrink-0 text-base font-bold tabular-nums', lost ? 'text-muted-foreground' : 'text-foreground')}>{score}</span>
+                    ) : (
+                      backed && (
+                        <span className="shrink-0 rounded-full bg-blue-500/20 px-2 py-0.5 text-[11px] font-semibold text-blue-500">Your pick</span>
+                      )
                     )}
                   </div>
                 );
@@ -347,11 +400,13 @@ function CodeContent({ code }: { code: string }) {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <p className="text-center text-sm text-muted-foreground">
-              {involved
-                ? `Waiting on ${otherName} to respond${countered ? ' to your counter' : ''}.`
-                : "This bet isn't addressed to you."}
-            </p>
+            {!decided && (
+              <p className="text-center text-sm text-muted-foreground">
+                {involved
+                  ? `Waiting on ${otherName} to respond${countered ? ' to your counter' : ''}.`
+                  : "This bet isn't addressed to you."}
+              </p>
+            )}
             <Button variant="outline" onClick={() => router.push('/bets/all')}>View bets</Button>
           </div>
         )}
