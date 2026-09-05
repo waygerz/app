@@ -19,6 +19,7 @@ import { cancelLocked, groupWagers, opponentsLabel, wagerPick, wagersApi, type B
 import { FILTERS, filterWagers, type BetFilter } from '@/app/(app)/bets/bets-common';
 import { BetSortMenu, sortGroups, type SortKey } from '@/components/bet-sort-menu';
 import { CounterButton } from '@/components/counter-dialog';
+import { TreatPicker, type Treat } from '@/components/treat-picker';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -449,7 +450,17 @@ const pickBtn = (selected: boolean) =>
 // "Custom" chip that reveals a free-type field for any other amount. Replaces
 // the old always-on amount input.
 const STAKE_PRESETS = [10, 20];
-function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) => void }) {
+function StakeChips({
+  credits,
+  onPick,
+  treat,
+  onTreat,
+}: {
+  credits: string;
+  onPick: (v: string) => void;
+  treat: Treat;
+  onTreat: (t: Treat) => void;
+}) {
   const val = Number(credits);
   const brag = credits.trim() !== '' && val === 0;
   const isPreset = STAKE_PRESETS.includes(val);
@@ -465,16 +476,9 @@ function StakeChips({ credits, onPick }: { credits: string; onPick: (v: string) 
     <div className="flex flex-col gap-2">
       <Label>Amount</Label>
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-pressed={brag}
-          aria-label="Beer — loser buys the round"
-          title="Beer — loser buys the round"
-          onClick={() => pick('0')}
-          className={cn(chip(brag), 'gap-1.5 px-3 py-2 text-sm')}
-        >
-          <span aria-hidden className="text-base leading-none">🍺</span> Beer
-        </button>
+        {/* Bragging-rights chip: a beer/shot picker (no word). Choosing a treat
+            both sets it and selects the $0 stake. */}
+        <TreatPicker value={treat} selected={brag} onPick={(t) => { setCustomOpen(false); onTreat(t); onPick('0'); }} />
         {STAKE_PRESETS.map((amt) => {
           const on = !custom && val === amt;
           return (
@@ -2422,6 +2426,7 @@ function ScheduleBetDialog({
   const [line, setLine] = useState<number | null>(null);
   const [picked, setPicked] = useState(false); // no cell selected until the user taps one
   const [credits, setCredits] = useState('10');
+  const [treat, setTreat] = useState<Treat>('beer');
   const [selected, setSelected] = useState<string[]>([]);
 
   const oddsQ = useQuery({
@@ -2438,7 +2443,7 @@ function ScheduleBetDialog({
   useEffect(() => {
     if (open) {
       setStep('config'); setSide('away'); setBetType('moneyline'); setLine(null);
-      setPicked(false); setCredits('10'); setSelected([]);
+      setPicked(false); setCredits('10'); setTreat('beer'); setSelected([]);
     }
   }, [open, event?.external_id]);
 
@@ -2457,7 +2462,7 @@ function ScheduleBetDialog({
   const propose = useMutation({
     mutationFn: () => wagersApi.propose({
       league_id: lg.id, event_id: event!.external_id, side,
-      amount_cents: Math.round(Number(credits) * 100), acceptor_ids: selected,
+      amount_cents: Math.round(Number(credits) * 100), acceptor_ids: selected, treat,
       bet_type: betType, line: betType === 'moneyline' ? null : line,
     }),
     onSuccess: (r) => {
@@ -2552,7 +2557,7 @@ function ScheduleBetDialog({
                 })}
               </div>
 
-              <StakeChips credits={credits} onPick={setCredits} />
+              <StakeChips credits={credits} onPick={setCredits} treat={treat} onTreat={setTreat} />
 
               <Button className="w-full" disabled={!configReady} onClick={() => setStep('members')}>
                 {pickLabel()}
@@ -2578,7 +2583,7 @@ function ScheduleBetDialog({
                   </span>
                   <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
                     {betType === 'moneyline' ? 'Straight up' : betType === 'spread' ? 'Spread' : 'Total'}
-                    {' · '}<StakeSummary cents={Math.round(Number(credits) * 100)} />
+                    {' · '}<StakeSummary cents={Math.round(Number(credits) * 100)} treat={treat} />
                   </span>
                 </div>
                 <div className={cn('mt-1 truncate text-xs text-muted-foreground', betType !== 'total' && 'pl-[2.625rem]')}>
@@ -2621,6 +2626,7 @@ function MatchupBetDialog({
   const [myPick, setMyPick] = useState('');
   const [theirPick, setTheirPick] = useState('');
   const [credits, setCredits] = useState('10');
+  const [treat, setTreat] = useState<Treat>('beer');
   const [selected, setSelected] = useState<string[]>([]);
 
   const fieldQ = useQuery({
@@ -2634,7 +2640,7 @@ function MatchupBetDialog({
     .map((c) => ({ value: c.name, label: c.name }));
 
   useEffect(() => {
-    if (open) { setStep('config'); setMyPick(''); setTheirPick(''); setCredits('10'); setSelected([]); }
+    if (open) { setStep('config'); setMyPick(''); setTheirPick(''); setCredits('10'); setTreat('beer'); setSelected([]); }
   }, [open, event?.external_id]);
 
   const opponents = lg.members.filter((m) => m.user_id !== me);
@@ -2645,7 +2651,7 @@ function MatchupBetDialog({
     mutationFn: () => wagersApi.propose({
       league_id: lg.id, event_id: event!.external_id, side: 'home',
       home_team: myPick, away_team: theirPick,
-      amount_cents: Math.round(Number(credits) * 100), acceptor_ids: selected,
+      amount_cents: Math.round(Number(credits) * 100), acceptor_ids: selected, treat,
     }),
     onSuccess: (r) => {
       if (r.created.length) toast.success(`Bet sent to ${r.created.length} member${r.created.length === 1 ? '' : 's'}`);
@@ -2706,14 +2712,14 @@ function MatchupBetDialog({
                   </div>
                 </>
               )}
-              <StakeChips credits={credits} onPick={setCredits} />
+              <StakeChips credits={credits} onPick={setCredits} treat={treat} onTreat={setTreat} />
               <Button className="w-full self-stretch sm:w-auto sm:self-end" disabled={!configReady} onClick={() => setStep('members')}>Next</Button>
             </>
           ) : (
             <>
               <div className="text-sm text-foreground">
                 <span className="font-semibold">{myPick}</span> vs <span className="font-semibold">{theirPick}</span>
-                {' · '}<StakeSummary cents={Math.round(Number(credits) * 100)} />
+                {' · '}<StakeSummary cents={Math.round(Number(credits) * 100)} treat={treat} />
               </div>
               <MemberPicker opponents={opponents} selected={selected} onToggle={toggle} />
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">

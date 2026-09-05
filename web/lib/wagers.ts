@@ -219,6 +219,8 @@ export interface ProposeInput {
   acceptor_ids: string[];
   bet_type?: BetType;
   line?: number | null;
+  /** For a $0 bragging bet, what the loser owes. Ignored for money bets. */
+  treat?: 'beer' | 'shot';
   // Field-sport (golf, racing) matchup: the proposer's two competitor picks.
   // home_team is the side the proposer backs; ignored for team/1v1 events.
   home_team?: string;
