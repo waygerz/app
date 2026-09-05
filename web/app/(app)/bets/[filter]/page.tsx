@@ -12,6 +12,10 @@ import { cancelLocked, groupWagers, wagersApi, type WagerGroup } from '@/lib/wag
 import { fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { CenterCard } from '@/components/ui/center-card';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
 import { WagerBetCard } from '@/app/(app)/leagues/[id]/sections';
@@ -157,13 +161,27 @@ export default function BetsView() {
       }
       if (!w.cancel_requested_by) {
         return (
-          <Button size="sm" variant="outline" className="h-9 w-full" disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(ids)}>
-            Cancel
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="outline" className="h-9 w-full" disabled={reqCancelM.isPending}>Cancel</Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Do you really want to cancel?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Your opponent has to approve the cancellation — both stakes are refunded only once they do. Until then the bet stands.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={reqCancelM.isPending}>Keep bet</AlertDialogCancel>
+                <AlertDialogAction disabled={reqCancelM.isPending} onClick={() => reqCancelM.mutate(ids)}>Cancel bet</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         );
       }
       if (w.cancel_requested_by === me) {
-        return <span className="text-center text-[11px] text-muted-foreground">Requested</span>;
+        return <span className="text-center text-[11px] text-muted-foreground">Cancel Requested</span>;
       }
       return (
         <>
