@@ -832,7 +832,7 @@ export function WagerBetCard({
             setDetailsOpen(true);
           }
         }}
-        className="cursor-pointer border-b border-border px-3 py-3 last:border-b-0 hover:bg-muted/20"
+        className="-mx-2 cursor-pointer border-b border-border px-2 py-3 last:border-b-0 hover:bg-muted/20 sm:mx-0 sm:px-3"
       >
         {/* caption: state dot + kickoff on the left, opponent + outcome on the right */}
         <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5 text-xs">
@@ -873,11 +873,11 @@ export function WagerBetCard({
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-[minmax(0,1fr)_3.25rem_5.25rem] gap-1.5">
+          <div className="grid grid-cols-[minmax(0,1fr)_2.75rem_5rem] gap-1.5 sm:grid-cols-[minmax(0,1fr)_3.25rem_5.25rem]">
             {/* away team */}
-            <div className={cn('flex h-11 items-center gap-2 rounded-md px-2.5', teamCls(teamBacked('away')))}>
-              <TeamLogo src={rows[0].logo} name={rows[0].abbr} size="sm" />
-              <span className={cn('min-w-0 flex-1 truncate text-sm', rows[0].lost ? 'text-muted-foreground' : 'font-medium text-foreground')}>{rows[0].name}</span>
+            <div className={cn('flex h-11 items-center gap-1.5 rounded-md px-2 sm:gap-2 sm:px-2.5', teamCls(teamBacked('away')))}>
+              <TeamLogo src={rows[0].logo} name={rows[0].abbr} size="sm" className="size-6 sm:size-8" />
+              <span className={cn('min-w-0 flex-1 truncate text-xs sm:text-sm', rows[0].lost ? 'text-muted-foreground' : 'font-medium text-foreground')}>{rows[0].name}</span>
               {started && rows[0].score != null && <span className={cn('text-sm font-bold tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[0].score}</span>}
             </div>
             {/* away pick */}
@@ -887,9 +887,9 @@ export function WagerBetCard({
               {resultInner}
             </div>
             {/* home team */}
-            <div className={cn('flex h-11 items-center gap-2 rounded-md px-2.5', teamCls(teamBacked('home')))}>
-              <TeamLogo src={rows[1].logo} name={rows[1].abbr} size="sm" />
-              <span className={cn('min-w-0 flex-1 truncate text-sm', rows[1].lost ? 'text-muted-foreground' : 'font-medium text-foreground')}>{rows[1].name}</span>
+            <div className={cn('flex h-11 items-center gap-1.5 rounded-md px-2 sm:gap-2 sm:px-2.5', teamCls(teamBacked('home')))}>
+              <TeamLogo src={rows[1].logo} name={rows[1].abbr} size="sm" className="size-6 sm:size-8" />
+              <span className={cn('min-w-0 flex-1 truncate text-xs sm:text-sm', rows[1].lost ? 'text-muted-foreground' : 'font-medium text-foreground')}>{rows[1].name}</span>
               {started && rows[1].score != null && <span className={cn('text-sm font-bold tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[1].score}</span>}
             </div>
             {/* home pick */}
