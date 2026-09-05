@@ -64,13 +64,19 @@ def _notify_friend(user_id, template_key, from_name, *, ref_id=None, dedup_key=N
         if ref_id:
             u = resolve_users_full([ref_id]).get(str(ref_id)) or {}
             actor = {"id": str(ref_id), "name": from_name, "avatar_key": u.get("avatar_key")}
+        # Descriptive title (the actor below already carries the person's name +
+        # face, so a bare name here was redundant with the body).
+        title = {
+            "friend_request": "New friend request",
+            "friend_accepted": "Friend request accepted",
+        }.get(template_key, from_name)
         requests.post(
             f"{base}/internal/notify",
             json={
                 "user_id": str(user_id),
                 "category": "friend_request",
                 "template_key": template_key,
-                "title": from_name,
+                "title": title,
                 "context": {"from_name": from_name},
                 "actor": actor,
                 "ref_type": "friend",

@@ -36,6 +36,8 @@ STARTER_TEMPLATES = [
      "You won {{amount}} on {{matchup}} in {{league}}! \U0001F389"),
     ("wager_settled_loss", "wager_alert",
      "Tough luck — you lost your bet on {{matchup}} ({{league}})."),
+    ("wager_countered", "wager_alert",
+     "{{other_name}} countered your bet — now {{amount}} (was {{was}}) on {{matchup}} in {{league}}. Open the app to respond."),
     ("league_invite", "wager_alert",
      "{{inviter_name}} invited you to {{league}} on Waygerz. Join: {{link}}"),
     ("friend_request", "friend_request",
