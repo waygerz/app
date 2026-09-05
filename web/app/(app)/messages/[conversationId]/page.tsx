@@ -19,8 +19,9 @@ import { formatStart } from '@/components/event-card';
 import { useAuth } from '@/auth/AuthContext';
 import { conversationTitle, clockTime, dayKey, dayLabel, senderColor } from '../helpers';
 
-// One game's compact scoreboard for the thread's live-score bar. Live shows the
-// running score, final mutes the loser, scheduled shows the kickoff time.
+// One game's compact scoreboard for the thread's live-score bar — a single
+// horizontal line: [Live/Final/kickoff] AWAY score · HOME score (scheduled games
+// read AWAY @ HOME with the kickoff time). Loser mutes once final.
 function ScoreCard({ ev }: { ev: SportEvent }) {
   const live = ev.status === 'live';
   const final = ev.status === 'final';
@@ -29,25 +30,24 @@ function ScoreCard({ ev }: { ev: SportEvent }) {
   const as = ev.away_score;
   const awayLost = final && hs != null && as != null && hs > as;
   const homeLost = final && hs != null && as != null && as > hs;
-  const status = live ? 'Live' : final ? 'Final' : ev.start_time ? formatStart(ev.start_time) : 'Scheduled';
-  const rows = [
-    { abbr: ev.away_abbr ?? ev.away_team, score: as, lost: awayLost },
-    { abbr: ev.home_abbr ?? ev.home_team, score: hs, lost: homeLost },
-  ];
+  const awayAbbr = ev.away_abbr ?? ev.away_team;
+  const homeAbbr = ev.home_abbr ?? ev.home_team;
   return (
-    <div className="flex min-w-[128px] shrink-0 flex-col gap-1 rounded-lg border border-border bg-card px-2.5 py-1.5">
-      <span className={cn('flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider', live ? 'text-brand' : 'text-muted-foreground')}>
-        {live && <span className="inline-block size-1.5 rounded-full bg-brand" aria-hidden />}
-        {status}
+    <div className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-1.5 text-xs">
+      {live ? (
+        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-brand">
+          <span className="inline-block size-1.5 rounded-full bg-brand" aria-hidden />Live
+        </span>
+      ) : final ? (
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Final</span>
+      ) : (
+        <span className="text-[11px] font-medium text-muted-foreground">{ev.start_time ? formatStart(ev.start_time) : 'Scheduled'}</span>
+      )}
+      <span className="flex items-center gap-1.5 font-semibold tabular-nums">
+        <span className={cn(awayLost ? 'text-muted-foreground' : 'text-foreground')}>{awayAbbr}{started && as != null ? ` ${as}` : ''}</span>
+        <span className="text-muted-foreground">{started ? '·' : '@'}</span>
+        <span className={cn(homeLost ? 'text-muted-foreground' : 'text-foreground')}>{homeAbbr}{started && hs != null ? ` ${hs}` : ''}</span>
       </span>
-      {rows.map((r, i) => (
-        <div key={i} className="flex items-center justify-between gap-2 text-xs">
-          <span className={cn('truncate font-semibold', r.lost ? 'text-muted-foreground' : 'text-foreground')}>{r.abbr}</span>
-          {started && r.score != null && (
-            <span className={cn('font-bold tabular-nums', r.lost ? 'text-muted-foreground' : 'text-foreground')}>{r.score}</span>
-          )}
-        </div>
-      ))}
     </div>
   );
 }
