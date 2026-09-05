@@ -126,7 +126,7 @@ export default function ThreadPage() {
   const onErr = (e: Error) => toast.error(e.message);
 
   const sendMsg = useMutation({
-    mutationFn: () => messagingApi.send(conversationId, draft.trim()),
+    mutationFn: (text: string) => messagingApi.send(conversationId, text.trim()),
     onSuccess: (msg) => {
       setDraft('');
       qc.setQueryData<ChatMessage[]>(['messages', conversationId], (old) => {
@@ -256,7 +256,42 @@ export default function ThreadPage() {
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-1.5 p-4">
           {msgsQ.isLoading && <p className="text-center text-sm text-muted-foreground">Loading messages…</p>}
           {!msgsQ.isLoading && items.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">Say hello!</p>
+            <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+              {activeConv && (isLeague ? (
+                <LeagueAvatar name={title} logoUrl={null} id={activeConv.league_id!} size={84} />
+              ) : (
+                <UserAvatar
+                  userId={activeConv.other_user?.id ?? conversationId}
+                  name={title}
+                  imageUrl={activeConv.other_user?.avatar_key}
+                  className="size-20"
+                  clickable={false}
+                />
+              ))}
+              <div className="flex flex-col gap-1">
+                <span className="text-lg font-bold text-foreground">{title}</span>
+                <span className="max-w-[34ch] text-sm text-muted-foreground">
+                  {isLeague
+                    ? `This is the start of the ${title} chat.`
+                    : "You're connected on Waygerz. Say something to get the trash talk started."}
+                </span>
+              </div>
+              {!isLeague && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  {['👋 Hey', 'Good luck this week', 'Wanna bet?'].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      disabled={sendMsg.isPending}
+                      onClick={() => sendMsg.mutate(t)}
+                      className="rounded-full border border-input bg-muted px-3.5 py-2 text-sm font-medium text-foreground transition-colors hover:border-foreground/30 disabled:opacity-50"
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           {items.map((it) => it.node)}
           {typingUser && (
@@ -289,11 +324,11 @@ export default function ThreadPage() {
             placeholder="Type a message…"
             className="h-11 text-base"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && draft.trim() && !sendMsg.isPending) sendMsg.mutate();
+              if (e.key === 'Enter' && draft.trim() && !sendMsg.isPending) sendMsg.mutate(draft);
             }}
           />
           <Button size="icon" className="size-11 shrink-0" disabled={sendMsg.isPending || !draft.trim()}
-            aria-label="Send message" onClick={() => sendMsg.mutate()}>
+            aria-label="Send message" onClick={() => sendMsg.mutate(draft)}>
             <Send className="size-4" />
           </Button>
         </div>
