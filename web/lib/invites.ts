@@ -43,7 +43,14 @@ export interface ResolvedCode {
   target_id: string | null;
   state: CodeState;
   single_use: boolean;
-  viewer: { authenticated: boolean; relationship: string; request_id?: string | null };
+  viewer: {
+    authenticated: boolean;
+    relationship: string;
+    request_id?: string | null;
+    /** For a bet code: is it this viewer's turn to Accept/Decline (drives the CTA
+     * after a counter, when it may be the proposer's turn — not just the acceptor). */
+    my_turn?: boolean;
+  };
   preview: LeagueCodePreview | FriendCodePreview | BetCodePreview | null;
   actions: InviteAction[];
 }

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.extensions import db
 
@@ -67,6 +67,28 @@ class Wager(db.Model):
     cancel_requested_by = db.Column(UUID(as_uuid=False), nullable=True)
     cancel_requested_at = db.Column(db.DateTime, nullable=True)
 
+    # ---- Counter-offer negotiation (see .docs/pending/COUNTER_OFFER_PLAN.md) --
+    # A wager is renegotiated in place: exactly one stake is held while OPEN (the
+    # `held_id`'s, at the exact ref `held_ref`), and `pending_id` is whose turn it
+    # is to approve/counter/decline. Money conservation is guaranteed by the
+    # reconciler keyed off the stored ref strings — never a recomputed ref.
+    #   held_id    — the member whose single negotiation stake is currently held
+    #   held_ref   — the EXACT wallet ref where that stake sits ("wager:{id}" for a
+    #                fresh/migrated row, "wager:{id}:r{n}:{nonce}" after a counter)
+    #   stake_round— monotonic counter bumped only by `counter` (propose=0)
+    #   accept_ref — EXACT ref of the approver's stake once ACCEPTED (null while OPEN;
+    #                migrated ACCEPTED rows carry the base ref, where accept held)
+    #   pending_id — whose turn it is to act; null once the wager leaves negotiation
+    #   negotiation— append-only round log [{by, amount_cents, line, at}]
+    held_id = db.Column(UUID(as_uuid=False), nullable=True)
+    held_ref = db.Column(db.String(80), nullable=True)
+    stake_round = db.Column(db.Integer, nullable=False, default=0,
+                            server_default=db.text("0"))
+    accept_ref = db.Column(db.String(80), nullable=True)
+    pending_id = db.Column(UUID(as_uuid=False), nullable=True)
+    negotiation = db.Column(JSONB, nullable=False, default=list,
+                            server_default=db.text("'[]'::jsonb"))
+
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)  # when the event was marked over
     settled_at = db.Column(db.DateTime, nullable=True)
@@ -79,6 +101,10 @@ class Wager(db.Model):
 
     def involves(self, user_id: str) -> bool:
         return user_id in (self.proposer_id, self.acceptor_id)
+
+    def other_party(self, user_id: str) -> str:
+        """The counterparty of `user_id` on this wager (proposer<->acceptor)."""
+        return self.acceptor_id if user_id == self.proposer_id else self.proposer_id
 
     def to_dict(self):
         return {
@@ -105,6 +131,13 @@ class Wager(db.Model):
             "cancel_requested_at": (
                 self.cancel_requested_at.isoformat() + "Z" if self.cancel_requested_at else None
             ),
+            # Negotiation state for the client. The exact ref strings
+            # (held_ref/accept_ref) stay server-side; `my_turn` is added per-viewer
+            # by the enrich layer, not here (to_dict has no viewer identity).
+            "held_id": self.held_id,
+            "pending_id": self.pending_id,
+            "stake_round": self.stake_round or 0,
+            "negotiation": self.negotiation or [],
             "created_at": self.created_at.isoformat() + "Z",
             "completed_at": self.completed_at.isoformat() + "Z" if self.completed_at else None,
             "settled_at": self.settled_at.isoformat() + "Z" if self.settled_at else None,

@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from flask import current_app, request
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from app.extensions import db
 from app.models.wager import (
@@ -160,6 +161,20 @@ def refund(account, user_id, amount_cents, ref):
     return _wallet_op("refund", account, user_id, amount_cents, ref)
 
 
+def wallet_holds(account, ref_prefix):
+    """Net-outstanding holds under a ref prefix (the reconciler's view of the
+    wallet): [{user_id, ref, amount_cents, created_at}]."""
+    base = current_app.config["WALLET_URL"]
+    resp = requests.post(
+        f"{base}/internal/holds",
+        json={"account": account, "ref_prefix": ref_prefix},
+        headers=_itoken(),
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json().get("holds", [])
+
+
 def resolve_users_full(ids) -> dict:
     """id -> profile dict ({id, display_name, avatar_key}) from the users service."""
     base = current_app.config["USERS_URL"]
@@ -186,7 +201,29 @@ class WagerError(Exception):
 
 
 def _ref(wager_id):
+    """Base ref — the propose hold, the settle payout, and every migrated row's
+    held_ref/accept_ref. Round 0 has no suffix so a pre-existing wager needs no
+    rewrite (see COUNTER_OFFER_PLAN.md)."""
     return f"wager:{wager_id}"
+
+
+def _ref_prefix(wager_id):
+    return f"wager:{wager_id}"
+
+
+def _nonce() -> str:
+    # 12 hex chars (48 bits): unique among a wager's own recent attempts, which is
+    # all that's needed since the ref already carries the wager id. Keeps every ref
+    # within transactions.ref VARCHAR(64).
+    return secrets.token_hex(6)
+
+
+def _ref_counter(wager_id, n, nonce):
+    return f"wager:{wager_id}:r{n}:{nonce}"
+
+
+def _ref_accept(wager_id, nonce):
+    return f"wager:{wager_id}:accept:{nonce}"
 
 
 def _account(league_id):
@@ -359,6 +396,14 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
     db.session.add(w)
     db.session.flush()  # assign id for the ref
 
+    # Zero-round negotiation state: the proposer is the sole staker (held at the
+    # base ref), and it's the acceptor's turn. A counter later supersedes these.
+    w.held_id = proposer_id
+    w.held_ref = _ref(w.id)
+    w.stake_round = 0
+    w.pending_id = acceptor_id
+    w.negotiation = []
+
     # Mint the /c/<code> deep link in the SAME transaction as the wager so a
     # code failure (or an InsufficientFunds rollback) never leaves a committed,
     # funded wager without its link. Lets the acceptor Accept/Reject straight
@@ -488,23 +533,46 @@ def _post_accepted_activity(wager):
 
 
 def accept(wager, user_id):
-    _lock(wager)
+    """Approve the current terms — the ``pending_id`` member stakes their side and
+    the bet goes live. Generalized from the acceptor-only accept: after a counter
+    it may be the *proposer* approving the acceptor's counter, so it gates on
+    ``pending_id`` and holds at a dedicated per-attempt ``accept_ref`` (never a
+    counter ref), leaving ``held_id``/``held_ref`` (the last counterer's stake) in
+    place."""
+    try:
+        _lock_bounded(wager)
+    except LockTimeout:
+        raise WagerError("this bet is busy right now — try again in a moment")
     if wager.status != OPEN:
         raise WagerError("this wager is no longer open")
-    if wager.acceptor_id != user_id:
-        raise WagerError("this wager isn't addressed to you")
-    # Can't accept a bet once its game has kicked off — otherwise an acceptor
-    # could wait to see the score move and only take a side that's already
-    # winning. (Startless offers are allowed; the scheduler never expires those.)
+    if wager.pending_id != user_id:
+        raise WagerError("it's not your turn on this bet")
+    if user_id == wager.held_id:
+        raise WagerError("your stake is already held on this bet")
+    # Can't approve a bet once its game has kicked off — otherwise a side could
+    # wait to see the score move and only take a position that's already winning.
+    # (Startless offers are allowed; the scheduler never expires those.)
     dt = _parse_start(wager)
     if dt is not None and datetime.utcnow() >= dt:
         raise WagerError("the game has already started — this bet can no longer be accepted")
-    hold(_account(wager.league_id), user_id, wager.amount_cents, _ref(wager.id))
+    # Hold the approver's stake at its own dedicated, per-attempt ref (never a
+    # counter ref, so it can't dedup-adopt a strand). The hold and the ACCEPTED
+    # commit ride the one bounded row lock; the last counterer stays held_id.
+    accept_ref = _ref_accept(wager.id, _nonce())
+    try:
+        hold(_account(wager.league_id), user_id, wager.amount_cents, accept_ref)
+    except InsufficientFunds:
+        db.session.rollback()
+        raise
     wager.status = ACCEPTED
+    wager.accept_ref = accept_ref
+    wager.pending_id = None
     db.session.commit()
     _post_accepted_activity(wager)
+    # Notify whoever was waiting on this turn — the current held_id (after a
+    # counter that may be the acceptor), not a hard-coded proposer.
     _notify(
-        wager.proposer_id,
+        wager.held_id or wager.proposer_id,
         "wager_accepted",
         "Bet accepted",
         {
@@ -520,29 +588,150 @@ def accept(wager, user_id):
     return wager
 
 
+def counter(wager, user_id, amount_cents, line=None):
+    """Renegotiate an open wager's stake (and, for spread/total, the line) and pass
+    it back to the other side. In-place on the one row: hold the counterer's new
+    stake at a fresh per-attempt ref, commit the new terms naming them ``held_id``,
+    then release the outgoing holder (best-effort; the reconciler is the guarantee).
+    """
+    # --- Validate before taking the row lock (these reads are immutable / external
+    # HTTP), so only the single hold runs inside the lock. ---
+    amount = int(amount_cents)
+    if amount < 0:
+        raise WagerError("amount can't be negative")
+    if amount > 0:
+        ctx = league_context(wager.league_id)
+        if not ctx:
+            # Fail closed (as propose does) — don't let an out-of-bounds counter
+            # through on a transient leagues-service hiccup.
+            raise WagerError("couldn't verify the league right now — try again")
+        minw, maxw = ctx.get("min_wager_cents"), ctx.get("max_wager_cents")
+        if minw and amount < minw:
+            raise WagerError("amount is below the league minimum")
+        if maxw and amount > maxw:
+            raise WagerError("amount is above the league maximum")
+
+    # Line normalization: wager.line is stored proposer-perspective. Negate ONLY a
+    # spread when the caller is the acceptor (mirroring wagerPick's -w.line); a
+    # total's line is the same for both sides; moneyline has none. (bet_type /
+    # acceptor_id are immutable, so reading them before the lock is safe.)
+    bt = wager.bet_type or MONEYLINE
+    if bt in (SPREAD, TOTAL):
+        if line is None or str(line).strip() == "":
+            raise WagerError("this bet needs a line")
+        try:
+            line = float(line)
+        except (TypeError, ValueError):
+            raise WagerError("invalid line")
+        stored_line = -line if (bt == SPREAD and user_id == wager.acceptor_id) else line
+    else:
+        stored_line = None
+
+    # --- Under the bounded lock: re-check the mutable state, hold, commit. ---
+    try:
+        _lock_bounded(wager)
+    except LockTimeout:
+        raise WagerError("this bet is busy right now — try again in a moment")
+    if wager.status != OPEN:
+        raise WagerError("this wager can no longer be countered")
+    if wager.pending_id != user_id:
+        raise WagerError("it's not your turn on this bet")
+    if user_id == wager.held_id:
+        raise WagerError("you already made the current offer")
+    # Same "game started" cutoff as accept — renegotiable up to kickoff.
+    dt = _parse_start(wager)
+    if dt is not None and datetime.utcnow() >= dt:
+        raise WagerError("the game has already started — this bet can no longer be countered")
+
+    account = _account(wager.league_id)
+    old_held_id, old_held_ref, old_amount = wager.held_id, wager.held_ref, wager.amount_cents
+    n = (wager.stake_round or 0) + 1
+    new_ref = _ref_counter(wager.id, n, _nonce())
+
+    # Hold the counterer's new stake FIRST (a 402 leaves the standing offer
+    # untouched), then commit the new terms. The hold + commit ride the one bounded
+    # lock; the outgoing refund is deferred to after the commit. Roll back on a 402
+    # so the row lock is released rather than left dangling.
+    try:
+        hold(account, user_id, amount, new_ref)
+    except InsufficientFunds:
+        db.session.rollback()
+        raise
+    wager.amount_cents = amount
+    wager.line = stored_line
+    wager.held_id = user_id
+    wager.held_ref = new_ref
+    wager.stake_round = n
+    wager.pending_id = old_held_id
+    log = list(wager.negotiation or [])
+    log.append({
+        "by": str(user_id),
+        "amount_cents": amount,
+        "line": stored_line,
+        "at": datetime.utcnow().isoformat() + "Z",
+    })
+    wager.negotiation = log
+    db.session.commit()
+
+    # Release the superseded holder at their exact ref (targeted, idempotent). If
+    # this best-effort call fails, the reconciler reclaims that stake once it ages.
+    try:
+        refund(account, old_held_id, old_amount, old_held_ref)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("counter: deferred refund failed wager=%s", wager.id)
+    _reconcile(wager)
+
+    _notify(
+        wager.pending_id,
+        "wager_countered",
+        "Bet countered",
+        {
+            "other_name": _name(user_id),
+            "amount": _format_stake(amount),
+            "was": _format_stake(old_amount),
+            "matchup": _matchup(wager),
+            "league": wager.league or "your league",
+        },
+        actor_uid=user_id,
+        ref_id=wager.id,
+        deep_link=f"/leagues/{wager.league_id}/play",
+        # Round-varying so each counter notifies (dedup_key is a permanent unique
+        # constraint, not a time window).
+        dedup_key=f"wager_countered:{wager.id}:r{n}",
+    )
+    return wager
+
+
 def decline(wager, user_id):
+    """Turn down the standing offer (the pending party). Refunds the staker
+    (held_id) at their exact ref."""
     _lock(wager)
     if wager.status != OPEN:
         raise WagerError("this wager is no longer open")
-    if wager.acceptor_id != user_id:
-        raise WagerError("this wager isn't addressed to you")
-    refund(_account(wager.league_id), wager.proposer_id, wager.amount_cents, _ref(wager.id))
+    if wager.pending_id != user_id:
+        raise WagerError("it's not your turn on this bet")
+    refund(_account(wager.league_id), wager.held_id, wager.amount_cents, wager.held_ref)
     wager.status = DECLINED
+    wager.settled_at = datetime.utcnow()  # transition time — the reconciler backstop rescans by it
     db.session.commit()
+    _reconcile(wager)
     return wager
 
 
 def cancel(wager, user_id):
-    """Withdraw an unaccepted proposal. Only the proposer has money at stake."""
+    """Withdraw the standing offer — only the staker (held_id) has money at stake,
+    so only they can call it off."""
     _lock(wager)
     if wager.status != OPEN:
         raise WagerError("only an open wager can be cancelled")
-    if wager.proposer_id != user_id:
-        raise WagerError("only the proposer can cancel")
+    if wager.held_id != user_id:
+        raise WagerError("only the member who made the current offer can withdraw it")
     _require_cancel_window(wager)
-    refund(_account(wager.league_id), wager.proposer_id, wager.amount_cents, _ref(wager.id))
+    refund(_account(wager.league_id), wager.held_id, wager.amount_cents, wager.held_ref)
     wager.status = CANCELLED
+    wager.settled_at = datetime.utcnow()
     db.session.commit()
+    _reconcile(wager)
     return wager
 
 
@@ -577,12 +766,16 @@ def approve_cancel(wager, user_id):
         raise WagerError("the other side has to approve your request")
     _require_cancel_window(wager)
     account = _account(wager.league_id)
-    for uid in (wager.proposer_id, wager.acceptor_id):
-        refund(account, uid, wager.amount_cents, _ref(wager.id))
+    # Refund BOTH accepted parties at their real held refs (held_ref / accept_ref),
+    # not the base ref — after a counter the proposer's base refund would dedup
+    # against the counter's outgoing refund and silently short them.
+    _refund_both(wager, account)
     wager.status = CANCELLED
+    wager.settled_at = datetime.utcnow()
     wager.cancel_requested_by = None
     wager.cancel_requested_at = None
     db.session.commit()
+    _reconcile(wager)
     return wager
 
 
@@ -745,14 +938,125 @@ def _lock(wager):
     db.session.refresh(wager, with_for_update=True)
 
 
+class LockTimeout(Exception):
+    pass
+
+
+def _lock_bounded(wager):
+    """Row-lock under a bounded ``lock_timeout`` (counter / approve).
+
+    A `gthread` worker isn't killed for a thread blocked on a plain
+    ``SELECT ... FOR UPDATE`` and no ``statement_timeout`` is set, so an
+    unbounded re-lock could stall behind a settle path that holds the row lock
+    across its own wallet HTTP. Bounding the acquire caps the hold->commit window
+    (so the reconciler's age gate stays valid) and turns a slow acquire into a
+    clean, retryable failure instead of a late commit. Raises ``LockTimeout``.
+    """
+    ms = int(current_app.config.get("RELOCK_LOCK_TIMEOUT_MS", 10_000))
+    # ms is an int from config (never user input) — safe to inline. A bare number
+    # is milliseconds for lock_timeout.
+    db.session.execute(text(f"SET LOCAL lock_timeout = '{ms}'"))
+    try:
+        db.session.refresh(wager, with_for_update=True)
+    except OperationalError:
+        db.session.rollback()
+        raise LockTimeout()
+
+
+def _parse_iso_utc(s):
+    """Parse the wallet's "…Z" timestamps to naive UTC (py3.9 fromisoformat can't
+    take a trailing Z)."""
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _expected_refs(wager) -> set:
+    """The (user_id, ref) pairs whose held stakes the wager legitimately backs.
+    Everything else under the wager's ref prefix is an orphan the reconciler
+    reclaims. SETTLED is never reconciled (its holds are consumed by the payout)."""
+    st = wager.status
+    if st == OPEN:
+        if wager.held_id and wager.held_ref:
+            return {(str(wager.held_id), wager.held_ref)}
+        return set()
+    if st in (ACCEPTED, COMPLETED):
+        s = set()
+        if wager.held_id and wager.held_ref:
+            s.add((str(wager.held_id), wager.held_ref))
+        if wager.held_id and wager.accept_ref:
+            s.add((str(wager.other_party(wager.held_id)), wager.accept_ref))
+        return s
+    # DECLINED / CANCELLED / REFUNDED → {} (every remaining hold is an orphan).
+    return set()
+
+
+def _reconcile(wager, *, immediate=False):
+    """Reclaim any stranded hold under this wager (a superseded counter's stake, a
+    failed best-effort refund, a lost concurrent attempt) — every net-outstanding
+    hold whose (user, ref) is outside the row's expected set, refunded at its own
+    ref (idempotent, dedups with any other refund of the same orphan).
+
+    Age-gated by default: a hold younger than RECONCILE_MIN_AGE may be an in-flight
+    counter, so it's left alone. At a payout site pass ``immediate=True`` — an
+    ACCEPTED/COMPLETED wager can have no in-flight hold, and a young strand must be
+    cleared before the payout consumes the two legit holds or it strands into
+    SETTLED. Never call on a SETTLED wager. Best-effort: a reconcile failure never
+    breaks the caller's own money move.
+    """
+    if wager.status == SETTLED:
+        return
+    try:
+        account = _account(wager.league_id)
+        holds = wallet_holds(account, _ref_prefix(wager.id))
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("reconcile: holds fetch failed wager=%s", wager.id)
+        return
+    expected = _expected_refs(wager)
+    cutoff = datetime.utcnow() - timedelta(
+        seconds=int(current_app.config.get("RECONCILE_MIN_AGE_SECONDS", 300))
+    )
+    for h in holds:
+        key = (str(h.get("user_id")), h.get("ref"))
+        if key in expected:
+            continue
+        if not immediate:
+            created = _parse_iso_utc(h.get("created_at"))
+            if created is not None and created > cutoff:
+                continue  # too young — may be an in-flight counter
+        try:
+            refund(account, h["user_id"], h["amount_cents"], h["ref"])
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception(
+                "reconcile: refund failed wager=%s ref=%s", wager.id, h.get("ref")
+            )
+
+
+def _refund_both(wager, account):
+    """Refund both accepted parties at their REAL held refs — held_id@held_ref and
+    the-other-party@accept_ref (both = current amount_cents, even-money). Idempotent
+    per (user, ref). Used by every ACCEPTED refund-both / void / push site so a
+    countered wager never refunds at the base ref (which would strand the real hold
+    and mint an unmatched credit)."""
+    refund(account, wager.held_id, wager.amount_cents, wager.held_ref)
+    refund(account, wager.other_party(wager.held_id), wager.amount_cents, wager.accept_ref)
+
+
 def _void_refund(wager, account, headline):
-    """Void an accepted wager: refund both stakes, mark it refunded, announce it.
-    Refund is idempotent on the wager ref, so a retry can't double-refund."""
-    refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
-    refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
+    """Void an accepted wager: refund both stakes at their REAL held refs
+    (held_ref / accept_ref), mark it refunded, announce it. Idempotent per
+    (user, ref), so a retry can't double-refund; the reconciler mops any orphan."""
+    _refund_both(wager, account)
     wager.status = REFUNDED
     wager.settled_at = datetime.utcnow()
     db.session.commit()
+    _reconcile(wager)
     _post_settled_activity(wager, headline)
 
 
@@ -791,11 +1095,13 @@ def purge_user(data: dict) -> tuple[dict, int]:
             _lock(wager)
             account = _account(wager.league_id)
             if wager.status == OPEN:
-                # Only the proposer staked money on an unaccepted offer. Refund
-                # and cancel — no feed post (mirrors a manual cancel).
-                refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
+                # Only the current staker (held_id) has money on an unaccepted
+                # offer. Refund at their exact ref and cancel — no feed post.
+                refund(account, wager.held_id, wager.amount_cents, wager.held_ref)
                 wager.status = CANCELLED
+                wager.settled_at = datetime.utcnow()
                 db.session.commit()
+                _reconcile(wager)
                 resolved["cancelled"] += 1
             elif wager.status == ACCEPTED:
                 _void_refund(wager, account, "A player left — bet voided, stakes returned")
@@ -806,6 +1112,7 @@ def purge_user(data: dict) -> tuple[dict, int]:
                 # is genuinely unresolvable.
                 winner = wager.winner_user_id
                 if winner:
+                    _reconcile(wager, immediate=True)  # clear orphans before payout
                     payout(account, winner, wager.amount_cents * 2, _ref(wager.id))
                     wager.status = SETTLED
                     wager.settled_at = datetime.utcnow()
@@ -864,6 +1171,7 @@ def settle_one(wager):
         # wager ref, so a retry can't double-pay.
         if outcome in ("proposer", "acceptor"):
             wager.winner_user_id = _outcome_winner_id(wager, outcome)
+            _reconcile(wager, immediate=True)  # clear orphans before consuming holds
             payout(account, wager.winner_user_id, wager.amount_cents * 2, _ref(wager.id))
             wager.status = SETTLED
             wager.settled_at = datetime.utcnow()
@@ -1009,11 +1317,11 @@ def confirm(wager, user_id):
     if not wager.winner_user_id:
         outcome = _resolve_outcome(wager, get_event(wager.event_id))
         if outcome == "push":
-            refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
-            refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
+            _refund_both(wager, account)
             wager.status = REFUNDED
             wager.settled_at = now
             db.session.commit()
+            _reconcile(wager)
             _post_settled_activity(wager, "A bet pushed — stakes returned")
             return wager
         wager.winner_user_id = _outcome_winner_id(wager, outcome)
@@ -1023,6 +1331,9 @@ def confirm(wager, user_id):
     if user_id != wager.winner_user_id:
         raise WagerError("only the winner can confirm this bet")
 
+    # Clear any orphan hold BEFORE the payout consumes the two legit holds
+    # (immediate — an ACCEPTED/COMPLETED wager can have no in-flight hold).
+    _reconcile(wager, immediate=True)
     payout(account, wager.winner_user_id, wager.amount_cents * 2, _ref(wager.id))
     wager.confirmed = True
     wager.status = SETTLED
@@ -1088,11 +1399,11 @@ def _settle_due(refresh=True) -> int:
             if not winner:
                 outcome = _resolve_outcome(wager, get_event(wager.event_id))
                 if outcome == "push":
-                    refund(account, wager.proposer_id, wager.amount_cents, _ref(wager.id))
-                    refund(account, wager.acceptor_id, wager.amount_cents, _ref(wager.id))
+                    _refund_both(wager, account)
                     wager.status = REFUNDED
                     wager.settled_at = datetime.utcnow()
                     db.session.commit()
+                    _reconcile(wager)
                     _post_settled_activity(wager, "A bet pushed — stakes returned")
                     moved += 1
                     continue
@@ -1100,6 +1411,7 @@ def _settle_due(refresh=True) -> int:
             if not winner:
                 continue  # score still unreadable — leave for the manual fallback
             wager.winner_user_id = winner
+            _reconcile(wager, immediate=True)  # clear orphans before consuming holds
             payout(account, winner, wager.amount_cents * 2, _ref(wager.id))
             wager.status = SETTLED
             wager.settled_at = datetime.utcnow()
@@ -1127,18 +1439,49 @@ def _settle_due(refresh=True) -> int:
             _lock(wager)
             if wager.status != OPEN:
                 continue
-            refund(_account(wager.league_id), wager.proposer_id, wager.amount_cents, _ref(wager.id))
+            refund(_account(wager.league_id), wager.held_id, wager.amount_cents, wager.held_ref)
             wager.status = CANCELLED
+            wager.settled_at = datetime.utcnow()
             db.session.commit()
+            _reconcile(wager)
             moved += 1
         except Exception:  # noqa: BLE001
             db.session.rollback()
             continue
+
+    # Reconciler backstop: reclaim any stranded hold (a superseded counter's stake, a
+    # failed best-effort refund, a crashed/lost attempt) the per-transition reconcile
+    # missed — age-gated, so an in-flight counter is never touched. It must cover every
+    # non-SETTLED wager that could still carry an outstanding hold, so it does NOT
+    # pre-filter by stake_round or created_at (a crash can strand a hold on a round-0
+    # OPEN offer, and a young orphan can ride into a terminal state on a wager created
+    # long before it resolved). Every live OPEN/ACCEPTED/COMPLETED row is scanned, plus
+    # any terminal-but-not-settled row whose TRANSITION (settled_at) is recent — long
+    # enough past the age gate that any young orphan has aged and been reclaimed, after
+    # which the clean row drops out of the scan. SETTLED is never reconciled (its holds
+    # were consumed by the payout).
+    from sqlalchemy import and_, or_
+    since = datetime.utcnow() - timedelta(hours=6)
+    candidates = Wager.query.filter(
+        or_(
+            Wager.status.in_([OPEN, ACCEPTED, COMPLETED]),
+            and_(
+                Wager.status.in_([DECLINED, CANCELLED, REFUNDED]),
+                Wager.settled_at.isnot(None),
+                Wager.settled_at >= since,
+            ),
+        )
+    ).all()
+    for wager in candidates:
+        try:
+            _reconcile(wager)
+        except Exception:  # noqa: BLE001
+            db.session.rollback()
     return moved
 
 
 # ---- HTTP handlers --------------------------------------------------------
-def _enrich(wagers):
+def _enrich(wagers, me=None):
     ids = set()
     for w in wagers:
         ids.update([w.proposer_id, w.acceptor_id, w.winner_user_id])
@@ -1151,6 +1494,10 @@ def _enrich(wagers):
         d["proposer_avatar_key"] = (users.get(w.proposer_id) or {}).get("avatar_key")
         d["acceptor_avatar_key"] = (users.get(w.acceptor_id) or {}).get("avatar_key")
         d["winner_name"] = (users.get(w.winner_user_id) or {}).get("display_name") if w.winner_user_id else None
+        # Whose turn it is, from the viewer's side — drives Approve/Counter/Decline
+        # vs Withdraw in the client. Computed here (viewer identity) rather than in
+        # to_dict (which has none).
+        d["my_turn"] = bool(me is not None and w.pending_id == me)
         out.append(d)
     return out
 
@@ -1192,7 +1539,7 @@ def propose_wagers(me, data):
         if "error" in r
     ]
     status = 201 if created else 200
-    return {"created": _enrich(created), "errors": errors}, status
+    return {"created": _enrich(created, me), "errors": errors}, status
 
 
 def my_wagers(me):
@@ -1206,7 +1553,7 @@ def my_wagers(me):
     if status:
         q = q.filter_by(status=status)
     rows = q.order_by(Wager.created_at.desc()).limit(200).all()
-    return {"wagers": _enrich(rows)}, 200
+    return {"wagers": _enrich(rows, me)}, 200
 
 
 def get_wager(wager_id, me):
@@ -1214,7 +1561,7 @@ def get_wager(wager_id, me):
     w = db.session.get(Wager, wager_id)
     if not w or not w.involves(me):
         return {"error": "wager not found"}, 404
-    return {"wager": _enrich([w])[0]}, 200
+    return {"wager": _enrich([w], me)[0]}, 200
 
 
 def _act(wager_id, me, fn):
@@ -1228,11 +1575,32 @@ def _act(wager_id, me, fn):
         return {"error": str(e)}, 400
     except InsufficientFunds:
         return {"error": "insufficient balance to cover the stake"}, 402
-    return {"wager": _enrich([w])[0]}, 200
+    return {"wager": _enrich([w], me)[0]}, 200
 
 
 def accept_wager(wager_id, me):
     return _act(wager_id, me, accept)
+
+
+def counter_wager(wager_id, me, data):
+    wager_id = str(wager_id)
+    w = db.session.get(Wager, wager_id)
+    if not w or not w.involves(me):
+        return {"error": "wager not found"}, 404
+    amount = data.get("amount_cents")
+    if amount is None:
+        return {"error": "amount_cents is required"}, 400
+    try:
+        amount = int(amount)
+    except (TypeError, ValueError):
+        return {"error": "invalid amount"}, 400
+    try:
+        counter(w, me, amount, data.get("line"))
+    except WagerError as e:
+        return {"error": str(e)}, 400
+    except InsufficientFunds:
+        return {"error": "insufficient balance to cover the stake"}, 402
+    return {"wager": _enrich([w], me)[0]}, 200
 
 
 def decline_wager(wager_id, me):
@@ -1253,22 +1621,25 @@ def resolve_code(me, code):
                 "viewer": {"authenticated": bool(me), "relationship": "other"},
                 "preview": None, "actions": []}, 404
     state = "ok" if w.status == OPEN else "consumed"
+    my_turn = bool(me and me == w.pending_id)
     if me and me == w.acceptor_id:
         rel = "acceptor"
     elif me and me == w.proposer_id:
         rel = "proposer"
     else:
         rel = "other"
-    # Only the addressed acceptor can act, and only while the wager is open.
-    actions = ["accept", "decline"] if (state == "ok" and rel == "acceptor") else []
+    # Offer Accept/Decline to whoever's turn it is — after a counter that may be
+    # the proposer, not the acceptor. Countering stays in-app (no Counter over the
+    # link in v1).
+    actions = ["accept", "decline"] if (state == "ok" and my_turn) else []
     return {
         "type": "bet",
         "code": code,
         "target_id": w.id,
         "state": state,
         "single_use": True,
-        "viewer": {"authenticated": bool(me), "relationship": rel},
-        "preview": {"wager": _enrich([w])[0]},
+        "viewer": {"authenticated": bool(me), "relationship": rel, "my_turn": my_turn},
+        "preview": {"wager": _enrich([w], me)[0]},
         "actions": actions,
     }, 200
 
@@ -1321,7 +1692,7 @@ def confirm_wager(wager_id, me, data):
         return {"error": str(e)}, 400
     except InsufficientFunds:
         return {"error": "insufficient balance to settle"}, 402
-    return {"wager": _enrich([w])[0]}, 200
+    return {"wager": _enrich([w], me)[0]}, 200
 
 
 def settle_due_admin():

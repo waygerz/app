@@ -18,6 +18,7 @@ import {
 import { cancelLocked, groupWagers, opponentsLabel, wagerPick, wagersApi, type BetType, type Wager, type WagerGroup, type WagerSide } from '@/lib/wagers';
 import { FILTERS, filterWagers, type BetFilter } from '@/app/(app)/bets/bets-common';
 import { BetSortMenu, sortGroups, type SortKey } from '@/components/bet-sort-menu';
+import { CounterButton } from '@/components/counter-dialog';
 import {
   fetchUpcomingEvents, fetchPeriodEvents, fetchEventOdds, fetchEvent, fetchSports, fetchLeagues, type SportEvent,
 } from '@/lib/ingestor';
@@ -999,16 +1000,25 @@ function HeadToHeadPlay({ lg }: { lg: LeagueDetail }) {
       );
     }
     if (w.status !== 'open') return null;
-    if (w.acceptor_id === me) {
+    // Whoever's turn it is can Accept / Counter / Decline; the member holding the
+    // current offer (waiting on the other side) can Withdraw it. Fall back to the
+    // original acceptor/proposer roles if the negotiation fields are absent (an old
+    // backend during a deploy window), and only offer Counter once they're present.
+    const respondTurn = w.my_turn ?? (w.pending_id != null ? w.pending_id === me : w.acceptor_id === me);
+    const holderIsMe = w.held_id != null ? w.held_id === me : w.proposer_id === me;
+    if (respondTurn) {
       return (
         <>
           <Button size="sm" className="w-full" disabled={acceptM.isPending} onClick={() => acceptM.mutate(ids)}>Accept</Button>
+          {/* Counter acts on a single wager; hide it if identical challenges from
+              different people merged into one card (rare — it self-splits once countered). */}
+          {w.pending_id != null && g.wagers.length === 1 && <CounterButton wager={w} me={me!} onDone={refresh} />}
           <Button size="sm" variant="outline" className="w-full" disabled={declineM.isPending} onClick={() => declineM.mutate(ids)}>Decline</Button>
         </>
       );
     }
-    if (w.proposer_id === me && !cancelLocked(w)) {
-      return <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>Cancel</Button>;
+    if (holderIsMe && !cancelLocked(w)) {
+      return <Button size="sm" variant="outline" className="w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>Withdraw</Button>;
     }
     return null;
   };

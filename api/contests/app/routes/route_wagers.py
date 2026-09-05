@@ -49,6 +49,12 @@ def decline(wager_id):
     return ctrl.decline(wager_id)
 
 
+@wagers_bp.post("/wagers/<uuid:wager_id>/counter")
+@jwt_required(locations=["cookies", "headers"])
+def counter(wager_id):
+    return ctrl.counter(wager_id)
+
+
 @wagers_bp.post("/wagers/<uuid:wager_id>/cancel")
 @jwt_required(locations=["cookies", "headers"])
 def cancel(wager_id):

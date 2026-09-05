@@ -13,6 +13,11 @@ def internal_account_balances():
     return jsonify(body), status
 
 
+def internal_holds():
+    body, status = svc.internal_holds(request.get_json(silent=True) or {})
+    return jsonify(body), status
+
+
 def internal_grant():
     body, status = svc.internal_grant(request.get_json(silent=True) or {})
     return jsonify(body), status

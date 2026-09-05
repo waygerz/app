@@ -257,20 +257,35 @@ function CodeContent({ code }: { code: string }) {
     const w = (data.preview as BetCodePreview).wager;
     const rel = data.viewer.relationship;
     const busy = act.isPending;
-    const canAct = rel === 'acceptor' && data.actions.includes('accept');
+    // Drive off my_turn, not "acceptor" — after a counter it may be the proposer's
+    // turn. The viewer's own side (mySide) is highlighted, and the "other party" is
+    // whoever last acted.
+    const iAmProposer = rel === 'proposer';
+    const involved = rel === 'proposer' || rel === 'acceptor';
+    const mySide = iAmProposer ? w.proposer_side : w.acceptor_side;
+    const otherName = iAmProposer ? w.acceptor_name : w.proposer_name;
+    const otherId = iAmProposer ? w.acceptor_id : w.proposer_id;
+    const otherAvatar = iAmProposer ? w.acceptor_avatar_key : w.proposer_avatar_key;
+    const myTurn = !!data.viewer.my_turn;
+    const countered = (w.stake_round ?? 0) > 0;
+    const canAct = myTurn && data.actions.includes('accept');
     return (
       <>
         <div className="flex flex-col items-center gap-3 text-center">
           <UserAvatar
-            userId={w.proposer_id}
-            name={w.proposer_name}
-            imageUrl={w.proposer_avatar_key}
+            userId={involved ? otherId : w.proposer_id}
+            name={involved ? otherName : w.proposer_name}
+            imageUrl={involved ? otherAvatar : w.proposer_avatar_key}
             className="size-20"
             fallbackClassName="text-xl"
           />
           <div>
             <h1 className="text-2xl font-bold text-foreground">
-              {w.proposer_name} sent you a bet
+              {myTurn
+                ? `${otherName} ${countered ? 'countered your bet' : 'sent you a bet'}`
+                : involved
+                  ? `Waiting on ${otherName}`
+                  : `${w.proposer_name}'s bet`}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">{w.league || 'Head-to-head'}</p>
           </div>
@@ -281,9 +296,9 @@ function CodeContent({ code }: { code: string }) {
             <div className="flex flex-col gap-1.5">
               {(['away', 'home'] as const).map((rk) => {
                 const name = rk === 'away' ? w.away_team : w.home_team;
-                // Highlight the acceptor's team (spread / moneyline). Totals are
-                // over/under, so acceptor_side never matches a team row.
-                const backed = rel === 'acceptor' && w.acceptor_side === rk;
+                // Highlight the viewer's own team (spread / moneyline). Totals are
+                // over/under, so mySide never matches a team row.
+                const backed = involved && mySide === rk;
                 return (
                   <div
                     key={rk}
@@ -307,10 +322,10 @@ function CodeContent({ code }: { code: string }) {
             </div>
           )}
           <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
-            {rel === 'acceptor' && (
+            {involved && (
               <>
                 <span className="text-muted-foreground">Your pick</span>
-                <span className="font-semibold text-foreground">{wagerPick(w, w.acceptor_side)}</span>
+                <span className="font-semibold text-foreground">{wagerPick(w, mySide)}</span>
                 <span className="text-muted-foreground">·</span>
               </>
             )}
@@ -331,8 +346,8 @@ function CodeContent({ code }: { code: string }) {
         ) : (
           <div className="flex flex-col gap-2">
             <p className="text-center text-sm text-muted-foreground">
-              {rel === 'proposer'
-                ? 'You sent this bet — waiting on your opponent.'
+              {involved
+                ? `Waiting on ${otherName} to respond${countered ? ' to your counter' : ''}.`
                 : "This bet isn't addressed to you."}
             </p>
             <Button variant="outline" onClick={() => router.push('/bets/all')}>View bets</Button>

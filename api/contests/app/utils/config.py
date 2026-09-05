@@ -47,6 +47,16 @@ class Config:
 
     MIN_WAGER_CENTS = int(os.environ.get("GAMEPLAY_MIN_WAGER_CENTS", 100))  # 1.00
 
+    # Counter-offer negotiation (see .docs/pending/COUNTER_OFFER_PLAN.md).
+    # RELOCK_LOCK_TIMEOUT_MS bounds the counter/approve re-lock so [A]->[C] can't
+    # stall unbounded behind a settle path that holds the row lock across wallet
+    # HTTP — a timed-out re-lock aborts to compensation instead of committing late.
+    # RECONCILE_MIN_AGE_SECONDS must sit an order of magnitude above that bound
+    # (wallet_timeout + lock_timeout ~ 20s) so the reconciler never reclaims a hold
+    # whose counter is still in flight.
+    RELOCK_LOCK_TIMEOUT_MS = int(os.environ.get("WAGER_RELOCK_LOCK_TIMEOUT_MS", 10_000))
+    RECONCILE_MIN_AGE_SECONDS = int(os.environ.get("WAGER_RECONCILE_MIN_AGE_SECONDS", 300))
+
     # Service-to-service (docker network) + shared internal secret.
     INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
     # Profiles (display_name/avatar) moved to the users service (split A2). Full

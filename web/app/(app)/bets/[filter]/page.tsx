@@ -17,6 +17,7 @@ import { FILTERS, filterWagers, type BetFilter } from '../bets-common';
 import { WagerBetCard } from '@/app/(app)/leagues/[id]/sections';
 import { ListSearch } from '@/components/list-search';
 import { BetSortMenu, sortGroups, type SortKey } from '@/components/bet-sort-menu';
+import { CounterButton } from '@/components/counter-dialog';
 
 export default function BetsView() {
   const { filter = 'all' } = useParams<{ filter: string }>();
@@ -172,21 +173,30 @@ export default function BetsView() {
       );
     }
     if (w.status !== 'open') return null;
-    if (w.acceptor_id === me) {
+    // Whoever's turn it is can Accept / Counter / Decline; the member holding the
+    // current offer (waiting) can Withdraw. Fall back to the original acceptor/
+    // proposer roles when the negotiation fields are absent (an old backend during a
+    // deploy window), and only offer Counter once they're present.
+    const respondTurn = w.my_turn ?? (w.pending_id != null ? w.pending_id === me : w.acceptor_id === me);
+    const holderIsMe = w.held_id != null ? w.held_id === me : w.proposer_id === me;
+    if (respondTurn) {
       return (
         <>
           <Button size="sm" className="h-9 w-full" disabled={acceptM.isPending} onClick={() => acceptM.mutate(ids)}>Accept</Button>
+          {/* Counter acts on a single wager; hide it if identical challenges from
+              different people merged into one card (rare — it self-splits once countered). */}
+          {w.pending_id != null && g.wagers.length === 1 && <CounterButton wager={w} me={me} onDone={refresh} className="h-9" />}
           <Button size="sm" variant="outline" className="h-9 w-full" disabled={declineM.isPending} onClick={() => declineM.mutate(ids)}>Decline</Button>
         </>
       );
     }
-    if (w.proposer_id === me) {
+    if (holderIsMe) {
       if (cancelLocked(w)) {
         // Game started — no action; the row's status badge carries the state.
         return null;
       }
       return (
-        <Button size="sm" variant="outline" className="h-9 w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>Cancel</Button>
+        <Button size="sm" variant="outline" className="h-9 w-full" disabled={cancelM.isPending} onClick={() => cancelM.mutate(ids)}>Withdraw</Button>
       );
     }
     return null;

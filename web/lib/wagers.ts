@@ -37,6 +37,17 @@ export interface Wager {
   /** Set while one side is waiting on the other to approve calling the bet off. */
   cancel_requested_by: string | null;
   cancel_requested_at: string | null;
+  // ---- Counter-offer negotiation (see COUNTER_OFFER_PLAN.md) ----------------
+  /** The member whose single negotiation stake is currently held (waiting side). */
+  held_id: string | null;
+  /** Whose turn it is to approve / counter / decline (null once it leaves negotiation). */
+  pending_id: string | null;
+  /** Bumped on each counter (0 = original proposal). */
+  stake_round: number;
+  /** Append-only round log for the history strip. */
+  negotiation: { by: string; amount_cents: number; line: number | null; at: string }[];
+  /** Derived per-viewer by the server: is it this viewer's turn to act? */
+  my_turn?: boolean;
   proposer_name: string;
   acceptor_name: string;
   proposer_avatar_key?: string | null;
@@ -119,6 +130,26 @@ export interface WagerGroup {
 /** The side the viewer is on (their pick), whoever proposed the bet. */
 export function viewerSide(w: Wager, me: string): WagerSide {
   return w.proposer_id === me ? w.proposer_side : w.acceptor_side;
+}
+
+/** It's the viewer's turn to act (approve / counter / decline). */
+export function myTurn(w: Wager, me: string): boolean {
+  return w.status === 'open' && w.pending_id === me;
+}
+
+/** The viewer is the current staker on an open offer, waiting on the other side —
+ * they alone can withdraw it. */
+export function iAmHolder(w: Wager, me: string): boolean {
+  return w.status === 'open' && w.held_id === me;
+}
+
+/** The current line from a side's perspective (stored proposer-perspective; only a
+ * spread flips sign for the acceptor — a total is the same for both). null when
+ * there's no line (moneyline). */
+export function lineForSide(w: Pick<Wager, 'bet_type' | 'line' | 'proposer_side'>, side: WagerSide): number | null {
+  if (w.line == null || w.bet_type === 'moneyline') return null;
+  if (w.bet_type === 'spread') return side === w.proposer_side ? w.line : -w.line;
+  return w.line; // total — same both sides
 }
 
 // Two siblings only merge when they'd render an identical card AND offer the
@@ -216,6 +247,10 @@ export const wagersApi = {
   accept: (id: string) => req(`${WAGERS_API}/${id}/accept`, { method: 'POST' }),
   decline: (id: string) => req(`${WAGERS_API}/${id}/decline`, { method: 'POST' }),
   cancel: (id: string) => req(`${WAGERS_API}/${id}/cancel`, { method: 'POST' }),
+  // Renegotiate an open bet: new stake, and for a spread/total a new line in the
+  // caller's own perspective (the server normalizes it to proposer-perspective).
+  counter: (id: string, input: { amount_cents: number; line?: number | null }) =>
+    req(`${WAGERS_API}/${id}/counter`, { method: 'POST', body: JSON.stringify(input) }),
   // Accepted wagers hold both stakes, so calling one off takes both sides:
   // one requests, the other approves (or rejects, leaving the bet standing).
   requestCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/request`, { method: 'POST' }),

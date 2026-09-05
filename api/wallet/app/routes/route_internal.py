@@ -30,6 +30,15 @@ def internal_hold():
     return ctrl.internal_hold()
 
 
+# Net-outstanding holds under a ref prefix (the contests reconciler reads this to
+# find stranded stakes). POST so the {account, ref_prefix} body isn't logged in a
+# query string.
+@wallet_internal_bp.post("/holds")
+@internal_only
+def internal_holds():
+    return ctrl.internal_holds()
+
+
 @wallet_internal_bp.post("/payout")
 @internal_only
 def internal_payout():

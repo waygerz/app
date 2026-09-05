@@ -74,4 +74,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(svc, "hold", lambda acct, u, a, r: recorded.append(("hold", u, a)))
     monkeypatch.setattr(svc, "payout", lambda acct, u, a, r: recorded.append(("payout", u, a)))
     monkeypatch.setattr(svc, "refund", lambda acct, u, a, r: recorded.append(("refund", u, a)))
+    # The reconciler reads the wallet's outstanding holds; a bare offer/accept flow
+    # never strands one, so return none (keeps these tests hermetic — no real HTTP).
+    monkeypatch.setattr(svc, "wallet_holds", lambda acct, prefix: [])
     return recorded
