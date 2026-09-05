@@ -37,6 +37,11 @@ on:
         required: true
         type: boolean
         default: false
+      migrate:
+        description: "Run `flask db upgrade` (pinned :sha one-off task) BEFORE deploy?"
+        required: true
+        type: boolean
+        default: false
       deploy:
         description: "Roll the ECS service after push?"
         required: true
@@ -166,6 +171,52 @@ jobs:
             ${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ steps.svc.outputs.REPO }}:${{ env.LATEST_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Apply DB migrations BEFORE the roll, so the new code never starts against
+      # an un-migrated schema. Runs as a one-off ECS task PINNED to the :sha just
+      # built (avoids the stale-:latest host-cache no-op), derived from the live
+      # service taskdef with the command overridden to `flask db upgrade` — so it
+      # inherits the same DATABASE_URL / DB_SCHEMA / roles and runs in-VPC (the
+      # only place the prod DB is reachable). Fail-fast: a non-zero migration exit
+      # fails the job before the Deploy step. Idempotent (a second upgrade no-ops).
+      - name: Run DB migration (pinned :sha one-off task)
+        if: ${{ github.event.inputs.migrate == 'true' }}
+        run: |
+          set -euo pipefail
+          SVC="${{ matrix.service }}"
+          IMG="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ steps.svc.outputs.REPO }}:${IMAGE_TAG}"
+          echo "Deriving migrate taskdef from waygerz-${SVC} (image ${IMG})"
+          TD_JSON="$(mktemp)"
+          aws ecs describe-task-definition --task-definition "waygerz-${SVC}" \
+            --query 'taskDefinition' --output json \
+          | jq --arg img "$IMG" --arg name "$SVC" --arg fam "waygerz-${SVC}-migrate" '
+              .containerDefinitions |= ( map(select(.name==$name))
+                | map(.image=$img
+                      | .command=["sh","-c","flask db upgrade"]
+                      | del(.portMappings) | del(.healthCheck)) )
+              | .family=$fam
+              | {family, taskRoleArn, executionRoleArn, networkMode, containerDefinitions,
+                 requiresCompatibilities, cpu, memory, volumes, placementConstraints}
+              | with_entries(select(.value != null and .value != []))
+            ' > "$TD_JSON"
+          MIG_TD=$(aws ecs register-task-definition --cli-input-json "file://${TD_JSON}" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "Registered ${MIG_TD}; running one-off task..."
+          TASK_ARN=$(aws ecs run-task --cluster "${ECS_CLUSTER}" --launch-type EC2 \
+            --task-definition "${MIG_TD}" --started-by gha-migrate \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Task ${TASK_ARN}; waiting for it to stop..."
+          aws ecs wait tasks-stopped --cluster "${ECS_CLUSTER}" --tasks "${TASK_ARN}"
+          EXIT=$(aws ecs describe-tasks --cluster "${ECS_CLUSTER}" --tasks "${TASK_ARN}" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "Migration exitCode=${EXIT}"
+          aws ecs deregister-task-definition --task-definition "${MIG_TD}" >/dev/null 2>&1 || true
+          if [ "${EXIT}" != "0" ]; then
+            echo "::error::Migration FAILED (exit ${EXIT}) — aborting before deploy." >&2
+            aws logs tail "/ecs/waygerz/${SVC}" --since 10m 2>/dev/null || true
+            exit 1
+          fi
+          echo "Migration OK."
 
       - name: Verify ECS service exists
         if: ${{ github.event.inputs.deploy == 'true' }}
