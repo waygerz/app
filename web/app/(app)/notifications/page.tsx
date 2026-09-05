@@ -9,7 +9,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { CenterCard } from '@/components/ui/center-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { notificationsApi, type FeedNotification } from '@/lib/notifications';
@@ -51,6 +50,23 @@ function notifMeta(n: FeedNotification): Meta {
     case 'weekly_digest': return { Icon: BarChart3, tint: digest, tone: 'default', action: null };
   }
   return { Icon: Bell, tint: 'text-muted-foreground bg-muted', tone: 'default', action: null };
+}
+
+// A bet-challenge notification whose wager has moved past "open" should show
+// the REAL outcome — not a blanket "No longer available", which reads as expired
+// even when the viewer accepted it (e.g. from the SMS link). Maps the contests
+// wager status to a feed label; `ok` outcomes get the resolved-check styling.
+const BET_RESOLVED: Record<string, { label: string; ok: boolean }> = {
+  accepted: { label: 'Accepted', ok: true },
+  completed: { label: 'Accepted', ok: true }, // accepted; event over, awaiting settlement
+  settled: { label: 'Settled', ok: true },
+  declined: { label: 'Declined', ok: false },
+  cancelled: { label: 'Cancelled', ok: false },
+  refunded: { label: 'No longer available', ok: false },
+};
+function betResolved(status: string | undefined) {
+  if (!status || status === 'open') return null;
+  return BET_RESOLVED[status] ?? { label: 'No longer available', ok: false };
 }
 
 function timeAgo(iso: string | null) {
@@ -184,37 +200,36 @@ export default function NotificationsPage() {
         </div>
 
         {feedQ.isLoading ? (
-          <Card className="overflow-hidden">
-            <div className="flex flex-col">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-3 border-b border-border px-4 py-3 last:border-b-0"
-                >
-                  <Skeleton className="size-9 shrink-0 rounded-full" />
-                  <div className="flex flex-1 flex-col gap-1.5 py-0.5">
-                    <Skeleton className="h-3.5 w-3/4" />
-                    <Skeleton className="h-3 w-1/3" />
-                  </div>
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-3 rounded-[14px] border border-border bg-card px-4 py-4"
+              >
+                <Skeleton className="size-9 shrink-0 rounded-full" />
+                <div className="flex flex-1 flex-col gap-1.5 py-0.5">
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-3 w-1/3" />
                 </div>
-              ))}
-            </div>
-          </Card>
+              </div>
+            ))}
+          </div>
         ) : items.length === 0 ? (
           <CenterCard>
             <BellOff className="size-6 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">You&apos;re all caught up.</p>
           </CenterCard>
         ) : (
-          <Card className="overflow-hidden">
-            <div className="flex flex-col">
+          <div className="flex flex-col gap-3">
               {items.map((n) => {
                 const meta = notifMeta(n);
                 const Icon = meta.Icon;
                 const done = resolved[n.id];
-                // Bet challenge that's no longer open (expired/voided/taken).
+                // Bet challenge that's no longer open — accepted, declined,
+                // settled, cancelled… Resolve it to a truthful outcome label.
                 const betStatus = meta.action === 'bet' ? wagerStatusById.get(n.ref_id ?? '') : undefined;
-                const betStale = betStatus !== undefined && betStatus !== 'open';
+                const betOutcome = betResolved(betStatus);
+                const betStale = betOutcome !== null;
                 const showActions = !!meta.action && !n.read && !done && !betStale;
                 const busy = act.isPending && act.variables?.n.id === n.id;
                 // An expired bet challenge has no live destination — drop the row link.
@@ -230,14 +245,11 @@ export default function NotificationsPage() {
                       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openItem(n); }
                     } : undefined}
                     className={cn(
-                      'relative flex items-start gap-3 border-b border-border px-4 py-3 text-left transition-colors last:border-b-0',
-                      clickable && 'cursor-pointer hover:bg-muted/40',
-                      !n.read && !done && 'bg-primary/[0.04]',
+                      'relative flex items-start gap-3 rounded-[14px] border px-4 py-4 text-left transition-colors',
+                      clickable && 'cursor-pointer hover:bg-muted/30',
+                      !n.read && !done ? 'border-primary/40 bg-primary/[0.06]' : 'border-border bg-card',
                     )}
                   >
-                    {!n.read && !done && (
-                      <span className="absolute inset-y-0 start-0 w-0.5 bg-primary" aria-hidden />
-                    )}
 
                     {/* Actor avatar (with a small category badge) when we know
                         who it's from; otherwise a category icon chip. */}
@@ -295,10 +307,11 @@ export default function NotificationsPage() {
                             {meta.action === 'bet' ? 'Reject' : meta.action === 'league' ? 'Dismiss' : 'Decline'}
                           </Button>
                         </div>
-                      ) : betStale && !n.read ? (
-                        <div className="mt-2">
-                          <Button size="sm" variant="outline" disabled>No longer available</Button>
-                        </div>
+                      ) : betOutcome ? (
+                        <span className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                          {betOutcome.ok && <Check className="size-3.5 text-brand" />}
+                          {betOutcome.label}
+                        </span>
                       ) : null}
 
                       <span className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
@@ -312,8 +325,7 @@ export default function NotificationsPage() {
                   </div>
                 );
               })}
-            </div>
-          </Card>
+          </div>
         )}
       </div>
     </div>
