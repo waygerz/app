@@ -31,6 +31,8 @@ export interface Wager {
   bet_type: BetType;
   line: number | null;
   amount_cents: number;
+  /** For a $0 bragging-rights bet, what the loser owes. Ignored for money bets. */
+  treat: 'beer' | 'shot';
   status: WagerStatus;
   winner_user_id: string | null;
   confirmed: boolean;
@@ -249,7 +251,7 @@ export const wagersApi = {
   cancel: (id: string) => req(`${WAGERS_API}/${id}/cancel`, { method: 'POST' }),
   // Renegotiate an open bet: new stake, and for a spread/total a new line in the
   // caller's own perspective (the server normalizes it to proposer-perspective).
-  counter: (id: string, input: { amount_cents: number; line?: number | null }) =>
+  counter: (id: string, input: { amount_cents: number; line?: number | null; treat?: 'beer' | 'shot' }) =>
     req(`${WAGERS_API}/${id}/counter`, { method: 'POST', body: JSON.stringify(input) }),
   // Accepted wagers hold both stakes, so calling one off takes both sides:
   // one requests, the other approves (or rejects, leaving the bet standing).

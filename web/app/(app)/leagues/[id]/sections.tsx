@@ -560,9 +560,12 @@ export function StatusIcon({ icon: Icon, label }: { icon: typeof Lock; label: st
 // stand for a batch — Cancel / Confirm then act on every sibling at once.
 // A beer bet (no money, loser buys the round) renders as the beer glass in place
 // of a dollar figure on the compact cards; real stakes render the signed amount.
-function StakeText({ cents, sign }: { cents: number; sign?: string }) {
+// The loser's-treat emoji for a $0 bragging bet.
+const treatEmoji = (treat?: string) => (treat === 'shot' ? '🥃' : '🍺');
+
+function StakeText({ cents, sign, treat }: { cents: number; sign?: string; treat?: string }) {
   if (cents === 0) {
-    return <span role="img" aria-label="Beer — loser buys the round" className="inline-block align-[-0.1em] text-[2.2em] leading-none">🍺</span>;
+    return <span role="img" aria-label="Bragging rights — loser buys the round" className="inline-block align-[-0.1em] text-[2.2em] leading-none">{treatEmoji(treat)}</span>;
   }
   return (
     <>
@@ -572,14 +575,14 @@ function StakeText({ cents, sign }: { cents: number; sign?: string }) {
   );
 }
 
-// The full stake phrase for the bet-confirmation summary: a beer bet spells out
-// "Beer (loser buys the round)"; a real stake is the play-money dollar amount.
-function StakeSummary({ cents }: { cents: number }) {
+// The full stake phrase for the bet-confirmation summary: a bragging bet shows the
+// treat emoji + "(loser buys the round)"; a real stake is the play-money amount.
+function StakeSummary({ cents, treat }: { cents: number; treat?: string }) {
   if (cents === 0) {
     return (
       <span className="inline-flex items-center gap-1">
-        <span aria-hidden>🍺</span>
-        Beer <span className="text-muted-foreground">(loser buys the round)</span>
+        <span aria-hidden>{treatEmoji(treat)}</span>
+        <span className="text-muted-foreground">(loser buys the round)</span>
       </span>
     );
   }
@@ -674,7 +677,7 @@ function BetDetailsDialog({
             {decided ? (
               <Badge size="sm" appearance="light" variant={iWon ? 'success' : iLost ? 'destructive' : 'secondary'}>
                 {iWon ? 'Won ' : iLost ? 'Lost ' : 'Push'}
-                {(iWon || iLost) && <StakeText cents={w.amount_cents} sign={iWon ? '+' : '−'} />}
+                {(iWon || iLost) && <StakeText cents={w.amount_cents} treat={w.treat} sign={iWon ? '+' : '−'} />}
               </Badge>
             ) : (
               wagerStatusBadge(w, me)
@@ -697,7 +700,7 @@ function BetDetailsDialog({
               <div className={cn(cellBase, pickCls(awayPk.mine))}>{awayPk.label || '—'}</div>
               <div className="row-span-2 flex flex-col items-center justify-center gap-1 self-stretch rounded-md bg-muted/60 px-1">
                 {decided ? (
-                  <span className={cn('text-xl font-extrabold tabular-nums', resultTone)}><StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} /></span>
+                  <span className={cn('text-xl font-extrabold tabular-nums', resultTone)}><StakeText cents={w.amount_cents} treat={w.treat} sign={iWon ? '+' : iLost ? '−' : ''} /></span>
                 ) : (
                   wagerStatusBadge(w, me)
                 )}
@@ -711,7 +714,7 @@ function BetDetailsDialog({
             </div>
           )}
           <div className="mt-3 text-center text-xs text-muted-foreground">
-            {betTypeLabel} · <StakeText cents={w.amount_cents} /> stake · {field && w.event_name ? w.event_name : `${w.away_team} @ ${w.home_team}`}
+            {betTypeLabel} · <StakeText cents={w.amount_cents} treat={w.treat} /> stake · {field && w.event_name ? w.event_name : `${w.away_team} @ ${w.home_team}`}
           </div>
         </DialogBody>
       </DialogContent>
@@ -814,7 +817,7 @@ export function WagerBetCard({
     <div className="flex w-full flex-col items-stretch gap-1" onClick={(e) => e.stopPropagation()}>{actions}</div>
   ) : settled || decided ? (
     <span className={cn('text-base font-extrabold tabular-nums', resultTone)}>
-      <StakeText cents={w.amount_cents} sign={iWon ? '+' : iLost ? '−' : ''} />
+      <StakeText cents={w.amount_cents} treat={w.treat} sign={iWon ? '+' : iLost ? '−' : ''} />
     </span>
   ) : (
     wagerStatusBadge(w, me)
@@ -1662,32 +1665,31 @@ function weekEndingLabel(p: LeaguePeriod): string {
   return p.label;
 }
 
-type OppRecon = { name: string; netCents: number; netBeers: number; wins: number; losses: number };
-type Recon = { wins: number; losses: number; netCents: number; netBeers: number; perOpp: Map<string, OppRecon> };
+type OppRecon = { name: string; netCents: number; netBeers: number; netShots: number; wins: number; losses: number };
+type Recon = { wins: number; losses: number; netCents: number; netBeers: number; netShots: number; perOpp: Map<string, OppRecon> };
 
-// Net out a week's decided bets from the viewer's perspective: dollars and beers
-// tracked separately (they're different currencies), overall and per opponent.
+// Net out a week's decided bets from the viewer's perspective: dollars, beers and
+// shots tracked separately (different currencies), overall and per opponent.
 // Pushes and refunds carry no result, so they don't move the tally.
 function reconcile(wagers: Wager[], me: string): Recon {
   const perOpp = new Map<string, OppRecon>();
-  let wins = 0, losses = 0, netCents = 0, netBeers = 0;
+  let wins = 0, losses = 0, netCents = 0, netBeers = 0, netShots = 0;
   for (const w of wagers) {
     if (w.status !== 'settled' || w.winner_user_id == null) continue;
     const iWon = w.winner_user_id === me;
     const oppId = w.proposer_id === me ? w.acceptor_id : w.proposer_id;
     const oppName = w.proposer_id === me ? w.acceptor_name : w.proposer_name;
-    const beer = w.amount_cents === 0;
-    const o = perOpp.get(oppId) ?? { name: oppName, netCents: 0, netBeers: 0, wins: 0, losses: 0 };
-    if (iWon) {
-      wins++; o.wins++;
-      if (beer) { netBeers++; o.netBeers++; } else { netCents += w.amount_cents; o.netCents += w.amount_cents; }
-    } else {
-      losses++; o.losses++;
-      if (beer) { netBeers--; o.netBeers--; } else { netCents -= w.amount_cents; o.netCents -= w.amount_cents; }
-    }
+    const bragging = w.amount_cents === 0;
+    const shot = bragging && w.treat === 'shot';
+    const o = perOpp.get(oppId) ?? { name: oppName, netCents: 0, netBeers: 0, netShots: 0, wins: 0, losses: 0 };
+    const d = iWon ? 1 : -1;
+    if (iWon) { wins++; o.wins++; } else { losses++; o.losses++; }
+    if (shot) { netShots += d; o.netShots += d; }
+    else if (bragging) { netBeers += d; o.netBeers += d; }
+    else { netCents += d * w.amount_cents; o.netCents += d * w.amount_cents; }
     perOpp.set(oppId, o);
   }
-  return { wins, losses, netCents, netBeers, perOpp };
+  return { wins, losses, netCents, netBeers, netShots, perOpp };
 }
 
 // Signed play-money delta: +$30 (up/green) or −$25 (down/red).
@@ -1700,13 +1702,13 @@ function MoneyDelta({ cents }: { cents: number }) {
   );
 }
 
-// Signed beer delta: +1 🍺 (up/green) or −2 🍺 (down/red).
-function BeerDelta({ count }: { count: number }) {
+// Signed treat delta: +1 🍺 / −2 🥃 (up = green, down = red).
+function TreatDelta({ count, emoji }: { count: number; emoji: string }) {
   const up = count > 0;
   return (
     <span className={cn('inline-flex items-center gap-0.5 font-semibold tabular-nums', up ? 'text-brand' : 'text-destructive')}>
       {up ? '+' : '−'}{Math.abs(count)}
-      <span aria-hidden>🍺</span>
+      <span aria-hidden>{emoji}</span>
     </span>
   );
 }
@@ -1716,9 +1718,10 @@ function BeerDelta({ count }: { count: number }) {
 function ReconAmount({ o }: { o: OppRecon }) {
   const parts: ReactNode[] = [];
   if (o.netCents !== 0) parts.push(<MoneyDelta key="m" cents={o.netCents} />);
-  if (o.netBeers !== 0) parts.push(<BeerDelta key="b" count={o.netBeers} />);
+  if (o.netBeers !== 0) parts.push(<TreatDelta key="b" count={o.netBeers} emoji="🍺" />);
+  if (o.netShots !== 0) parts.push(<TreatDelta key="s" count={o.netShots} emoji="🥃" />);
   if (parts.length === 0) return <span className="text-sm text-muted-foreground">even</span>;
-  const verb = parts.length === 1 ? ((o.netCents || o.netBeers) > 0 ? 'you won' : 'you owe') : '';
+  const verb = parts.length === 1 ? ((o.netCents || o.netBeers || o.netShots) > 0 ? 'you won' : 'you owe') : '';
   return (
     <span className="flex items-center gap-1.5 text-sm">
       {verb && <span className="text-muted-foreground">{verb}</span>}
@@ -1801,12 +1804,13 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
               <span className="text-sm font-medium text-muted-foreground">
                 {recon.wins}–{recon.losses}
               </span>
-              {recon.netCents === 0 && recon.netBeers === 0 ? (
+              {recon.netCents === 0 && recon.netBeers === 0 && recon.netShots === 0 ? (
                 <span className="text-sm text-muted-foreground">even</span>
               ) : (
                 <>
                   {recon.netCents !== 0 && <MoneyDelta cents={recon.netCents} />}
-                  {recon.netBeers !== 0 && <BeerDelta count={recon.netBeers} />}
+                  {recon.netBeers !== 0 && <TreatDelta count={recon.netBeers} emoji="🍺" />}
+                  {recon.netShots !== 0 && <TreatDelta count={recon.netShots} emoji="🥃" />}
                 </>
               )}
             </span>

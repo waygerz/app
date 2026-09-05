@@ -192,10 +192,7 @@ export function UserProfileDialog({
                       </span>
                       <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
                         {brag ? (
-                          <>
-                            <span aria-hidden className="text-sm leading-none">🍺</span>
-                            Beer
-                          </>
+                          <span aria-hidden className="text-sm leading-none">{w.treat === 'shot' ? '🥃' : '🍺'}</span>
                         ) : (
                           formatCredits(w.amount_cents)
                         )}
