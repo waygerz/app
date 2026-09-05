@@ -7,7 +7,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Users, MessagesSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { CenterCard } from '@/components/ui/center-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/user-avatar';
@@ -90,11 +89,11 @@ export default function MessagesPage() {
       <Link
         href={'/messages/' + conv.id}
         className={cn(
-          'relative flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40',
-          unread > 0 && 'bg-primary/[0.05]',
+          'relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted',
+          unread > 0 && 'bg-primary/[0.06]',
         )}
       >
-        {unread > 0 && <span className="absolute inset-y-0 start-0 w-0.5 bg-primary" aria-hidden />}
+        {unread > 0 && <span className="absolute inset-y-2 start-0 w-0.5 rounded-full bg-primary" aria-hidden />}
         <div className="relative shrink-0">
           {isLeague ? (
             <LeagueAvatar name={title} logoUrl={null} id={conv.league_id!} size={46} />
@@ -149,19 +148,17 @@ export default function MessagesPage() {
   function renderBody() {
     if (convsQ.isLoading) {
       return (
-        <Card className="overflow-hidden">
-          <div className="flex flex-col">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-4 py-3">
-                <Skeleton className="size-[46px] shrink-0 rounded-full" />
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Skeleton className="h-3.5 w-2/5" />
-                  <Skeleton className="h-3 w-3/4" />
-                </div>
+        <div className="flex flex-col gap-0.5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+              <Skeleton className="size-[46px] shrink-0 rounded-full" />
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Skeleton className="h-3.5 w-2/5" />
+                <Skeleton className="h-3 w-3/4" />
               </div>
-            ))}
-          </div>
-        </Card>
+            </div>
+          ))}
+        </div>
       );
     }
     if (conversations.length === 0) {
@@ -192,9 +189,8 @@ export default function MessagesPage() {
       );
     }
     return (
-      <Card className="overflow-hidden">
-        <div className="flex flex-col divide-y divide-border/60">
-          {groups.unread.length > 0 && (
+      <div className="flex flex-col gap-0.5">
+        {groups.unread.length > 0 && (
           <div className="flex flex-col">
             <GroupHeader
               label={`Unread · ${groups.unread.length}`}
@@ -218,8 +214,7 @@ export default function MessagesPage() {
             {groups.earlier.map((c) => <ConversationRow key={c.id} conv={c} />)}
           </div>
         )}
-        </div>
-      </Card>
+      </div>
     );
   }
 
