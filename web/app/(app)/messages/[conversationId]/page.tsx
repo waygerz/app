@@ -13,8 +13,44 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { messagingApi, type ChatMessage } from '@/lib/messaging';
 import { leaguesApi } from '@/lib/leagues';
+import { wagersApi } from '@/lib/wagers';
+import { fetchEvent, type SportEvent } from '@/lib/ingestor';
+import { formatStart } from '@/components/event-card';
 import { useAuth } from '@/auth/AuthContext';
 import { conversationTitle, clockTime, dayKey, dayLabel, senderColor } from '../helpers';
+
+// One game's compact scoreboard for the thread's live-score bar. Live shows the
+// running score, final mutes the loser, scheduled shows the kickoff time.
+function ScoreCard({ ev }: { ev: SportEvent }) {
+  const live = ev.status === 'live';
+  const final = ev.status === 'final';
+  const started = live || final;
+  const hs = ev.home_score;
+  const as = ev.away_score;
+  const awayLost = final && hs != null && as != null && hs > as;
+  const homeLost = final && hs != null && as != null && as > hs;
+  const status = live ? 'Live' : final ? 'Final' : ev.start_time ? formatStart(ev.start_time) : 'Scheduled';
+  const rows = [
+    { abbr: ev.away_abbr ?? ev.away_team, score: as, lost: awayLost },
+    { abbr: ev.home_abbr ?? ev.home_team, score: hs, lost: homeLost },
+  ];
+  return (
+    <div className="flex min-w-[128px] shrink-0 flex-col gap-1 rounded-lg border border-border bg-card px-2.5 py-1.5">
+      <span className={cn('flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider', live ? 'text-brand' : 'text-muted-foreground')}>
+        {live && <span className="inline-block size-1.5 rounded-full bg-brand" aria-hidden />}
+        {status}
+      </span>
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-center justify-between gap-2 text-xs">
+          <span className={cn('truncate font-semibold', r.lost ? 'text-muted-foreground' : 'text-foreground')}>{r.abbr}</span>
+          {started && r.score != null && (
+            <span className={cn('font-bold tabular-nums', r.lost ? 'text-muted-foreground' : 'text-foreground')}>{r.score}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function ThreadPage() {
   const params = useParams<{ conversationId: string }>();
@@ -141,6 +177,38 @@ export default function ThreadPage() {
 
   const title = activeConv ? conversationTitle(activeConv, leagueNames) : 'Chat';
   const isLeague = activeConv?.type === 'league' && !!activeConv.league_id;
+
+  // Live scoreboard: every game these two users have an ACTIVE bet on (direct
+  // chats only). Dedup by event; poll the ingestor while any game is live. This
+  // is score context only — the inline bet cards were removed.
+  const otherUserId = activeConv?.type === 'direct' ? activeConv.other_user?.id : undefined;
+  const betsQ = useQuery({
+    queryKey: ['thread-bets', me, otherUserId],
+    queryFn: () => wagersApi.all(),
+    enabled: !!me && !!otherUserId,
+    staleTime: 30_000,
+  });
+  const betEventIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const w of betsQ.data ?? []) {
+      if (w.status !== 'open' && w.status !== 'accepted') continue;
+      const opp = w.proposer_id === me ? w.acceptor_id : w.proposer_id;
+      if (opp === otherUserId && w.event_id) ids.add(w.event_id);
+    }
+    return [...ids];
+  }, [betsQ.data, me, otherUserId]);
+  const scoresQ = useQuery({
+    queryKey: ['thread-bet-events', [...betEventIds].sort().join(',')],
+    queryFn: async () => {
+      const out: SportEvent[] = [];
+      await Promise.all(betEventIds.map(async (id) => { const ev = await fetchEvent(id); if (ev) out.push(ev); }));
+      return out;
+    },
+    enabled: betEventIds.length > 0,
+    staleTime: 60_000,
+    refetchInterval: (q) => ((q.state.data ?? []).some((e) => e.status === 'live') ? 30_000 : false),
+  });
+  const scoreEvents = (scoresQ.data ?? []).filter((e) => e.status !== 'cancelled');
   const messages = msgsQ.data ?? [];
 
   // Interleave messages + open bets (direct only) by time.
@@ -251,6 +319,14 @@ export default function ThreadPage() {
           </div>
         </div>
       </div>
+
+      {scoreEvents.length > 0 && (
+        <div className="shrink-0 overflow-x-auto border-b border-border">
+          <div className="mx-auto flex w-full max-w-2xl gap-2 px-3 py-2">
+            {scoreEvents.map((ev) => <ScoreCard key={ev.external_id} ev={ev} />)}
+          </div>
+        </div>
+      )}
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-1.5 p-4">
