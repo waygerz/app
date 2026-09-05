@@ -53,6 +53,9 @@ class Wager(db.Model):
                          server_default=MONEYLINE)
     line = db.Column(db.Float, nullable=True)
     amount_cents = db.Column(db.BigInteger, nullable=False)
+    # For a $0 bragging-rights bet, what the loser owes: "beer" | "shot". Ignored
+    # for money bets. Defaults to beer.
+    treat = db.Column(db.String(8), nullable=False, default="beer", server_default="beer")
 
     status = db.Column(db.String(16), nullable=False, default=OPEN, index=True)
     winner_user_id = db.Column(UUID(as_uuid=False), nullable=True)
@@ -124,6 +127,7 @@ class Wager(db.Model):
             "bet_type": self.bet_type or MONEYLINE,
             "line": self.line,
             "amount_cents": self.amount_cents,
+            "treat": self.treat or "beer",
             "status": self.status,
             "winner_user_id": self.winner_user_id,
             "confirmed": self.confirmed,

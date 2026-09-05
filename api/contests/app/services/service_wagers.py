@@ -328,8 +328,9 @@ def _resolve_sides(event, side, home_team, away_team):
 
 
 def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
-            home_team=None, away_team=None, bet_type=None, line=None):
+            home_team=None, away_team=None, bet_type=None, line=None, treat=None):
     bet_type = (bet_type or MONEYLINE).lower()
+    treat = _norm_treat(treat)
     if bet_type not in BET_TYPES:
         raise WagerError("invalid bet type")
     side = (side or "").lower()
@@ -391,6 +392,7 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
         bet_type=bet_type,
         line=line,
         amount_cents=amount,
+        treat=treat,
         status=OPEN,
     )
     db.session.add(w)
@@ -426,7 +428,7 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
         "New bet challenge",
         {
             "from_name": prop_name,
-            "amount": _format_stake(amount),
+            "amount": _format_stake(amount, treat),
             "matchup": _matchup(w),
             "league": w.league or "your league",
             "link": f"https://waygerz.com/c/{code}",
@@ -440,14 +442,14 @@ def propose(proposer_id, league_id, event_id, side, amount_cents, acceptor_id,
 
 
 def propose_many(proposer_id, league_id, event_id, side, amount_cents, acceptor_ids,
-                 home_team=None, away_team=None, bet_type=None, line=None):
+                 home_team=None, away_team=None, bet_type=None, line=None, treat=None):
     """Send the same bet to several members — one independent wager each."""
     results = []
     for aid in acceptor_ids:
         try:
             wager = propose(proposer_id, league_id, event_id, side, amount_cents, aid,
                             home_team=home_team, away_team=away_team,
-                            bet_type=bet_type, line=line)
+                            bet_type=bet_type, line=line, treat=treat)
             results.append({"acceptor_id": aid, "wager": wager})
         except WagerError as exc:
             results.append({"acceptor_id": aid, "error": str(exc)})
@@ -460,11 +462,16 @@ def _format_credits(amount_cents):
     return f"{amount_cents / 100:.2f}"
 
 
-def _format_stake(amount_cents):
-    """Stake as text: $10, $10.50 when not whole, or "a beer" for a $0
-    bragging-rights wager (loser buys the beer)."""
+def _norm_treat(t):
+    """Normalize a bragging-rights treat to one of the two allowed values."""
+    return "shot" if str(t or "").strip().lower() == "shot" else "beer"
+
+
+def _format_stake(amount_cents, treat="beer"):
+    """Stake as text: $10, $10.50 when not whole, or "a beer"/"a shot" for a $0
+    bragging-rights wager (loser buys the round)."""
     if amount_cents == 0:
-        return "a beer"
+        return "a shot" if _norm_treat(treat) == "shot" else "a beer"
     dollars = amount_cents / 100
     return f"${dollars:.0f}" if amount_cents % 100 == 0 else f"${dollars:.2f}"
 
@@ -520,7 +527,7 @@ def _post_accepted_activity(wager):
         )
     else:
         sentence = (
-            f"{proposer} took {team} for {_format_stake(wager.amount_cents)} "
+            f"{proposer} took {team} for {_format_stake(wager.amount_cents, wager.treat)} "
             f"{connector} {_opponent_phrase(opponents)}"
         )
     post_league_activity(wager.league_id, {
@@ -598,7 +605,7 @@ def accept(wager, user_id):
     return wager
 
 
-def counter(wager, user_id, amount_cents, line=None):
+def counter(wager, user_id, amount_cents, line=None, treat=None):
     """Renegotiate an open wager's stake (and, for spread/total, the line) and pass
     it back to the other side. In-place on the one row: hold the counterer's new
     stake at a fresh per-attempt ref, commit the new terms naming them ``held_id``,
@@ -668,6 +675,8 @@ def counter(wager, user_id, amount_cents, line=None):
         db.session.rollback()
         raise
     wager.amount_cents = amount
+    if treat is not None:
+        wager.treat = _norm_treat(treat)
     wager.line = stored_line
     wager.held_id = user_id
     wager.held_ref = new_ref
@@ -697,8 +706,8 @@ def counter(wager, user_id, amount_cents, line=None):
         "Bet countered",
         {
             "other_name": _name(user_id),
-            "amount": _format_stake(amount),
-            "was": _format_stake(old_amount),
+            "amount": _format_stake(amount, wager.treat),
+            "was": _format_stake(old_amount, wager.treat),
             "matchup": _matchup(wager),
             "league": wager.league or "your league",
             "link": _wager_link(wager),
@@ -1215,7 +1224,7 @@ def _notify_settled(wager):
     link = _wager_link(wager)
     _notify(
         winner, "wager_settled_win", "You won!",
-        {"other_name": loser_name, "amount": _format_stake(wager.amount_cents),
+        {"other_name": loser_name, "amount": _format_stake(wager.amount_cents, wager.treat),
          "matchup": matchup, "league": league, "link": link},
         ref_id=wager.id, deep_link="/bets/active",
         dedup_key=f"wager_settled:{wager.id}:{winner}",
@@ -1545,6 +1554,7 @@ def propose_wagers(me, data):
         away_team=data.get("away_team"),
         bet_type=data.get("bet_type"),
         line=data.get("line"),
+        treat=data.get("treat"),
     )
     created = [r["wager"] for r in results if "wager" in r]
     errors = [
@@ -1609,7 +1619,7 @@ def counter_wager(wager_id, me, data):
     except (TypeError, ValueError):
         return {"error": "invalid amount"}, 400
     try:
-        counter(w, me, amount, data.get("line"))
+        counter(w, me, amount, data.get("line"), treat=data.get("treat"))
     except WagerError as e:
         return {"error": str(e)}, 400
     except InsufficientFunds:
