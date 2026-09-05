@@ -69,7 +69,19 @@ export interface FeedItem {
   body: string | null;
   link_url: string | null;
   link_label: string | null;
+  /** Structured extras. Bet-result posts carry the matchup + final score + stake. */
+  meta: FeedMeta | null;
   created_at: string;
+}
+
+export interface FeedMeta {
+  amount_cents?: number;
+  treat?: 'beer' | 'shot';
+  away?: string;
+  home?: string;
+  away_score?: number | null;
+  home_score?: number | null;
+  [k: string]: unknown;
 }
 
 export interface Invite {

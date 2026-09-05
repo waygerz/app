@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { commentsApi, type Comment, type PostEngagement } from '@/lib/comments';
 import { ReactionControl } from '@/components/reactions/reaction-control';
-import type { FeedItem } from '@/lib/leagues';
+import type { FeedItem, FeedMeta } from '@/lib/leagues';
+import { formatCredits } from '@/lib/wallet';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,6 +46,25 @@ const EVENT_STYLE: Record<string, { icon: LucideIcon; chip: string; label?: stri
   wager_completed: { icon: Swords, chip: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', label: 'Bet result' },
 };
 const DEFAULT_EVENT = { icon: Activity, chip: 'bg-muted text-muted-foreground' };
+
+// The game behind a bet post: matchup + final score + stake. `started` = the
+// score is in (a final game); otherwise it's just the matchup + kickoff pending.
+function GameRow({ m }: { m: FeedMeta }) {
+  const started = m.away_score != null && m.home_score != null;
+  const stake = m.amount_cents ? formatCredits(m.amount_cents) : m.treat === 'shot' ? '🥃' : '🍺';
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
+      <span className="flex items-center gap-1.5 text-sm font-semibold tabular-nums text-foreground">
+        <span>{m.away}{started ? ` ${m.away_score}` : ''}</span>
+        <span className="text-muted-foreground">{started ? '·' : '@'}</span>
+        <span>{m.home}{started ? ` ${m.home_score}` : ''}</span>
+      </span>
+      <span className="ml-auto text-xs font-medium text-muted-foreground">
+        {stake}{started ? ' · Final' : ''}
+      </span>
+    </div>
+  );
+}
 
 // Compact relative time ("just now", "5m ago", "3h ago", then a date).
 function timeAgo(iso: string): string {
@@ -103,6 +123,13 @@ function PostHeader({
   // the matchup name doesn't reappear under the label.
   const showSubtitle = !ev.label && !!item.title && item.title !== heading;
 
+  // Bet posts carry the game: show a compact matchup + final score row (from
+  // meta). Older posts without meta fall back to the matchup name.
+  const wagerEvent = (item.event_type ?? '').startsWith('wager_');
+  const gm = item.meta;
+  const hasGame = wagerEvent && !!gm && (!!gm.away || !!gm.home);
+  const showMatchupFallback = wagerEvent && !hasGame && !!item.title && item.title !== heading;
+
   return (
     <div className={cn('flex flex-col gap-4 p-4 sm:p-5', className)}>
       {/* Heading — avatar + author name over the date (post4 style). */}
@@ -144,6 +171,10 @@ function PostHeader({
         >
           {item.body}
         </p>
+      )}
+      {hasGame && gm && <GameRow m={gm} />}
+      {showMatchupFallback && (
+        <div className="text-sm font-medium text-muted-foreground">{item.title}</div>
       )}
       {item.link_url && (
         <a

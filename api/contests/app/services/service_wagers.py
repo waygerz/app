@@ -1295,6 +1295,21 @@ def _post_completed_activity(wager):
     key = f"{wager.proposer_id}:{wager.event_id}:{wager.proposer_side}:{wager.amount_cents}"
     line = _TRASH_TALK[zlib.crc32(key.encode()) % len(_TRASH_TALK)]
 
+    # Attach the game data so the feed post can show the matchup + final score,
+    # not just the trash talk. Best-effort: a missing event just omits the score.
+    try:
+        ev = get_event(wager.event_id) or {}
+    except Exception:  # noqa: BLE001
+        ev = {}
+    meta = {
+        "amount_cents": wager.amount_cents,
+        "treat": wager.treat or "beer",
+        "away": ev.get("away_abbr") or ev.get("away_team") or wager.away_team,
+        "home": ev.get("home_abbr") or ev.get("home_team") or wager.home_team,
+        "away_score": ev.get("away_score"),
+        "home_score": ev.get("home_score"),
+    }
+
     post_league_activity(wager.league_id, {
         "event_type": "wager_completed",
         "author_id": author,
@@ -1302,7 +1317,7 @@ def _post_completed_activity(wager):
         "body": line.format(W=winners_txt, L=losers_txt),
         "dedup_key": f"wager_result:{key}",
         "upsert": True,
-        "meta": {"amount_cents": wager.amount_cents},
+        "meta": meta,
     })
 
 
