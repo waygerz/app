@@ -37,13 +37,21 @@ def create_app(config_class=Config):
         """Read-only: print the configured sports for leagues matching QUERY
         (an id or a case-insensitive name substring). Reads this service's own
         schema — safe to run as a one-off. Used to diagnose Upcoming scoping."""
+        import uuid as _uuid
+
         from app.models.league import League
         from app.models.sport import LeagueSport
 
         q = (query or "").strip()
-        leagues = League.query.filter(
-            db.or_(League.id == q, League.name.ilike(f"%{q}%"))
-        ).all()
+        # id is a UUID column — only compare it when the query IS a uuid, else
+        # Postgres rejects the cast. Otherwise match on the name substring.
+        conds = [League.name.ilike(f"%{q}%")]
+        try:
+            _uuid.UUID(q)
+            conds.insert(0, League.id == q)
+        except ValueError:
+            pass
+        leagues = League.query.filter(db.or_(*conds)).all()
         if not leagues:
             print(f"no leagues match {q!r}", flush=True)
             return
