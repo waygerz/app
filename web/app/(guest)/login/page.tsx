@@ -107,7 +107,14 @@ export default function LoginPage() {
         sms_transactional: smsAccount,
         sms_marketing: smsMarketing,
       });
-      router.push(next);
+      // A brand-new account that got here by following an invite link: mark the
+      // return so the /c page auto-honors it (league invites only — the page
+      // never auto-acts on a money bet). Existing-user login (onVerify) does not
+      // set this, so they still get the normal preview + Join.
+      const dest = next.startsWith('/c/')
+        ? `${next}${next.includes('?') ? '&' : '?'}autojoin=1`
+        : next;
+      router.push(dest);
     });
   };
 

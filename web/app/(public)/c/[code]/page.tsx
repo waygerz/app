@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -57,6 +57,7 @@ function Dead({ message }: { message: string }) {
 
 function CodeContent({ code }: { code: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const qc = useQueryClient();
   const { user } = useAuth();
   const me = user?.id ?? '';
@@ -110,6 +111,26 @@ function CodeContent({ code }: { code: string }) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  // A user who just created their account by following a league invite lands
+  // here with ?autojoin=1 — honor the invitation automatically instead of
+  // making them tap "Join". Scoped to LEAGUE codes only (never auto-accept a
+  // money bet or auto-add a friend), non-members, and fired once. On success
+  // `act` already routes into the league.
+  const autojoin = searchParams.get('autojoin') === '1';
+  const autoJoined = useRef(false);
+  useEffect(() => {
+    if (!autojoin || autoJoined.current || act.isPending) return;
+    const d = resolved.data;
+    if (
+      d?.state === 'ok' &&
+      d.type === 'league' &&
+      d.viewer.relationship !== 'member'
+    ) {
+      autoJoined.current = true;
+      act.mutate('join');
+    }
+  }, [autojoin, resolved.data, act]);
 
   if (resolved.isLoading) {
     // Bare content — the default export already wraps this in the outer Card,
