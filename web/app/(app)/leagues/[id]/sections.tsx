@@ -1151,9 +1151,44 @@ function SportIcon({ logo, emoji, label, px }: { logo?: string; emoji?: string; 
   );
 }
 
-// The next N games across every sport, or one sport's board — as tabs, with
-// "Upcoming" (soonest games league-wide) as the landing tab.
-const UPCOMING_LIMIT = 10;
+// One sport's board (week-paged) or, on the landing "Upcoming" tab, TODAY's
+// games across every sport — see upcomingInRange.
+
+// The calendar day (YYYY-MM-DD) an instant falls on in a given IANA zone. Used
+// to decide "today" from the LEAGUE's timezone, so every member sees the same
+// slate regardless of where they are. Falls back to the device zone if `tz` is
+// invalid.
+function localDay(iso: string, tz: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(iso));
+  } catch {
+    return new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(iso));
+  }
+}
+
+type UpcomingRange = 'today' | 'week';
+
+// "Upcoming" = not-yet-started games across all the league's sports, chronological.
+//   today → the league's calendar day (tz above).
+//   week  → a rolling 7 days from now.
+// No cap: the window is naturally bounded, and the per-sport pills narrow it.
+function upcomingInRange(events: SportEvent[], tz: string, range: UpcomingRange): SportEvent[] {
+  const now = Date.now();
+  const today = localDay(new Date(now).toISOString(), tz);
+  const weekEnd = now + 7 * 24 * 60 * 60 * 1000;
+  return events
+    .filter((e) => {
+      if (!e.start_time) return false;
+      const t = new Date(e.start_time).getTime();
+      if (t <= now) return false; // already started
+      return range === 'today' ? localDay(e.start_time, tz) === today : t <= weekEnd;
+    })
+    .sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''));
+}
 
 export function LeagueSports() {
   const lg = useLeague();
@@ -1201,11 +1236,11 @@ export function LeagueSports() {
     ? ms(sportSorted[0]) + weeksShown * 7 * 24 * 60 * 60 * 1000
     : 0;
   const hasMoreWeeks = !q && tab !== 'upcoming' && sportSorted.some((e) => ms(e) > windowEnd);
-  const base = tab === 'upcoming' ? [...evs].sort(byStart) : sportSorted;
+  const base = tab === 'upcoming' ? upcomingInRange(evs, lg.timezone, 'today') : sportSorted;
   const shown = q
     ? base.filter(matchesQuery)
     : tab === 'upcoming'
-      ? base.slice(0, UPCOMING_LIMIT)
+      ? base
       : base.filter((e) => ms(e) <= windowEnd);
   const teamEvs = shown.filter((e) => !isFieldSport(e.sport));
   const fieldEvs = shown.filter((e) => isFieldSport(e.sport));
@@ -1256,7 +1291,7 @@ export function LeagueSports() {
 
       {tab === 'upcoming' && !q && (
         <p className="text-xs text-muted-foreground">
-          The next {UPCOMING_LIMIT} games across all your sports{canBet ? ' · tap a game to bet' : ''}.
+          Today’s games across all your sports{canBet ? ' · tap a game to bet' : ''}.
         </p>
       )}
 
@@ -1268,7 +1303,11 @@ export function LeagueSports() {
         <CenterCard>
           <CalendarDays className="size-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            {q ? `No games match “${query.trim()}”.` : 'No upcoming games right now.'}
+            {q
+              ? `No games today match “${query.trim()}”.`
+              : tab === 'upcoming'
+                ? 'No more games today. Pick a sport tab for its full schedule.'
+                : 'No upcoming games right now.'}
           </p>
         </CenterCard>
       ) : (
@@ -1324,21 +1363,37 @@ export function LeagueSports() {
   );
 }
 
-// The Upcoming tab (own page): the next N games across the league's sports as
-// tap-to-bet cards, reusing the same EventCard + wager dialogs as the Sports
-// hub. Rendered on all breakpoints — it's a standalone page now, split out from
-// the Feed tab.
+// The Upcoming tab (own page): TODAY's games across the league's sports as
+// tap-to-bet cards, with All + per-sport filter pills (only for sports actually
+// playing today). Reuses the same board + wager dialogs as the Sports hub.
 export function LeagueUpcomingGames() {
   const lg = useLeague();
   const { user } = useAuth();
   const me = user?.id;
   const canBet = lg.status === 'active';
   const [selected, setSelected] = useState<SportEvent | null>(null);
+  const [tab, setTab] = useState<string>('all'); // 'all' | sport_league_id
+  const [range, setRange] = useState<UpcomingRange>('today'); // today | this week
 
   const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
-  const shown = [...(events.data ?? [])]
-    .sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''))
-    .slice(0, UPCOMING_LIMIT);
+  const rangeEvs = upcomingInRange(events.data ?? [], lg.timezone, range);
+
+  // Filter pills: All + one per sport that has a game in the range, ordered by
+  // that sport's soonest game (rangeEvs is already start-sorted). A range/day
+  // change can leave `tab` pointing at a sport with no games left — fall to All.
+  const nameOf = new Map(lg.sports.map((s) => [s.sport_league_id, s.name || s.sport_league_id]));
+  const sportsInRange: { id: string; label: string }[] = [];
+  const seenSport = new Set<string>();
+  for (const e of rangeEvs) {
+    const id = e.sport_league_id ?? '';
+    if (id && !seenSport.has(id)) {
+      seenSport.add(id);
+      sportsInRange.push({ id, label: nameOf.get(id) ?? id });
+    }
+  }
+  const activeTab = tab !== 'all' && seenSport.has(tab) ? tab : 'all';
+
+  const shown = activeTab === 'all' ? rangeEvs : rangeEvs.filter((e) => e.sport_league_id === activeTab);
   const teamEvs = shown.filter((e) => !isFieldSport(e.sport));
   const fieldEvs = shown.filter((e) => isFieldSport(e.sport));
   // Tournament-style events (golf, racing) aren't tappable until their field is posted.
@@ -1349,14 +1404,60 @@ export function LeagueUpcomingGames() {
   if (lg.league_type === 'pickem') return null;
   if (lg.sports.length === 0) return null;
 
+  const pill = (on: boolean) =>
+    cn(
+      'shrink-0 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-medium transition-colors',
+      on
+        ? 'border-primary bg-primary text-primary-foreground'
+        : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground',
+    );
+
   return (
     <div className="flex flex-col gap-3">
+      {/* Date range: Today vs a rolling 7 days. */}
+      <div className="inline-flex w-fit rounded-full border border-input p-0.5">
+        {(['today', 'week'] as const).map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => setRange(r)}
+            className={cn(
+              'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+              range === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {r === 'today' ? 'Today' : 'This week'}
+          </button>
+        ))}
+      </div>
+
+      {/* Sport filter pills — only when more than one sport plays in the range
+          (otherwise "All" and the lone sport are the same list). */}
+      {sportsInRange.length > 1 && (
+        <div className="w-full min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex w-max min-w-full gap-2">
+            <button type="button" onClick={() => setTab('all')} className={pill(activeTab === 'all')}>
+              All
+            </button>
+            {sportsInRange.map((s) => (
+              <button key={s.id} type="button" onClick={() => setTab(s.id)} className={pill(activeTab === s.id)}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {events.isLoading ? (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
       ) : shown.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No upcoming games.</p>
+        <p className="text-sm text-muted-foreground">
+          {range === 'today'
+            ? 'No more games today. Try “This week”, or the Sports tab for the full schedule.'
+            : 'No games in the next 7 days. Check the Sports tab for the full schedule.'}
+        </p>
       ) : (
         <div className="flex flex-col gap-4">
           {teamEvs.length > 0 && (
