@@ -607,7 +607,9 @@ def accept(wager, user_id):
         },
         actor_uid=user_id,
         ref_id=wager.id,
-        deep_link=f"/leagues/{wager.league_id}/play",
+        # Open the bet view so the proposer sees the locked bet + game, not the
+        # league play page.
+        deep_link=_wager_path(wager),
         dedup_key=f"wager_accepted:{wager.id}",
     )
     return wager

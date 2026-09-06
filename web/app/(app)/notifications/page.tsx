@@ -73,6 +73,22 @@ function betResolved(status: string | undefined) {
   return BET_RESOLVED[status] ?? { label: 'No longer available', ok: false };
 }
 
+// Is this a bet notification (challenge / counter / accept / settle)?
+function isBetNotif(n: FeedNotification): boolean {
+  return (n.template_key ?? '').startsWith('wager_') || n.category === 'wager_alert';
+}
+
+// The bet's /c code — from the deep_link when it points there, otherwise parsed
+// out of the notification body (every bet notification includes its full
+// https://…/c/<code> link). Lets even older rows, whose stored deep_link
+// predates the /c fix, open the bet view and drive inline Accept/Counter/Reject.
+function betCode(n: FeedNotification): string | null {
+  const m =
+    (n.deep_link ?? '').match(/\/c\/([A-Za-z0-9]+)/) ??
+    (n.body ?? '').match(/\/c\/([A-Za-z0-9]+)/);
+  return m ? m[1] : null;
+}
+
 function timeAgo(iso: string | null) {
   if (!iso) return '';
   const t = new Date(iso).getTime();
@@ -144,8 +160,8 @@ export default function NotificationsPage() {
     mutationFn: async ({ n, yes }: { n: FeedNotification; yes: boolean }) => {
       const meta = notifMeta(n);
       if (meta.action === 'bet') {
-        const code = (n.deep_link || '').replace(/^\/c\//, '');
-        if (!code.startsWith('B')) throw new Error('This bet link is invalid');
+        const code = betCode(n);
+        if (!code || !code.startsWith('B')) throw new Error('This bet link is invalid');
         await actOnCode(code, yes ? 'accept' : 'decline');
         return yes ? 'Accepted' : 'Rejected';
       }
@@ -186,9 +202,13 @@ export default function NotificationsPage() {
   });
 
   // Opening an item marks it read and jumps to where the live action lives.
+  // Bet notifications always open the /c bet view (Accept/Counter/Reject + the
+  // game), derived from the code even when the stored deep_link is older.
   const openItem = (n: FeedNotification) => {
     if (!n.read) markRead.mutate([n.id]);
-    if (n.deep_link) router.push(n.deep_link);
+    const code = isBetNotif(n) ? betCode(n) : null;
+    const dest = code ? `/c/${code}` : n.deep_link;
+    if (dest) router.push(dest);
   };
 
   if (!user) return null;
