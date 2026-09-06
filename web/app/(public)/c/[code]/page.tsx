@@ -20,6 +20,8 @@ import { formatCredits } from '@/lib/wallet';
 import { fetchEvent } from '@/lib/ingestor';
 import { clearPendingLink } from '@/lib/pending-link';
 import { AuthRedirectIfGuest } from '@/auth/AuthRedirectIfGuest';
+import { useAuth } from '@/auth/AuthContext';
+import { CounterButton } from '@/components/counter-dialog';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
 import { TeamLogo } from '@/components/event-card';
@@ -56,6 +58,8 @@ function Dead({ message }: { message: string }) {
 function CodeContent({ code }: { code: string }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const me = user?.id ?? '';
 
   // The stash only powered the login-page banner; we're past login now.
   useEffect(() => {
@@ -394,6 +398,18 @@ function CodeContent({ code }: { code: string }) {
             <Button onClick={() => act.mutate('accept')} disabled={busy}>
               {act.isPending ? 'Working…' : `Accept — ${formatCredits(w.amount_cents)}`}
             </Button>
+            {/* Renegotiate stake/line before the bet goes live — same dialog as the
+                in-app bets page. The counter endpoint gates on my_turn server-side,
+                so on success re-resolve the code to flip this into the waiting state. */}
+            <CounterButton
+              wager={w}
+              me={me}
+              onDone={() => {
+                qc.invalidateQueries({ queryKey: ['invite-code', code] });
+                qc.invalidateQueries({ queryKey: ['wagers-all'] });
+                qc.invalidateQueries({ queryKey: ['wagers'] });
+              }}
+            />
             <Button variant="outline" onClick={() => act.mutate('decline')} disabled={busy}>
               Reject
             </Button>
