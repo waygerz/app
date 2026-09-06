@@ -1671,7 +1671,11 @@ def resolve_code(me, code):
                 "state": "invalid", "single_use": True,
                 "viewer": {"authenticated": bool(me), "relationship": "other"},
                 "preview": None, "actions": []}, 404
-    state = "ok" if w.status == OPEN else "consumed"
+    # A bet code stays viewable for the life of the wager (accepted, declined,
+    # settled) so a tap from a notification always SHOWS the bet with its current
+    # status — never a dead "invite already used". Actions are separately gated
+    # on open + my_turn below.
+    state = "ok"
     my_turn = bool(me and me == w.pending_id)
     if me and me == w.acceptor_id:
         rel = "acceptor"

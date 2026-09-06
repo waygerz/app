@@ -328,17 +328,26 @@ function CodeContent({ code }: { code: string }) {
     const iWon = involved && decided && !!w.winner_user_id && w.winner_user_id === myId;
     const iLost = involved && decided && !!w.winner_user_id && w.winner_user_id !== myId;
     const stakeText = w.amount_cents ? formatCredits(w.amount_cents) : '';
+    const terminal = w.status === 'declined' || w.status === 'cancelled' || w.status === 'refunded';
     const headline = decided
       ? iWon
         ? `You beat ${otherName}`
         : iLost
           ? `${otherName} beat you`
           : 'Push'
-      : myTurn
-        ? `${otherName} ${countered ? 'countered your bet' : 'sent you a bet'}`
-        : involved
-          ? `Waiting on ${otherName}`
-          : `${w.proposer_name}'s bet`;
+      : terminal
+        ? w.status === 'declined'
+          ? `${otherName} declined`
+          : w.status === 'cancelled'
+            ? 'Bet cancelled'
+            : 'Bet refunded'
+        : myTurn
+          ? `${otherName} ${countered ? 'countered your bet' : 'sent you a bet'}`
+          : w.status === 'accepted'
+            ? `You’re on with ${otherName}`
+            : involved
+              ? `Waiting on ${otherName}`
+              : `${w.proposer_name}'s bet`;
 
     return (
       <>
@@ -437,11 +446,13 @@ function CodeContent({ code }: { code: string }) {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {!decided && (
+            {!decided && !terminal && (
               <p className="text-center text-sm text-muted-foreground">
-                {involved
-                  ? `Waiting on ${otherName} to respond${countered ? ' to your counter' : ''}.`
-                  : "This bet isn't addressed to you."}
+                {w.status === 'accepted'
+                  ? 'Locked in — this bet is live.'
+                  : involved
+                    ? `Waiting on ${otherName} to respond${countered ? ' to your counter' : ''}.`
+                    : "This bet isn't addressed to you."}
               </p>
             )}
             <Button variant="outline" onClick={() => router.push('/bets/all')}>View bets</Button>
