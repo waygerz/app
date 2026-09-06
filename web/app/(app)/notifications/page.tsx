@@ -35,6 +35,9 @@ function notifMeta(n: FeedNotification): Meta {
   const digest = 'text-amber-500 bg-amber-500/15';
   switch (n.template_key) {
     case 'wager_proposed': return { Icon: Swords, tint: bet, tone: 'default', action: 'bet' };
+    // A counter is a "your turn" state, same as a fresh proposal — the recipient
+    // can Accept/Counter/Reject right from the notification.
+    case 'wager_countered': return { Icon: Swords, tint: bet, tone: 'default', action: 'bet' };
     case 'wager_accepted': return { Icon: Swords, tint: bet, tone: 'default', action: null };
     case 'wager_settled_win': return { Icon: Trophy, tint: 'text-brand bg-brand/15', tone: 'win', action: null };
     case 'wager_settled_loss': return { Icon: TrendingDown, tint: 'text-destructive bg-destructive/15', tone: 'loss', action: null };

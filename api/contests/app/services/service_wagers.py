@@ -485,6 +485,14 @@ def _wager_link(wager):
     return f"https://waygerz.com/c/{row.code}" if row else "https://waygerz.com/bets/all"
 
 
+def _wager_path(wager):
+    """The in-app deep_link (relative form of _wager_link): /c/<code>, so tapping
+    a notification opens the scored bet view with Accept/Counter/Reject. Falls
+    back to the bets list if the code is somehow missing."""
+    row = WagerInviteCode.query.filter_by(wager_id=wager.id).first()
+    return f"/c/{row.code}" if row else "/bets/all"
+
+
 def _opponent_phrase(names):
     """"Johnny" / "Johnny and Richard" / "Johnny, Richard and 2 others"."""
     n = len(names)
@@ -714,7 +722,9 @@ def counter(wager, user_id, amount_cents, line=None, treat=None):
         },
         actor_uid=user_id,
         ref_id=wager.id,
-        deep_link=f"/leagues/{wager.league_id}/play",
+        # Point at the bet view (like wager_proposed), not the league play page —
+        # a counter is a "your turn" state; the recipient can Accept/Counter/Reject.
+        deep_link=_wager_path(wager),
         # Round-varying so each counter notifies (dedup_key is a permanent unique
         # constraint, not a time window).
         dedup_key=f"wager_countered:{wager.id}:r{n}",
