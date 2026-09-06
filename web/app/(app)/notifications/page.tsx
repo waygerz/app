@@ -15,9 +15,10 @@ import { notificationsApi, type FeedNotification } from '@/lib/notifications';
 import { actOnCode } from '@/lib/invites';
 import { friendsApi } from '@/lib/friends';
 import { leaguesApi } from '@/lib/leagues';
-import { wagersApi } from '@/lib/wagers';
+import { wagersApi, type Wager } from '@/lib/wagers';
 import { UserAvatar } from '@/components/user-avatar';
 import { LeagueAvatar } from '@/components/league-avatar';
+import { CounterButton } from '@/components/counter-dialog';
 import { useAuth } from '@/auth/AuthContext';
 import { cn } from '@/lib/utils';
 
@@ -86,6 +87,7 @@ function timeAgo(iso: string | null) {
 
 export default function NotificationsPage() {
   const { user } = useAuth();
+  const me = user?.id ?? '';
   const qc = useQueryClient();
   const router = useRouter();
   // Notifications resolved inline this session → show a terse "done" line.
@@ -116,6 +118,13 @@ export default function NotificationsPage() {
   const wagerStatusById = useMemo(() => {
     const m = new Map<string, string>();
     for (const w of wagersQ.data ?? []) m.set(w.id, w.status);
+    return m;
+  }, [wagersQ.data]);
+  // Full wager objects, so a bet notification can open the same Counter dialog
+  // used on the bets page / share link (needs the sides, line, stake, treat).
+  const wagerById = useMemo(() => {
+    const m = new Map<string, Wager>();
+    for (const w of wagersQ.data ?? []) m.set(w.id, w);
     return m;
   }, [wagersQ.data]);
 
@@ -228,6 +237,7 @@ export default function NotificationsPage() {
                 // Bet challenge that's no longer open — accepted, declined,
                 // settled, cancelled… Resolve it to a truthful outcome label.
                 const betStatus = meta.action === 'bet' ? wagerStatusById.get(n.ref_id ?? '') : undefined;
+                const betWager = meta.action === 'bet' ? wagerById.get(n.ref_id ?? '') : undefined;
                 const betOutcome = betResolved(betStatus);
                 const betStale = betOutcome !== null;
                 const showActions = !!meta.action && !n.read && !done && !betStale;
@@ -303,6 +313,21 @@ export default function NotificationsPage() {
                           <Button size="sm" disabled={busy} onClick={() => act.mutate({ n, yes: true })}>
                             {meta.action === 'bet' ? 'Accept' : meta.action === 'league' ? 'Join' : 'Accept'}
                           </Button>
+                          {/* Counter opens the full dialog in place (needs stake/line/
+                              treat inputs); Accept/Reject stay one-tap. */}
+                          {meta.action === 'bet' && betWager && (
+                            <CounterButton
+                              wager={betWager}
+                              me={me}
+                              className="w-auto"
+                              onDone={() => {
+                                setResolved((r) => ({ ...r, [n.id]: 'Countered' }));
+                                if (!n.read) markRead.mutate([n.id]);
+                                qc.invalidateQueries({ queryKey: ['wagers-all'] });
+                                qc.invalidateQueries({ queryKey: ['wagers'] });
+                              }}
+                            />
+                          )}
                           <Button size="sm" variant="outline" disabled={busy} onClick={() => act.mutate({ n, yes: false })}>
                             {meta.action === 'bet' ? 'Reject' : meta.action === 'league' ? 'Dismiss' : 'Decline'}
                           </Button>
