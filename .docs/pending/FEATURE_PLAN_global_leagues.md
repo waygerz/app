@@ -29,6 +29,13 @@ Add two columns (new migration):
   new signups are auto-joined to every `is_system && auto_enroll && active`
   league.
 
+Also add to `api/leagues/app/models/member.py` (**same migration**):
+- `group_id` UUID nullable, indexed — the display **pod** a member is shown in
+  (see "Leaderboard, pods & the overall winner" below). Nullable so it costs
+  nothing until pods are switched on; `null` = one flat global list. It is a
+  **display grouping only** — picks, scoring, and the global rank ignore it
+  entirely. Put it in now so turning on pods later is zero data-migration.
+
 **System actor:** reserve a constant `SYSTEM_USER_ID` (fixed UUID) used as
 `commissioner_id` for system leagues. This keeps `commissioner_id` non-null and
 means **every existing ownership guard denies all normal users automatically**
@@ -132,8 +139,92 @@ Even with auto-join, users need to find/join the *non-default* global leagues an
   leagues with Join / "Joined ✓". A dedicated `/leagues/browse` page is overkill
   for v1's handful of globals.
 
+## Leaderboard, pods & the overall winner
+
+The system league is **one contest**: every user is auto-joined, picks the same
+weekly slate, and holds **one global rank** in a single season standing. Pods and
+the winner rules below are all *views and settlement over that one flat record* —
+nothing here forks the pick or membership data (picks stay one row per
+`(user, period, event)`, `uq_pick`).
+
+### The scale gap (must fix — the one real hole in this plan)
+`standings()` (`service_leagues.py:1188`) loads **every** Pick row for the league
+into memory (`:1220`) and tallies per member in Python — no aggregation, no
+pagination. Fine for a 20-person league; a bomb for an everyone-league
+(all users × ~16 picks/week × 18 weeks). Before this becomes auto-enroll:
+- Rewrite the tally as a **SQL aggregate** — `GROUP BY user_id`,
+  `count(*) FILTER (WHERE correct)` — instead of pulling all rows into Python.
+- **Materialize a per-member standing** (win/loss + global rank) updated at grade
+  time in the tick, so reads are cheap and the global rank is precomputed.
+- Never render the whole list — every surface is a **scoped slice** (below).
+
+### Display pods
+At 100k users a single flat leaderboard is a dead surface (nobody engages with
+"rank 43,921"). So the leaderboard is rendered as **pods** — a human-sized window
+into the one standing:
+- **A pod is ~100 real users** sharing a `group_id`. Same slate, same grading,
+  same global rank — the only difference between pods is *who's in them*. No pod
+  is easier or harder.
+- **Assignment:** at auto-enroll, drop the user into the current open pod; fill to
+  ~100, then open the next. Random fill, no skill-banding in v1.
+- **Sticky for the season.** Pods never reshuffle mid-season (users track their
+  standing against those 100 for 18 weeks). New NFL season → fresh pods.
+- **Identity:** anonymous numbered ("Pod 402") for v1; friendly generated names
+  ("Sunday Gamblers") are a later nicety.
+
+### The four leaderboard surfaces (all from the one materialized standing)
+1. **Your pod** — the home screen: your ~100, ranked by season-cumulative correct
+   (plus a weekly view). Bounded ~100-row query, so the scale hotspot never bites
+   the primary surface.
+2. **Friends** — your friends ranked, cutting *across* pods (a filter, free).
+3. **Global Top 100** — site-wide leaders; a `LIMIT 100` slice everyone shares.
+4. **Your neighborhood** — your global rank ±10 ("#12,403 site-wide"); a small
+   window slice so the global number stays meaningful without rendering 100k rows.
+
+Every user thus carries two numbers at once — **"#4 in my pod" and "#12,403
+site-wide"** — both from the same computation. A pod is **not** a separate league,
+prize pool, or bracket; it's display only.
+
+### Determining the overall winner
+The champion is **#1 in the global season-cumulative standing** — pods are
+irrelevant to the crown (they may each show a cosmetic "pod champ," but the title
+is singular and site-wide). Crown **two** things to keep 100k people engaged:
+- **Weekly winner** each week — already computed by `_period_leaderboard`
+  (`:1263`), tie-broken by the MNF-total prediction (`tiebreaker_total`).
+- **Season champion** — top of the cumulative standing at season end.
+
+**Metric:** total correct picks across all 18 weeks (existing `standings()` sum of
+`correct`, voided excluded). **Tiebreaker cascade** (needed — 100k players pile up
+on identical correct counts):
+1. Most season correct picks.
+2. **Season tiebreaker accuracy** — cumulative `|predicted MNF total − actual|`
+   across weeks, lowest total error (accumulate the per-week `tiebreaker_total`).
+3. Best single week (highest weekly correct count).
+4. A **designated final-tiebreaker event** — predict the exact combined total of
+   the season's last game / championship; closeness breaks whatever remains.
+5. Still tied → **co-champions** (play-money bragging rights; don't invent a coin
+   flip).
+
+**⚠️ Fairness fix — unpicked = a loss.** Today the secondary sort is `-wins,
+losses` (`standings()`), which is exploitable: a cherry-picker with the same
+correct count but fewer games picked has fewer losses and wins the tiebreak over
+someone who picked the full slate. For the system-wide contest, **count unpicked
+games as incorrect** so everyone races the identical ~272-game denominator and
+"most correct" is ungameable (standard public-pool rule). *(DECISION TO CONFIRM —
+this is the recommended rule; the alternative is to keep partial picks but drop
+`losses` as a tiebreaker and rely on the MNF cascade.)*
+
+**⚠️ Settlement / determinism.** Don't crown at the final whistle — the tick's
+`reconcile_recent_finals` self-heals late score corrections for **3 days**
+(`service_leagues.py:495`). After the last period flips `final`, **wait out the
+reconcile window, then compute final standings once and freeze/materialize them**
+(a late stat correction must not silently dethrone a crowned champion) and flip the
+league to `status=completed`. That frozen standing is the official result.
+
 ## Mobile notes
 - Global-league cards match the existing My-Leagues card; one-tap Join, ≥44px.
+- Pod leaderboard is the home surface; Friends / Global Top 100 / your-neighborhood
+  are tabs or a segmented control over it — all ≥44px, no horizontal scroll.
 - Auto-joined default league simply appears in My Leagues on first load — no
   empty-state dead end for brand-new users (nice onboarding win).
 
@@ -142,18 +233,24 @@ Even with auto-join, users need to find/join the *non-default* global leagues an
   (`/v1/gameplay/leagues`); the internal enroll route stays off the gateway
   (compose / ALB internal only, `X-Internal-Token`). **No gateway `default.conf`
   change**, `web/lib/api-paths.ts` untouched.
-- One migration: `leagues` adds `is_system`, `auto_enroll`. Applied in prod via
-  the pinned-`:sha` one-off `run-task` procedure.
+- One migration: `leagues` adds `is_system`, `auto_enroll` (on `leagues`) and
+  `group_id` (on `league_members`, nullable). Applied in prod via the
+  pinned-`:sha` one-off `run-task` procedure.
 - No Next.js build on the 2 GB host; use lint + memory-bounded `tsc`.
 - Commit each edit; **deploy only when told**. Migrations + CLI seeds are
   explicit, gated actions.
 
 ## Build sequence
-1. **Backend** (leagues: 2 columns + migration, `SYSTEM_USER_ID`,
-   `create-system-league` CLI, `GET /discover`, open-join, `enroll-defaults`
-   internal + auth signup call + taskdef URL).
-2. **Web** (home "Global leagues" section + Join).
-3. **Seed + backfill** (run CLI to create NFL Pick'em Global 2026 auto-enroll;
+1. **Backend** (leagues: 3 columns + migration [`is_system`, `auto_enroll`,
+   `group_id`], `SYSTEM_USER_ID`, `create-system-league` CLI, `GET /discover`,
+   open-join, `enroll-defaults` internal + auth signup call + taskdef URL).
+2. **Standings scale + winner** (leagues: SQL-aggregate/materialized standings,
+   pod `group_id` assignment at enroll, scoped leaderboard endpoints [pod / friends
+   / global-top-N / neighborhood], unpicked-as-loss scoring, season freeze +
+   `status=completed` at reconcile-window close).
+3. **Web** (home "Global leagues" section + Join; pod leaderboard as the home
+   surface with Friends / Global Top 100 / neighborhood slices).
+4. **Seed + backfill** (run CLI to create NFL Pick'em Global 2026 auto-enroll;
    backfill existing users) — a deploy-time action, on your word.
 
 ## Audit (verified against code, 2026-08-14)
