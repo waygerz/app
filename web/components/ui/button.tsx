@@ -35,11 +35,15 @@ const buttonVariants = cva(
         solid: '',
         dashed: '',
       },
+      // Mobile standard: every interactive button is at least 44px tall on
+      // mobile (min-h-11) for a comfortable touch target, reverting to the
+      // compact design height at sm+ (sm:min-h-0). Icon buttons go 44px square.
+      // Link-mode buttons opt out below (they're inline text).
       size: {
-        lg: 'h-10 rounded-md px-4 text-sm gap-1.5 [&_svg:not([class*=size-])]:size-4',
-        md: 'h-8.5 rounded-md px-3 gap-1.5 text-[0.8125rem] leading-(--text-sm--line-height) [&_svg:not([class*=size-])]:size-4',
-        sm: 'h-7 rounded-md px-2.5 gap-1.25 text-xs [&_svg:not([class*=size-])]:size-3.5',
-        icon: 'size-8.5 rounded-md [&_svg:not([class*=size-])]:size-4 shrink-0',
+        lg: 'h-10 min-h-11 sm:min-h-0 rounded-md px-4 text-sm gap-1.5 [&_svg:not([class*=size-])]:size-4',
+        md: 'h-8.5 min-h-11 sm:min-h-0 rounded-md px-3 gap-1.5 text-[0.8125rem] leading-(--text-sm--line-height) [&_svg:not([class*=size-])]:size-4',
+        sm: 'h-7 min-h-11 sm:min-h-0 rounded-md px-2.5 gap-1.25 text-xs [&_svg:not([class*=size-])]:size-3.5',
+        icon: 'size-11 sm:size-8.5 rounded-md [&_svg:not([class*=size-])]:size-4 shrink-0',
       },
       autoHeight: {
         true: '',
@@ -52,7 +56,7 @@ const buttonVariants = cva(
       mode: {
         default: 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         icon: 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 shrink-0',
-        link: 'text-primary h-auto p-0 bg-transparent rounded-none hover:bg-transparent data-[state=open]:bg-transparent',
+        link: 'text-primary h-auto min-h-0 p-0 bg-transparent rounded-none hover:bg-transparent data-[state=open]:bg-transparent',
         input: `
             justify-start font-normal hover:bg-background [&_svg]:transition-colors [&_svg]:hover:text-foreground data-[state=open]:bg-background 
             focus-visible:border-ring focus-visible:outline-hidden focus-visible:ring-[3px] focus-visible:ring-ring/30 
@@ -106,17 +110,17 @@ const buttonVariants = cva(
       {
         size: 'md',
         autoHeight: true,
-        className: 'h-auto min-h-8.5',
+        className: 'h-auto min-h-11 sm:min-h-8.5',
       },
       {
         size: 'sm',
         autoHeight: true,
-        className: 'h-auto min-h-7',
+        className: 'h-auto min-h-11 sm:min-h-7',
       },
       {
         size: 'lg',
         autoHeight: true,
-        className: 'h-auto min-h-10',
+        className: 'h-auto min-h-11 sm:min-h-10',
       },
 
       // Shadow support
@@ -304,21 +308,21 @@ const buttonVariants = cva(
       {
         size: 'sm',
         mode: 'icon',
-        className: 'w-7 h-7 p-0 [[&_svg:not([class*=size-])]:size-3.5',
+        className: 'w-11 h-11 sm:w-7 sm:h-7 p-0 [[&_svg:not([class*=size-])]:size-3.5',
       },
       {
         size: 'md',
         mode: 'icon',
-        className: 'w-8.5 h-8.5 p-0 [&_svg:not([class*=size-])]:size-4',
+        className: 'w-11 h-11 sm:w-8.5 sm:h-8.5 p-0 [&_svg:not([class*=size-])]:size-4',
       },
       {
         size: 'icon',
-        className: 'w-8.5 h-8.5 p-0 [&_svg:not([class*=size-])]:size-4',
+        className: 'w-11 h-11 sm:w-8.5 sm:h-8.5 p-0 [&_svg:not([class*=size-])]:size-4',
       },
       {
         size: 'lg',
         mode: 'icon',
-        className: 'w-10 h-10 p-0 [&_svg:not([class*=size-])]:size-4',
+        className: 'w-11 h-11 sm:w-10 sm:h-10 p-0 [&_svg:not([class*=size-])]:size-4',
       },
 
       // Input mode
