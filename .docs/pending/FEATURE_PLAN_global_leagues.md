@@ -4,7 +4,8 @@ Net-new feature, planned against the current code (Aug 2026). Mobile-first. No
 code written yet — this is the design to react to before build.
 
 **Decisions locked:** free **weekly pick'em only**, **auto-join at signup**,
-**unpicked games count as a loss** (full-slate denominator; see Leaderboard).
+**season ranking by correct count with an MNF-accuracy tiebreak, no `losses`
+key** (ungameable and needs no slate data; see Leaderboard).
 
 Companion plan: `FEATURE_PLAN_favorite_teams.md`.
 
@@ -46,7 +47,7 @@ change. Members can still `leave` (opt out); no real user is commissioner, so th
 
 **⚠️ Two traps the audit surfaced with this approach:**
 1. **Phantom member.** `create_league` auto-inserts the creator as a
-   `LeagueMember(role=commissioner, active)` (`service_leagues.py:800`). If the
+   `LeagueMember(role=commissioner, active)` (`service_leagues.py:812`). If the
    CLI reuses `create_league` as-is, `SYSTEM_USER_ID` becomes a fake member —
    it inflates the member count and renders as a `User xxxxxxxx` fallback (auth's
    `/internal/users` returns nothing for it; degrades gracefully, no crash, but
@@ -54,7 +55,8 @@ change. Members can still `leave` (opt out); no real user is commissioner, so th
    `SYSTEM_USER_ID` member row.
 2. **Activation vs membership.** But `activate_league` requires **both**
    `commissioner_id == me` **and** `_membership(league_id, me)`
-   (`service_leagues.py:1017-1023`). Skip the member row and the guarded
+   (`service_leagues.py:1029`; membership guard `:1032`, commissioner `:1034`).
+   Skip the member row and the guarded
    `activate_league(SYSTEM_USER_ID)` now 404s on the membership check. **Fix:**
    don't drive system-league activation through the guarded HTTP-facing function
    at all — extract the activation core (status→active + `_prebuild_periods`) into
@@ -83,11 +85,13 @@ denying non-system callers.
   ingestor (`.../schedule/by-catalog/<id>/weeks`). If the season isn't ingested
   yet, activation **degrades to a single synthetic "Week 1"** period (no error) —
   and the tick does **not** re-pull: `rollover_periods` just synthesizes generic
-  `Week N+1` labels forever; only the manual `regenerate_periods` path re-reads
-  the ingestor. **So create/activate the global league only AFTER the season's
-  schedule is ingested, or run `regenerate_periods` once it lands.** Given
-  2026-08-14 is NFL preseason, verify the 2026 NFL schedule is ingested before
-  seeding, or plan the regenerate.
+  `Week N+1` labels forever (`:596-600`); only the manual `regenerate_periods`
+  path re-reads the ingestor (`:647`). **So create/activate the global league
+  only AFTER the season's schedule is ingested, or run `regenerate_periods` once
+  it lands.** As of 2026-09-08 the 2026 NFL regular season is already underway, so
+  the schedule should be ingestable now — **verify the weeks are present (via
+  `ingestor_weeks`) before seeding; if the league was seeded earlier and only has
+  the synthetic Week 1, run `regenerate_periods` once.**
 - **Season rollover** (NFL season ends → need next year's): a manual re-run of
   the CLI per season for v1. Noted as a known follow-up, not automated.
 - **Timing note:** the natural v1 default auto-enroll league is **NFL Pick'em
@@ -98,28 +102,28 @@ denying non-system callers.
   `{ user_id }`; joins that user (reusing the existing role-agnostic `_join()`)
   into every `is_system && auto_enroll && active` league. Idempotent (the
   `(league_id, user_id)` unique constraint + upsert).
-- **`auth` calls it** from **`otp_complete()` in `service_auth.py`, right after
-  the existing best-effort notifications opt-in block (after line ~253)** — this
-  is the *only* place the real signup flow creates a `User` (OTP *verify* does
-  not create; returning-user login never reaches here), so the hook fires exactly
-  once per new account. Copy the existing internal-call convention:
+- **`auth` calls it** from **`otp_complete()` in `service_auth.py` (`:227`),
+  right after the `User` is created + the best-effort notifications opt-in block
+  (User construction is `:252-258`)** — this is the *only* place the real signup
+  flow creates a `User` (OTP *verify* does not create; the returning-user branch
+  at `:249` never reaches here), so the hook fires exactly once per new account.
+  Copy the existing internal-call convention (`service_notifications._sync_prefs`,
+  `service_notifications.py:17-27`):
   `requests.post(f"{INTERNAL_LEAGUES_URL}/internal/enroll-defaults", json={...},
-  headers={"X-Internal-Token": Config.INTERNAL_TOKEN}, timeout=10)` in try/except
-  (same shape as `service_notifications._sync_prefs`). Add `INTERNAL_LEAGUES_URL`
-  to `config.py` alongside `INTERNAL_NOTIFICATIONS_URL` — **must be the
-  `https://waygerz.com` ALB form in prod**, not the compose default, or the call
-  silently no-ops.
+  headers={"X-Internal-Token": Config.INTERNAL_TOKEN}, timeout=10)` in try/except.
+  **`INTERNAL_LEAGUES_URL` already exists** in auth's `config.py:86` (compose
+  default) — the only real task is ensuring the **prod taskdef sets the
+  `https://waygerz.com` ALB form**, not the compose default, or the call silently
+  no-ops.
 - **⚠️ `flask create-user` bypasses `otp_complete`** — it constructs the `User`
-  directly and shares no creation helper. CLI-made accounts won't auto-enroll
-  unless we add a second call site there. **OPEN QUESTION:** cover CLI accounts
-  (second call site) or accept that only OTP signups auto-enroll? (CLI is a dev/
-  admin path, so probably fine to skip — decide.)
+  directly (`auth/app/__init__.py:35-39`, `User(...)` at `:54`) and shares no
+  creation helper, so CLI-made accounts won't auto-enroll. **RECOMMENDATION:
+  skip** — CLI is a dev/admin path; not worth a second call site (overridable).
 - **Existing users backfill:** one-off **`flask backfill-enrollments`** in
   leagues that enrolls a set of user ids into auto-enroll leagues. (Leagues can't
-  list all users — not its schema — so pass ids in, or add a throwaway auth
-  `/internal/all-user-ids` for the backfill. Small userbase → trivial.) Run once
-  via the pinned-`:sha` one-off `run-task`. **OPEN QUESTION:** throwaway
-  `/internal/all-user-ids` vs hand-listed ids.
+  list all users — not its schema.) **RECOMMENDATION:** add a throwaway auth
+  `/internal/all-user-ids` (reusable, trivial) rather than hand-listing ids. Run
+  once via the pinned-`:sha` one-off `run-task`.
 - **Robustness gap (acknowledged):** if leagues is down during a signup, that
   user misses auto-join until a re-run of the backfill. Acceptable at current
   scale; a tick-time reconcile is the future fix.
@@ -154,9 +158,12 @@ into memory (`:1220`) and tallies per member in Python — no aggregation, no
 pagination. Fine for a 20-person league; a bomb for an everyone-league
 (all users × ~16 picks/week × 18 weeks). Before this becomes auto-enroll:
 - Rewrite the tally as a **SQL aggregate** — `GROUP BY user_id`,
-  `count(*) FILTER (WHERE correct)` — instead of pulling all rows into Python.
-- **Materialize a per-member standing** (win/loss + global rank) updated at grade
-  time in the tick, so reads are cheap and the global rank is precomputed.
+  `count(*) FILTER (WHERE correct)` over `league_picks`. Because ranking is by
+  correct count (not unpicked-as-loss), this aggregate over existing picks **is**
+  the standing — no `members × slate` cross-product needed.
+- **Materialize a per-member standing** (correct count, cumulative MNF-accuracy
+  for the tiebreak, and global rank) updated at grade time in the tick, so reads
+  are cheap and the global rank is precomputed.
 - Never render the whole list — every surface is a **scoped slice** (below).
 
 ### Leaderboard surfaces — a paginated global board + Friends
@@ -214,16 +221,24 @@ on identical correct counts):
 5. Still tied → **co-champions** (play-money bragging rights; don't invent a coin
    flip).
 
-**⚠️ Fairness fix — unpicked = a loss.** Today the secondary sort is `-wins,
-losses` (`standings()`), which is exploitable: a cherry-picker with the same
-correct count but fewer games picked has fewer losses and wins the tiebreak over
-someone who picked the full slate. For the system-wide contest, **count unpicked
-games as incorrect** so everyone races the identical ~272-game denominator and
-"most correct" is ungameable (standard public-pool rule). **DECIDED 2026-09-08:
-unpicked games count as a loss.** Grading must therefore score every game in a
-period for every member — a missing Pick row is a loss, not a no-op — so the
-denominator is the full slate for everyone (voided/no-contest games still
-excluded for all).
+**Fairness — rank by correct count, drop the `losses` key.** Ranking by raw
+correct count is already ungameable: every game you pick has non-negative
+expected value, so the optimal play is to pick them all — sitting games out only
+costs you wins, it never helps. The one exploitable spot was the *secondary* sort
+in `standings()` (`(-wins, losses, name)`, `:1247`): a cherry-picker with the
+same correct count but fewer picks has fewer losses and won the tiebreak over
+someone who played the full slate. **DECIDED 2026-09-08: drop `losses` as a
+tiebreaker; rank by correct count and break ties with the MNF-accuracy cascade
+below.**
+
+Crucially this needs **no slate data** — leagues does not store the per-period
+game list (audit 2026-09-08: no event table; `standings()`/`_period_leaderboard`
+derive their game set from the picks that exist), so "unpicked = a loss" would
+have required pulling+persisting the full slate from the ingestor and scoring
+`members × slate` on both boards. The correct-count rule avoids all of that, and
+`_period_leaderboard` **already** ranks `(-correct, tiebreaker_diff, name)` with
+no `losses` key (`:1330-1334`) — so the **weekly board needs no change**; only
+season `standings()`'s sort changes.
 
 **⚠️ Settlement / determinism.** Don't crown at the final whistle — the tick's
 `reconcile_recent_finals` self-heals late score corrections for **3 days**
@@ -258,7 +273,8 @@ league to `status=completed`. That frozen standing is the official result.
    open-join, `enroll-defaults` internal + auth signup call + taskdef URL).
 2. **Standings scale + winner** (leagues: SQL-aggregate/materialized standings,
    paginated leaderboard endpoints [global Top N / your-rank neighborhood + jump-to-me
-   / paged browse / friends], unpicked-as-loss scoring, season freeze +
+   / paged browse / friends], correct-count ranking (drop the `losses` sort key
+   in `standings()`; add cumulative MNF-accuracy tiebreak), season freeze +
    `status=completed` at reconcile-window close). `group_id` ships in the migration
    but is unused (deferred pods).
 3. **Web** (home "Global leagues" section + Join; global board as the home surface
@@ -266,28 +282,44 @@ league to `status=completed`. That frozen standing is the official result.
 4. **Seed + backfill** (run CLI to create NFL Pick'em Global 2026 auto-enroll;
    backfill existing users) — a deploy-time action, on your word.
 
-## Audit (verified against code, 2026-08-14)
-All claims checked against the real `leagues` + `auth` services. Verdicts:
-- **Route collision** — VERIFIED. `POST /<uuid:league_id>/join` already =
-  `accept_invite` (`route_leagues.py:93`). → open-join renamed to `/join-open`.
+## Audit (re-verified against code, 2026-09-08)
+All claims re-checked against the current `leagues` + `auth` services (line
+numbers had drifted since the 2026-08-14 pass). Verdicts + current locations:
+- **Route collision** — VERIFIED. `POST /<uuid:league_id>/join` = `accept_invite`
+  (`route_leagues.py:93-95`). → open-join uses `/join-open`.
 - **Phantom member** — VERIFIED. `create_league` inserts the creator as a
-  commissioner member (`service_leagues.py:800`); a synthetic id renders as a
-  `User xxxxxxxx` fallback via `/internal/users`. → system path skips the member
-  row.
-- **Activate guard** — VERIFIED. `activate_league` needs `commissioner_id == me`
-  **and** membership (`:1017-1023`). → extract an unguarded activation core for
-  the CLI (resolves the conflict with skipping the member row).
-- **`_join` for pickem** — VERIFIED safe + idempotent. `grant_starting_balance`
-  is a no-op for non-money leagues (`:375`); unique `(league_id, user_id)` makes
-  re-join idempotent.
-- **Period build** — VERIFIED depends on ingestor; degrades to one synthetic
-  period, and the tick never re-pulls the schedule (only `regenerate_periods`
-  does). → seed after the schedule is ingested, or regenerate.
-- **Idempotency** — VERIFIED there is none; duplicate leagues are possible. → CLI
-  must do its own existence check.
-- **Signup hook** — VERIFIED the sole creation point is `otp_complete()`
-  (`service_auth.py:234-243`); `flask create-user` bypasses it. Internal-call
-  convention (`requests` + `X-Internal-Token` + `INTERNAL_*_URL`) confirmed.
+  commissioner member (`service_leagues.py:812`; renders as `User xxxxxxxx` via
+  `/internal/users`). → system path skips the member row.
+- **Activate guard** — VERIFIED. `activate_league` (`:1029`) needs
+  `commissioner_id == me` (`:1034`) **and** membership (`:1032`). → extract an
+  unguarded activation core for the CLI.
+- **`_join` for pickem** — VERIFIED safe + idempotent. `_join` `:738` reactivates
+  a left/removed row; `grant_starting_balance` no-op guard `:388` (gated on
+  `is_money`; pickem isn't in `MONEY_TYPES`); unique `(league_id, user_id)`
+  (`member.py:20-22`) makes re-join idempotent.
+- **Period build** — VERIFIED. `_prebuild_periods` `:298` (ingestor fetch `:311`);
+  synthetic Week-1 fallback in `activate_league` `:1046-1068`; `rollover_periods`
+  `:567` never re-pulls (`:596-600`); only `regenerate_periods` `:636` does
+  (`:647`). → seed after ingest, or regenerate.
+- **Idempotency** — VERIFIED there is none (no unique constraint on `League`;
+  `create_league` `:761` inserts unconditionally). → CLI must do its own check.
+- **Signup hook** — VERIFIED. Sole real-signup `User` creation is `otp_complete()`
+  `:227` (User at `:252-258`; returning-user branch `:249`). `flask create-user`
+  (`auth/app/__init__.py:35`, User at `:54`) bypasses it. `INTERNAL_LEAGUES_URL`
+  already in `config.py:86`; convention `service_notifications._sync_prefs:17-27`.
+- **Standings scale** — VERIFIED. `standings()` `:1188` full-scans every Pick
+  (`:1220`), tallies in Python, sorts `(-wins, losses, name)` (`:1247`). → SQL
+  aggregate + materialized per-member standing.
+- **Weekly board already correct-count-ranked** — VERIFIED. `_period_leaderboard`
+  `:1263` sorts `(-correct, tiebreaker_diff, name)` (`:1330-1334`), no `losses`
+  key. → season `standings()` should match it (drop `losses`).
+- **No slate in leagues (kills "unpicked = a loss")** — VERIFIED. No event/game
+  table; `_prebuild_periods` stores only week label/start/end; grading
+  (`grade_period` `:427`) and both boards derive games from existing picks only.
+  → rank by correct count instead (needs no slate); see Leaderboard fairness note.
+- **`reconcile_recent_finals`** — VERIFIED `:495`, `window_days=3` (`:508`),
+  called from `tick()` (`service_internal.py:118`). → freeze standings after the
+  3-day window.
 
 ## Open follow-ups (noted, not v1)
 - Season-rollover automation for global leagues.
