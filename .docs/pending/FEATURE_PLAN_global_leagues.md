@@ -31,11 +31,11 @@ Add two columns (new migration):
   league.
 
 Also add to `api/leagues/app/models/member.py` (**same migration**):
-- `group_id` UUID nullable, indexed — the display **pod** a member is shown in
-  (see "Leaderboard, pods & the overall winner" below). Nullable so it costs
-  nothing until pods are switched on; `null` = one flat global list. It is a
-  **display grouping only** — picks, scoring, and the global rank ignore it
-  entirely. Put it in now so turning on pods later is zero data-migration.
+- `group_id` UUID nullable, indexed — a **deferred hook** for display pods (see
+  "Leaderboard → Deferred: display pods"). **Not used in v1** — the leaderboard
+  is a paginated global board + Friends, so this stays `null`; picks, scoring, and
+  the global rank ignore it entirely. It ships in the launch migration purely so
+  pods can be switched on later with zero pick-data migration.
 
 **System actor:** reserve a constant `SYSTEM_USER_ID` (fixed UUID) used as
 `commissioner_id` for system leagues. This keeps `commissioner_id` non-null and
@@ -140,12 +140,12 @@ Even with auto-join, users need to find/join the *non-default* global leagues an
   leagues with Join / "Joined ✓". A dedicated `/leagues/browse` page is overkill
   for v1's handful of globals.
 
-## Leaderboard, pods & the overall winner
+## Leaderboard & the overall winner
 
 The system league is **one contest**: every user is auto-joined, picks the same
-weekly slate, and holds **one global rank** in a single season standing. Pods and
-the winner rules below are all *views and settlement over that one flat record* —
-nothing here forks the pick or membership data (picks stay one row per
+weekly slate, and holds **one global rank** in a single season standing. The
+surfaces and winner rules below are all *views and settlement over that one flat
+record* — nothing here forks the pick or membership data (picks stay one row per
 `(user, period, event)`, `uq_pick`).
 
 ### The scale gap (must fix — the one real hole in this plan)
@@ -159,37 +159,45 @@ pagination. Fine for a 20-person league; a bomb for an everyone-league
   time in the tick, so reads are cheap and the global rank is precomputed.
 - Never render the whole list — every surface is a **scoped slice** (below).
 
-### Display pods
-At 100k users a single flat leaderboard is a dead surface (nobody engages with
-"rank 43,921"). So the leaderboard is rendered as **pods** — a human-sized window
-into the one standing:
-- **A pod is ~100 real users** sharing a `group_id`. Same slate, same grading,
-  same global rank — the only difference between pods is *who's in them*. No pod
-  is easier or harder.
-- **Assignment:** at auto-enroll, drop the user into the current open pod; fill to
-  ~100, then open the next. Random fill, no skill-banding in v1.
-- **Sticky for the season.** Pods never reshuffle mid-season (users track their
-  standing against those 100 for 18 weeks). New NFL season → fresh pods.
-- **Identity:** anonymous numbered ("Pod 402") for v1; friendly generated names
-  ("Sunday Gamblers") are a later nicety.
+### Leaderboard surfaces — a paginated global board + Friends
+The leaderboard is **one global standing, windowed** — you never render all 100k
+rows, you slice into them. All four surfaces come straight off the materialized
+per-member standing (so each is a cheap `LIMIT`/window query), in both a **weekly**
+and a **season-cumulative** cadence:
+1. **Global Top 100** — the site-wide leaders; a `LIMIT 100` slice everyone shares.
+2. **Your rank + neighborhood** — your global rank with the handful of players
+   above/below you (a window centered on you), plus a **jump-to-me** control. Keeps
+   "#12,403 site-wide" meaningful without a giant list.
+3. **Browse** — ordinary paging (cursor/offset) down the full standing for anyone
+   who wants to scroll past the top.
+4. **Friends** — your friends ranked against each other (a filter over the same
+   standing). This is the real **small-pond** competition — a meaningful weekly race
+   against people you know, which matters far more for engagement than placement in
+   a list of 100k strangers.
 
-### The four leaderboard surfaces (all from the one materialized standing)
-1. **Your pod** — the home screen: your ~100, ranked by season-cumulative correct
-   (plus a weekly view). Bounded ~100-row query, so the scale hotspot never bites
-   the primary surface.
-2. **Friends** — your friends ranked, cutting *across* pods (a filter, free).
-3. **Global Top 100** — site-wide leaders; a `LIMIT 100` slice everyone shares.
-4. **Your neighborhood** — your global rank ±10 ("#12,403 site-wide"); a small
-   window slice so the global number stays meaningful without rendering 100k rows.
+Pagination + Friends covers both problems a giant board has: **rendering** (windowed
+slices, never the whole list) and **motivation** (Friends gives everyone a race they
+can actually win). No cohort/grouping machinery is needed for v1.
 
-Every user thus carries two numbers at once — **"#4 in my pod" and "#12,403
-site-wide"** — both from the same computation. A pod is **not** a separate league,
-prize pool, or bracket; it's display only.
+### Deferred: display pods (only if a flat board proves demotivating)
+A *pod* would be a ~100-user display cohort (the nullable `group_id` on
+`league_members`, already in the launch migration) giving each user a "1st of 100"
+race among strangers. **We are not building pods in v1:** pagination handles
+rendering, and Friends already provides the motivating small-group competition, so a
+random stranger-cohort adds real complexity (assignment, concurrency, naming, and
+pod-shopping rules) for a weaker version of what Friends does.
+
+`group_id` stays in the schema as the **cheap escape hatch**. If engagement data
+later shows the flat board is demotivating *and* Friends isn't enough, turning pods
+on is **zero pick-data migration**: populate `group_id` (fill the open pod to ~100
+then open the next; **sticky per season**), and add a per-pod leaderboard scope.
+Rules if it ever ships: **no user-facing pod switching** (pod-shopping), leave→rejoin
+keeps the same pod, new season = fresh pods; the overall winner stays the global #1
+regardless (a pod would only ever show a cosmetic "pod champ").
 
 ### Determining the overall winner
-The champion is **#1 in the global season-cumulative standing** — pods are
-irrelevant to the crown (they may each show a cosmetic "pod champ," but the title
-is singular and site-wide). Crown **two** things to keep 100k people engaged:
+The champion is **#1 in the global season-cumulative standing** — a single,
+site-wide title. Crown **two** things to keep 100k people engaged:
 - **Weekly winner** each week — already computed by `_period_leaderboard`
   (`:1263`), tie-broken by the MNF-total prediction (`tiebreaker_total`).
 - **Season champion** — top of the cumulative standing at season end.
@@ -226,8 +234,9 @@ league to `status=completed`. That frozen standing is the official result.
 
 ## Mobile notes
 - Global-league cards match the existing My-Leagues card; one-tap Join, ≥44px.
-- Pod leaderboard is the home surface; Friends / Global Top 100 / your-neighborhood
-  are tabs or a segmented control over it — all ≥44px, no horizontal scroll.
+- The global board is the home surface; Global Top 100 / Your rank / Friends are
+  tabs or a segmented control, with jump-to-me + paged scroll for browsing — all
+  ≥44px, no horizontal scroll.
 - Auto-joined default league simply appears in My Leagues on first load — no
   empty-state dead end for brand-new users (nice onboarding win).
 
@@ -248,11 +257,12 @@ league to `status=completed`. That frozen standing is the official result.
    `group_id`], `SYSTEM_USER_ID`, `create-system-league` CLI, `GET /discover`,
    open-join, `enroll-defaults` internal + auth signup call + taskdef URL).
 2. **Standings scale + winner** (leagues: SQL-aggregate/materialized standings,
-   pod `group_id` assignment at enroll, scoped leaderboard endpoints [pod / friends
-   / global-top-N / neighborhood], unpicked-as-loss scoring, season freeze +
-   `status=completed` at reconcile-window close).
-3. **Web** (home "Global leagues" section + Join; pod leaderboard as the home
-   surface with Friends / Global Top 100 / neighborhood slices).
+   paginated leaderboard endpoints [global Top N / your-rank neighborhood + jump-to-me
+   / paged browse / friends], unpicked-as-loss scoring, season freeze +
+   `status=completed` at reconcile-window close). `group_id` ships in the migration
+   but is unused (deferred pods).
+3. **Web** (home "Global leagues" section + Join; global board as the home surface
+   with Top 100 / Your rank / Friends slices + paged browse).
 4. **Seed + backfill** (run CLI to create NFL Pick'em Global 2026 auto-enroll;
    backfill existing users) — a deploy-time action, on your word.
 
