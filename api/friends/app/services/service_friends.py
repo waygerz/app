@@ -70,6 +70,12 @@ def _notify_friend(user_id, template_key, from_name, *, ref_id=None, dedup_key=N
             "friend_request": "New friend request",
             "friend_accepted": "Friend request accepted",
         }.get(template_key, from_name)
+        # The friend_request SMS ends with {{link}} to the recipient's friends
+        # list (where the request is accepted). friend_accepted has no {{link}} —
+        # the extra context key is simply ignored when that template renders.
+        context = {"from_name": from_name}
+        if template_key == "friend_request":
+            context["link"] = "https://waygerz.com/friends"
         requests.post(
             f"{base}/internal/notify",
             json={
@@ -77,7 +83,7 @@ def _notify_friend(user_id, template_key, from_name, *, ref_id=None, dedup_key=N
                 "category": "friend_request",
                 "template_key": template_key,
                 "title": title,
-                "context": {"from_name": from_name},
+                "context": context,
                 "actor": actor,
                 "ref_type": "friend",
                 "ref_id": ref_id,
