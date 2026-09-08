@@ -9,10 +9,12 @@ import { leaguesApi, type LeagueMember } from '@/lib/leagues';
 import { inviteUrl } from '@/lib/invites';
 import { shareLink } from '@/lib/share';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CenterCard } from '@/components/ui/center-card';
-import { UserMiniCard } from '@/components/user-mini-card';
+import { UserAvatar } from '@/components/user-avatar';
 import { ListSearch } from '@/components/list-search';
+import { cn } from '@/lib/utils';
 import {
   Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -115,16 +117,26 @@ export function InviteToLeagueDialog({
                   const isMember = memberIds.has(uid);
                   const isInvited = invited.has(uid);
                   return (
-                    <UserMiniCard
+                    <Card
                       key={f.friendship_id}
-                      userId={uid}
-                      name={f.display_name}
-                      imageUrl={f.avatar_key}
-                      actions={
-                        isMember ? (
-                          <span className="text-xs text-muted-foreground">Member</span>
+                      className={cn('flex flex-row items-center gap-3 p-3', isMember && 'opacity-60')}
+                    >
+                      <UserAvatar
+                        userId={uid}
+                        name={f.display_name}
+                        imageUrl={f.avatar_key}
+                        className="size-12 shrink-0"
+                        fallbackClassName="text-lg"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-foreground">{f.display_name}</div>
+                        {isMember && <div className="truncate text-xs text-muted-foreground">In this league</div>}
+                      </div>
+                      <div className="shrink-0">
+                        {isMember ? (
+                          <span className="text-xs font-medium text-muted-foreground">Member</span>
                         ) : isInvited ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
                             <Check className="size-3.5" /> Invited
                           </span>
                         ) : (
@@ -135,9 +147,9 @@ export function InviteToLeagueDialog({
                           >
                             Invite
                           </Button>
-                        )
-                      }
-                    />
+                        )}
+                      </div>
+                    </Card>
                   );
                 })}
               </div>
