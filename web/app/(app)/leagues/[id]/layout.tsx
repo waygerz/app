@@ -18,9 +18,8 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { Swords, Trophy, UserPlus } from 'lucide-react';
-import { shareLink } from '@/lib/share';
-import { inviteUrl } from '@/lib/invites';
 import { LeagueProvider } from './league-context';
+import { InviteToLeagueDialog } from './invite-dialog';
 
 const PLAY_TAB: Record<LeagueType, string> = {
   head_to_head: 'My Bets',
@@ -59,6 +58,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
     onError: (e: Error) => toast.error(e.message),
   });
   const [infoOpen, setInfoOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   if (league.isLoading) {
     return <div className="container min-w-0 w-full py-8"><Skeleton className="h-40 rounded-xl" /></div>;
@@ -95,25 +95,6 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
     { to: `/leagues/${id}/members`, label: 'Members', end: false },
     ...(isCommish ? [{ to: `/leagues/${id}/manage`, label: 'Manage', end: false }] : []),
   ];
-
-  const shareInvite = async () => {
-    if (!lg.invite_code) {
-      toast.error('No invite link for this league yet');
-      return;
-    }
-    const inviteLink = inviteUrl(lg.invite_code);
-    try {
-      const result = await shareLink({
-        url: inviteLink,
-        title: `Join ${lg.name} on Waygerz`,
-        text: `You're invited to join ${lg.name} on Waygerz`,
-      });
-      toast.success(result === 'shared' ? 'Link shared' : 'Link copied — paste into a message');
-    } catch (e) {
-      if (e instanceof Error && e.name === 'AbortError') return;
-      toast.error(e instanceof Error ? e.message : 'Could not share link');
-    }
-  };
 
   return (
     <div className="container min-w-0 w-full py-5 sm:py-8">
@@ -190,7 +171,13 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
               <p className="w-full break-words text-center text-sm text-foreground">{lg.description}</p>
             )}
 
-            <Button className="w-full" onClick={() => void shareInvite()}>
+            <Button
+              className="w-full"
+              onClick={() => {
+                setInfoOpen(false);
+                setInviteOpen(true);
+              }}
+            >
               <UserPlus className="size-4" />
               Invite
             </Button>
@@ -207,6 +194,15 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
           </DialogBody>
         </DialogContent>
       </Dialog>
+
+      <InviteToLeagueDialog
+        leagueId={id}
+        leagueName={lg.name}
+        inviteCode={lg.invite_code}
+        members={lg.members}
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+      />
 
       {/* Scrollable pill nav — swipes horizontally when the tabs overflow. */}
       <div
