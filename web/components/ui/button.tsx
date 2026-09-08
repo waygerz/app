@@ -35,16 +35,16 @@ const buttonVariants = cva(
         solid: '',
         dashed: '',
       },
-      // Mobile standard: every interactive button is at least 44px tall on
-      // mobile (min-h-11) for a comfortable touch target, reverting to the
+      // Mobile standard: every interactive button is at least 48px tall on
+      // mobile (min-h-12) for a comfortable touch target, reverting to the
       // compact design height at lg+ (lg:min-h-0) — lg is this app's mobile->
       // desktop switch (matches the members/friends grids). Icon buttons go
-      // 44px square. Link-mode buttons opt out below (they're inline text).
+      // 48px square. Link-mode buttons opt out below (they're inline text).
       size: {
-        lg: 'h-10 min-h-11 lg:min-h-0 rounded-md px-4 text-sm gap-1.5 [&_svg:not([class*=size-])]:size-4',
-        md: 'h-8.5 min-h-11 lg:min-h-0 rounded-md px-3 gap-1.5 text-[0.8125rem] leading-(--text-sm--line-height) [&_svg:not([class*=size-])]:size-4',
-        sm: 'h-7 min-h-11 lg:min-h-0 rounded-md px-2.5 gap-1.25 text-xs [&_svg:not([class*=size-])]:size-3.5',
-        icon: 'size-11 lg:size-8.5 rounded-md [&_svg:not([class*=size-])]:size-4 shrink-0',
+        lg: 'h-10 min-h-12 lg:min-h-0 rounded-md px-4 text-sm gap-1.5 [&_svg:not([class*=size-])]:size-4',
+        md: 'h-8.5 min-h-12 lg:min-h-0 rounded-md px-3 gap-1.5 text-[0.8125rem] leading-(--text-sm--line-height) [&_svg:not([class*=size-])]:size-4',
+        sm: 'h-7 min-h-12 lg:min-h-0 rounded-md px-2.5 gap-1.25 text-xs [&_svg:not([class*=size-])]:size-3.5',
+        icon: 'size-12 lg:size-8.5 rounded-md [&_svg:not([class*=size-])]:size-4 shrink-0',
       },
       autoHeight: {
         true: '',
@@ -111,17 +111,17 @@ const buttonVariants = cva(
       {
         size: 'md',
         autoHeight: true,
-        className: 'h-auto min-h-11 lg:min-h-8.5',
+        className: 'h-auto min-h-12 lg:min-h-8.5',
       },
       {
         size: 'sm',
         autoHeight: true,
-        className: 'h-auto min-h-11 lg:min-h-7',
+        className: 'h-auto min-h-12 lg:min-h-7',
       },
       {
         size: 'lg',
         autoHeight: true,
-        className: 'h-auto min-h-11 lg:min-h-10',
+        className: 'h-auto min-h-12 lg:min-h-10',
       },
 
       // Shadow support
@@ -309,21 +309,21 @@ const buttonVariants = cva(
       {
         size: 'sm',
         mode: 'icon',
-        className: 'w-11 h-11 lg:w-7 lg:h-7 p-0 [[&_svg:not([class*=size-])]:size-3.5',
+        className: 'w-12 h-12 lg:w-7 lg:h-7 p-0 [[&_svg:not([class*=size-])]:size-3.5',
       },
       {
         size: 'md',
         mode: 'icon',
-        className: 'w-11 h-11 lg:w-8.5 lg:h-8.5 p-0 [&_svg:not([class*=size-])]:size-4',
+        className: 'w-12 h-12 lg:w-8.5 lg:h-8.5 p-0 [&_svg:not([class*=size-])]:size-4',
       },
       {
         size: 'icon',
-        className: 'w-11 h-11 lg:w-8.5 lg:h-8.5 p-0 [&_svg:not([class*=size-])]:size-4',
+        className: 'w-12 h-12 lg:w-8.5 lg:h-8.5 p-0 [&_svg:not([class*=size-])]:size-4',
       },
       {
         size: 'lg',
         mode: 'icon',
-        className: 'w-11 h-11 lg:w-10 lg:h-10 p-0 [&_svg:not([class*=size-])]:size-4',
+        className: 'w-12 h-12 lg:w-10 lg:h-10 p-0 [&_svg:not([class*=size-])]:size-4',
       },
 
       // Input mode
