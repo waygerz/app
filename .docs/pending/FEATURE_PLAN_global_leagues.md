@@ -3,7 +3,8 @@
 Net-new feature, planned against the current code (Aug 2026). Mobile-first. No
 code written yet — this is the design to react to before build.
 
-**Decisions locked:** free **weekly pick'em only**, **auto-join at signup**.
+**Decisions locked:** free **weekly pick'em only**, **auto-join at signup**,
+**unpicked games count as a loss** (full-slate denominator; see Leaderboard).
 
 Companion plan: `FEATURE_PLAN_favorite_teams.md`.
 
@@ -210,9 +211,11 @@ losses` (`standings()`), which is exploitable: a cherry-picker with the same
 correct count but fewer games picked has fewer losses and wins the tiebreak over
 someone who picked the full slate. For the system-wide contest, **count unpicked
 games as incorrect** so everyone races the identical ~272-game denominator and
-"most correct" is ungameable (standard public-pool rule). *(DECISION TO CONFIRM —
-this is the recommended rule; the alternative is to keep partial picks but drop
-`losses` as a tiebreaker and rely on the MNF cascade.)*
+"most correct" is ungameable (standard public-pool rule). **DECIDED 2026-09-08:
+unpicked games count as a loss.** Grading must therefore score every game in a
+period for every member — a missing Pick row is a loss, not a no-op — so the
+denominator is the full slate for everyone (voided/no-contest games still
+excluded for all).
 
 **⚠️ Settlement / determinism.** Don't crown at the final whistle — the tick's
 `reconcile_recent_finals` self-heals late score corrections for **3 days**
