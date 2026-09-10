@@ -12,11 +12,14 @@ Companion plan: `FEATURE_PLAN_favorite_teams.md`.
 ---
 
 ## What the code gives us (and the gaps)
-- **Pick'em weekly leagues already self-run**: on `activate` they prebuild one
-  period per ingestor week; the scheduler `/internal/tick` (every 30s)
-  auto-grades picks, reconciles finals, and rolls periods `OPEN→FINAL→next`. **A
-  system pick'em needs no new manager** — only a way to *exist*, be *discovered*,
-  and be *joined*.
+- **Pick'em weekly leagues already self-run *during the season***: on `activate`
+  they prebuild one period per ingestor week; the scheduler `/internal/tick`
+  (every 30s) auto-grades picks, reconciles finals, and rolls periods
+  `OPEN→FINAL→next`. So the net-new work is a way to *exist*, be *discovered*, and
+  be *joined* — **plus** three things the code does NOT do today (see Leaderboard):
+  **season completion** (weekly leagues never end — `rollover_periods` synthesizes
+  a generic `Week N+1` forever, `:594-601`), **standings materialization**, and the
+  **winner freeze**.
 - **Gaps** (all net-new): no system/public/visibility concept; `commissioner_id`
   is required and drives every ownership guard; "My Leagues" (`GET /`) is
   strictly membership-scoped; there is **no code-less open-join** and **no
@@ -100,13 +103,19 @@ denying non-system callers.
 ## Auto-join at signup
 - **`POST /internal/enroll-defaults`** in `api/leagues` (`@internal_only`): body
   `{ user_id }`; joins that user (reusing the existing role-agnostic `_join()`)
-  into every `is_system && auto_enroll && active` league. Idempotent (the
-  `(league_id, user_id)` unique constraint + upsert).
+  into every `is_system && auto_enroll && active` league. Idempotent via `_join`'s
+  **pre-SELECT** on `(league_id, user_id)` (`:739`) — it reactivates or no-ops an
+  existing member (there is **no** upsert / `IntegrityError` handling). ⚠️ That's
+  check-then-insert, so two truly-concurrent first joins could both miss the SELECT
+  and the loser hits the `uq_league_member` unique constraint with an **uncaught**
+  `IntegrityError` — very low risk for a once-per-signup call, but wrap the insert
+  in a try/except (catch IntegrityError → treat as already-joined) to be safe.
 - **`auth` calls it** from **`otp_complete()` in `service_auth.py` (`:227`),
   right after the `User` is created + the best-effort notifications opt-in block
   (User construction is `:252-258`)** — this is the *only* place the real signup
-  flow creates a `User` (OTP *verify* does not create; the returning-user branch
-  at `:249` never reaches here), so the hook fires exactly once per new account.
+  flow creates a `User` (OTP *verify* does not create; the returning-user login
+  path lives in `otp_verify` ~`:220`, and the `:249` guard here rejects a
+  duplicate phone), so the hook fires exactly once per new account.
   Copy the existing internal-call convention (`service_notifications._sync_prefs`,
   `service_notifications.py:17-27`):
   `requests.post(f"{INTERNAL_LEAGUES_URL}/internal/enroll-defaults", json={...},
@@ -133,11 +142,17 @@ Even with auto-join, users need to find/join the *non-default* global leagues an
 **re-join** after leaving:
 - **`GET /discover`** (or `/system`) in leagues, JWT required: returns active
   `is_system` leagues with a `joined` flag for the caller (member counts, current
-  period). Not membership-scoped.
+  period). Not membership-scoped. Reuse the **`my_leagues` card-builder shape**
+  (`:872-895` — already yields `member_count`/`top_members`/`current_period`/
+  logo/type/status); it's membership-joined today, so `/discover` is a net-new
+  non-scoped query `League.query.filter_by(is_system=True, status=ACTIVE)` feeding
+  that builder + a per-league membership lookup for the `joined` flag.
 - **`POST /<id>/join-open`** code-less join path, allowed **only when
-  `is_system && active`** (reuse `_join()`, which is safe + idempotent for free
-  pickem — verified). **NB: `POST /<id>/join` already exists** and maps to
-  `accept_invite` (invite acceptance), so the new open-join route must use a
+  `is_system && active`** (reuse `_join()`, safe + idempotent for free pickem).
+  ⚠️ `_join` itself does **no status gate** (`:738-758` — it happily adds an active
+  member to a `draft` league), so the `is_system && active` guard **must live in
+  this new route/controller**, not in `_join`. **NB: `POST /<id>/join` already
+  exists** and maps to `accept_invite` (invite acceptance), so open-join must use a
   distinct path (`/join-open`), not `/join`.
 - **Web surface:** a **"Global leagues"** section on the home page
   (`web/app/(app)/page.tsx`) under "My Leagues", listing discoverable system
@@ -216,10 +231,28 @@ on identical correct counts):
 2. **Season tiebreaker accuracy** — cumulative `|predicted MNF total − actual|`
    across weeks, lowest total error (accumulate the per-week `tiebreaker_total`).
 3. Best single week (highest weekly correct count).
-4. A **designated final-tiebreaker event** — predict the exact combined total of
-   the season's last game / championship; closeness breaks whatever remains.
-5. Still tied → **co-champions** (play-money bragging rights; don't invent a coin
+4. Still tied → **co-champions** (play-money bragging rights; don't invent a coin
    flip).
+
+**⚠️ Tiebreaker data reality (audit 2026-09-10) — DECISION NEEDED.**
+`tiebreaker_total` is an **optional** per-week per-pick field (`pick.py:37`, set in
+`submit_picks` `:1101/:1140/:1144`), honored only on the week's last game
+(`_period_leaderboard:1310`), computed on the fly and **never persisted**. Two
+consequences the cascade above has to reckon with:
+- **It degenerates at scale.** Most of 100k casual users never enter an MNF total,
+  so step 2's cumulative accuracy is null/undefined for them (`_period_leaderboard`
+  already sorts a null tb as `+inf`, `:1319/:1332`). The cascade then collapses to
+  large co-champion ties right after step 1 — far less discriminating than it reads.
+- **A "final-game / championship" tiebreaker has NO data source.** There is no
+  season-level single-prediction capture anywhere (grep: `tiebreaker_total` is only
+  the per-week column) — so that step was **net-new capture**. It's been dropped
+  from the cascade above; re-adding it means a new season-tiebreaker field + UI.
+
+**Recommendation:** make the **weekly MNF total required** on submit (small change
+to `submit_picks`) so step 2's cumulative accuracy is well-defined for everyone who
+played that week; then the cascade is real without any season-level capture. If we
+don't require it, accept that co-champions will be common and keep the cascade
+best-effort. *(Confirm which.)*
 
 **Fairness — rank by correct count, drop the `losses` key.** Ranking by raw
 correct count is already ungameable: every game you pick has non-negative
@@ -240,12 +273,24 @@ have required pulling+persisting the full slate from the ingestor and scoring
 no `losses` key (`:1330-1334`) — so the **weekly board needs no change**; only
 season `standings()`'s sort changes.
 
-**⚠️ Settlement / determinism.** Don't crown at the final whistle — the tick's
-`reconcile_recent_finals` self-heals late score corrections for **3 days**
-(`service_leagues.py:495`). After the last period flips `final`, **wait out the
-reconcile window, then compute final standings once and freeze/materialize them**
-(a late stat correction must not silently dethrone a crowned champion) and flip the
-league to `status=completed`. That frozen standing is the official result.
+**⚠️ Settlement / determinism — all net-new (audit 2026-09-10).** Don't crown at
+the final whistle — the tick's `reconcile_recent_finals` self-heals late score
+corrections for **3 days** (`service_leagues.py:495`). After the last period flips
+`final`, **wait out the reconcile window, then compute final standings once and
+freeze/materialize them** (a late stat correction must not silently dethrone a
+crowned champion) and flip the league to `status=completed`. Three things this
+needs that **do not exist today**:
+- **Season-end is net-new — weekly leagues never end.** `rollover_periods`
+  synthesizes a generic `Week N+1` OPEN period forever (`:594-601`); there is no
+  "last week → done" path. The system league needs an explicit season-end: stop
+  rollover when the ingestor reports no further week (or a configured final week)
+  and set completion. **Without this the global league sprouts phantom Week 19,
+  20, … indefinitely.**
+- **`status=completed` is net-new.** The `COMPLETED = "completed"` enum exists
+  (`league.py:16`) but **no code path ever sets it** — the flip is new write logic.
+- **Materialized/frozen standings are net-new.** There is no cached-standings
+  table today (both the live materialized standing and the frozen final one are
+  new models/rows).
 
 ## Mobile notes
 - Global-league cards match the existing My-Leagues card; one-tap Join, ≥44px.
@@ -271,11 +316,14 @@ league to `status=completed`. That frozen standing is the official result.
 1. **Backend** (leagues: 3 columns + migration [`is_system`, `auto_enroll`,
    `group_id`], `SYSTEM_USER_ID`, `create-system-league` CLI, `GET /discover`,
    open-join, `enroll-defaults` internal + auth signup call + taskdef URL).
-2. **Standings scale + winner** (leagues: SQL-aggregate/materialized standings,
-   paginated leaderboard endpoints [global Top N / your-rank neighborhood + jump-to-me
-   / paged browse / friends], correct-count ranking (drop the `losses` sort key
-   in `standings()`; add cumulative MNF-accuracy tiebreak), season freeze +
-   `status=completed` at reconcile-window close). `group_id` ships in the migration
+2. **Standings scale + winner + season-end** (leagues, all net-new per the
+   2026-09-10 audit): SQL-aggregate/materialized standings; paginated leaderboard
+   endpoints [global Top N / your-rank neighborhood + jump-to-me / paged browse /
+   friends]; correct-count ranking (drop the `losses` sort key in `standings()`;
+   add cumulative MNF-accuracy tiebreak — and decide whether to require the weekly
+   MNF total); **season-end** (stop `rollover_periods` when the ingestor has no
+   further week, instead of synthesizing `Week N+1` forever); freeze + set
+   `status=completed` after the reconcile window. `group_id` ships in the migration
    but is unused (deferred pods).
 3. **Web** (home "Global leagues" section + Join; global board as the home surface
    with Top 100 / Your rank / Friends slices + paged browse).
@@ -320,6 +368,26 @@ numbers had drifted since the 2026-08-14 pass). Verdicts + current locations:
 - **`reconcile_recent_finals`** — VERIFIED `:495`, `window_days=3` (`:508`),
   called from `tick()` (`service_internal.py:118`). → freeze standings after the
   3-day window.
+
+### Second pass (2026-09-10) — line numbers all re-confirmed; new holes found
+- **Weekly leagues never end.** `rollover_periods` synthesizes `Week N+1` forever
+  (`:594-601`); season-end/completion is entirely net-new (see Settlement).
+- **`status=completed` enum exists, nothing sets it** (`league.py:16`); the flip
+  is new write logic. No materialized/cached standings table exists — net-new.
+- **Tiebreaker cascade degenerates:** `tiebreaker_total` is optional & mostly null
+  at scale, so the cumulative-accuracy tiebreak is undefined for most users; and a
+  season-level "final-game" tiebreaker had no capture (dropped). See the ⚠️ under
+  the winner cascade — decide whether to require the weekly MNF total.
+- **`enroll-defaults` idempotency is check-then-insert, not upsert** — `_join`'s
+  pre-SELECT (`:739`), no `IntegrityError` guard; wrap the insert to swallow the
+  rare concurrent-first-join `uq_league_member` race.
+- **`_join` has no status gate** (`:738-758`) — the `is_system && active`
+  restriction must live in the `/join-open` route, not `_join`.
+- **`/discover`** should reuse the `my_leagues` card-builder (`:872-895`), which
+  already yields `member_count`/`current_period`; it's membership-joined today, so
+  the non-scoped query + `joined` flag are net-new.
+- Minor: `otp_complete`'s `:249` is the duplicate-phone guard (returning-user login
+  is in `otp_verify` ~`:220`) — conclusion unchanged.
 
 ## Open follow-ups (noted, not v1)
 - Season-rollover automation for global leagues.
