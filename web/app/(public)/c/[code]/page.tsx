@@ -21,7 +21,9 @@ import { fetchEvent } from '@/lib/ingestor';
 import { clearPendingLink } from '@/lib/pending-link';
 import { AuthRedirectIfGuest } from '@/auth/AuthRedirectIfGuest';
 import { useAuth } from '@/auth/AuthContext';
+import { Home } from 'lucide-react';
 import { CounterButton } from '@/components/counter-dialog';
+import { treatEmoji } from '@/components/treat-picker';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
 import { TeamLogo } from '@/components/event-card';
@@ -328,6 +330,9 @@ function CodeContent({ code }: { code: string }) {
     const iWon = involved && decided && !!w.winner_user_id && w.winner_user_id === myId;
     const iLost = involved && decided && !!w.winner_user_id && w.winner_user_id !== myId;
     const stakeText = w.amount_cents ? formatCredits(w.amount_cents) : '';
+    // A beer/shot treat bet has no money — show the emoji, not "$0" (matches the
+    // feed + bet-slip convention).
+    const stakeLabel = w.amount_cents ? formatCredits(w.amount_cents) : treatEmoji(w.treat);
     const terminal = w.status === 'declined' || w.status === 'cancelled' || w.status === 'refunded';
     const headline = decided
       ? iWon
@@ -419,14 +424,14 @@ function CodeContent({ code }: { code: string }) {
               </>
             )}
             <span className="text-muted-foreground">Stake</span>
-            <span className="rounded-full bg-secondary px-2.5 py-0.5 font-semibold text-secondary-foreground">{formatCredits(w.amount_cents)}</span>
+            <span className="rounded-full bg-secondary px-2.5 py-0.5 font-semibold text-secondary-foreground">{stakeLabel}</span>
           </div>
         </div>
 
         {canAct ? (
           <div className="flex flex-col gap-2">
             <Button onClick={() => act.mutate('accept')} disabled={busy}>
-              {act.isPending ? 'Working…' : `Accept — ${formatCredits(w.amount_cents)}`}
+              {act.isPending ? 'Working…' : `Accept — ${stakeLabel}`}
             </Button>
             {/* Renegotiate stake/line before the bet goes live — same dialog as the
                 in-app bets page. The counter endpoint gates on my_turn server-side,
@@ -458,6 +463,10 @@ function CodeContent({ code }: { code: string }) {
             <Button variant="outline" onClick={() => router.push('/bets/all')}>View bets</Button>
           </div>
         )}
+        <Button variant="ghost" className="w-full" onClick={() => router.push('/')}>
+          <Home className="size-4" />
+          Home
+        </Button>
       </>
     );
   }
