@@ -9,6 +9,7 @@ import {
   Megaphone,
   MessageCircle,
   PartyPopper,
+  Send,
   Swords,
   Trash2,
   Trophy,
@@ -242,7 +243,7 @@ export function FeedPostCard({ item, engagement, currentUserId, engagementKey, a
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[85vh] flex-col gap-0 p-0">
+        <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="sr-only mb-0">
             <DialogTitle>{item.title || item.author_name || 'Post'}</DialogTitle>
             <DialogDescription>Post details and comments</DialogDescription>
@@ -374,12 +375,13 @@ function PostContent({
             }}
           />
           <Button
-            size="sm"
+            size="icon"
             className="shrink-0"
+            aria-label={replyTo ? 'Send reply' : 'Post comment'}
             disabled={addComment.isPending || !draft.trim()}
             onClick={() => addComment.mutate()}
           >
-            {replyTo ? 'Reply' : 'Post'}
+            <Send className="size-4" />
           </Button>
         </div>
       </div>
