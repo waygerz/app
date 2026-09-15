@@ -36,28 +36,52 @@ at another `/c`.
 
 ## Architecture (all in `notifications`)
 - **Store** (`notifications` schema, one migration):
-  - `redirect_links`: `{ code (PK, base62 ~7 chars, no ambiguous chars, always
-    minted with a leading `R`), target_path (same-origin relative), kind
-    (template_key), created_at }`. **Idempotent** per `(target_path, kind)` — one
-    code reused across all recipients of a send (not per recipient).
+  - `redirect_links`: `{ code (PK, leading `R` + the existing 32-char
+    no-ambiguous `_CODE_ALPHABET` "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" that
+    contests/leagues/friends already use — NOT base62; ~7 body chars),
+    target_path (same-origin relative), kind (template_key), created_at }`.
+    **Idempotent** per `(target_path, kind)` — one code reused across all
+    recipients of a send. ⚠️ Because a pick'em week-open **fans out per member**
+    (100k for the global league), 100k identical `shorten(target,kind)` calls
+    race — a naive select-then-insert produces a unique-violation storm. Add a
+    **unique index on `(target_path, kind)`** and mint with **`INSERT … ON
+    CONFLICT DO NOTHING` then re-select** (concurrency-safe upsert).
   - `link_clicks`: append a row / bump a rollup on each engagement, from **both**
     channels: `{ kind, user_id?, source ('link' | 'inapp'), code?, at, ua?, ip? }`.
     Prefer per-(code|kind, user) **counter rollups** over unbounded raw rows.
-- **B — shorten at send:** in `notify()`/`render()`, before substituting
-  `{{link}}`, if the target is a shortenable path (rule above) call an internal
-  `shorten(target, kind)` → `/c/R<code>` and substitute. **Best-effort**: if
-  minting fails, emit the direct link (never withhold). Emitters untouched.
-- **B — the redirect:** **`GET /c/R<code>`** on notifications (public, edge). One
-  handler: look up target (cached — immutable), record a `link` click (attribute
-  via the `Lax` `waygerz_access` cookie, decoded by flask-jwt-extended like every
-  service), **`302`** to the target. Use **302, never 301** (301 is cached
-  forever and skips the tracker on repeat taps). **Cache the target lookup only —
-  every tap still logs a click.**
-- **A — in-app/push open tracking:** the notifications feed already marks a
-  notification read on tap (`openItem` → `markRead` + `router.push(deep_link)`).
-  Add a lightweight click write there (`source='inapp'`, `kind=template_key`,
-  `user`) so an in-app/push open lands in the **same `link_clicks` store**. No
-  `/c/R` for in-app taps — they use the client `deep_link`, not a web redirect.
+- **B — shorten at send, SMS branch only:** shorten inside `notify()` **on the
+  copy of the context passed to the SMS `send()`** (`service_internal.py:390-399`),
+  NOT the shared `render()` at `:351` (which builds the in-app feed body) and NOT
+  inside `render()` itself (it's a pure fn re-run per channel — minting there
+  double-fires). So the in-app feed keeps the full link (nav uses the separate
+  unshortened `deep_link` anyway) and only the SMS text carries `/c/R<code>`. If
+  the target is shortenable (rule above), call the concurrency-safe
+  `shorten(target, kind)` → substitute. **Best-effort**: on any mint failure emit
+  the direct link (never withhold). Emitters untouched.
+- **B — the redirect:** **`GET /c/R<code>`** on notifications (public, edge; a new
+  non-`/v1` blueprint registered at `/c`). One handler: look up target (cached —
+  immutable), record a `link` click, **`302`** to the target **preserving the
+  target's query string** (`?week=N`). Requirements:
+  - **Optional JWT** — `verify_jwt_in_request(optional=True)` (NOT `jwt_required`),
+    so a logged-out SMS tap attributes-as-anonymous and still 302s (required JWT
+    would 401). flask-jwt-extended is already wired in notifications (shared
+    secret, cookie name `waygerz_access`) — no new setup.
+  - **Use 302, never 301** (301 is cached forever and skips the tracker on repeat).
+  - **Cache the target lookup only — every tap still logs a click, EXCEPT log
+    nothing on a code MISS** (don't let `/c/R<random>` scans write rows).
+  - **Client IP from `X-Forwarded-For`/`X-Real-IP`** (behind ALB/nginx), never
+    `remote_addr`, for the dedup key.
+- **A — in-app/push open tracking:** record the `source='inapp'` click on the
+  **genuine open path only** — the webui `openItem` (`notifications/page.tsx:210`)
+  — **NOT** the shared `/me/read` markRead endpoint, which also fires from
+  **Mark-all-read** (`:229`), inline Accept/Reject (`:187/:199`), and CounterButton
+  (`:350`) → that would over-count. So add a distinct write (its own endpoint/param
+  triggered from `openItem`), keyed by `template_key` + user; the notifications
+  service derives `template_key` by looking the notification row up (it already
+  queries by id). Lands in the **same `link_clicks` store**. No `/c/R` for in-app
+  taps — they use the client `deep_link`, not a web redirect. (`openItem` guards
+  `if (!n.read)`, so only the first open is counted — fine for per-(kind,user)
+  rollups.)
 - **Unify (A+B):** because both channels write `link_clicks` keyed by
   `(kind, user)`, "who engaged with the pick'em notification" is one query over
   the two sources.
@@ -69,7 +93,11 @@ at another `/c`.
   a `/c/R*` path pattern.)
 - **Local compose:** one nginx block `location /c/R { proxy_pass http://notifications:8000/c/R; }`
   in `api/gateway/conf.d/default.conf` (today all non-`/api` → webui, so without it
-  `/c/R` would wrongly hit webui). B/L/F `/c/*` still → webui.
+  `/c/R` would wrongly hit webui). nginx longest-prefix routes `/c/R…` here while
+  `/c/B…` still falls to `location /` → webui. Gotchas: (a) `location /c/R` with
+  **no trailing slash** (else it won't match `/c/Rabc`); (b) add **no
+  `proxy_set_header`** in the block so it inherits the server-level
+  `X-Real-IP`/`X-Forwarded-For`/`X-Forwarded-Proto` needed for IP dedup.
 - **No `proxy.ts` change** — webui never serves `/c/R`. No new gateway/ALB *service*,
   just the one path rule + one local location.
 
@@ -77,13 +105,20 @@ at another `/c`.
 - **Open-redirect guard (in notifications, Python, at shorten-time):** only
   same-origin **relative** targets; **allowlist** the known leading segments
   (`/leagues`, `/friends`); reject absolute, **protocol-relative (`//evil`)** and
-  **backslash (`/\evil`)** forms, and strip/reject control + whitespace chars. And
-  by construction never a `/c/...` target (the shorten rule skips those).
-- **`/c/R` is a new dependency in the tap path** for every *sent* SMS link — once
-  sent it can't fall back to the direct target — so notifications must stay HA (it
-  already is; it's on the send path today). A bad/expired code → `302 /`; a
-  *transient* resolve failure → `302 /` silently drops the destination (degraded,
-  not broken).
+  **backslash (`/\evil`)** forms, and strip/reject control + whitespace chars; and
+  by construction never a `/c/...` target. **Allow + preserve the query string**
+  (`?week=N` on pick'em targets) — validate the path portion, keep the query on
+  both store and 302.
+- **⚠️ Unthrottled public DB-touching endpoint in prod.** The prod ALB routes
+  `/c/R*` straight to the notifications TG with **no rate limit** (ALB doesn't
+  rate-limit without WAF; the compose nginx 30r/s cap only exists locally). Each
+  `GET /c/R<random>` is a lookup. Mitigate: **cache resolves**, **don't write on a
+  code miss** (above), and add **WAF/rate-limiting** in front of `/c/R*`.
+- **`/c/R` makes notifications tap-path-critical** — today it's only on the *send*
+  path; after this it's on the *read/tap* path for **every sent SMS link**, which
+  can't fall back to the direct target once sent. So notifications must stay HA. A
+  bad/expired code → `302 /`; a *transient* resolve failure → `302 /` **silently
+  drops the destination** (unrecoverable from the URL) — degraded, not broken.
 - **Bot / link-preview inflation:** SMS/iMessage/Slack/scanners prefetch URLs.
   Count **GET only** (ignore HEAD), filter known bot UAs, honor `Purpose:
   prefetch`/`X-Purpose`, best-effort dedup per (code, ip/ua) short-window.
@@ -91,8 +126,13 @@ at another `/c`.
   isn't load-bearing, so bot filtering + best-effort dedup are enough.
 - **No Twilio link shortening** — our `/c/R` handles SMS; keep Twilio's feature OFF.
 - **SameSite:** attribution needs the auth cookie on the top-level cross-site GET;
-  auth defaults `JWT_COOKIE_SAMESITE=Lax` (sent on nav) — confirm prod isn't
-  `Strict`.
+  auth defaults `JWT_COOKIE_SAMESITE=Lax` (sent on nav). It's env-driven
+  (`AUTH_COOKIE_SAMESITE`) — **verify the prod auth taskdef isn't `Strict`**, else
+  attribution silently fails (still 302s, just anonymous).
+- **Prereq (orthogonal, prod):** the ALB `/internal`+`/admin` edge-deny is still
+  TODO (`ROUTING_AUDIT_REMEDIATION.md`); it must be in place regardless — adding a
+  public `/c/R` on notifications doesn't change it, but don't ship public routes on
+  a service whose `/internal` isn't edge-denied in prod.
 - **Privacy:** click logs tie user+IP+UA to a tap — internal only, retention
   window, and **disclose click tracking in the privacy policy** (open counsel item).
 
@@ -118,22 +158,29 @@ at another `/c`.
   `assetlinks.json`) served by webui/gateway. Note for the mobile build; no work now.
 
 ## v1 build sequence
-1. **notifications store** — migration: `redirect_links` + `link_clicks` (rollup
-   counters). Base62 code-gen helper (leading `R`, no ambiguous chars, unique).
-2. **shorten at send** — in `notify()`/`render()`, shorten a `{{link}}` whose
-   target is a non-`/c` same-origin path (allowlist-validated), best-effort with
-   direct-link fallback. (Emitters unchanged.)
-3. **`GET /c/R<code>`** handler on notifications — resolve (cached) + log click
-   (Lax-cookie attribution) + 302; GET-only + bot/prefetch filtering.
-4. **Routing** — prod ALB `/c/R*` → notifications TG; local gateway `location /c/R`.
-5. **A — in-app/push open tracking** — write a `source='inapp'` click on the feed's
-   existing open/markRead path, keyed by `template_key` + user.
+1. **notifications store** — migration: `redirect_links` (**unique index on
+   `(target_path, kind)`**) + `link_clicks` (rollup counters). Code-gen = leading
+   `R` + the existing `_CODE_ALPHABET` (no base62). Mint via concurrency-safe
+   `INSERT … ON CONFLICT DO NOTHING` + re-select.
+2. **shorten at send** — in `notify()`, shorten only the **SMS-branch** context
+   copy (`service_internal.py:390-399`), not the shared `render()` / not inside
+   `render()`; only a non-`/c` same-origin path, allowlist-validated, query
+   preserved; best-effort direct-link fallback. Emitters unchanged.
+3. **`GET /c/R<code>` blueprint** (new, non-`/v1`, registered at `/c` in
+   `register_blueprints`) — `verify_jwt_in_request(optional=True)`, cached resolve,
+   `302` preserving `?week`, GET-only + bot/prefetch filtering, **no write on a
+   code miss**, client IP from `X-Forwarded-For`.
+4. **Routing** — prod ALB `/c/R*` → notifications TG (+ WAF/rate-limit); local
+   gateway `location /c/R` (no trailing slash, inherit `X-Forwarded-For`).
+5. **A — in-app open tracking** — a distinct `source='inapp'` click written from
+   webui `openItem` **only** (not the shared markRead), `template_key` derived
+   service-side from the notification row.
 6. **Unified read** — an internal/admin query (later a small dashboard) over
    `link_clicks` grouped by `kind` × source.
 
-Deploy order when built: notifications (migration) → the ALB `/c/R*` rule → webui
-(only if the feed-tap-tracking touches webui, which it does for step 5). Commit
-each edit; deploy only when told.
+Deploy order when built: notifications (migration) → the ALB `/c/R*` rule (with
+WAF) → webui (step 5 touches the feed). Confirm the prod ALB `/internal` deny and
+`AUTH_COOKIE_SAMESITE=Lax` first. Commit each edit; deploy only when told.
 
 ## Open decisions
 - **Emitter-side shorten vs send-time shorten** — plan assumes **send-time** in
