@@ -4,6 +4,7 @@ from app.utils.config import Config
 
 from app.routes.route_feed import notifications_feed_bp
 from app.routes.route_internal import notifications_internal_bp
+from app.routes.route_redirect import redirect_bp
 
 service_bp = Blueprint(Config.SERVICE_NAME, __name__)
 
@@ -22,3 +23,6 @@ for bp in [
 def register_blueprints(app):
     app.register_blueprint(service_bp, url_prefix=Config.api_prefix())
     app.register_blueprint(notifications_internal_bp, url_prefix=Config.api_prefix() + "/internal")
+    # Public redirect surface, OUTSIDE the /v1 prefix: /c/R<code> (the ALB/gateway
+    # routes only /c/R* here; /c/B|L|F go to webui).
+    app.register_blueprint(redirect_bp, url_prefix="/c")

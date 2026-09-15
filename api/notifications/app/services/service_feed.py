@@ -36,6 +36,19 @@ def mark_read(user_id: str, ids=None) -> tuple[dict, int]:
     return {"updated": updated}, 200
 
 
+def record_open(user_id: str, notif_id, *, ua=None) -> tuple[dict, int]:
+    """Log a genuine in-app OPEN (goal A) as a click, keyed by the notification's
+    template_key. Best-effort; only for the caller's own notification."""
+    if not notif_id:
+        return {"error": "id is required"}, 400
+    n = Notification.query.filter_by(id=str(notif_id), user_id=user_id).first()
+    if n is None:
+        return {"ok": False}, 200  # not the caller's / gone — no-op, never error
+    from app.services.service_links import record_inapp_open
+    record_inapp_open(user_id, n.template_key, ua=ua)
+    return {"ok": True}, 200
+
+
 def get_preferences(user_id: str) -> tuple[dict, int]:
     return {"preferences": get_preferences_matrix(user_id)}, 200
 

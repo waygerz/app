@@ -21,3 +21,8 @@ def set_preferences():
 def purge_user():
     body, status = svc.purge_user(request.get_json(silent=True) or {})
     return jsonify(body), status
+
+
+def link_stats():
+    from app.services import service_links
+    return jsonify(service_links.click_stats()), 200

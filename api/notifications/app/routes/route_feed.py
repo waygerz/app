@@ -24,6 +24,14 @@ def mark_read():
     return ctrl.mark_read()
 
 
+# Goal A: a genuine in-app OPEN (distinct from mark-read, which also fires from
+# mark-all-read + inline resolves). Fire-and-forget from the client.
+@notifications_feed_bp.post("/me/opened")
+@jwt_required(locations=["cookies", "headers"])
+def mark_opened():
+    return ctrl.mark_opened()
+
+
 @notifications_feed_bp.get("/me/preferences")
 @jwt_required(locations=["cookies", "headers"])
 def get_preferences():

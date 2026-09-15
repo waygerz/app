@@ -208,6 +208,10 @@ export default function NotificationsPage() {
   // game), derived from the code even when the stored deep_link is older.
   const openItem = (n: FeedNotification) => {
     if (!n.read) markRead.mutate([n.id]);
+    // Engagement tracking (goal A): a genuine open, logged fire-and-forget so it
+    // never delays navigation. Distinct from mark-read (which also fires on
+    // mark-all-read + inline resolves).
+    void notificationsApi.recordOpen(n.id).catch(() => {});
     const code = isBetNotif(n) ? betCode(n) : null;
     const dest = code ? `/c/${code}` : n.deep_link;
     if (dest) router.push(dest);

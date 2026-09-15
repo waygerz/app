@@ -22,6 +22,14 @@ def mark_read():
     return jsonify(body), status
 
 
+def mark_opened():
+    data = request.get_json(silent=True) or {}
+    body, status = svc.record_open(
+        get_jwt_identity(), data.get("id"), ua=request.headers.get("User-Agent")
+    )
+    return jsonify(body), status
+
+
 def get_preferences():
     body, status = svc.get_preferences(get_jwt_identity())
     return jsonify(body), status

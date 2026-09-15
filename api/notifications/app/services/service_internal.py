@@ -9,9 +9,11 @@ from app.extensions import db
 from app.models.channel_pref import NotificationChannelPref
 from app.models.device_token import DeviceToken
 from app.models.message import FAILED, OPTED_OUT, SENT, Message
+from app.models.link import LinkClick
 from app.models.notification import Notification
 from app.models.preference import NotificationPreference
 from app.models.template import NotificationTemplate
+from app.services.service_links import maybe_shorten_link_context
 from app.utils.config import Config
 
 _VAR = re.compile(r"\{\{\s*(\w+)\s*\}\}")
@@ -387,13 +389,19 @@ def notify(data: dict) -> tuple[dict, int]:
     if "sms" in channels and key and not to:
         to = _resolve_phone(user_id)
     if "sms" in channels and to and key:
+        # Shorten the {{link}} (→ /c/R<code>) on the SMS branch ONLY (the in-app
+        # feed body above keeps the full link; nav uses deep_link). Only when SMS
+        # will actually send for this user (opted in) so muted users mint nothing.
+        sms_context = context
+        if user_id and channel_enabled(user_id, category, "sms"):
+            sms_context = maybe_shorten_link_context(context, key)
         sms_body, _ = send(
             {
                 "user_id": user_id,
                 "to": to,
                 "category": category,
                 "template_key": key,
-                "context": context,
+                "context": sms_context,
                 "dedup_key": f"{dedup_key}:sms" if dedup_key else None,
             }
         )
@@ -495,6 +503,10 @@ def purge_user(data: dict) -> tuple[dict, int]:
     chan = NotificationChannelPref.query.filter(
         NotificationChannelPref.user_id == uid
     ).delete(synchronize_session=False)
+    # Click PII (user_id + ip + ua). redirect_links are shared/user-less → kept.
+    clicks = LinkClick.query.filter(LinkClick.user_id == uid).delete(
+        synchronize_session=False
+    )
 
     # Anonymize kept rows where this user was the actor on another user's feed.
     scrubbed = (
@@ -512,6 +524,7 @@ def purge_user(data: dict) -> tuple[dict, int]:
             "device_tokens": tokens,
             "preferences": prefs,
             "channel_prefs": chan,
+            "link_clicks": clicks,
         },
         "scrubbed": {"actor_rows": scrubbed},
     }, 200

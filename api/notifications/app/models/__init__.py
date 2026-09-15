@@ -4,3 +4,4 @@ from app.models.preference import NotificationPreference  # noqa: F401
 from app.models.channel_pref import NotificationChannelPref  # noqa: F401
 from app.models.device_token import DeviceToken  # noqa: F401
 from app.models.template import NotificationTemplate  # noqa: F401
+from app.models.link import RedirectLink, LinkClick  # noqa: F401

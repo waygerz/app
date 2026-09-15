@@ -28,3 +28,9 @@ def set_preferences():
 @internal_only
 def purge_user():
     return ctrl.purge_user()
+
+
+@notifications_internal_bp.get("/link-stats")
+@internal_only
+def link_stats():
+    return ctrl.link_stats()

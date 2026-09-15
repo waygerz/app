@@ -64,6 +64,12 @@ export const notificationsApi = {
       method: 'POST',
       body: JSON.stringify({ ids: ids ?? null }),
     }),
+  // Log a genuine in-app OPEN (engagement tracking). Fire-and-forget.
+  recordOpen: (id: string) =>
+    req<{ ok: boolean }>(`${API.notifications}/me/opened`, {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    }),
   getPreferences: () =>
     req<{ preferences: NotificationPreferences }>(`${API.notifications}/me/preferences`),
   updatePreferences: (patch: NotificationPreferencesPatch) =>
