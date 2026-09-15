@@ -44,12 +44,14 @@ function notifMeta(n: FeedNotification): Meta {
     case 'friend_request': return { Icon: UserPlus, tint: friend, tone: 'default', action: 'friend' };
     case 'friend_accepted': return { Icon: UserCheck, tint: friend, tone: 'default', action: null };
     case 'league_invite': return { Icon: Ticket, tint: invite, tone: 'default', action: 'league' };
+    case 'pickem_week': return { Icon: Trophy, tint: digest, tone: 'default', action: null };
     case 'weekly_digest': return { Icon: BarChart3, tint: digest, tone: 'default', action: null };
   }
   switch (n.category) {
     case 'wager_alert': return { Icon: Swords, tint: bet, tone: 'default', action: null };
     case 'friend_request': return { Icon: UserPlus, tint: friend, tone: 'default', action: null };
     case 'league_invite': return { Icon: Ticket, tint: invite, tone: 'default', action: null };
+    case 'league_alert': return { Icon: Trophy, tint: digest, tone: 'default', action: null };
     case 'reaction': return { Icon: SmilePlus, tint: 'text-rose-500 bg-rose-500/15', tone: 'default', action: null };
     case 'weekly_digest': return { Icon: BarChart3, tint: digest, tone: 'default', action: null };
   }

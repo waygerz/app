@@ -26,6 +26,9 @@ CHANNEL_DEFAULTS = {
     "wager_alert": {"sms": True, "inapp": True, "push": True},
     "league_invite": {"sms": True, "inapp": True, "push": True},
     "friend_request": {"sms": True, "inapp": True, "push": True},
+    # League gameplay updates (a week opened / a week's results). In-app + push on;
+    # SMS opt-in only, so we don't text everyone every week.
+    "league_alert": {"sms": False, "inapp": True, "push": True},
     # Post reactions — in-app only (never SMS/push), on by default, mutable.
     "reaction": {"sms": False, "inapp": True, "push": False},
     "weekly_digest": {"sms": False, "inapp": False, "push": False},
@@ -38,7 +41,7 @@ CHANNEL_DEFAULTS = {
 # Transactional "app notifications". `marketing` is intentionally NOT here — it's
 # a separate promotional opt-in, governed only by its own toggle, never by the
 # app-notifications master.
-APP_NOTIFICATION_CATEGORIES = {"wager_alert", "league_invite", "friend_request", "weekly_digest"}
+APP_NOTIFICATION_CATEGORIES = {"wager_alert", "league_invite", "friend_request", "league_alert", "weekly_digest"}
 
 
 def channel_default(category: str, channel: str) -> bool:

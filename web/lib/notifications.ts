@@ -30,6 +30,7 @@ export interface FeedNotification {
 export type NotificationCategory =
   | 'wager_alert'
   | 'league_invite'
+  | 'league_alert'
   | 'friend_request'
   | 'reaction'
   | 'weekly_digest'

@@ -40,6 +40,8 @@ STARTER_TEMPLATES = [
      "{{other_name}} countered: {{amount}} (was {{was}}) on {{matchup}}. {{link}}"),
     ("league_invite", "wager_alert",
      "{{inviter_name}} invited you to {{league}} on Waygerz. Join: {{link}}"),
+    ("pickem_week", "league_alert",
+     "{{headline}} {{link}}"),
     ("friend_request", "friend_request",
      "{{from_name}} sent you a friend request on Waygerz. {{link}}"),
     ("friend_accepted", "friend_request",

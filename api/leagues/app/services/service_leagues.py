@@ -93,30 +93,85 @@ def _headers():
     return {"X-Internal-Token": current_app.config["INTERNAL_TOKEN"]}
 
 
-def _notify_league(user_id, template_key, title, context, *, actor=None, ref_id=None, deep_link=None, dedup_key=None):
-    """Fan a league event out to a member's notifications (in-app feed + SMS).
-    Best-effort — never let a notification failure affect the league action."""
+def _notify_league(user_id, template_key, title, context, *, category="league_invite",
+                   channels=None, actor=None, ref_id=None, deep_link=None, dedup_key=None):
+    """Fan a league event out to a member's notifications (in-app + SMS/push).
+    Best-effort — never let a notification failure affect the league action.
+    `channels` defaults to the notifications service's own default when omitted."""
     try:
         base = current_app.config["NOTIFICATIONS_URL"]
+        payload = {
+            "user_id": str(user_id),
+            "category": category,
+            "template_key": template_key,
+            "title": title,
+            "context": context,
+            "actor": actor,
+            "ref_type": "league",
+            "ref_id": ref_id,
+            "deep_link": deep_link,
+            "dedup_key": dedup_key,
+        }
+        if channels is not None:
+            payload["channels"] = channels
         requests.post(
             f"{base}/internal/notify",
-            json={
-                "user_id": str(user_id),
-                "category": "league_invite",
-                "template_key": template_key,
-                "title": title,
-                "context": context,
-                "actor": actor,
-                "ref_type": "league",
-                "ref_id": ref_id,
-                "deep_link": deep_link,
-                "dedup_key": dedup_key,
-            },
+            json=payload,
             headers=_headers(),
             timeout=3,  # best-effort; fail fast so the action never blocks on it
         )
     except Exception:  # noqa: BLE001
         current_app.logger.exception("league notify failed user=%s key=%s", user_id, template_key)
+
+
+def _pickem_week_headline(league, finalized, opened, winner_line):
+    """Copy for the pick'em week notification — one message covering the week that
+    just finished and/or the week that just opened. Tweak the wording here later.
+    `winner_line` is the "🏆 … won with X/Y correct" string, or None if a game is
+    still ungraded at rollover."""
+    name = league.name
+    if finalized and opened:
+        lead = f"{winner_line}. " if winner_line else f"{finalized.label} is final. "
+        return f"{name}: {lead}{opened.label} is open — make your picks."
+    if opened:  # first week (activation) — no prior result
+        return f"{name}: {opened.label} is open — make your picks."
+    # Season end: a final week with no next week.
+    if winner_line:
+        return f"{name}: {finalized.label} is final. {winner_line}."
+    return f"{name}: {finalized.label} is final."
+
+
+def _notify_pickem_week(league, *, finalized=None, opened=None):
+    """Notify a pick'em league's active members that a week opened and/or a week
+    finished — one combined message (in-app + push; SMS is opt-in via the
+    league_alert category default). Best-effort. Fan-out is per-member, which is
+    fine for normal leagues; a future 100k global league needs a batched path."""
+    if league.league_type != PICKEM:
+        return
+    winner_line = None
+    if finalized is not None:
+        try:
+            winner_line = _period_final_body(league.id, finalized)
+        except Exception:  # noqa: BLE001 — a notification must never break the tick
+            winner_line = None
+    headline = _pickem_week_headline(league, finalized, opened, winner_line)
+    deep_link = f"/leagues/{league.id}/play"
+    link = f"https://waygerz.com{deep_link}"
+    ref_period = opened or finalized
+    stub = f"pickem_week:{ref_period.id if ref_period is not None else league.id}"
+    members = LeagueMember.query.filter_by(league_id=league.id, status=ACTIVE).all()
+    for m in members:
+        _notify_league(
+            m.user_id,
+            "pickem_week",
+            league.name,
+            {"league": league.name, "headline": headline, "link": link},
+            category="league_alert",
+            channels=["inapp", "push", "sms"],
+            ref_id=str(league.id),
+            deep_link=deep_link,
+            dedup_key=f"{stub}:{m.user_id}",
+        )
 
 
 def wallet_account_balances(account) -> dict:
@@ -574,6 +629,7 @@ def rollover_periods() -> int:
         if not league:
             continue
         p.status = FINAL
+        opened_period = None
         # Grading runs before rollover in the same tick, so the winner is
         # normally known here; if anything is still ungraded we stay generic
         # rather than announce a wrong winner (filled in later by re-announce).
@@ -599,9 +655,14 @@ def rollover_periods() -> int:
                     status=OPEN,
                 )
                 db.session.add(nxt)
+            opened_period = nxt
             _rollover_feed(league.id, "period_opened", f"{nxt.label} is open",
                            "Betting is now open.", dedup_key=f"period_opened:{league.id}:{nxt.index}")
         db.session.commit()
+        # One combined pick'em notification: last week's result + the new week
+        # opening (no-op for non-pick'em leagues). After commit so it reflects
+        # the persisted state and never blocks the roll.
+        _notify_pickem_week(league, finalized=p, opened=opened_period)
         rolled += 1
     return rolled
 
@@ -1071,6 +1132,8 @@ def activate_league(league_id, me):
              title=f"{period.label} is open", body="Betting is now open.")
     db.session.commit()
     warm_event_cache(league.id)
+    # Kick off pick'em: tell members the first week is open (no-op otherwise).
+    _notify_pickem_week(league, opened=period)
     return {"league": _detail(league, me)}, 200
 
 
