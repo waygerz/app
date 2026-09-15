@@ -81,6 +81,25 @@ def _add_week(start_utc, tz) -> datetime:
     )
     return nxt.astimezone(timezone.utc).replace(tzinfo=None)
 
+
+# A pick'em week doesn't open until Tuesday 9 AM league-local — after the prior
+# week's Monday-night game is done — giving Tue–Thu to make picks. Mon=0.
+_WEEK_OPEN_WEEKDAY = 1
+_WEEK_OPEN_HOUR = 9
+
+
+def _pickem_week_open_at(ends_utc, tz) -> datetime:
+    """When the next pick'em week becomes open: the first Tuesday 09:00 league-local
+    at or after `ends_utc` (the finished week's natural end). Naive UTC, DST-correct."""
+    local = ends_utc.replace(tzinfo=timezone.utc).astimezone(tz)
+    ahead = (_WEEK_OPEN_WEEKDAY - local.weekday()) % 7
+    boundary = (local + timedelta(days=ahead)).replace(
+        hour=_WEEK_OPEN_HOUR, minute=0, second=0, microsecond=0
+    )
+    if boundary < local:  # already Tuesday but past 9 AM — next Tuesday
+        boundary += timedelta(days=7)
+    return boundary.astimezone(timezone.utc).replace(tzinfo=None)
+
 # No ambiguous characters (no I/O/0/1).
 _CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 # Leading marker so a client routes /c/<code> by prefix without a lookup.
@@ -623,10 +642,19 @@ def rollover_periods() -> int:
     now = datetime.utcnow()
     rolled = 0
     for p in LeaguePeriod.query.filter_by(status=OPEN).all():
-        if not p.ends_at or p.ends_at > now:
+        if not p.ends_at:
             continue
         league = db.session.get(League, p.league_id)
         if not league:
+            continue
+        # A weekly pick'em league doesn't roll (finalize + open the next week)
+        # until Tuesday 9 AM league-local, so the new week opens then rather than
+        # the moment the last game's buffer passes. Other league types keep the
+        # ends_at boundary.
+        boundary = p.ends_at
+        if league.league_type == PICKEM and league.period_type == WEEKLY:
+            boundary = _pickem_week_open_at(p.ends_at, _league_zone(league))
+        if boundary > now:
             continue
         p.status = FINAL
         opened_period = None
@@ -1368,12 +1396,18 @@ def _period_leaderboard(league_id, period_id):
         if hs is not None and as_ is not None:
             actual_total = int(hs) + int(as_)
 
-    per = {uid: {"correct": 0, "graded": 0, "total": 0, "made": 0, "tb": None} for uid in member_ids}
+    per = {uid: {"correct": 0, "graded": 0, "total": 0, "made": 0, "tb": None, "first": None}
+           for uid in member_ids}
     for p in picks:
         agg = per.get(p.user_id)
         if agg is None:
             continue
         agg["made"] += 1  # participation — counts voided picks too
+        # Earliest pick submission for the period — the final tie-breaker so a
+        # genuine dead heat (same record + same MNF-total guess) still resolves
+        # to a single winner: first to lock in ranks higher.
+        if p.created_at and (agg["first"] is None or p.created_at < agg["first"]):
+            agg["first"] = p.created_at
         if p.voided:
             continue  # no contest — excluded from the W/L math
         agg["total"] += 1
@@ -1401,24 +1435,20 @@ def _period_leaderboard(league_id, period_id):
             "total": agg["total"],
             "tiebreaker_total": tb,
             "tiebreaker_diff": diff,
+            "first_at": agg["first"].isoformat() if agg["first"] else "",
         })
+    # Fully deterministic order — correct → MNF-total distance → earliest picks
+    # submitted → id — so every row gets a unique rank and there are no ties.
+    # The MNF-total tie-breaker normally decides a close finish; if two are still
+    # level, whoever locked their picks in first ranks higher.
     rows.sort(key=lambda r: (
         -r["correct"],
         r["tiebreaker_diff"] if r["tiebreaker_diff"] is not None else float("inf"),
-        r["display_name"].lower(),
+        r["first_at"] or "￿",  # blank submission time sorts last
+        r["user_id"],
     ))
-
-    # Competition rank: members with the same correct count AND the same
-    # tie-breaker distance are genuinely tied and share a rank (e.g. 1, 1, 3).
-    # Two members can have identical picks and tie-breaker — they co-lead.
-    rank = 0
-    prev_key = None
     for i, r in enumerate(rows):
-        key = (r["correct"], r["tiebreaker_diff"])
-        if i == 0 or key != prev_key:
-            rank = i + 1
-        r["rank"] = rank
-        prev_key = key
+        r["rank"] = i + 1
 
     last_game = None
     if last_event_id:
@@ -1474,23 +1504,18 @@ def _period_final_body(league_id, period):
         print(f"[winner] leaderboard failed for period {period.id}: {exc}", flush=True)
         return None
 
-    winners = [r for r in rows if r.get("rank") == 1 and r["graded"] > 0]
-    if not winners:
+    # Ranking is a total order (see _period_leaderboard), so there is always
+    # exactly one winner — never a tie.
+    graded = [r for r in rows if r["graded"] > 0]
+    if not graded:
         return None
-
-    top = winners[0]
-    score = f"{top['correct']}/{top['graded']}"
-    names = [w["display_name"] for w in winners]
-    if len(names) == 1:
-        line = f"🏆 {names[0]} won with {score} correct"
-        # Only call out the tie-breaker when it actually broke a tie.
-        contenders = [r for r in rows if r["graded"] > 0 and r["correct"] == top["correct"]]
-        if len(contenders) > 1 and top.get("tiebreaker_diff") is not None:
-            line += f" (tie-breaker: off by {top['tiebreaker_diff']})"
-        return line
-    if len(names) == 2:
-        return f"🏆 {names[0]} and {names[1]} tied at {score} correct"
-    return f"🏆 {', '.join(names[:-1])} and {names[-1]} tied at {score} correct"
+    top = graded[0]
+    line = f"🏆 {top['display_name']} won with {top['correct']}/{top['graded']} correct"
+    # Call out the tie-breaker only when it actually decided a close finish
+    # (someone else matched the winner's correct count).
+    if any(r is not top and r["correct"] == top["correct"] for r in graded) and top.get("tiebreaker_diff") is not None:
+        line += f" (tie-breaker: off by {top['tiebreaker_diff']})"
+    return line
 
 
 def confirm_member(league_id, period_id, user_id, me, data):
