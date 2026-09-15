@@ -122,6 +122,20 @@ def create_app(config_class=Config):
             graded = ungraded == 0
             print(f"  {finalized.label}: {ungraded} ungraded pick(s) -> "
                   f"{'FULLY GRADED' if graded else 'NOT fully graded'}", flush=True)
+            # Stale-notify guard: if this finished week's period_final feed post is
+            # still GENERIC, a later tick's _reannounce_winners would fill it AND
+            # fire a (stale) notification. Report whether that's a risk.
+            from app.models.feed import LeagueFeed
+            fp = LeagueFeed.query.filter_by(
+                league_id=lg.id, event_type="period_final",
+                dedup_key=f"period_final:{finalized.id}",
+            ).first()
+            if fp is None:
+                print("  period_final feed: (none) — reannounce won't fire", flush=True)
+            elif fp.body == svc.GENERIC_FINAL_BODY:
+                print("  period_final feed: GENERIC ⚠ reannounce would fill + NOTIFY (stale-blast risk)", flush=True)
+            else:
+                print(f"  period_final feed: has winner line (safe) — {fp.body!r}", flush=True)
             winner = None
             try:
                 winner = svc._period_final_body(lg.id, finalized)
