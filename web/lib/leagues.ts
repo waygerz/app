@@ -117,6 +117,11 @@ export const leaguesApi = {
     req<{ league: LeagueDetail }>(`${LEAGUES_API}/`, { method: 'POST', body: JSON.stringify(input) }).then((d) => d.league),
   activate: (id: string) =>
     req<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}/activate`, { method: 'POST' }).then((d) => d.league),
+  // Commissioner: manually (re)send the pick'em week notification to all members.
+  notifyWeek: (id: string) =>
+    req<{ sent: boolean; members: number; finalized: string; opened: string | null; winner_line: string }>(
+      `${LEAGUES_API}/${id}/notify-week`, { method: 'POST' },
+    ),
   update: (id: string, payload: Record<string, unknown>) =>
     req<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }).then((d) => d.league),
   advancePeriod: (id: string) =>

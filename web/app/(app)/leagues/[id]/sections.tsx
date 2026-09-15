@@ -3592,6 +3592,12 @@ function LeagueManageInner() {
     onSuccess: () => { toast.success('League archived'); qc.invalidateQueries({ queryKey: ['leagues'] }); router.push('/'); },
     onError: onErr,
   });
+  const notifyWeek = useMutation({
+    mutationFn: () => leaguesApi.notifyWeek(lg.id),
+    onSuccess: (r) =>
+      toast.success(`Sent to ${r.members} member${r.members === 1 ? '' : 's'} — ${r.finalized} results`),
+    onError: onErr,  // e.g. 409 "the finished week isn't fully graded yet"
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -3637,6 +3643,40 @@ function LeagueManageInner() {
                     <AlertDialogCancel disabled={advance.isPending}>Cancel</AlertDialogCancel>
                     <AlertDialogAction disabled={advance.isPending} onClick={() => advance.mutate()}>
                       Advance period
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </Card>
+          </div>
+        )}
+
+        {/* Pick'em: manually (re)send the week notification — last finished
+            week's result + the current open week — to every active member. */}
+        {lg.league_type === 'pickem' && lg.status === 'active' && (
+          <div id="manage-notify" className="scroll-mt-6">
+            <Card className="gap-3 p-6">
+              <h2 className="text-base font-semibold text-foreground sm:text-lg">Notify members</h2>
+              <p className="text-sm text-muted-foreground">
+                Send the week update — last week’s result and the open week — to all members (in-app + push; SMS for those who opted in). Only sends once the finished week is fully graded.
+              </p>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="mt-1 self-start" disabled={notifyWeek.isPending}>
+                    {notifyWeek.isPending ? 'Sending…' : 'Send week update'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Send the week update to everyone?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This notifies every active member now. It can’t be unsent.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={notifyWeek.isPending}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction disabled={notifyWeek.isPending} onClick={() => notifyWeek.mutate()}>
+                      Send
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
