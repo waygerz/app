@@ -40,8 +40,10 @@ default) **+ one gateway `location /l/`** block for local compose.
 **Decided 2026-09-15:** `/l` does **not** wrap `/c/<code>` invite/bet links. `/c`
 links are already short and carry their own resolver; we don't need to track code
 clicks, and wrapping them would only add a redirect hop. So `/l` never redirects
-to a `/c` — it shortens/tracks the *plain in-app route* links (which are also the
-long ones that benefit from shortening).
+to a `/c` — it covers the *plain in-app route* links. ⚠️ **Only pick'em's links
+are actually long** (`/leagues/<uuid>/results?week=N`); `league_invite`
+(`/leagues`) and `friend_request` (`/friends`) are ~28 chars, so `/l` (~29 chars)
+shortens **nothing** for those two.
 
 **In `/l` scope (migrate):**
 - **leagues** `service_leagues.py`: `pickem_week` link (`:187`,
@@ -56,11 +58,16 @@ long ones that benefit from shortening).
 - **webui** `inviteUrl(code)` → `https://waygerz.com/c/<code>` (shared league /
   friend "add me" links).
 
-**Scope implication:** with `/c` excluded, `/l`'s value is mainly **shortening +
-tracking the pick'em direct links** (long UUID paths) plus taps on
-`friend_request` / `league_invite`. Bet-invite click-through (arguably the biggest
-engagement signal) is intentionally **not** tracked — revisit if that changes.
-(Unwired: `weekly_digest`. In-app `deep_link` excluded.)
+**Scope implication (the value concentrates on pick'em):** with `/c` excluded,
+nearly all the value collapses onto **pick'em** — it's the only in-scope link that
+gains from shortening AND the only strong tracking target. `league_invite` and
+`friend_request` point at **bare list pages** (`/leagues`, `/friends`), so wrapping
+them gives no length benefit and only a weak "opened the list" signal, while still
+incurring `/l`'s new availability dependency. Bet-invite click-through (arguably
+the biggest engagement signal) is intentionally **not** tracked (it's `/c`). Net:
+the build-now case really rests on pick'em alone — which leans toward **waiting**
+until there's more direct-link volume or a concrete analytics need (see Open
+decisions). (Unwired: `weekly_digest`. In-app `deep_link` excluded.)
 
 Each in-scope emitter becomes: build the real target as today → `shorten(target,
 kind)` → emit `https://waygerz.com/l/<code>`.
