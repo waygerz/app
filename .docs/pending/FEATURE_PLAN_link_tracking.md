@@ -4,6 +4,15 @@ Planned 2026-09-15 (revised after 3 audits + a design call). **Goal: A + B.**
 - **A — know who *opened* a pick'em notification** (in-app + push engagement).
 - **B — deliver pick'em links over SMS short + click-tracked.**
 
+⚠️ **B fires only for SMS-opted-in users.** `pickem_week` is category
+`league_alert`, whose SMS default is **off** (`service_internal.py:31`), so `send()`
+returns `skipped:muted` for the default user and no `/c/R` link is minted/sent for
+them — they get in-app/push (A) only. So B — and the `/c/R` shortener's whole
+reason to exist — matters only for users who opt into `league_alert` SMS. **Confirm
+that's acceptable**, or plan to change the default / prompt for SMS opt-in;
+otherwise A (in-app tracking, no `/c/R` needed) is nearly the whole story and the
+shortener is low-value.
+
 **Design (settled): one `/c` system, a new `R` (redirect) code type, hosted in the
 `notifications` service. NO new service, NO `/l` root.** `/c/R<code>` is served
 server-side by notifications (resolve → log click → `302`); `/c/B|L|F` (the
@@ -22,10 +31,14 @@ the click analytics, so A and B land in one store and unify for free.
 
 ## Scope — what gets shortened+tracked
 `notifications` shortens the `{{link}}` at **send time**, so **emitter services do
-not change**. The rule is purely structural: shorten the `link` context var **iff
-its target is a same-origin path that is NOT under `/c/`**. That set is exactly:
-- **pick'em** `pickem_week` → `/leagues/<uuid>/results?week=N` or `/play` (the long
-  URLs — the real shortening win, and the primary tracking target),
+not change**. ⚠️ Emitters pass an **absolute** URL (`https://waygerz.com/…`), so the
+rule is: **parse the link, confirm the host is our own origin, strip to a relative
+`path+query`; shorten iff that path is NOT under `/c/`** (and passes the allowlist).
+So "reject absolute" below means "reject an absolute URL whose host isn't ours" —
+our own origin is stripped, not rejected. The in-scope set is exactly:
+- **pick'em** `pickem_week` → `/leagues/<uuid>/results?week=N` or
+  `/leagues/<id>/play` (the long URLs — the real shortening win + primary tracking
+  target),
 - `league_invite` → `/leagues`, `friend_request` → `/friends` (tracked; already
   short so no length gain — bare-list targets, weak signal, but free to include).
 
@@ -62,11 +75,15 @@ at another `/c`.
   non-`/v1` blueprint registered at `/c`). One handler: look up target (cached —
   immutable), record a `link` click, **`302`** to the target **preserving the
   target's query string** (`?week=N`). Requirements:
-  - **Optional JWT** — `verify_jwt_in_request(optional=True)` (NOT `jwt_required`),
-    so a logged-out SMS tap attributes-as-anonymous and still 302s (required JWT
-    would 401). flask-jwt-extended is already wired in notifications (shared
-    secret, cookie name `waygerz_access`) — no new setup.
-  - **Use 302, never 301** (301 is cached forever and skips the tracker on repeat).
+  - **Optional JWT, and CATCH decode failures.** `verify_jwt_in_request(optional=True)`
+    swallows a *missing* cookie (→ anonymous) but still **raises on an
+    expired/malformed** one — and a stale SMS tap days later is *exactly* an
+    expired `waygerz_access`. So the handler must **try/except the decode and fall
+    back to anonymous**, never let it 5xx. (flask-jwt-extended is already wired in
+    notifications — shared secret, cookie `waygerz_access` — no new setup.)
+  - **Use 302, never 301** (301 is cached forever and skips the tracker on repeat);
+    the `Location` is the stored **relative** `path+query` (browsers accept a
+    relative Location — no need to reconstruct the absolute origin).
   - **Cache the target lookup only — every tap still logs a click, EXCEPT log
     nothing on a code MISS** (don't let `/c/R<random>` scans write rows).
   - **Client IP from `X-Forwarded-For`/`X-Real-IP`** (behind ALB/nginx), never
@@ -78,10 +95,11 @@ at another `/c`.
   (`:350`) → that would over-count. So add a distinct write (its own endpoint/param
   triggered from `openItem`), keyed by `template_key` + user; the notifications
   service derives `template_key` by looking the notification row up (it already
-  queries by id). Lands in the **same `link_clicks` store**. No `/c/R` for in-app
-  taps — they use the client `deep_link`, not a web redirect. (`openItem` guards
-  `if (!n.read)`, so only the first open is counted — fine for per-(kind,user)
-  rollups.)
+  queries by id). **Fire-and-forget** — `mutate` without `await`, mirroring the
+  existing `markRead`, so it never delays `router.push`. Lands in the **same
+  `link_clicks` store**. No `/c/R` for in-app taps — they use the client
+  `deep_link`, not a web redirect. (`openItem` guards `if (!n.read)`, so only the
+  first open is counted — fine for per-(kind,user) rollups.)
 - **Unify (A+B):** because both channels write `link_clicks` keyed by
   `(kind, user)`, "who engaged with the pick'em notification" is one query over
   the two sources.
@@ -102,13 +120,14 @@ at another `/c`.
   just the one path rule + one local location.
 
 ## Safety & failure
-- **Open-redirect guard (in notifications, Python, at shorten-time):** only
-  same-origin **relative** targets; **allowlist** the known leading segments
-  (`/leagues`, `/friends`); reject absolute, **protocol-relative (`//evil`)** and
-  **backslash (`/\evil`)** forms, and strip/reject control + whitespace chars; and
-  by construction never a `/c/...` target. **Allow + preserve the query string**
-  (`?week=N` on pick'em targets) — validate the path portion, keep the query on
-  both store and 302.
+- **Open-redirect guard (in notifications, Python, at shorten-time):** first
+  **normalize** — parse the emitter's absolute URL, require `host == our origin`
+  (reject if not ours), strip to `path+query`. Then on that relative path:
+  **allowlist** the known leading segments (`/leagues`, `/friends`); reject
+  **protocol-relative (`//evil`)** and **backslash (`/\evil`)** forms and
+  control/whitespace chars; and by construction never a `/c/...` path. **Preserve
+  the query string** (`?week=N`) — validate the path portion, keep the query on both
+  the stored `target_path` and the 302. Store only the relative `path+query`.
 - **⚠️ Unthrottled public DB-touching endpoint in prod.** The prod ALB routes
   `/c/R*` straight to the notifications TG with **no rate limit** (ALB doesn't
   rate-limit without WAF; the compose nginx 30r/s cap only exists locally). Each
@@ -133,8 +152,14 @@ at another `/c`.
   TODO (`ROUTING_AUDIT_REMEDIATION.md`); it must be in place regardless — adding a
   public `/c/R` on notifications doesn't change it, but don't ship public routes on
   a service whose `/internal` isn't edge-denied in prod.
-- **Privacy:** click logs tie user+IP+UA to a tap — internal only, retention
-  window, and **disclose click tracking in the privacy policy** (open counsel item).
+- **Privacy + account purge (must-fix):** `link_clicks` carries user_id+IP+UA
+  (PII). The notifications purge-user job enumerates each table it deletes
+  (`service_internal.py:485-497`: Notification/Message/DeviceToken/prefs) — a new
+  `link_clicks` table would **orphan a deleted account's PII**, so add `link_clicks`
+  (by user_id) to that delete set. `redirect_links` are shared, user-less and
+  immutable → **not** purged. Also add a **time-retention TTL** for `link_clicks`
+  (no time-based purge job exists today) and **disclose click tracking in the
+  privacy policy** (open counsel item).
 
 ## Scale (ties to the global pick'em)
 - Per-`(target, kind)` codes keep volume tiny: a league-week link is **one** code
