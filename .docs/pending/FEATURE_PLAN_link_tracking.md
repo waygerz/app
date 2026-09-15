@@ -1,234 +1,145 @@
-# Feature plan: `/l` link shortening & click tracking
+# Feature plan: `/c/R` link shortening & click tracking (in `notifications`)
 
-Net-new subsystem, planned 2026-09-15. A front door for the platform's **outbound
-direct-navigation links** (SMS, push-opened-in-browser) — **excluding `/c` invite/
-bet codes** (see Scope): issue a short `https://waygerz.com/l/<code>` that **logs a
-click** (attributing to the viewer's session when present) and **302-redirects** to
-the real destination.
+Planned 2026-09-15 (revised after 3 audits + a design call). **Goal: A + B.**
+- **A — know who *opened* a pick'em notification** (in-app + push engagement).
+- **B — deliver pick'em links over SMS short + click-tracked.**
 
-**Why:** (1) know *who clicked* a notification/link — cross-channel engagement
-analytics; (2) short links for SMS (a `/l/AbC123X` ≈ 28 chars vs the ~75-char
-UUID URLs today, ~half a segment saved). Mirrors the existing public `/c/<code>`
-resolve pattern.
+**Design (settled): one `/c` system, a new `R` (redirect) code type, hosted in the
+`notifications` service. NO new service, NO `/l` root.** `/c/R<code>` is served
+server-side by notifications (resolve → log click → `302`); `/c/B|L|F` (the
+existing invite/bet/friend *action* codes) keep going to the webui page,
+unchanged. The split is done at the routing layer (an ALB rule), so the user only
+ever sees one `/c`, consistent with the existing "leading letter picks the owner"
+convention (`B`/`L`/`F` → `+R`).
 
-**Out of scope:** in-app `deep_link` values (e.g. notifications' tap target) —
-those are client-side `router.push` routes, not URLs that leave the app; instrument
-those taps client-side, not through `/l`.
-
-**Decisions locked (react before build):** dedicated `links` service; **per-link
-codes + session attribution** (not per-recipient) in v1; **idempotent shorten**
-(one code reused per (target, kind)); shorten is **best-effort with a direct-link
-fallback** so a notification link is never blocked; **no Twilio link shortening**
-— our `/l` handles SMS too (keep Twilio's feature off).
-
-**Architecture (settled over two 2026-09-15 audits): `/l` is served directly by
-the `links` service via an ALB `/l/*` rule — NOT through webui.** `/l` is a pure
-redirect (no render, unlike the `/c` *page*), so `GET /l/<code>` on the links
-service does resolve → log → `302` in one hop: browser → public-zone ALB → links.
-This is a north-south request, so it never touches the drifted private zone, and
-it removes what the first audit flagged: no webui-SSR hop, **no "mesh webui first"
-prerequisite**, no private-zone-drift SPOF, no cookie-forwarding, and no separate
-public resolve endpoint. Attribution is done **inside links** — a `Lax`
-`waygerz_access` cookie is sent on the top-level GET to `waygerz.com/l/…`, and
-links (flask-jwt-extended, shared secret) decodes it directly. Cost vs the
-rejected webui-handler design: **one ALB `/l/*` rule** (priority above the webui
-default) **+ one gateway `location /l/`** block for local compose.
+**Why not `/l` / a `links` service:** a redirect is a server-side 302, not a
+client page — but `/c` codes are prefix-routed already, so `/c/R*` can be routed
+to a backend *before* webui without a new root or a new service. Folding it into
+`notifications` is natural: it already builds and sends these links and will own
+the click analytics, so A and B land in one store and unify for free.
 
 ---
 
-## Scope — `/l` covers direct-navigation links only, NOT `/c` codes
-**Decided 2026-09-15:** `/l` does **not** wrap `/c/<code>` invite/bet links. `/c`
-links are already short and carry their own resolver; we don't need to track code
-clicks, and wrapping them would only add a redirect hop. So `/l` never redirects
-to a `/c` — it covers the *plain in-app route* links. ⚠️ **Only pick'em's links
-are actually long** (`/leagues/<uuid>/results?week=N`); `league_invite`
-(`/leagues`) and `friend_request` (`/friends`) are ~28 chars, so `/l` (~29 chars)
-shortens **nothing** for those two.
+## Scope — what gets shortened+tracked
+`notifications` shortens the `{{link}}` at **send time**, so **emitter services do
+not change**. The rule is purely structural: shorten the `link` context var **iff
+its target is a same-origin path that is NOT under `/c/`**. That set is exactly:
+- **pick'em** `pickem_week` → `/leagues/<uuid>/results?week=N` or `/play` (the long
+  URLs — the real shortening win, and the primary tracking target),
+- `league_invite` → `/leagues`, `friend_request` → `/friends` (tracked; already
+  short so no length gain — bare-list targets, weak signal, but free to include).
 
-**In `/l` scope (migrate):**
-- **leagues** `service_leagues.py`: `pickem_week` link (`:187`,
-  `/leagues/<id>/results?week=N` or `/play` — the long UUID URLs); `league_invite`
-  link (`:1694`, `https://waygerz.com/leagues`).
-- **friends** `service_friends.py`: `friend_request` link (`:78`,
-  `https://waygerz.com/friends`).
+**Excluded (left bare):** every `/c/B|L|F` link (wager links, shared invite links)
+— already short, own resolver, and re-wrapping a `/c` in a `/c/R` is explicitly
+disallowed by the shorten rule (target under `/c/` → skip). So `/c/R` never points
+at another `/c`.
 
-**Out of `/l` scope (stay bare `/c`, untracked):**
-- **contests** `_wager_link` → `https://waygerz.com/c/<Bcode>` (all 5 wager
-  templates).
-- **webui** `inviteUrl(code)` → `https://waygerz.com/c/<code>` (shared league /
-  friend "add me" links).
+## Architecture (all in `notifications`)
+- **Store** (`notifications` schema, one migration):
+  - `redirect_links`: `{ code (PK, base62 ~7 chars, no ambiguous chars, always
+    minted with a leading `R`), target_path (same-origin relative), kind
+    (template_key), created_at }`. **Idempotent** per `(target_path, kind)` — one
+    code reused across all recipients of a send (not per recipient).
+  - `link_clicks`: append a row / bump a rollup on each engagement, from **both**
+    channels: `{ kind, user_id?, source ('link' | 'inapp'), code?, at, ua?, ip? }`.
+    Prefer per-(code|kind, user) **counter rollups** over unbounded raw rows.
+- **B — shorten at send:** in `notify()`/`render()`, before substituting
+  `{{link}}`, if the target is a shortenable path (rule above) call an internal
+  `shorten(target, kind)` → `/c/R<code>` and substitute. **Best-effort**: if
+  minting fails, emit the direct link (never withhold). Emitters untouched.
+- **B — the redirect:** **`GET /c/R<code>`** on notifications (public, edge). One
+  handler: look up target (cached — immutable), record a `link` click (attribute
+  via the `Lax` `waygerz_access` cookie, decoded by flask-jwt-extended like every
+  service), **`302`** to the target. Use **302, never 301** (301 is cached
+  forever and skips the tracker on repeat taps). **Cache the target lookup only —
+  every tap still logs a click.**
+- **A — in-app/push open tracking:** the notifications feed already marks a
+  notification read on tap (`openItem` → `markRead` + `router.push(deep_link)`).
+  Add a lightweight click write there (`source='inapp'`, `kind=template_key`,
+  `user`) so an in-app/push open lands in the **same `link_clicks` store**. No
+  `/c/R` for in-app taps — they use the client `deep_link`, not a web redirect.
+- **Unify (A+B):** because both channels write `link_clicks` keyed by
+  `(kind, user)`, "who engaged with the pick'em notification" is one query over
+  the two sources.
 
-**Scope implication (the value concentrates on pick'em):** with `/c` excluded,
-nearly all the value collapses onto **pick'em** — it's the only in-scope link that
-gains from shortening AND the only strong tracking target. `league_invite` and
-`friend_request` point at **bare list pages** (`/leagues`, `/friends`), so wrapping
-them gives no length benefit and only a weak "opened the list" signal, while still
-incurring `/l`'s new availability dependency. Bet-invite click-through (arguably
-the biggest engagement signal) is intentionally **not** tracked (it's `/c`). Net:
-the build-now case really rests on pick'em alone — which leans toward **waiting**
-until there's more direct-link volume or a concrete analytics need (see Open
-decisions). (Unwired: `weekly_digest`. In-app `deep_link` excluded.)
+## Routing
+- **Prod ALB:** one rule `/c/R*` → **notifications** TG, at higher priority than
+  the webui default. `/c/*` (i.e. `B`/`L`/`F`) keeps hitting webui. (Precedent:
+  every `/v1/*` group already has an ALB→TG rule; this is the same mechanism, just
+  a `/c/R*` path pattern.)
+- **Local compose:** one nginx block `location /c/R { proxy_pass http://notifications:8000/c/R; }`
+  in `api/gateway/conf.d/default.conf` (today all non-`/api` → webui, so without it
+  `/c/R` would wrongly hit webui). B/L/F `/c/*` still → webui.
+- **No `proxy.ts` change** — webui never serves `/c/R`. No new gateway/ALB *service*,
+  just the one path rule + one local location.
 
-Each in-scope emitter becomes: build the real target as today → `shorten(target,
-kind)` → emit `https://waygerz.com/l/<code>`.
-
-## Architecture
-- **New `links` service** (mesh `links:8000`, group `platform` →
-  `/v1/platform/links`). Owns the store, the internal `shorten`, and the
-  click-log. A dedicated service (not folded into notifications) keeps the public
-  redirect path independently scalable/reliable — it sits in front of *every*
-  link tap.
-- **`GET /l/<code>` — the redirect, served by the links service itself** (public,
-  edge-reachable; the ALB `/l/*` rule points at the links target group). One
-  handler does it all: look up the target, record a click, `302` to the target.
-  webui is not in the path at all.
-  - **Routing:** prod adds an ALB rule `/l/*` → links TG (precedent:
-    `ROUTING_AUDIT_REMEDIATION.md` — all `/v1/*` groups already route ALB→TG
-    directly). Local compose adds a `location /l/ { proxy_pass http://links:8000/…; }`
-    block in `api/gateway/conf.d/default.conf` (today `:146` sends all non-`/api`
-    to webui, so without it `/l` would wrongly hit webui locally). **No webui /
-    `proxy.ts` change** — webui never sees `/l`.
-  - **Cache + 302:** cache the immutable code→target **lookup** (Redis/in-memory)
-    so a tap isn't a DB read; use **302, never 301** (301 is cached permanently by
-    browsers and would skip the tracker on repeat taps). **Caching applies to the
-    target lookup only — every tap still writes a click, even on a cache hit.**
-  - **Defense (not a tight per-IP limit):** resolve is hit on *every legit tap*,
-    and a viral link's taps can share one egress IP (carrier NAT / corp proxy), so
-    a per-IP rate limit would throttle real users. Keep resolve **cheap +
-    idempotent** and defend click integrity with **bot-UA / prefetch filtering**
-    (below); the gateway's existing global cap is a coarse backstop only.
-- **Store** (`links` schema):
-  - `links`: `{ code (PK, base62 ~7-8 chars), target_path, kind (template_key/
-    campaign), created_at, created_by?, expires_at? }`. `target_path` is stored
-    as a **relative in-app path** (`/leagues/…`, `/friends`) and the redirect
-    prepends the canonical origin — never store/redirect to an arbitrary external
-    host, and never a `/c/<code>` (those aren't shortened).
-  - `link_clicks`: `{ id, code, user_id?, at, ua?, ip? }` (raw events; roll up to
-    per-code counts for cheap reads). Consider retention TTL (privacy + volume).
-- **shorten (internal, mesh-only):** `POST /internal/shorten { target_path, kind }`
-  → `{ code, url }` (`X-Internal-Token`). Called by the Flask emitter services,
-  which ARE in the mesh. **Idempotent**: same (target_path, kind) reuses the
-  existing code — one `/l` code per (target, kind), reused across all recipients,
-  not one per send. (E.g. a league-week's `/leagues/<id>/results?week=N` +
-  `pickem_week` = one shared code for that week's blast.)
-
-## Attribution — how we know "who clicked"
-- **v1: per-link code + session, done inside the links service.** The `GET /l`
-  handler receives the `waygerz_access` cookie on the tap (same registrable
-  domain) and links — flask-jwt-extended, shared secret,
-  `locations=["cookies","headers"]` like every other service — decodes it to a
-  `user_id` (optional) and records it on the click. No webui hop and no
-  cookie-forwarding: because `/l` is served by links directly, the cookie arrives
-  at links first-hand. A **logged-out** tap (common from SMS) is an **anonymous**
-  click.
-- **⚠️ Depends on the cookie's `SameSite`.** A tap from an external app is a
-  top-level cross-site navigation: `SameSite=Lax` cookies ARE sent (→ attributed),
-  `Strict` would NOT be. Auth defaults `JWT_COOKIE_SAMESITE=Lax` (`auth config.py`)
-  — good; just confirm prod doesn't override it to `Strict`.
-- **Click counts are directional engagement analytics, not billing/payout**, so
-  their integrity isn't load-bearing: bot filtering + best-effort short-window
-  dedup are enough; a determined actor rotating IP/UA could inflate a count, and
-  that's acceptable.
-- **Deferred: per-recipient codes** (a unique `/l` code per member per send) →
-  exact identity even for logged-out SMS taps, at the cost of code volume. Only if
-  SMS-tap-level identity becomes a real need.
-
-## Failure & safety
-- **shorten() is best-effort:** if the links service is unreachable when a
-  notification is built, fall back to emitting the **direct** target URL — a link
-  is never withheld because tracking is down. (shorten is server-to-server from a
-  Flask service, which IS in the mesh → `http://links:8000/internal/shorten`,
-  `X-Internal-Token`. Only *resolve* is public/edge-reachable, per Architecture.)
-- **⚠️ `/l` is a new single point of failure for every *sent* link.** Once an `/l`
-  SMS link is sent it can't fall back to the direct target, so **links must be HA**
-  — today `/c/<code>` resolves client-side against the already-HA contests/leagues
-  services with no links service in the path, so this is a real new dependency.
-  (Direct-ALB removes the *drift* part of the first audit's concern — the tap is a
-  north-south public-zone request — but the HA requirement stands.) A bad/expired
-  code → `302 /` is sane (mirrors `/c`); a **transient** resolve failure → `302 /`
-  **silently drops the user's real destination** — a degraded, not broken, regression
-  to state explicitly.
-- **Open-redirect guard:** only same-origin **relative** `target_path`s, validated
-  **at shorten-time, in the links service (Python)** — not a JS check (shorten is
-  Flask). Prefer an **allowlist** of known leading segments (`/leagues`,
-  `/friends`; `/c/` is out of scope) over a blocklist; strip/reject control +
-  whitespace chars
-  (tab/newline); and still reject **protocol-relative (`//evil.com`)** and
-  **backslash (`/\evil.com`)** forms, which normalize into off-site redirects once
-  the origin is prepended.
-- **⚠️ Bot / link-preview inflation.** SMS, iMessage, WhatsApp, Slack, email and
-  security scanners **prefetch** URLs to build previews — they hit `/l/<code>`
-  before any human taps, polluting click data. Count **GET only** (ignore HEAD),
-  filter known bot UAs, honor `Purpose: prefetch` / `X-Purpose` headers, and dedup
-  per (code, ip/ua) within a short window.
-- **No Twilio link shortening (decided 2026-09-15).** SMS links go through our
-  `/l` only — keep Twilio's Messaging **Link Shortening / Click Tracking feature
-  OFF** so links aren't double-wrapped or double-counted.
-- **Privacy:** click logs tie a person + IP + UA to a tap — keep them internal, set
-  a retention window, and **disclose click tracking in the privacy policy** (ties
-  to the still-open `/terms` + `/privacy` counsel item).
-
-## Migrating ALL links (sequence)
-1. **links service** — schema + migration, internal `shorten`, the public
-   **`GET /l/<code>`** resolve+log+302 handler (links-side JWT attribution, cache
-   the lookup, GET-only + bot filtering, always log), click-log + per-code rollup,
-   shorten-time open-redirect validation (Python allowlist). Register in Service
-   Connect (`links`, port `http`).
-2. **Routing** — prod ALB rule `/l/*` → links TG; local gateway `location /l/`
-   block. No webui/`proxy.ts` change.
-3. **Migrate emitters** (each is a server-side Flask service that calls
-   `shorten()` with a best-effort direct-link fallback):
-   - leagues `pickem_week` + `league_invite` links;
-   - friends `friend_request` link.
-   (No client-side shorten needed — all in-scope emitters are server-side; `/c`
-   emitters, incl. webui `inviteUrl`, are out of scope.)
-4. **Analytics read** — an internal/admin endpoint (or query) for per-code and
-   per-recipient click counts; later a small dashboard.
+## Safety & failure
+- **Open-redirect guard (in notifications, Python, at shorten-time):** only
+  same-origin **relative** targets; **allowlist** the known leading segments
+  (`/leagues`, `/friends`); reject absolute, **protocol-relative (`//evil`)** and
+  **backslash (`/\evil`)** forms, and strip/reject control + whitespace chars. And
+  by construction never a `/c/...` target (the shorten rule skips those).
+- **`/c/R` is a new dependency in the tap path** for every *sent* SMS link — once
+  sent it can't fall back to the direct target — so notifications must stay HA (it
+  already is; it's on the send path today). A bad/expired code → `302 /`; a
+  *transient* resolve failure → `302 /` silently drops the destination (degraded,
+  not broken).
+- **Bot / link-preview inflation:** SMS/iMessage/Slack/scanners prefetch URLs.
+  Count **GET only** (ignore HEAD), filter known bot UAs, honor `Purpose:
+  prefetch`/`X-Purpose`, best-effort dedup per (code, ip/ua) short-window.
+- **Click counts are directional engagement analytics, not billing** — integrity
+  isn't load-bearing, so bot filtering + best-effort dedup are enough.
+- **No Twilio link shortening** — our `/c/R` handles SMS; keep Twilio's feature OFF.
+- **SameSite:** attribution needs the auth cookie on the top-level cross-site GET;
+  auth defaults `JWT_COOKIE_SAMESITE=Lax` (sent on nav) — confirm prod isn't
+  `Strict`.
+- **Privacy:** click logs tie user+IP+UA to a tap — internal only, retention
+  window, and **disclose click tracking in the privacy policy** (open counsel item).
 
 ## Scale (ties to the global pick'em)
-- Idempotent per-target codes keep volume low: a league-week link is **one** code,
-  not one per member — so even the 100k global league adds a handful of codes per
-  week, not 100k.
-- `link_clicks` is the volume risk at 100k: prefer **counter rollups** (increment
-  per code, optionally per (code,user)) over unbounded raw events, or sample/TTL
-  raw rows.
+- Per-`(target, kind)` codes keep volume tiny: a league-week link is **one** code
+  shared by all recipients — even the 100k global league adds a few codes/week,
+  not 100k.
+- `link_clicks` is the volume risk at 100k → **counter rollups**, not raw events
+  (or sample/TTL raw).
 
-## Analytics granularity & cross-channel
-- **Granularity limit of the v1 code scheme:** reuse-per-(target,`kind`) means you
-  can slice clicks by notification *type* (`kind`/`template_key`), but NOT by which
-  *send* drove a click when the same target is linked from multiple sends — same
-  code. Per-send/per-campaign attribution is the per-send-code upgrade (deferred).
-- **Cross-channel consistency:** in-app taps are NOT `/l` links (they're
-  client-side `deep_link` router pushes) — track those via the notifications
-  feed's existing read/tap state. So unified "click-through" reporting must union
-  two sources: `/l` clicks (SMS/push-browser/share) + in-app tap state. Decide the
-  combined metric up front so the `kind`/`template_key` dimension lines up.
+## Analytics
+- **Granularity:** per-`(target, kind)` slices clicks by notification *type*, not
+  by which *send* — fine for engagement; per-send codes are a deferred upgrade.
+- **Unified metric:** define "opened/clicked the pick'em notification" as the union
+  of `source='link'` (SMS `/c/R` taps) + `source='inapp'` (feed opens), grouped by
+  `kind`/`template_key`. Decide this shape up front so both writers agree.
 
 ## Mobile
-- Native apps (Flutter, planned): `/l` links open the browser → 302 → the target
-  deep link. Universal Links / App Links must map the **`/l`** (and `/c`) path
-  patterns to the app so an installed app intercepts the tap natively — which also
-  means the association files `/.well-known/apple-app-site-association` and
-  `assetlinks.json` (served by webui/gateway) must list `/l` and `/c`. Note for the
-  mobile build; no work now.
+- Universal Links / App Links: keep `/c/B|L|F` and the **target** routes
+  (`/leagues`, `/friends`) mapped to the app; **do NOT** claim `/c/R` for the app —
+  let it open in the browser so notifications can 302 (then the target route is
+  intercepted natively). Association files (`/.well-known/apple-app-site-association`,
+  `assetlinks.json`) served by webui/gateway. Note for the mobile build; no work now.
 
-## Cross-cutting
-- **Routing:** prod adds ONE ALB rule `/l/*` → links TG (above the webui default);
-  local compose adds ONE gateway `location /l/` block. No `proxy.ts` change — webui
-  is never in the `/l` path. (The earlier "no gateway/ALB change" was for the
-  rejected webui-handler design.)
-- `web/lib/api-paths.ts` gains the `links` prefix (for the internal `shorten`
-  callers / any `/v1/platform/links` admin reads).
-- New service → one migration in the `links` schema. **shorten** stays internal
-  (`X-Internal-Token`), reached by Flask emitter services over the mesh
-  (`http://links:8000`). **`GET /l`** is the public edge surface (ALB → links).
-  Register `links` in Service Connect (port `http`).
-- Commit each edit; deploy only when told.
+## v1 build sequence
+1. **notifications store** — migration: `redirect_links` + `link_clicks` (rollup
+   counters). Base62 code-gen helper (leading `R`, no ambiguous chars, unique).
+2. **shorten at send** — in `notify()`/`render()`, shorten a `{{link}}` whose
+   target is a non-`/c` same-origin path (allowlist-validated), best-effort with
+   direct-link fallback. (Emitters unchanged.)
+3. **`GET /c/R<code>`** handler on notifications — resolve (cached) + log click
+   (Lax-cookie attribution) + 302; GET-only + bot/prefetch filtering.
+4. **Routing** — prod ALB `/c/R*` → notifications TG; local gateway `location /c/R`.
+5. **A — in-app/push open tracking** — write a `source='inapp'` click on the feed's
+   existing open/markRead path, keyed by `template_key` + user.
+6. **Unified read** — an internal/admin query (later a small dashboard) over
+   `link_clicks` grouped by `kind` × source.
+
+Deploy order when built: notifications (migration) → the ALB `/c/R*` rule → webui
+(only if the feed-tap-tracking touches webui, which it does for step 5). Commit
+each edit; deploy only when told.
 
 ## Open decisions
-- Dedicated `links` service (recommended) vs fold into `notifications`.
-- Raw click events vs counter rollups from day one (leaning rollups + optional
-  sampled raw for debugging).
-- Given `/c` is out of scope, whether the remaining value (mainly shortening +
-  tracking pick'em's long links) justifies a whole new service now, or whether it
-  waits until there's more direct-link volume / a concrete analytics need.
+- **Emitter-side shorten vs send-time shorten** — plan assumes **send-time** in
+  notifications (zero emitter changes). Only revisit if a link needs shortening
+  outside a notification (e.g. a shared/browser-issued link) — deferred.
+- **Raw click events vs counter rollups** — leaning rollups from day one, optional
+  sampled raw for debugging.
+- **Per-send codes** (campaign-level attribution) — deferred; per-`(target,kind)`
+  is enough for engagement.
