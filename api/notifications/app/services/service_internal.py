@@ -348,9 +348,14 @@ def notify(data: dict) -> tuple[dict, int]:
     if not (user_id and category and (title or key)):
         return {"error": "user_id, category and a title or template_key are required"}, 400
 
-    # Shared body: render the template if given, else fall back to the title.
+    # Shared body (in-app feed + push). For league_alert (pick'em) drop the raw
+    # {{link}} — the card taps via deep_link, so the URL is just clutter. SMS
+    # re-renders below WITH the (shortened) link, so texts keep it.
+    render_context = {**context, "link": ""} if category == "league_alert" else context
     try:
-        body = render(key, context) if key else title
+        body = (render(key, render_context) if key else title)
+        if key:
+            body = body.rstrip()
     except RenderError as e:
         return {"error": str(e)}, 400
 
