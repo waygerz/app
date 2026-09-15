@@ -141,19 +141,19 @@ def _pickem_week_headline(league, finalized, opened, winner_line):
     return f"{name}: {finalized.label} is final."
 
 
-def _notify_pickem_week(league, *, finalized=None, opened=None):
+def _notify_pickem_week(league, *, finalized=None, opened=None, winner_line=None):
     """Notify a pick'em league's active members that a week opened and/or a week
     finished — one combined message (in-app + push; SMS is opt-in via the
     league_alert category default). Best-effort. Fan-out is per-member, which is
-    fine for normal leagues; a future 100k global league needs a batched path."""
+    fine for normal leagues; a future 100k global league needs a batched path.
+
+    A finished week is NEVER announced until it's fully graded: callers pass the
+    computed winner line, and if a `finalized` week has none yet we skip and let a
+    later tick (via `_reannounce_winners`, once grading completes) send it."""
     if league.league_type != PICKEM:
         return
-    winner_line = None
-    if finalized is not None:
-        try:
-            winner_line = _period_final_body(league.id, finalized)
-        except Exception:  # noqa: BLE001 — a notification must never break the tick
-            winner_line = None
+    if finalized is not None and not winner_line:
+        return  # week not graded yet — defer until the winner is known
     headline = _pickem_week_headline(league, finalized, opened, winner_line)
     deep_link = f"/leagues/{league.id}/play"
     link = f"https://waygerz.com{deep_link}"
@@ -633,7 +633,8 @@ def rollover_periods() -> int:
         # Grading runs before rollover in the same tick, so the winner is
         # normally known here; if anything is still ungraded we stay generic
         # rather than announce a wrong winner (filled in later by re-announce).
-        body = _period_final_body(league.id, p) or GENERIC_FINAL_BODY
+        winner_line = _period_final_body(league.id, p)
+        body = winner_line or GENERIC_FINAL_BODY
         _rollover_feed(league.id, "period_final", f"{p.label} is final",
                        body, dedup_key=f"period_final:{p.id}")
         if league.period_type == WEEKLY and league.status == L_ACTIVE:
@@ -660,9 +661,11 @@ def rollover_periods() -> int:
                            "Betting is now open.", dedup_key=f"period_opened:{league.id}:{nxt.index}")
         db.session.commit()
         # One combined pick'em notification: last week's result + the new week
-        # opening (no-op for non-pick'em leagues). After commit so it reflects
-        # the persisted state and never blocks the roll.
-        _notify_pickem_week(league, finalized=p, opened=opened_period)
+        # opening (no-op for non-pick'em leagues). Only sends if the finished
+        # week is already graded; otherwise _reannounce_winners fires it on a
+        # later tick once the winner is known. After commit so it never blocks
+        # the roll.
+        _notify_pickem_week(league, finalized=p, opened=opened_period, winner_line=winner_line)
         rolled += 1
     return rolled
 
@@ -691,6 +694,15 @@ def _reannounce_winners() -> int:
             item.body = body
             db.session.commit()
             updated += 1
+            # The rollover skipped the week notification because the winner
+            # wasn't known yet — now that it is, send the deferred combined
+            # message (result + the week that opened after this one).
+            league = db.session.get(League, period.league_id)
+            if league is not None:
+                opened = LeaguePeriod.query.filter_by(
+                    league_id=period.league_id, index=period.index + 1, status=OPEN,
+                ).first()
+                _notify_pickem_week(league, finalized=period, opened=opened, winner_line=body)
     return updated
 
 
