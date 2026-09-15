@@ -160,7 +160,7 @@ def _pickem_week_headline(league, finalized, opened, winner_line):
     return f"{name}: {finalized.label} is final."
 
 
-def _notify_pickem_week(league, *, finalized=None, opened=None, winner_line=None):
+def _notify_pickem_week(league, *, finalized=None, opened=None, winner_line=None, dedup_suffix=""):
     """Notify a pick'em league's active members that a week opened and/or a week
     finished — one combined message (in-app + push; SMS is opt-in via the
     league_alert category default). Best-effort. Fan-out is per-member, which is
@@ -168,7 +168,10 @@ def _notify_pickem_week(league, *, finalized=None, opened=None, winner_line=None
 
     A finished week is NEVER announced until it's fully graded: callers pass the
     computed winner line, and if a `finalized` week has none yet we skip and let a
-    later tick (via `_reannounce_winners`, once grading completes) send it."""
+    later tick (via `_reannounce_winners`, once grading completes) send it.
+
+    `dedup_suffix` extends the per-member dedup key so a deliberate manual re-send
+    (the send-pickem-week CLI --force) isn't suppressed as a duplicate."""
     if league.league_type != PICKEM:
         return
     if finalized is not None and not winner_line:
@@ -181,6 +184,8 @@ def _notify_pickem_week(league, *, finalized=None, opened=None, winner_line=None
     link = f"https://waygerz.com{deep_link}"
     ref_period = opened or finalized
     stub = f"pickem_week:{ref_period.id if ref_period is not None else league.id}"
+    if dedup_suffix:
+        stub = f"{stub}:{dedup_suffix}"
     members = LeagueMember.query.filter_by(league_id=league.id, status=ACTIVE).all()
     for m in members:
         _notify_league(
