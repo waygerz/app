@@ -192,14 +192,15 @@ at another `/c`.
    `render()`; only a non-`/c` same-origin path, allowlist-validated, query
    preserved; best-effort direct-link fallback. Emitters unchanged.
 3. **`GET /c/R<code>` blueprint** (new, non-`/v1`, registered at `/c` in
-   `register_blueprints`) — `verify_jwt_in_request(optional=True)`, cached resolve,
-   `302` preserving `?week`, GET-only + bot/prefetch filtering, **no write on a
-   code miss**, client IP from `X-Forwarded-For`.
+   `register_blueprints`) — `verify_jwt_in_request(optional=True)` **wrapped in
+   try/except → anonymous** (an expired cookie must not 5xx), cached resolve,
+   `302` (relative Location) preserving `?week`, GET-only + bot/prefetch filtering,
+   **no write on a code miss**, client IP from `X-Forwarded-For`.
 4. **Routing** — prod ALB `/c/R*` → notifications TG (+ WAF/rate-limit); local
    gateway `location /c/R` (no trailing slash, inherit `X-Forwarded-For`).
-5. **A — in-app open tracking** — a distinct `source='inapp'` click written from
-   webui `openItem` **only** (not the shared markRead), `template_key` derived
-   service-side from the notification row.
+5. **A — in-app open tracking** — a distinct `source='inapp'` click written
+   **fire-and-forget** from webui `openItem` **only** (not the shared markRead),
+   `template_key` derived service-side from the notification row.
 6. **Unified read** — an internal/admin query (later a small dashboard) over
    `link_clicks` grouped by `kind` × source.
 
