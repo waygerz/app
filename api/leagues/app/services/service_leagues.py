@@ -745,6 +745,43 @@ def _reannounce_winners() -> int:
     return updated
 
 
+def notify_week(league_id, me):
+    """Commissioner action: manually (re)send the pick'em week notification —
+    last finished week's result + the current open week — to all active members.
+    Runs in the in-mesh leagues service (unlike the one-off CLI), so it actually
+    reaches notifications. Only sends once the finished week is fully graded; no
+    dedup_suffix, so tapping it twice is idempotent per (period, member)."""
+    league_id = str(league_id)
+    league = db.session.get(League, league_id)
+    if not league or not _membership(league_id, me):
+        return {"error": "league not found"}, 404
+    if league.commissioner_id != me:
+        return {"error": "only the commissioner can send this"}, 403
+    if league.league_type != PICKEM:
+        return {"error": "not a pick'em league"}, 400
+
+    finalized = (
+        LeaguePeriod.query.filter_by(league_id=league_id, status=FINAL)
+        .order_by(LeaguePeriod.index.desc()).first()
+    )
+    opened = LeaguePeriod.query.filter_by(league_id=league_id, status=OPEN).first()
+    if finalized is None:
+        return {"error": "no finished week to announce yet"}, 400
+    winner_line = _period_final_body(league.id, finalized)
+    if not winner_line:
+        return {"error": "the finished week isn't fully graded yet"}, 409
+
+    members = LeagueMember.query.filter_by(league_id=league_id, status=ACTIVE).count()
+    _notify_pickem_week(league, finalized=finalized, opened=opened, winner_line=winner_line)
+    return {
+        "sent": True,
+        "members": members,
+        "finalized": finalized.label,
+        "opened": opened.label if opened else None,
+        "winner_line": winner_line,
+    }, 200
+
+
 def regenerate_periods(league_id, me):
     """Commissioner action: sync new/upcoming weeks from the master schedule into
     this pick'em league's periods (idempotent; never disturbs periods with picks)."""

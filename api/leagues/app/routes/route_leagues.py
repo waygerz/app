@@ -40,6 +40,11 @@ def activate_league(league_id):
     return ctrl.activate_league(league_id)
 
 
+@leagues_bp.post("/<uuid:league_id>/notify-week")
+def notify_week(league_id):
+    return ctrl.notify_week(league_id)
+
+
 @leagues_bp.put("/<uuid:league_id>/periods/<uuid:period_id>/picks")
 def submit_picks(league_id, period_id):
     return ctrl.submit_picks(league_id, period_id)

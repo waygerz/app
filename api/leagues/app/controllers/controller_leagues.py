@@ -48,6 +48,12 @@ def activate_league(league_id):
 
 
 @jwt_required(locations=["cookies", "headers"])
+def notify_week(league_id):
+    body, status = service.notify_week(league_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def submit_picks(league_id, period_id):
     body, status = service.submit_picks(league_id, period_id, get_jwt_identity(), request.get_json(silent=True) or {})
     return jsonify(body), status
