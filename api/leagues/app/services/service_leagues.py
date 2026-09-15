@@ -177,13 +177,14 @@ def _notify_pickem_week(league, *, finalized=None, opened=None, winner_line=None
     if finalized is not None and not winner_line:
         return  # week not graded yet — defer until the winner is known
     headline = _pickem_week_headline(league, finalized, opened, winner_line)
-    # A results message (a week finished) links to that FINISHED week's results
-    # (?week=<index>, which PickemResults selects on); a pure week-opened message
-    # links to Play so members go straight to making picks.
-    if finalized is not None:
-        deep_link = f"/leagues/{league.id}/results?week={finalized.index}"
-    else:
+    # Link to Play whenever there's an open week — the message's CTA is "make your
+    # picks," so land members there. Only the season-end case (a final week with no
+    # next) links to that finished week's results (?week=<index>, which
+    # PickemResults selects on).
+    if opened is not None:
         deep_link = f"/leagues/{league.id}/play"
+    else:
+        deep_link = f"/leagues/{league.id}/results?week={finalized.index}"
     link = f"https://waygerz.com{deep_link}"
     ref_period = opened or finalized
     stub = f"pickem_week:{ref_period.id if ref_period is not None else league.id}"
