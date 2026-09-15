@@ -1,9 +1,10 @@
 # Feature plan: `/l` link shortening & click tracking
 
-Net-new subsystem, planned 2026-09-15. A single front door for every **outbound**
-link the platform emits (SMS, push-opened-in-browser, shared invite links): issue
-a short `https://waygerz.com/l/<code>` that **logs a click** (attributing to the
-viewer's session when present) and **302-redirects** to the real destination.
+Net-new subsystem, planned 2026-09-15. A front door for the platform's **outbound
+direct-navigation links** (SMS, push-opened-in-browser) — **excluding `/c` invite/
+bet codes** (see Scope): issue a short `https://waygerz.com/l/<code>` that **logs a
+click** (attributing to the viewer's session when present) and **302-redirects** to
+the real destination.
 
 **Why:** (1) know *who clicked* a notification/link — cross-channel engagement
 analytics; (2) short links for SMS (a `/l/AbC123X` ≈ 28 chars vs the ~75-char
@@ -35,20 +36,34 @@ default) **+ one gateway `location /l/`** block for local compose.
 
 ---
 
-## What emits an outbound link today (the migration inventory)
-- **contests** `service_wagers.py` `_wager_link` → `https://waygerz.com/c/<Bcode>`
-  (wager_proposed / accepted / countered / settled_win / settled_loss).
+## Scope — `/l` covers direct-navigation links only, NOT `/c` codes
+**Decided 2026-09-15:** `/l` does **not** wrap `/c/<code>` invite/bet links. `/c`
+links are already short and carry their own resolver; we don't need to track code
+clicks, and wrapping them would only add a redirect hop. So `/l` never redirects
+to a `/c` — it shortens/tracks the *plain in-app route* links (which are also the
+long ones that benefit from shortening).
+
+**In `/l` scope (migrate):**
 - **leagues** `service_leagues.py`: `pickem_week` link (`:187`,
-  `/leagues/<id>/results?week=N` or `/play`); `league_invite` link (`:1694`,
-  `https://waygerz.com/leagues`).
+  `/leagues/<id>/results?week=N` or `/play` — the long UUID URLs); `league_invite`
+  link (`:1694`, `https://waygerz.com/leagues`).
 - **friends** `service_friends.py`: `friend_request` link (`:78`,
   `https://waygerz.com/friends`).
-- **webui** `lib/invites.ts` `inviteUrl(code)` → `https://waygerz.com/c/<code>` for
-  the **shared** league-invite and friend "add me" links.
-- (Unwired: `weekly_digest`.) In-app `deep_link` is excluded per above.
 
-Every one of these becomes: build the real target as today → call the links
-service `shorten(target, kind)` → emit `https://waygerz.com/l/<code>` instead.
+**Out of `/l` scope (stay bare `/c`, untracked):**
+- **contests** `_wager_link` → `https://waygerz.com/c/<Bcode>` (all 5 wager
+  templates).
+- **webui** `inviteUrl(code)` → `https://waygerz.com/c/<code>` (shared league /
+  friend "add me" links).
+
+**Scope implication:** with `/c` excluded, `/l`'s value is mainly **shortening +
+tracking the pick'em direct links** (long UUID paths) plus taps on
+`friend_request` / `league_invite`. Bet-invite click-through (arguably the biggest
+engagement signal) is intentionally **not** tracked — revisit if that changes.
+(Unwired: `weekly_digest`. In-app `deep_link` excluded.)
+
+Each in-scope emitter becomes: build the real target as today → `shorten(target,
+kind)` → emit `https://waygerz.com/l/<code>`.
 
 ## Architecture
 - **New `links` service** (mesh `links:8000`, group `platform` →
@@ -78,18 +93,17 @@ service `shorten(target, kind)` → emit `https://waygerz.com/l/<code>` instead.
 - **Store** (`links` schema):
   - `links`: `{ code (PK, base62 ~7-8 chars), target_path, kind (template_key/
     campaign), created_at, created_by?, expires_at? }`. `target_path` is stored
-    as a **relative path** (`/c/<code>`, `/leagues/…`) and the redirect prepends
-    the canonical origin — never store/redirect to an arbitrary external host.
+    as a **relative in-app path** (`/leagues/…`, `/friends`) and the redirect
+    prepends the canonical origin — never store/redirect to an arbitrary external
+    host, and never a `/c/<code>` (those aren't shortened).
   - `link_clicks`: `{ id, code, user_id?, at, ua?, ip? }` (raw events; roll up to
     per-code counts for cheap reads). Consider retention TTL (privacy + volume).
 - **shorten (internal, mesh-only):** `POST /internal/shorten { target_path, kind }`
   → `{ code, url }` (`X-Internal-Token`). Called by the Flask emitter services,
   which ARE in the mesh. **Idempotent**: same (target_path, kind) reuses the
-  existing code — so a bet gets **one `/l` code per (target, kind)**: because a
-  bet's `/c/<Bcode>` is linked from up to 5 template_keys (proposed/accepted/
-  countered/settled_win/settled_loss), that's up to 5 codes per bet (one per
-  notification type, each reused across all recipients), not one and not one
-  per send.
+  existing code — one `/l` code per (target, kind), reused across all recipients,
+  not one per send. (E.g. a league-week's `/leagues/<id>/results?week=N` +
+  `pickem_week` = one shared code for that week's blast.)
 
 ## Attribution — how we know "who clicked"
 - **v1: per-link code + session, done inside the links service.** The `GET /l`
@@ -129,8 +143,9 @@ service `shorten(target, kind)` → emit `https://waygerz.com/l/<code>` instead.
   to state explicitly.
 - **Open-redirect guard:** only same-origin **relative** `target_path`s, validated
   **at shorten-time, in the links service (Python)** — not a JS check (shorten is
-  Flask). Prefer an **allowlist** of known leading segments (`/c/`, `/leagues`,
-  `/friends`, `/bets`) over a blocklist; strip/reject control + whitespace chars
+  Flask). Prefer an **allowlist** of known leading segments (`/leagues`,
+  `/friends`; `/c/` is out of scope) over a blocklist; strip/reject control +
+  whitespace chars
   (tab/newline); and still reject **protocol-relative (`//evil.com`)** and
   **backslash (`/\evil.com`)** forms, which normalize into off-site redirects once
   the origin is prepended.
@@ -154,13 +169,12 @@ service `shorten(target, kind)` → emit `https://waygerz.com/l/<code>` instead.
    Connect (`links`, port `http`).
 2. **Routing** — prod ALB rule `/l/*` → links TG; local gateway `location /l/`
    block. No webui/`proxy.ts` change.
-3. **Migrate emitters** (each calls `shorten()` with a best-effort direct-link
-   fallback):
-   - contests `_wager_link`;
+3. **Migrate emitters** (each is a server-side Flask service that calls
+   `shorten()` with a best-effort direct-link fallback):
    - leagues `pickem_week` + `league_invite` links;
-   - friends `friend_request` link;
-   - webui `inviteUrl()` (shared league/friend links) — via an SSR/internal
-     shorten (or a small `/api`-fronted shorten) so the browser gets the `/l` form.
+   - friends `friend_request` link.
+   (No client-side shorten needed — all in-scope emitters are server-side; `/c`
+   emitters, incl. webui `inviteUrl`, are out of scope.)
 4. **Analytics read** — an internal/admin endpoint (or query) for per-code and
    per-recipient click counts; later a small dashboard.
 
@@ -208,5 +222,6 @@ service `shorten(target, kind)` → emit `https://waygerz.com/l/<code>` instead.
 - Dedicated `links` service (recommended) vs fold into `notifications`.
 - Raw click events vs counter rollups from day one (leaning rollups + optional
   sampled raw for debugging).
-- Whether shared invite links (`inviteUrl`) shorten client-side (needs a public
-  `/api` shorten, rate-limited) or only server-issued links shorten in v1.
+- Given `/c` is out of scope, whether the remaining value (mainly shortening +
+  tracking pick'em's long links) justifies a whole new service now, or whether it
+  waits until there's more direct-link volume / a concrete analytics need.
