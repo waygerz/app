@@ -749,8 +749,9 @@ def notify_week(league_id, me):
     """Commissioner action: manually (re)send the pick'em week notification —
     last finished week's result + the current open week — to all active members.
     Runs in the in-mesh leagues service (unlike the one-off CLI), so it actually
-    reaches notifications. Only sends once the finished week is fully graded; no
-    dedup_suffix, so tapping it twice is idempotent per (period, member)."""
+    reaches notifications. Only sends once the finished week is fully graded. Each
+    manual send uses a unique dedup_suffix so it RE-DELIVERS (a fresh in-app card +
+    SMS), rather than being deduped against a prior send — a deliberate re-blast."""
     league_id = str(league_id)
     league = db.session.get(League, league_id)
     if not league or not _membership(league_id, me):
@@ -772,7 +773,10 @@ def notify_week(league_id, me):
         return {"error": "the finished week isn't fully graded yet"}, 409
 
     members = LeagueMember.query.filter_by(league_id=league_id, status=ACTIVE).count()
-    _notify_pickem_week(league, finalized=finalized, opened=opened, winner_line=winner_line)
+    _notify_pickem_week(
+        league, finalized=finalized, opened=opened, winner_line=winner_line,
+        dedup_suffix=datetime.utcnow().strftime("%Y%m%d%H%M%S"),
+    )
     return {
         "sent": True,
         "members": members,
