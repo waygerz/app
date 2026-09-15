@@ -10,7 +10,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export type InviteType = 'league' | 'friend' | 'bet';
 export type CodeState = 'ok' | 'invalid' | 'expired' | 'consumed';
-export type InviteAction = 'join' | 'add' | 'accept' | 'decline';
+export type InviteAction = 'join' | 'add' | 'accept' | 'decline' | 'undecline';
 
 export interface LeagueCodePreview {
   id: string;

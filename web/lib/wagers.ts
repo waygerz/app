@@ -250,6 +250,8 @@ export const wagersApi = {
     req<ProposeResult>(WAGERS_API, { method: 'POST', body: JSON.stringify(input) }),
   accept: (id: string) => req(`${WAGERS_API}/${id}/accept`, { method: 'POST' }),
   decline: (id: string) => req(`${WAGERS_API}/${id}/decline`, { method: 'POST' }),
+  // Reverse a decline — reopen a declined bet so it can be accepted after all.
+  undecline: (id: string) => req(`${WAGERS_API}/${id}/undecline`, { method: 'POST' }),
   cancel: (id: string) => req(`${WAGERS_API}/${id}/cancel`, { method: 'POST' }),
   // Renegotiate an open bet: new stake, and for a spread/total a new line in the
   // caller's own perspective (the server normalizes it to proposer-perspective).

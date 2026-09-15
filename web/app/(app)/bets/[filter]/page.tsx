@@ -109,6 +109,11 @@ export default function BetsView() {
     onSuccess: () => { toast.success('Bet declined'); refresh(); },
     onError: onErr,
   });
+  const undeclineM = useMutation({
+    mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.undecline)),
+    onSuccess: () => { toast.success('Bet reopened'); refresh(); },
+    onError: onErr,
+  });
   const cancelM = useMutation({
     mutationFn: (ids: string[]) => Promise.all(ids.map(wagersApi.cancel)),
     onSuccess: () => { toast.success('Bet cancelled'); refresh(); },
@@ -189,6 +194,18 @@ export default function BetsView() {
           <Button size="sm" variant="ghost" className="h-9 w-full" disabled={rejectCancelM.isPending} onClick={() => rejectCancelM.mutate(ids)}>Reject</Button>
         </>
       );
+    }
+    // A bet you declined can be reopened (un-declined) right up until kickoff,
+    // so you can accept it after all.
+    if (w.status === 'declined') {
+      const iDeclined = w.pending_id != null ? w.pending_id === me : w.acceptor_id === me;
+      const started = w.start_time ? Date.now() >= new Date(w.start_time).getTime() : false;
+      if (iDeclined && !started) {
+        return (
+          <Button size="sm" className="h-9 w-full" disabled={undeclineM.isPending} onClick={() => undeclineM.mutate(ids)}>Un-decline</Button>
+        );
+      }
+      return null;
     }
     if (w.status !== 'open') return null;
     // Whoever's turn it is can Accept / Counter / Decline; the member holding the

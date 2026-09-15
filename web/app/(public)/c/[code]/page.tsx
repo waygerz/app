@@ -101,8 +101,14 @@ function CodeContent({ code }: { code: string }) {
         toast.success('Joined');
         router.push(`/leagues/${res.target_id}`);
       } else if (res.type === 'bet') {
-        toast.success(action === 'accept' ? 'Bet accepted' : 'Bet rejected');
-        router.push('/bets/all');
+        if (action === 'undecline') {
+          // Stay on the bet view and re-resolve so Accept/Counter/Reject return.
+          toast.success('Bet reopened');
+          qc.invalidateQueries({ queryKey: ['invite-code', code] });
+        } else {
+          toast.success(action === 'accept' ? 'Bet accepted' : 'Bet rejected');
+          router.push('/bets/all');
+        }
       } else if (action === 'decline') {
         toast.success('Declined');
         router.push('/');
@@ -313,6 +319,8 @@ function CodeContent({ code }: { code: string }) {
     const myTurn = data.viewer.my_turn ?? rel === 'acceptor';
     const countered = (w.stake_round ?? 0) > 0;
     const canAct = myTurn && data.actions.includes('accept');
+    // A declined bet the viewer turned down can be reopened (until kickoff).
+    const canUndecline = myTurn && data.actions.includes('undecline');
 
     // Live/final game scores (from the ingestor event behind the bet), rendered
     // the same way the in-app bet card does so the shared link shows the game.
@@ -342,7 +350,7 @@ function CodeContent({ code }: { code: string }) {
           : 'Push'
       : terminal
         ? w.status === 'declined'
-          ? `${otherName} declined`
+          ? canUndecline ? 'You declined this bet' : `${otherName} declined`
           : w.status === 'cancelled'
             ? 'Bet cancelled'
             : 'Bet refunded'
@@ -448,6 +456,16 @@ function CodeContent({ code }: { code: string }) {
             <Button variant="outline" onClick={() => act.mutate('decline')} disabled={busy}>
               Reject
             </Button>
+          </div>
+        ) : canUndecline ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-center text-sm text-muted-foreground">
+              Changed your mind? Reopen this bet to accept it.
+            </p>
+            <Button onClick={() => act.mutate('undecline')} disabled={busy}>
+              {act.isPending ? 'Reopening…' : 'Un-decline'}
+            </Button>
+            <Button variant="outline" onClick={() => router.push('/bets/all')}>View bets</Button>
           </div>
         ) : (
           <div className="flex flex-col gap-2">

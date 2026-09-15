@@ -56,6 +56,12 @@ def decline(wager_id):
 
 
 @jwt_required(locations=["cookies", "headers"])
+def undecline(wager_id):
+    body, status = service.undecline_wager(wager_id, get_jwt_identity())
+    return jsonify(body), status
+
+
+@jwt_required(locations=["cookies", "headers"])
 def counter(wager_id):
     body, status = service.counter_wager(
         wager_id, get_jwt_identity(), request.get_json(silent=True) or {}

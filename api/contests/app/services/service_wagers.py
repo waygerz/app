@@ -750,6 +750,39 @@ def decline(wager, user_id):
     return wager
 
 
+def undecline(wager, user_id):
+    """Reverse a decline — the member who turned the bet down takes it back to
+    OPEN so it can be accepted (or re-countered) after all. Re-holds the standing
+    staker's (held_id) stake, refunded on decline, at a fresh ref; the same
+    pre-kickoff cutoff as accept applies. pending_id is unchanged, so it's the
+    reopener's turn again."""
+    try:
+        _lock_bounded(wager)
+    except LockTimeout:
+        raise WagerError("this bet is busy right now — try again in a moment")
+    if wager.status != DECLINED:
+        raise WagerError("only a declined bet can be reopened")
+    if wager.pending_id != user_id:
+        raise WagerError("only the member who declined can reopen this bet")
+    dt = _parse_start(wager)
+    if dt is not None and datetime.utcnow() >= dt:
+        raise WagerError("the game has already started — this bet can no longer be reopened")
+    # Re-hold the standing staker's stake (refunded on decline) at a fresh ref,
+    # mirroring counter()'s re-hold so it can't dedup against the decline refund.
+    new_ref = _ref_counter(wager.id, wager.stake_round or 0, _nonce())
+    try:
+        hold(_account(wager.league_id), wager.held_id, wager.amount_cents, new_ref)
+    except InsufficientFunds:
+        db.session.rollback()
+        raise WagerError("the other side no longer has enough to cover this bet")
+    wager.held_ref = new_ref
+    wager.status = OPEN
+    wager.settled_at = None
+    db.session.commit()
+    _reconcile(wager)
+    return wager
+
+
 def cancel(wager, user_id):
     """Withdraw the standing offer — only the staker (held_id) has money at stake,
     so only they can call it off."""
@@ -849,6 +882,13 @@ def _parse_start(wager):
     if dt.tzinfo is not None:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
+
+
+def _can_reopen(wager) -> bool:
+    """A declined bet can still be reopened until its game starts (a startless
+    offer never expires)."""
+    dt = _parse_start(wager)
+    return dt is None or datetime.utcnow() < dt
 
 
 def _cancel_locked(wager) -> bool:
@@ -1658,6 +1698,10 @@ def decline_wager(wager_id, me):
     return _act(wager_id, me, decline)
 
 
+def undecline_wager(wager_id, me):
+    return _act(wager_id, me, undecline)
+
+
 # ---- Unified /c/<code> deep link (bet type) -------------------------------
 def resolve_code(me, code):
     """Resolve a /c/B<code> bet link to the shared contract shape (see
@@ -1685,8 +1729,12 @@ def resolve_code(me, code):
         rel = "other"
     # Offer Accept/Decline to whoever's turn it is — after a counter that may be
     # the proposer, not the acceptor. Countering stays in-app (no Counter over the
-    # link in v1).
-    actions = ["accept", "decline"] if (state == "ok" and my_turn) else []
+    # link in v1). A declined bet offers Un-decline to the member who declined,
+    # up until the game starts (accept()/undecline() re-check the cutoff).
+    if w.status == DECLINED and my_turn and _can_reopen(w):
+        actions = ["undecline"]
+    else:
+        actions = ["accept", "decline"] if (state == "ok" and my_turn and w.status == OPEN) else []
     return {
         "type": "bet",
         "code": code,
@@ -1708,9 +1756,9 @@ def act_on_code(me, code, data):
     w = db.session.get(Wager, rec.wager_id) if rec else None
     if not rec or not w:
         return {"error": "bet not found"}, 404
-    if action not in ("accept", "decline"):
+    if action not in ("accept", "decline", "undecline"):
         return {"error": "unsupported action"}, 400
-    fn = accept if action == "accept" else decline
+    fn = {"accept": accept, "decline": decline, "undecline": undecline}[action]
     try:
         fn(w, me)
     except WagerError as e:
