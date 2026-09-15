@@ -20,17 +20,18 @@ codes + session attribution** (not per-recipient) in v1; **idempotent shorten**
 fallback** so a notification link is never blocked; **no Twilio link shortening**
 — our `/l` handles SMS too (keep Twilio's feature off).
 
-**Corrected after the 2026-09-15 audit** (the original draft's core hop was
-impossible): **`resolve` is a PUBLIC `/v1/platform/links/resolve` route** (webui
-is not meshed and `/internal/*` is edge-denied), **attribution is done LINKS-SIDE**
-(webui can't decode the JWT — it forwards the cookie), and the `/l` tap path
-**rides the unresolved private-zone drift** until webui is meshed. See Architecture
-+ Failure & safety.
-
-**Prerequisite:** ideally **mesh webui as a Service Connect client first**
-(`ROUTING_AUDIT_REMEDIATION.md` finding #6) so the resolve hop is in-VPC and not
-on the drift path; otherwise accept that every `/l` tap depends on the re-pinned
-private zone.
+**Architecture (settled over two 2026-09-15 audits): `/l` is served directly by
+the `links` service via an ALB `/l/*` rule — NOT through webui.** `/l` is a pure
+redirect (no render, unlike the `/c` *page*), so `GET /l/<code>` on the links
+service does resolve → log → `302` in one hop: browser → public-zone ALB → links.
+This is a north-south request, so it never touches the drifted private zone, and
+it removes what the first audit flagged: no webui-SSR hop, **no "mesh webui first"
+prerequisite**, no private-zone-drift SPOF, no cookie-forwarding, and no separate
+public resolve endpoint. Attribution is done **inside links** — a `Lax`
+`waygerz_access` cookie is sent on the top-level GET to `waygerz.com/l/…`, and
+links (flask-jwt-extended, shared secret) decodes it directly. Cost vs the
+rejected webui-handler design: **one ALB `/l/*` rule** (priority above the webui
+default) **+ one gateway `location /l/`** block for local compose.
 
 ---
 
@@ -55,65 +56,58 @@ service `shorten(target, kind)` → emit `https://waygerz.com/l/<code>` instead.
   click-log. A dedicated service (not folded into notifications) keeps the public
   redirect path independently scalable/reliable — it sits in front of *every*
   link tap.
-- **`/l/<code>` resolve** is a **Next.js Route Handler** in webui
-  (`app/(public)/l/[code]/route.ts`) — a handler (not a page), no render, just a
-  fast `NextResponse.redirect(target, 302)`. It calls the links service to resolve
-  the target + record the click, then redirects.
-  - **⚠️ How the handler reaches links (audit 2026-09-15 MUST-FIX #1/#2):** webui
-    is **NOT in the Service Connect mesh** (`web/taskdef.json` is bridge-mode, no
-    `serviceConnectConfiguration`; `ROUTING_AUDIT_REMEDIATION.md` finding #6 is
-    still TODO), so the handler **cannot** call `http://links:8000`. Its only
-    SSR path is `API_INTERNAL_URL = https://waygerz.com` (the ALB, via the
-    drift-prone private zone), and the ALB/gateway **404s `/internal/*`**.
-    Therefore the resolve endpoint the handler calls **must be a PUBLIC
-    `POST /v1/platform/links/resolve`** (edge-reachable, abuse/rate-limit
-    guarded) — NOT `/internal/resolve`. And note the tap path **rides the
-    unresolved private-zone drift bug** (`ROUTING_AUDIT_REMEDIATION.md` §1,
-    finding #1a): either **mesh webui first** (finding #6) or accept that every
-    `/l` tap depends on the re-pinned zone. Do not claim "in-VPC via mesh."
-  - **Cache + 302:** the handler/links should **cache** the immutable code→target
-    lookup (Redis/in-memory) so a tap isn't a DB hit; use **302 (never 301)** so
-    browsers don't permanently cache the redirect and skip the tracker on repeat.
-  - `proxy.ts`: add `/l` to `PUBLIC_PREFIXES` (alongside `/c`,`/terms`,`/privacy`)
-    — REQUIRED, else the middleware 302s a logged-out `/l` tap to `/login` and
-    breaks SMS.
-  - Gateway/ALB: `/l/*` is non-`/api`, so it already routes to webui — **no
-    gateway/ALB change** for `/l` itself (the resolve route is a normal `/v1/...`
-    already forwarded).
+- **`GET /l/<code>` — the redirect, served by the links service itself** (public,
+  edge-reachable; the ALB `/l/*` rule points at the links target group). One
+  handler does it all: look up the target, record a click, `302` to the target.
+  webui is not in the path at all.
+  - **Routing:** prod adds an ALB rule `/l/*` → links TG (precedent:
+    `ROUTING_AUDIT_REMEDIATION.md` — all `/v1/*` groups already route ALB→TG
+    directly). Local compose adds a `location /l/ { proxy_pass http://links:8000/…; }`
+    block in `api/gateway/conf.d/default.conf` (today `:146` sends all non-`/api`
+    to webui, so without it `/l` would wrongly hit webui locally). **No webui /
+    `proxy.ts` change** — webui never sees `/l`.
+  - **Cache + 302:** cache the immutable code→target **lookup** (Redis/in-memory)
+    so a tap isn't a DB read; use **302, never 301** (301 is cached permanently by
+    browsers and would skip the tracker on repeat taps). **Caching applies to the
+    target lookup only — every tap still writes a click, even on a cache hit.**
+  - **Defense (not a tight per-IP limit):** resolve is hit on *every legit tap*,
+    and a viral link's taps can share one egress IP (carrier NAT / corp proxy), so
+    a per-IP rate limit would throttle real users. Keep resolve **cheap +
+    idempotent** and defend click integrity with **bot-UA / prefetch filtering**
+    (below); the gateway's existing global cap is a coarse backstop only.
 - **Store** (`links` schema):
   - `links`: `{ code (PK, base62 ~7-8 chars), target_path, kind (template_key/
     campaign), created_at, created_by?, expires_at? }`. `target_path` is stored
     as a **relative path** (`/c/<code>`, `/leagues/…`) and the redirect prepends
-    the canonical origin — never store/redirect to an arbitrary external host
-    (open-redirect guard: only same-origin relative paths).
+    the canonical origin — never store/redirect to an arbitrary external host.
   - `link_clicks`: `{ id, code, user_id?, at, ua?, ip? }` (raw events; roll up to
     per-code counts for cheap reads). Consider retention TTL (privacy + volume).
 - **shorten (internal, mesh-only):** `POST /internal/shorten { target_path, kind }`
   → `{ code, url }` (`X-Internal-Token`). Called by the Flask emitter services,
   which ARE in the mesh. **Idempotent**: same (target_path, kind) reuses the
-  existing code (a bet's `/c/<Bcode>` gets one `/l` code for its life, not one per
-  send).
-- **resolve (PUBLIC, edge-reachable):** `POST /v1/platform/links/resolve { code }`
-  with the caller's `waygerz_access` cookie forwarded → `{ target_path }`, and it
-  records the click (deriving `user_id` from the cookie links-side). **Public**
-  because the `/l` webui handler is not meshed and reaches it through the ALB;
-  **rate-limit / abuse-guard it** since it's edge-exposed. Never `/internal/*`
-  (edge-denied).
+  existing code — so a bet gets **one `/l` code per (target, kind)**: because a
+  bet's `/c/<Bcode>` is linked from up to 5 template_keys (proposed/accepted/
+  countered/settled_win/settled_loss), that's up to 5 codes per bet (one per
+  notification type, each reused across all recipients), not one and not one
+  per send.
 
 ## Attribution — how we know "who clicked"
-- **v1: per-link code + session, resolved LINKS-SIDE (audit MUST-FIX #3).** webui
-  **cannot decode the JWT** itself — it has no `JWT_SECRET_KEY` env and no
-  jose/jsonwebtoken dependency. So the `/l` handler **forwards** the
-  `waygerz_access` cookie (read via `next/headers`) to the links `resolve`
-  endpoint, and **links** — flask-jwt-extended, shared secret,
-  `locations=["cookies","headers"]` like every other service — derives the
-  `user_id` (optional) and records it on the click. A **logged-out** tap (common
-  from SMS) is an **anonymous** click.
-- **⚠️ Attribution depends on the cookie's `SameSite`.** A tap from an external
-  app (SMS/Messages) is a top-level cross-site navigation: `SameSite=Lax` cookies
-  ARE sent (→ attributed), `SameSite=Strict` would NOT be (→ anonymous even when
-  logged in). Confirm `waygerz_access` is `Lax` before assuming SMS attribution
-  works.
+- **v1: per-link code + session, done inside the links service.** The `GET /l`
+  handler receives the `waygerz_access` cookie on the tap (same registrable
+  domain) and links — flask-jwt-extended, shared secret,
+  `locations=["cookies","headers"]` like every other service — decodes it to a
+  `user_id` (optional) and records it on the click. No webui hop and no
+  cookie-forwarding: because `/l` is served by links directly, the cookie arrives
+  at links first-hand. A **logged-out** tap (common from SMS) is an **anonymous**
+  click.
+- **⚠️ Depends on the cookie's `SameSite`.** A tap from an external app is a
+  top-level cross-site navigation: `SameSite=Lax` cookies ARE sent (→ attributed),
+  `Strict` would NOT be. Auth defaults `JWT_COOKIE_SAMESITE=Lax` (`auth config.py`)
+  — good; just confirm prod doesn't override it to `Strict`.
+- **Click counts are directional engagement analytics, not billing/payout**, so
+  their integrity isn't load-bearing: bot filtering + best-effort short-window
+  dedup are enough; a determined actor rotating IP/UA could inflate a count, and
+  that's acceptable.
 - **Deferred: per-recipient codes** (a unique `/l` code per member per send) →
   exact identity even for logged-out SMS taps, at the cost of code volume. Only if
   SMS-tap-level identity becomes a real need.
@@ -124,21 +118,22 @@ service `shorten(target, kind)` → emit `https://waygerz.com/l/<code>` instead.
   is never withheld because tracking is down. (shorten is server-to-server from a
   Flask service, which IS in the mesh → `http://links:8000/internal/shorten`,
   `X-Internal-Token`. Only *resolve* is public/edge-reachable, per Architecture.)
-- **⚠️ Resolve is a new single point of failure (audit MUST-FIX #5).** `/l` sits in
-  the tap path of **every migrated link**, and once an `/l` SMS link is *sent* it
-  can't fall back to the direct target. Today `/c/<code>` resolves client-side
-  against the already-HA contests/leagues services with **no** links service in the
-  path — so `/l` makes links-service (and webui-SSR) availability **load-bearing
-  for every previously-sent message**, and it inherits the private-zone drift path
-  (finding #1a). Accept only if links is HA and (ideally) **webui is meshed first**.
-  A bad/expired code → `302 /` is sane (mirrors `/c`); but a **transient** resolve
-  failure → `302 /` **silently drops the user's real destination** — a real (if
-  degraded) regression to state explicitly.
-- **Open-redirect guard (audit MUST-FIX #4):** only same-origin **relative**
-  `target_path`s, validated **at shorten-time**. Reject not just absolute URLs but
-  **protocol-relative (`//evil.com`)** and **backslash (`/\evil.com`)** forms,
-  which normalize into off-site redirects once prefixed. Enforce
-  `path.startsWith('/') && !path.startsWith('//') && !path.startsWith('/\\')`.
+- **⚠️ `/l` is a new single point of failure for every *sent* link.** Once an `/l`
+  SMS link is sent it can't fall back to the direct target, so **links must be HA**
+  — today `/c/<code>` resolves client-side against the already-HA contests/leagues
+  services with no links service in the path, so this is a real new dependency.
+  (Direct-ALB removes the *drift* part of the first audit's concern — the tap is a
+  north-south public-zone request — but the HA requirement stands.) A bad/expired
+  code → `302 /` is sane (mirrors `/c`); a **transient** resolve failure → `302 /`
+  **silently drops the user's real destination** — a degraded, not broken, regression
+  to state explicitly.
+- **Open-redirect guard:** only same-origin **relative** `target_path`s, validated
+  **at shorten-time, in the links service (Python)** — not a JS check (shorten is
+  Flask). Prefer an **allowlist** of known leading segments (`/c/`, `/leagues`,
+  `/friends`, `/bets`) over a blocklist; strip/reject control + whitespace chars
+  (tab/newline); and still reject **protocol-relative (`//evil.com`)** and
+  **backslash (`/\evil.com`)** forms, which normalize into off-site redirects once
+  the origin is prepended.
 - **⚠️ Bot / link-preview inflation.** SMS, iMessage, WhatsApp, Slack, email and
   security scanners **prefetch** URLs to build previews — they hit `/l/<code>`
   before any human taps, polluting click data. Count **GET only** (ignore HEAD),
@@ -152,15 +147,13 @@ service `shorten(target, kind)` → emit `https://waygerz.com/l/<code>` instead.
   to the still-open `/terms` + `/privacy` counsel item).
 
 ## Migrating ALL links (sequence)
-0. **(Prerequisite, recommended)** mesh webui as a Service Connect client
-   (`ROUTING_AUDIT_REMEDIATION.md` #6) so the resolve hop is in-VPC, not on the
-   drift path. If skipped, accept the re-pinned-zone dependency for every tap.
-1. **links service** — schema + migration, internal `shorten` + **public**
-   `resolve` (rate-limited, links-side JWT attribution), click-log, per-code count
-   rollup, shorten-time open-redirect validation. Register in Service Connect
-   (`links`, port `http`).
-2. **`/l` route handler** in webui (calls public `resolve`, forwards the cookie,
-   302, GET-only + bot filtering, cache) + `proxy.ts` PUBLIC_PREFIX.
+1. **links service** — schema + migration, internal `shorten`, the public
+   **`GET /l/<code>`** resolve+log+302 handler (links-side JWT attribution, cache
+   the lookup, GET-only + bot filtering, always log), click-log + per-code rollup,
+   shorten-time open-redirect validation (Python allowlist). Register in Service
+   Connect (`links`, port `http`).
+2. **Routing** — prod ALB rule `/l/*` → links TG; local gateway `location /l/`
+   block. No webui/`proxy.ts` change.
 3. **Migrate emitters** (each calls `shorten()` with a best-effort direct-link
    fallback):
    - contests `_wager_link`;
@@ -192,18 +185,22 @@ service `shorten(target, kind)` → emit `https://waygerz.com/l/<code>` instead.
 
 ## Mobile
 - Native apps (Flutter, planned): `/l` links open the browser → 302 → the target
-  deep link. Universal Links / App Links config must map **`/l`** (and `/c`) to the
-  app so a tap opens natively. Note for the mobile build; no work now.
+  deep link. Universal Links / App Links must map the **`/l`** (and `/c`) path
+  patterns to the app so an installed app intercepts the tap natively — which also
+  means the association files `/.well-known/apple-app-site-association` and
+  `assetlinks.json` (served by webui/gateway) must list `/l` and `/c`. Note for the
+  mobile build; no work now.
 
 ## Cross-cutting
-- No gateway/ALB change (`/l` is non-`/api`, served by webui like `/c`).
-- `web/lib/api-paths.ts` gains the `links` prefix; `proxy.ts` PUBLIC_PREFIXES gains
-  `/l`.
+- **Routing:** prod adds ONE ALB rule `/l/*` → links TG (above the webui default);
+  local compose adds ONE gateway `location /l/` block. No `proxy.ts` change — webui
+  is never in the `/l` path. (The earlier "no gateway/ALB change" was for the
+  rejected webui-handler design.)
+- `web/lib/api-paths.ts` gains the `links` prefix (for the internal `shorten`
+  callers / any `/v1/platform/links` admin reads).
 - New service → one migration in the `links` schema. **shorten** stays internal
-  (`X-Internal-Token`), reached by Flask services over the mesh
-  (`http://links:8000`) — never the ALB form. **resolve** is the exception: it's a
-  PUBLIC `/v1/platform/links/resolve` route because its caller (the `/l` webui
-  handler) is not meshed — so it goes through the ALB and must be abuse-guarded.
+  (`X-Internal-Token`), reached by Flask emitter services over the mesh
+  (`http://links:8000`). **`GET /l`** is the public edge surface (ALB → links).
   Register `links` in Service Connect (port `http`).
 - Commit each edit; deploy only when told.
 
