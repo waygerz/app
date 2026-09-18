@@ -126,7 +126,7 @@ class _WagerTile extends StatelessWidget {
 
   /// The proposer's pick, e.g. "Braves ML", "Braves -1.5", "Over 8.5".
   String _pick(Wager w) {
-    final teamFor = (String side) => side == 'home' ? (w.homeTeam ?? 'Home') : (w.awayTeam ?? 'Away');
+    String teamFor(String side) => side == 'home' ? (w.homeTeam ?? 'Home') : (w.awayTeam ?? 'Away');
     switch (w.betType) {
       case 'spread':
         final sign = (w.line ?? 0) > 0 ? '+' : '';

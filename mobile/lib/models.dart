@@ -1,6 +1,7 @@
 /// Plain data models mirroring the API JSON. Kept intentionally small — grow
 /// these as screens need more fields. JSON keys match the backend snake_case;
 /// parse defensively (null-safe with defaults) since some endpoints enrich rows.
+library;
 
 class User {
   User({required this.id, required this.phone, required this.displayName, this.avatarKey});

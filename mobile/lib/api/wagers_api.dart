@@ -11,11 +11,8 @@ class WagersApi {
 
   /// The caller's wagers, optionally scoped to a league and/or status.
   Future<List<Wager>> mine({String? leagueId, String? status}) async {
-    final q = <String>[];
-    if (leagueId != null) q.add('league_id=$leagueId');
-    if (status != null) q.add('status=$status');
-    final qs = q.isEmpty ? '' : '?${q.join('&')}';
-    final res = await _api.get('$_p/wagers$qs');
+    final res = await _api.get(
+        withQuery('$_p/wagers', {'league_id': leagueId, 'status': status}));
     final list = (res['wagers'] as List<dynamic>? ?? []);
     return list.map((e) => Wager.fromJson(e as Map<String, dynamic>)).toList();
   }

@@ -7,6 +7,18 @@ import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../auth/token_store.dart';
 
+/// Appends [params] to [path] as a correctly URL-encoded query string. Null
+/// values are dropped; everything else is stringified. Use this instead of
+/// interpolating `?k=v` by hand so values like `league:<id>` are encoded.
+String withQuery(String path, Map<String, Object?> params) {
+  final q = <String, String>{
+    for (final e in params.entries)
+      if (e.value != null) e.key: '${e.value}',
+  };
+  if (q.isEmpty) return path;
+  return '$path?${Uri(queryParameters: q).query}';
+}
+
 class ApiException implements Exception {
   ApiException(this.statusCode, this.message);
   final int statusCode;
@@ -103,7 +115,7 @@ class ApiClient {
     final refresh = await _tokens.refreshToken;
     final device = await ensureDeviceUuid();
     if (refresh == null) return false;
-    final res = await _raw('POST', Config.auth + '/refresh',
+    final res = await _raw('POST', '${Config.auth}/refresh',
         auth: false, body: {'refresh_token': refresh, 'device_uuid': device});
     if (res.statusCode != 200) return false;
     final data = jsonDecode(res.body) as Map<String, dynamic>;

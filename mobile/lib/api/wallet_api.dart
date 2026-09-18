@@ -13,7 +13,7 @@ class WalletApi {
   static String leagueAccount(String leagueId) => 'league:$leagueId';
 
   Future<WalletBalance> balance(String account) async {
-    final res = await _api.get('$_p/me?account=$account');
+    final res = await _api.get(withQuery('$_p/me', {'account': account}));
     return WalletBalance.fromJson(res);
   }
 
@@ -21,7 +21,8 @@ class WalletApi {
 
   /// Ledger entries for an account (grants, holds, payouts, refunds).
   Future<List<Map<String, dynamic>>> transactions(String account, {int limit = 50}) async {
-    final res = await _api.get('$_p/me/transactions?account=$account&limit=$limit');
+    final res = await _api.get(
+        withQuery('$_p/me/transactions', {'account': account, 'limit': limit}));
     final list = (res['transactions'] as List<dynamic>? ?? []);
     return list.cast<Map<String, dynamic>>();
   }

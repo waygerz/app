@@ -7,7 +7,7 @@ class NotificationsApi {
   final ApiClient _api;
 
   Future<List<FeedNotification>> feed({int limit = 50}) async {
-    final res = await _api.get('${Config.notifications}/me?limit=$limit');
+    final res = await _api.get(withQuery('${Config.notifications}/me', {'limit': limit}));
     final list = (res['notifications'] as List<dynamic>? ?? []);
     return list.map((e) => FeedNotification.fromJson(e as Map<String, dynamic>)).toList();
   }

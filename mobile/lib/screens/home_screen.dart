@@ -18,15 +18,24 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _tab = 0;
 
+  // Created once per State (not per build) on the shared ApiClient owned by
+  // AuthController, so rebuilds don't churn API objects.
+  late final NotificationsApi _notifications;
+
+  @override
+  void initState() {
+    super.initState();
+    _notifications = NotificationsApi(context.read<AuthController>().api);
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
-    final notifications = NotificationsApi(auth.api);
 
     final tabs = <Widget>[
       LeaguesScreen(api: auth.api),
       BetsScreen(api: auth.api),
-      NotificationsScreen(api: notifications),
+      NotificationsScreen(api: _notifications),
       _ProfileTab(user: auth.user, onLogout: auth.logout),
     ];
 
