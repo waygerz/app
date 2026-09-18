@@ -1,3 +1,6 @@
+from datetime import datetime
+
+import click
 from flask import Flask
 from sqlalchemy import text
 
@@ -29,5 +32,17 @@ def create_app(config_class=Config):
         db.session.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
         db.session.commit()
         print(f"schema ready: {schema}")
+
+    @app.cli.command("rescore")
+    @click.option("--since", required=True, help="First day to re-read, YYYY-MM-DD (UTC).")
+    @click.option("--until", default=None, help="Last day, YYYY-MM-DD (default: today).")
+    def rescore(since, until):
+        """Re-read ESPN boards for a date range and overwrite stored results."""
+        from app.services.service_schedule import rescore_dates
+
+        start = datetime.strptime(since, "%Y-%m-%d").date()
+        end = datetime.strptime(until, "%Y-%m-%d").date() if until else datetime.utcnow().date()
+        for league, n in rescore_dates(start, end).items():
+            print(f"rescored {league}: {n} events")
 
     return app

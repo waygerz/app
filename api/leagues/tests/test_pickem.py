@@ -371,6 +371,33 @@ def test_reconcile_flips_stale_grade_when_result_corrected(client, auth_headers,
         assert svc.reconcile_recent_finals() == 0
 
 
+def test_reconcile_fixes_open_week_immediately(client, auth_headers, app, monkeypatch):
+    # A game wrongly finalized mid-week (e.g. a 0-0 placeholder called a draw) must
+    # re-grade as soon as the real result lands — not after the week rolls over.
+    from app.services import service_leagues as svc
+
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
+    lid, pid = d["id"], _period_id(d)
+    client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+               json={"picks": [{"event_id": "EVT1", "side": "home"}]},
+               headers=auth_headers(U1))
+    monkeypatch.setattr(svc, "get_event", lambda eid: {
+        "status": "final", "winner_side": "draw", "home_score": 0, "away_score": 0})
+    with app.app_context():
+        from app.models.pick import Pick as _P
+        assert svc.grade_open_periods() == 1
+        assert _P.query.filter_by(period_id=pid).one().correct is False
+        assert db.session.get(LeaguePeriod, pid).status == period_model.OPEN
+
+    monkeypatch.setattr(svc, "get_event", lambda eid: {
+        "status": "final", "winner_side": "home", "home_score": 41, "away_score": 31})
+    with app.app_context():
+        from app.models.pick import Pick as _P
+        assert svc.reconcile_recent_finals() == 1
+        assert _P.query.filter_by(period_id=pid).one().correct is True
+
+
 def test_member_picks_hidden_when_start_unknown(client, auth_headers):
     # Fail closed: a member can't see another member's picks when we can't prove
     # the lock has passed (no readable start time) — else the slate leaks early.

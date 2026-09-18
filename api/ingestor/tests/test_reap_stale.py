@@ -28,10 +28,11 @@ def _seed(*evs):
 
 
 def test_reaps_past_scheduled_and_live(app):
-    long_ago = datetime.utcnow() - timedelta(days=2)
+    now = datetime.utcnow()
     _seed(
-        _ev("old-sched", SCHEDULED, long_ago),
-        _ev("old-live", LIVE, long_ago),
+        # Never seen start: only reaped once refresh_scores' catch-up window lapses.
+        _ev("old-sched", SCHEDULED, now - sched._CATCHUP_WINDOW - timedelta(hours=1)),
+        _ev("old-live", LIVE, now - timedelta(days=2)),
     )
     n = sched.reap_stale_events()
     assert n == 2
@@ -56,6 +57,24 @@ def test_reaps_stuck_game_with_score_to_final(app):
     got = Event.query.filter_by(external_id="stuck-live").one()
     assert got.status == FINAL
     assert got.winner_side == "home"  # 20 > 17
+
+
+def test_pregame_placeholder_score_is_not_a_result(app):
+    # ESPN's pre-game board reports "0" for both teams. A game we never saw start
+    # must not be finalized as a 0-0 draw (2026-09-18: BUF 41-31 graded a draw).
+    now = datetime.utcnow()
+    recent = _ev("missed", SCHEDULED, now - timedelta(hours=13))
+    recent.home_score, recent.away_score = 0, 0
+    old = _ev("abandoned", SCHEDULED, now - sched._CATCHUP_WINDOW - timedelta(hours=1))
+    old.home_score, old.away_score = 0, 0
+    _seed(recent, old)
+    n = sched.reap_stale_events()
+    assert n == 1
+    # Inside the catch-up window: left for refresh_scores to pull the real final.
+    assert Event.query.filter_by(external_id="missed").one().status == SCHEDULED
+    # Past it: void (no contest), never a fabricated draw.
+    got = Event.query.filter_by(external_id="abandoned").one()
+    assert got.status == CANCELLED and got.winner_side is None
 
 
 def test_acquire_team_write_lock_runs(app):
@@ -164,23 +183,45 @@ def test_live_window_survives_a_long_running_game(app):
     assert sched.has_live_window("baseball", "mlb") is True
 
 
-# ---- score refresh queries yesterday+today ---------------------------------
+# ---- score refresh: one ESPN request per date --------------------------------
 
-def test_refresh_scores_queries_yesterday_and_today(app, monkeypatch):
-    """ESPN buckets a game under its LOCAL date, so a 7pm ET game lands on the
-    next UTC day. Querying only today's UTC date dropped last night's games
-    before their final score arrived."""
-    seen = {}
+def _capture_boards(monkeypatch):
+    seen = []
 
     def fake_scoreboard(sport, league, params=None):
-        seen['params'] = params
+        seen.append((params or {}).get("dates"))
         return {"events": []}
 
     monkeypatch.setattr(sched, "_scoreboard", fake_scoreboard)
     monkeypatch.setattr(sched, "_mark", lambda key: None)  # no Redis in tests
-    sched.refresh_scores("baseball", "mlb", force=True)
+    return seen
 
-    dates = seen['params']['dates']
+
+def test_refresh_scores_queries_yesterday_and_today(app, monkeypatch):
+    """ESPN buckets a game under its LOCAL date, so a 7pm ET game lands on the
+    next UTC day — query yesterday too. One request per date: ESPN answers the
+    YYYYMMDD-YYYYMMDD range form with HTTP 400, which froze every score."""
+    seen = _capture_boards(monkeypatch)
+    sched.refresh_scores("baseball", "mlb", force=True)
     today = datetime.utcnow().strftime("%Y%m%d")
     yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y%m%d")
-    assert dates == f"{yesterday}-{today}"
+    assert seen == [yesterday, today]
+
+
+def test_refresh_scores_catches_up_stuck_games(app, monkeypatch):
+    # A game still 'scheduled' two days after kickoff gets its own board re-read
+    # (and the day before, for ESPN's local-date bucketing).
+    start = datetime.utcnow() - timedelta(days=2)
+    _seed(_ev("stuck", SCHEDULED, start))
+    seen = _capture_boards(monkeypatch)
+    sched.refresh_scores("baseball", "mlb", force=True)
+    assert start.strftime("%Y%m%d") in seen
+    assert (start - timedelta(days=1)).strftime("%Y%m%d") in seen
+    assert all("-" not in d for d in seen)
+
+
+def test_date_range_fixtures_fetch_one_day_per_request(app, monkeypatch):
+    seen = _capture_boards(monkeypatch)
+    sched._ingest_date_range("baseball", "mlb")
+    assert len(seen) == app.config["SCHEDULE_WEEKS_AHEAD"] * 7
+    assert all(len(d) == 8 for d in seen)

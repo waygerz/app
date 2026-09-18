@@ -10,7 +10,7 @@ is identical across team sports, so parsing + upsert are shared. Leagues differ
 only in how the fetch window is expressed:
   * native_week (NFL, college FB) — read the scoreboard `calendar`, iterate its
     week entries, fetch `?dates={year}&seasontype={t}&week={n}` per week.
-  * date_range (NBA, MLB, NHL, soccer) — fetch `?dates={YYYYMMDD}-{YYYYMMDD}`
+  * date_range (NBA, MLB, NHL, soccer) — fetch `?dates={YYYYMMDD}` per day
     over a forward window.
 
 Adding a league is one LEAGUE_REGISTRY line. Slugs match the catalog because RTS
@@ -230,18 +230,14 @@ def _ingest_native(sport, league):
 
 
 def _ingest_date_range(sport, league):
-    """Date-based sports: page a forward window in 14-day chunks, each chunk
-    committing independently and rolling back on error."""
+    """Date-based sports: walk a forward window one day per request (ESPN
+    rejects the YYYYMMDD-YYYYMMDD range form with HTTP 400 since ~2026-09-15),
+    each day committing independently and rolling back on error."""
     weeks_ahead = current_app.config["SCHEDULE_WEEKS_AHEAD"]
-    total_days = weeks_ahead * 7
     start = datetime.utcnow().date()
     total = 0
-    step = 14
-    day = 0
-    while day < total_days:
-        d0 = start + timedelta(days=day)
-        d1 = start + timedelta(days=min(day + step - 1, total_days - 1))
-        dates = f"{d0.strftime('%Y%m%d')}-{d1.strftime('%Y%m%d')}"
+    for offset in range(weeks_ahead * 7):
+        dates = (start + timedelta(days=offset)).strftime("%Y%m%d")
         try:
             board = _scoreboard(sport, league, {"dates": dates})
             total += _ingest_events(board.get("events"), sport, league)
@@ -251,7 +247,6 @@ def _ingest_date_range(sport, league):
             current_app.logger.warning(
                 "schedule range %s/%s %s: %s", sport, league, dates, exc
             )
-        day += step
     return total
 
 
@@ -347,17 +342,76 @@ def refresh_scores(sport, league, force=False):
         # current UTC date meant last night's games fell off the board before
         # their final score landed — they aged out at their 0-0 placeholder and
         # the stale-event reaper then marked them final, so wagers on them could
-        # never auto-settle.
+        # never auto-settle. Plus the dates of any game still unresolved past its
+        # kickoff, so a missed final is caught up from ESPN (free) rather than
+        # left to the reaper.
+        #
+        # One request per date: ESPN rejects the YYYYMMDD-YYYYMMDD range form
+        # (HTTP 400 since ~2026-09-15), which silently froze every score.
         now = datetime.utcnow()
-        dates = f"{(now - timedelta(days=1)).strftime('%Y%m%d')}-{now.strftime('%Y%m%d')}"
-        board = _scoreboard(sport, league, {"dates": dates})
-        n = _ingest_events(board.get("events"), sport, league)
+        dates = {now.date(), (now - timedelta(days=1)).date()} | _stuck_dates(sport, league, now)
+        n = 0
+        for day in sorted(dates):
+            board = _scoreboard(sport, league, {"dates": day.strftime("%Y%m%d")})
+            n += _ingest_events(board.get("events"), sport, league)
         db.session.commit()
     except Exception:
         db.session.rollback()  # keep the session clean for the next league
         raise
     _mark(_k_scores(sport, league))
     return n
+
+
+def rescore_dates(start, end) -> dict:
+    """Re-read every registered league's ESPN board for each day in [start, end]
+    and upsert, overwriting whatever we stored — the repair for results written
+    while score refresh was down (e.g. games the reaper closed as 0-0 draws).
+    Each league/day commits on its own."""
+    out = {}
+    for entry in LEAGUE_REGISTRY:
+        sport, league = entry["sport"], entry["league"]
+        n = 0
+        day = start
+        while day <= end:
+            try:
+                board = _scoreboard(sport, league, {"dates": day.strftime("%Y%m%d")})
+                n += _ingest_events(board.get("events"), sport, league)
+                db.session.commit()
+            except Exception as exc:  # noqa: BLE001 — one bad day shouldn't sink the rest
+                db.session.rollback()
+                current_app.logger.warning("rescore %s/%s %s: %s", sport, league, day, exc)
+            day += timedelta(days=1)
+        out[f"{sport}/{league}"] = n
+    return out
+
+
+# How far back refresh_scores re-checks unresolved games, and the most extra
+# dates it will fetch in one pass (each is one ESPN request).
+_CATCHUP_WINDOW = timedelta(days=3)
+_CATCHUP_MAX_DATES = 6
+
+
+def _stuck_dates(sport, league, now):
+    """Board dates (the UTC start date and the day before, since ESPN buckets by
+    local date) of games in this league still scheduled/live after they must
+    have ended."""
+    maxdur = _MAX_GAME_DURATION.get(sport, timedelta(hours=5))
+    rows = (
+        db.session.query(Event.start_time)
+        .filter(
+            Event.sport == sport,
+            Event.league == league,
+            Event.status.in_([SCHEDULED, LIVE]),
+            Event.start_time < now - maxdur,
+            Event.start_time > now - _CATCHUP_WINDOW,
+        )
+        .all()
+    )
+    out = set()
+    for (start,) in rows:
+        out.add(start.date())
+        out.add((start - timedelta(days=1)).date())
+    return set(sorted(out, reverse=True)[:_CATCHUP_MAX_DATES])
 
 
 # One league's fixture pass per tick, guarded by a Redis lease. Doing all
@@ -469,26 +523,35 @@ def tick():
 # TODAY's board, and ESPN drops old games from the scoreboard, so an event whose
 # final-status flip is missed can stay 'scheduled'/'live' forever. Sweep anything
 # still scheduled/live well past its start:
-#   * If we captured a score, the game plainly finished (ESPN just never flipped
-#     it to 'final') — finalize it and derive the winner from the score. Never
-#     void a played game: that would strand Pick'em picks and refund live wagers.
-#   * If there's no score at all, we truly never observed a result — 'cancelled'
-#     (void-refunds H2H, voids Pick'em picks, no contest).
+#   * If we saw it LIVE with a score, the game plainly finished (ESPN just never
+#     flipped it to 'final') — finalize it and derive the winner from the score.
+#     Never void a played game: that would strand Pick'em picks and refund live
+#     wagers.
+#   * A game we never saw start is NOT scored: ESPN's pre-game board reports
+#     "0" for both teams, so trusting it turned every missed game into a 0-0
+#     draw (2026-09-15..18). Leave it for refresh_scores' catch-up, and only
+#     after that window lapses call it 'cancelled' (void-refunds H2H, voids
+#     Pick'em picks, no contest).
 # The grace comfortably exceeds any real game length, so a genuinely live game is
 # never mis-reaped.
 _STALE_EVENT_GRACE = timedelta(hours=12)
 
 
 def reap_stale_events() -> int:
-    cutoff = datetime.utcnow() - _STALE_EVENT_GRACE
+    now = datetime.utcnow()
     stuck = (
         Event.query
-        .filter(Event.status.in_([SCHEDULED, LIVE]), Event.start_time < cutoff)
+        .filter(
+            or_(
+                and_(Event.status == LIVE, Event.start_time < now - _STALE_EVENT_GRACE),
+                and_(Event.status == SCHEDULED, Event.start_time < now - _CATCHUP_WINDOW),
+            )
+        )
         .all()
     )
     n = 0
     for ev in stuck:
-        if ev.home_score is not None and ev.away_score is not None:
+        if ev.status == LIVE and ev.home_score is not None and ev.away_score is not None:
             ev.status = FINAL
             if ev.home_score > ev.away_score:
                 ev.winner_side = "home"

@@ -588,14 +588,21 @@ def reconcile_recent_finals(window_days: int = 3) -> int:
     current event and flip any that now disagree; when a period changes, reset its
     winner post to generic so `_reannounce_winners` re-announces the right winner.
 
-    Bounded to recently-ended periods so it only re-checks weeks whose results
-    could still move; get_event is a cached ingestor read, deduped per period.
+    Bounded to in-progress and recently-ended periods so it only re-checks weeks
+    whose results could still move — an open week included, so a corrected result
+    fixes its standings now rather than after rollover. get_event is a cached
+    ingestor read, deduped per period.
     """
     cutoff = datetime.utcnow() - timedelta(days=window_days)
     periods = LeaguePeriod.query.filter(
-        LeaguePeriod.status == FINAL,
-        LeaguePeriod.ends_at.isnot(None),
-        LeaguePeriod.ends_at >= cutoff,
+        db.or_(
+            LeaguePeriod.status.in_([OPEN, period_model.CLOSED]),
+            db.and_(
+                LeaguePeriod.status == FINAL,
+                LeaguePeriod.ends_at.isnot(None),
+                LeaguePeriod.ends_at >= cutoff,
+            ),
+        )
     ).all()
     changed = 0
     for period in periods:
