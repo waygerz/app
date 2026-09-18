@@ -5,18 +5,18 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
 
-/// One bottom-nav destination. [avatar] replaces the icon (the Profile tab).
+/// One bottom-nav destination.
 class NavItem {
-  const NavItem({required this.label, this.icon, this.avatar, this.badge = 0});
+  const NavItem({required this.label, required this.icon, this.badge = 0});
   final String label;
-  final IconData? icon;
-  final Widget? avatar;
+  final IconData icon;
   final int badge;
 }
 
 /// The web's mobile bottom bar (components/shell/bottom-nav.tsx): background at
 /// 95% with a blur, top border, 24px lucide icons over 11px/500 labels, active =
-/// primary icon + foreground label, red "9+"-capped unread badges.
+/// primary icon + foreground label, red "9+"-capped unread badges. The account
+/// menu is in the header, top right.
 class WaygerzBottomNav extends StatelessWidget {
   const WaygerzBottomNav({super.key, required this.items, required this.index, required this.onTap});
   final List<NavItem> items;
@@ -65,8 +65,7 @@ class _Tab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = WaygerzColors.of(context);
-    final icon = item.avatar ??
-        Icon(item.icon, size: 24, color: active ? c.primary : c.mutedForeground);
+    final icon = Icon(item.icon, size: 24, color: active ? c.primary : c.mutedForeground);
     return InkResponse(
       onTap: onTap,
       radius: 32,
@@ -93,8 +92,7 @@ class _Tab extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                // The Profile tab's label always stays muted, as on the web.
-                color: active && item.avatar == null ? c.foreground : c.mutedForeground,
+                color: active ? c.foreground : c.mutedForeground,
               ),
             ),
           ],

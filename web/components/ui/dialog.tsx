@@ -15,7 +15,7 @@ const dialogContentVariants = cva(
         // but is capped to the viewport height and scrolls its own body, so a
         // tall dialog never clips.
         default:
-          'left-[50%] top-[50%] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] ' +
+          'left-[50%] top-[50%] w-[calc(100%-2rem)] max-w-[calc(var(--app-max-width)-2rem)] translate-x-[-50%] translate-y-[-50%] ' +
           'max-sm:max-h-[85dvh] max-sm:overflow-y-auto',
         fullscreen: 'inset-5',
       },

@@ -3,17 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Ticket, Bell, MessageCircle, type LucideIcon } from 'lucide-react';
-import { UserAvatar } from '@/components/user-avatar';
 import { useAuth } from '@/auth/AuthContext';
 import { useUnreadMessages } from '@/lib/messaging';
 import { useUnreadNotifications } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
-import { ProfileMenu } from './profile-menu';
 
 // Persistent mobile tab bar (hidden at lg+). Mirrors the native app's tabs so
 // web + mobile feel like one product. Alerts + Messages link to their pages;
-// their badges come from the shared unread-count hooks. Sits above the home
-// indicator (safe-area).
+// their badges come from the shared unread-count hooks. The account menu lives
+// in the header (top right). Sits above the home indicator (safe-area).
 
 const tabBase =
   'flex flex-1 flex-col items-center justify-center gap-1 pt-2 pb-1 min-h-14 text-[11px] font-medium';
@@ -59,7 +57,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-background/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="app-column fixed inset-x-0 bottom-0 z-30 flex items-stretch border-t border-border bg-background/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <Link href="/" className={tabBase} aria-current={isLeagues ? 'page' : undefined}>
         <TabInner icon={Home} label="Leagues" active={isLeagues} />
@@ -76,19 +74,6 @@ export function BottomNav() {
       <Link href="/messages" className={tabBase} aria-label="Messages" aria-current={isMessages ? 'page' : undefined}>
         <TabInner icon={MessageCircle} label="Messages" active={isMessages} badge={msgUnread} />
       </Link>
-
-      <ProfileMenu>
-        <button type="button" className={tabBase} aria-label="Profile">
-          <UserAvatar
-            userId={user.id}
-            name={user.display_name}
-            imageUrl={user.avatar_key}
-            className="size-6"
-            clickable={false}
-          />
-          <span className="text-muted-foreground">Profile</span>
-        </button>
-      </ProfileMenu>
     </nav>
   );
 }

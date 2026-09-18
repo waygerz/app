@@ -31,7 +31,7 @@ export function HeaderToolbar() {
         </Button>
       ) : (
         <>
-          {/* Messages, Alerts + Profile all live in the bottom nav on mobile; keep them here on desktop. */}
+          {/* Messages + Alerts live in the bottom nav on mobile; keep them here on desktop. */}
           <div className="hidden items-center gap-1 sm:gap-2.5 lg:flex">
             <Button asChild variant="ghost" size="icon" className="relative text-white/90 hover:text-white">
               <Link href="/messages" aria-label="Messages">
@@ -45,18 +45,19 @@ export function HeaderToolbar() {
                 <IconBadge count={notifUnread} />
               </Link>
             </Button>
-            <ProfileMenu>
-              <button type="button" className="cursor-pointer" aria-label="Account menu">
-                <UserAvatar
-                  userId={user.id}
-                  name={user.display_name}
-                  imageUrl={user.avatar_key}
-                  className="size-8"
-                  clickable={false}
-                />
-              </button>
-            </ProfileMenu>
           </div>
+          {/* The account menu sits top right at every width. */}
+          <ProfileMenu>
+            <button type="button" className="flex size-11 cursor-pointer items-center justify-center lg:size-auto" aria-label="Account menu">
+              <UserAvatar
+                userId={user.id}
+                name={user.display_name}
+                imageUrl={user.avatar_key}
+                className="size-8"
+                clickable={false}
+              />
+            </button>
+          </ProfileMenu>
         </>
       )}
     </nav>

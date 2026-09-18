@@ -289,7 +289,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
 
       {/* Save bar pinned to the bottom of the page (open week only) */}
       {evs.length > 0 && editable && (
-        <div className="fixed inset-x-0 bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-20 border-t border-border bg-background/95 backdrop-blur-sm lg:bottom-0">
+        <div className="app-column fixed inset-x-0 bottom-[calc(4rem_+_env(safe-area-inset-bottom))] z-20 border-t border-border bg-background/95 backdrop-blur-sm lg:bottom-0">
           <div className="container flex items-center justify-between gap-3 py-3">
             <span className="text-xs text-muted-foreground">
               {picksLocked

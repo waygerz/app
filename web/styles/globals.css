@@ -160,6 +160,35 @@
 .dark[data-accent='indigo'] { --brand: var(--color-indigo-500); }
 .dark[data-accent='violet'] { --brand: var(--color-violet-500); }
 
+/** Mobile-only layout **/
+/* The webui is always the phone layout, at every screen size: the breakpoints
+   are pushed past any real screen so `sm:` / `md:` / `lg:` / `xl:` / `2xl:`
+   never apply, and the app renders in one phone-width column (--app-max-width)
+   centered on wider screens. Size things for the phone; don't add breakpoint
+   variants. */
+@theme {
+  --breakpoint-sm: 999rem;
+  --breakpoint-md: 999rem;
+  --breakpoint-lg: 999rem;
+  --breakpoint-xl: 999rem;
+  --breakpoint-2xl: 999rem;
+}
+
+:root {
+  --app-max-width: 30rem;
+}
+
+/* Wider than the column: frame it — a muted page behind a bordered column. */
+@media (min-width: 31rem) {
+  body {
+    background-color: var(--muted);
+  }
+  .app-frame {
+    background-color: var(--background);
+    box-shadow: 1px 0 0 var(--border), -1px 0 0 var(--border);
+  }
+}
+
 /** Theme Setup **/
 @theme inline {
   /** Base Colors **/
@@ -283,10 +312,15 @@ html {
 
 /** Custom Containers **/
 @utility container {
-  /* App-wide centered column. The webui is ~99% mobile, so on larger screens
-     every page (and the header) sits in a single tablet-ish column rather than
-     stretching the full width. All page wrappers + the header share this. */
-  @apply mx-auto w-full max-w-2xl px-4 lg:px-5;
+  /* The app's phone-width column (see "Mobile-only layout"). Page wrappers and
+     the header share it. */
+  @apply mx-auto w-full max-w-(--app-max-width) px-4;
+}
+
+/* Fixed-position bars (header, bottom nav, save bars) and overlays span the
+   viewport; this pins them to the column instead. */
+@utility app-column {
+  @apply mx-auto w-full max-w-(--app-max-width);
 }
 
 @utility container-fluid {

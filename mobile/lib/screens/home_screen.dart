@@ -1,26 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../api/messaging_api.dart';
 import '../api/notifications_api.dart';
 import '../app_nav.dart';
 import '../auth/auth_controller.dart';
-import '../models.dart';
 import '../push/push_service.dart';
 import '../shell/app_header.dart';
 import '../shell/bottom_nav.dart';
-import '../theme/app_theme.dart';
 import '../ui/ui.dart';
-import 'account/account_screen.dart';
 import 'bets_screen.dart';
-import 'friends_screen.dart';
 import 'leagues_screen.dart';
 import 'messages_screen.dart';
 import 'notifications_screen.dart';
-import 'widgets.dart';
 
 /// The signed-in app shell, matching the webui on a phone: the dark top header
 /// with the page title, and the bottom nav (Leagues · Bets · Alerts · Messages ·
@@ -47,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final PushService _push;
   late final AppNav _nav;
   final _messagesKey = GlobalKey<MessagesScreenState>();
+  late final void Function() _removeSignOutHook;
 
   @override
   void initState() {
@@ -56,6 +51,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _messaging = MessagingApi(api);
     _push = PushService(_notifications);
     _nav = context.read<AppNav>();
+    // Stop pushes to this device for this account before signing out.
+    _removeSignOutHook = context.read<AuthController>().onBeforeSignOut(_push.unregister);
     // Signed in: open any link that arrived while signed out, and start push.
     _nav.attach(api);
     _push.register(
@@ -74,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _poll?.cancel();
     _nav.attach(null);
+    _removeSignOutHook();
     super.dispose();
   }
 
@@ -90,33 +88,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onTap(int i) {
-    if (i == 4) {
-      _openProfile();
-      return;
-    }
     _nav.selectTab(i);
     if (i == AppNav.tabMessages) _messagesKey.currentState?.reload();
     _refreshBadges();
   }
 
-  void _openProfile() {
-    final auth = context.read<AuthController>();
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (_) => _ProfileSheet(
-        user: auth.user,
-        onLogout: () async {
-          await _push.unregister(); // no more pushes to this device for this account
-          await auth.logout();
-        },
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
-    final user = auth.user;
     final tab = context.watch<AppNav>().tab;
 
     final tabs = <Widget>[
@@ -137,76 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const NavItem(label: 'Bets', icon: WaygerzBottomNav.bets),
           NavItem(label: 'Alerts', icon: WaygerzBottomNav.alerts, badge: _alerts),
           NavItem(label: 'Messages', icon: WaygerzBottomNav.messages, badge: _messages),
-          NavItem(
-            label: 'Profile',
-            avatar: UserAvatar(userId: user?.id ?? '', name: user?.displayName ?? '?', avatarKey: user?.avatarKey, size: 24),
-          ),
         ],
-      ),
-    );
-  }
-}
-
-class _ProfileSheet extends StatelessWidget {
-  const _ProfileSheet({required this.user, required this.onLogout});
-  final User? user;
-  final Future<void> Function() onLogout;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = WaygerzColors.of(context);
-    final u = user;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(children: [
-              UserAvatar(userId: u?.id ?? '', name: u?.displayName ?? '?', avatarKey: u?.avatarKey, size: 48),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(u?.displayName ?? 'You',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  if (u != null && u.phone.isNotEmpty)
-                    Text(u.phone, style: TextStyle(fontSize: 13, color: c.mutedForeground)),
-                ]),
-              ),
-            ]),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: () {
-                final nav = Navigator.of(context);
-                nav.pop();
-                nav.push(MaterialPageRoute<void>(builder: (_) => const AccountScreen()));
-              },
-              icon: const Icon(LucideIcons.settings, size: 16),
-              label: const Text('Account'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () {
-                final nav = Navigator.of(context);
-                final api = context.read<AuthController>().api;
-                nav.pop();
-                nav.push(MaterialPageRoute<void>(builder: (_) => FriendsScreen(api: api)));
-              },
-              icon: const Icon(LucideIcons.users, size: 16),
-              label: const Text('Friends'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).pop();
-                onLogout();
-              },
-              icon: const Icon(LucideIcons.logOut, size: 16),
-              label: const Text('Log out'),
-            ),
-          ],
-        ),
       ),
     );
   }

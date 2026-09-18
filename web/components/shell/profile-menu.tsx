@@ -16,9 +16,8 @@ import {
 import { useAuth } from '@/auth/AuthContext';
 
 /**
- * The account menu (identity, Account, Friends, theme, sign out). Shared by the
- * desktop header toolbar and the mobile bottom nav; pass the trigger as
- * `children`. Radix flips the menu upward when anchored to the bottom bar.
+ * The account menu (identity, Account, Friends, theme, sign out), opened from
+ * the avatar at the top right of the header; pass the trigger as `children`.
  */
 export function ProfileMenu({ children }: { children: ReactNode }) {
   const { theme, setTheme } = useTheme();
@@ -32,7 +31,7 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" side="top" align="end" sideOffset={11}>
+      <DropdownMenuContent className="w-56" side="bottom" align="end" sideOffset={11}>
         <div className="flex items-center gap-3 px-3 py-2">
           <UserAvatar userId={user.id} name={user.display_name} imageUrl={user.avatar_key} />
           <div className="flex flex-col items-start">

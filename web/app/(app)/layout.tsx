@@ -45,7 +45,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <ProfileDialogProvider me={user.id}>
         <Header />
         <main
-          className="flex w-full min-w-0 max-w-full grow flex-col overflow-x-hidden pt-[calc(var(--header-height-mobile)_+_env(safe-area-inset-top))] pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pt-(--header-height) lg:pb-0"
+          className="app-column app-frame flex min-w-0 grow flex-col overflow-x-hidden pt-[calc(var(--header-height-mobile)_+_env(safe-area-inset-top))] pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pt-(--header-height) lg:pb-0"
           role="main"
         >
           {children}

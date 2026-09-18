@@ -3,11 +3,13 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../screens/widgets.dart';
 import '../theme/app_theme.dart';
+import 'profile_menu.dart';
 
 /// The web's mobile top bar (components/shell/header.tsx + header-logo.tsx):
 /// dark in both themes, 70px + safe area, a bottom border, and on the left the
 /// Waygerz logo + page title — or, on a league page, the league avatar + name.
 /// Pushed routes get a back chevron (the web relies on the browser for that).
+/// The account menu (avatar) is always at the top right, as on the web.
 class WaygerzHeader extends StatelessWidget implements PreferredSizeWidget {
   const WaygerzHeader({super.key, required this.title, this.leagueId, this.leagueLogo, this.actions = const []});
 
@@ -63,6 +65,7 @@ class WaygerzHeader extends StatelessWidget implements PreferredSizeWidget {
             ),
           ),
           ...actions,
+          const ProfileMenuButton(),
         ],
       ),
     );

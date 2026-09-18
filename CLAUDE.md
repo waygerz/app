@@ -133,6 +133,12 @@ Next.js 16 App Router, React 19, Tailwind 4, TanStack Query, based on the
 Metronic template (`web/README.md` is the stock template readme — ignore its
 Prisma instructions; this app has no Prisma).
 
+- **Mobile-only layout.** The webui is always the phone layout at every screen
+  size: `styles/globals.css` pushes Tailwind's breakpoints to `999rem` (so
+  `sm:`/`md:`/`lg:` never apply) and the app renders in one centered column,
+  `--app-max-width` (30rem). Fixed bars and overlays use the `app-column`
+  utility to stay inside it. Don't add breakpoint variants. The account menu
+  (avatar) is always top right in the header, as in the mobile app.
 - `app/(app)` (auth-gated), `app/(guest)` (login/signup), `app/(public)`
   (shareable deep links) route groups.
 - `proxy.ts` is the Next middleware: gates routes by presence of the

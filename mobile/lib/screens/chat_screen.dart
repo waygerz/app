@@ -11,6 +11,7 @@ import '../api/wagers_api.dart';
 import '../auth/auth_controller.dart';
 import '../format.dart';
 import '../models.dart';
+import '../shell/profile_menu.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
 import 'widgets.dart';
@@ -182,6 +183,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
+        actions: const [ProfileMenuButton(), SizedBox(width: 8)],
         title: Row(children: [
           _avatar(32),
           const SizedBox(width: 10),

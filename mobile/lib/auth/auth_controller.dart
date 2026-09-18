@@ -93,7 +93,21 @@ class AuthController extends ChangeNotifier {
     await _persist(res);
   }
 
+  final _beforeSignOut = <Future<void> Function()>[];
+
+  /// Work to do while still signed in, just before a sign-out (e.g. dropping
+  /// this device's push token). Returns a remover.
+  void Function() onBeforeSignOut(Future<void> Function() hook) {
+    _beforeSignOut.add(hook);
+    return () => _beforeSignOut.remove(hook);
+  }
+
   Future<void> logout() async {
+    for (final hook in [..._beforeSignOut]) {
+      try {
+        await hook();
+      } catch (_) {/* never block sign-out */}
+    }
     try {
       await _auth.logout();
     } catch (_) {/* best effort */}

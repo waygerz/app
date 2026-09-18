@@ -14,8 +14,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
     // success=green, error=red, warning=amber, info=blue — fixed across light and
     // dark, readable, and brand-exact (no sonner richColors). icon/title/description
     // inherit the toast's foreground so they stay visible on the filled surface.
+    // Top-center keeps toasts inside the phone-width column on any screen
+    // (and clear of the bottom nav).
     <Sonner
       theme={theme as ToasterProps['theme']}
+      position="top-center"
       className="toaster group"
       toastOptions={{
         classNames: {
