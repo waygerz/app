@@ -1,9 +1,11 @@
 name: Build & Deploy Service (Waygerz, ARM64)
 
 # Builds one (or all) Waygerz service image(s) for arm64, pushes to ECR
-# (waygerz/<service>), and optionally rolls the matching ECS service.
+# (waygerz/<service>:<sha> and :latest), and optionally rolls the matching ECS
+# service onto a task-def revision pinned to <sha>. See CLAUDE.md "Deploy" and
+# .docs/complete/INTERNAL_SERVICE_CONNECT.md.
 #
-# Prereqs (see _docs/INF_PROD.md "ECR / CI-CD" + step 8/9):
+# Prereqs:
 #   - GitHub OIDC provider + role waygerz-gha-deploy (trusts repo:waygerz/app)
 #   - ECR repos waygerz/<service> exist
 #   - ECS cluster waygerz-prod + the service exist (for deploy)
@@ -33,7 +35,7 @@ on:
           - webui
           - scheduler
       register_taskdef:
-        description: "Register new task def revision from <service>/taskdef.json?"
+        description: "Register from <service>/taskdef.json instead of cloning the live task def? (either way the image is pinned to this commit)"
         required: true
         type: boolean
         default: false
@@ -276,17 +278,41 @@ jobs:
             --services "${{ steps.svc.outputs.ECS_SERVICE }}" \
             --query 'services[0].status' --output text >/dev/null
 
-      - name: Register new task definition revision
-        if: ${{ github.event.inputs.deploy == 'true' && github.event.inputs.register_taskdef == 'true' }}
+      # Every deploy registers a revision pinned to this commit's image (:sha), so
+      # a task def always says exactly what it runs and a rollback is just the
+      # previous revision. The source is the service's LIVE task def (keeps any
+      # env/cpu/memory changed in the console or CLI), or <service>/taskdef.json
+      # when register_taskdef is set — its __ACCOUNT_ID__ / __AWS_REGION__ /
+      # __IMAGE__ placeholders are filled in here, so no account id is committed.
+      - name: Register task definition revision (pinned :sha)
+        if: ${{ github.event.inputs.deploy == 'true' }}
         id: taskdef
         run: |
           set -euo pipefail
-          TASKDEF_PATH="${{ steps.svc.outputs.CTX }}/taskdef.json"
-          [ -f "${TASKDEF_PATH}" ] || { echo "Task definition file not found: ${TASKDEF_PATH}"; exit 1; }
-          NEW_TD_ARN=$(aws ecs register-task-definition \
-            --cli-input-json "file://${TASKDEF_PATH}" \
-            --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "Registered ${NEW_TD_ARN}"
+          SERVICE="${{ steps.svc.outputs.ECS_SERVICE }}"
+          REPO="${{ steps.svc.outputs.REPO }}"
+          IMG="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO}:${IMAGE_TAG}"
+          SRC="$(mktemp)"
+          if [ "${{ github.event.inputs.register_taskdef }}" = "true" ]; then
+            TASKDEF_PATH="${{ steps.svc.outputs.CTX }}/taskdef.json"
+            [ -f "${TASKDEF_PATH}" ] || { echo "Task definition file not found: ${TASKDEF_PATH}"; exit 1; }
+            echo "Source: ${TASKDEF_PATH}"
+            sed -e "s|__ACCOUNT_ID__|${ACCOUNT_ID}|g" -e "s|__AWS_REGION__|${AWS_REGION}|g"                 -e "s|__IMAGE__|${IMG}|g" "${TASKDEF_PATH}" > "${SRC}"
+          else
+            LIVE=$(aws ecs describe-services --cluster "${ECS_CLUSTER}" --services "${SERVICE}"               --query 'services[0].taskDefinition' --output text)
+            echo "Source: live ${LIVE}"
+            aws ecs describe-task-definition --task-definition "${LIVE}"               --query 'taskDefinition' --output json > "${SRC}"
+          fi
+          TD_JSON="$(mktemp)"
+          jq --arg img "$IMG" --arg repo "/${REPO}:" '
+              .containerDefinitions |= map(if (.image | contains($repo)) then .image = $img else . end)
+              | {family, taskRoleArn, executionRoleArn, networkMode, containerDefinitions,
+                 requiresCompatibilities, cpu, memory, volumes, placementConstraints}
+              | with_entries(select(.value != null and .value != []))
+            ' "${SRC}" > "${TD_JSON}"
+          jq -e --arg img "$IMG" '[.containerDefinitions[].image] | index($img) != null' "${TD_JSON}" >/dev/null             || { echo "::error::no container in the task def uses ${REPO}"; exit 1; }
+          NEW_TD_ARN=$(aws ecs register-task-definition --cli-input-json "file://${TD_JSON}"             --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "Registered ${NEW_TD_ARN} (image ${IMG})"
           echo "arn=${NEW_TD_ARN}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy (roll ECS service)
@@ -295,15 +321,8 @@ jobs:
           set -euo pipefail
           SERVICE="${{ steps.svc.outputs.ECS_SERVICE }}"
           NEW_TD="${{ steps.taskdef.outputs.arn }}"
-          if [ -n "${NEW_TD}" ]; then
-            echo "Deploying ${SERVICE} with ${NEW_TD}"
-            aws ecs update-service --cluster "${ECS_CLUSTER}" --service "${SERVICE}" \
-              --task-definition "${NEW_TD}" --force-new-deployment >/dev/null
-          else
-            echo "Rolling ${SERVICE} (force-new-deployment, re-pulls :latest)"
-            aws ecs update-service --cluster "${ECS_CLUSTER}" --service "${SERVICE}" \
-              --force-new-deployment >/dev/null
-          fi
+          echo "Deploying ${SERVICE} with ${NEW_TD}"
+          aws ecs update-service --cluster "${ECS_CLUSTER}" --service "${SERVICE}"             --task-definition "${NEW_TD}" --force-new-deployment >/dev/null
           echo "Waiting for ${SERVICE} to stabilize..."
           aws ecs wait services-stable --cluster "${ECS_CLUSTER}" --services "${SERVICE}"
           echo "${SERVICE} deployed."

@@ -7,6 +7,15 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  shared-files:
+    name: shared files in sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # guards.py / wsgi.py / migrations/env.py are copied into every service
+      # (separate build contexts); fail if a copy drifts from api/auth's.
+      - run: python scripts/check_shared_files.py
+
   pytest:
     name: pytest (${{ matrix.service }})
     runs-on: ubuntu-latest

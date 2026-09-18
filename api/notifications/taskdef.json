@@ -2,7 +2,7 @@
   "containerDefinitions": [
     {
       "name": "notifications",
-      "image": "882781856019.dkr.ecr.us-east-1.amazonaws.com/waygerz/notifications:latest",
+      "image": "__IMAGE__",
       "cpu": 96,
       "portMappings": [
         {
@@ -97,7 +97,7 @@
     }
   ],
   "family": "waygerz-notifications",
-  "executionRoleArn": "arn:aws:iam::882781856019:role/waygerz-ecs-task-execution-role",
+  "executionRoleArn": "arn:aws:iam::__ACCOUNT_ID__:role/waygerz-ecs-task-execution-role",
   "networkMode": "bridge",
   "volumes": [],
   "placementConstraints": [],

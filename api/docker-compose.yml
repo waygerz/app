@@ -14,11 +14,15 @@ x-app-db: &app-db
 #
 #   Service      Limit   Notes
 #   ---------    -----   -----
-#   pgsql        384M    shared_buffers=64M, max_connections=30
+#   pgsql        384M    shared_buffers=64M, max_connections=30 (pools are capped
+#                          to fit; the prod data host runs 100)
 #   redis         96M    maxmemory 64mb LRU
 #   messaging    192M    gthread ×4 (SSE)
 #   leagues      160M    busiest gameplay API
 #   auth         128M    login / sessions
+#   notifications 128M   feed, push, SMS, link redirects
+#   users         96M    profiles, favorites
+#   twilio        96M    voice/SMS webhooks (no DB)
 #   contests     128M    head-to-head wagers
 #   media        112M    S3 presign only (no upload proxy)
 #   wallet        96M
@@ -29,13 +33,13 @@ x-app-db: &app-db
 #   scheduler     48M    poll loop only
 #   webui        256M    Next.js SSR (Node standalone)
 #   ───────────────────
-#   sum limits  ~2020M
+#   sum limits  ~2340M  (over 2 GB on paper; add swap before running it all)
 #
 # This compose file and the backend service build contexts live under api/. Run
 # all compose commands from this directory (api/); backend contexts are relative
 # to it (./auth, ./gateway, …) and .env is expected alongside it (api/.env).
 # webui is the one exception — it lives at the repo root, so its context is
-# ../webui.
+# ../web.
 
 services:
   # ---- Infra ----------------------------------------------------------------
@@ -358,6 +362,7 @@ services:
     depends_on:
       - contests
       - leagues
+      - ingestor
       - users
     deploy:
       resources:
@@ -419,6 +424,9 @@ services:
       - comments
       - messaging
       - media
+      - users
+      - notifications
+      - twilio
     deploy:
       resources:
         limits:
