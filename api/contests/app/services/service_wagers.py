@@ -227,13 +227,20 @@ def resolve_users_full(ids) -> dict:
     ids = list({str(i) for i in ids if i is not None})
     if not ids:
         return {}
-    resp = requests.post(
-        f"{base}/internal/profiles", json={"ids": ids}, headers=_itoken(), timeout=10
-    )
-    resp.raise_for_status()
+    # Names/avatars are decoration: a users outage must not fail (and invite a
+    # retry of) a write that already committed. Callers fall back to "User <id>".
+    try:
+        resp = requests.post(
+            f"{base}/internal/profiles", json={"ids": ids}, headers=_itoken(), timeout=10
+        )
+        resp.raise_for_status()
+        profiles = resp.json().get("profiles", [])
+    except (requests.RequestException, ValueError):
+        current_app.logger.exception("profile lookup failed ids=%d", len(ids))
+        return {}
     return {
         p["user_id"]: {"id": p["user_id"], "display_name": p.get("display_name"), "avatar_key": p.get("avatar_key")}
-        for p in resp.json().get("profiles", [])
+        for p in profiles
     }
 
 
