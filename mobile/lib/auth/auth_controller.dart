@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
@@ -11,6 +13,7 @@ enum AuthStatus { unknown, signedOut, signedIn }
 class AuthController extends ChangeNotifier {
   AuthController({TokenStore? tokens, ApiClient? api}) : _tokens = tokens ?? TokenStore() {
     _api = api ?? ApiClient(_tokens);
+    _api.onSessionExpired = _onSessionExpired;
     _auth = AuthApi(_api);
   }
 
@@ -34,12 +37,36 @@ class AuthController extends ChangeNotifier {
       final u = await _auth.me();
       _set(AuthStatus.signedIn, u);
     } on SessionExpired {
-      await _tokens.clear();
-      _set(AuthStatus.signedOut, null);
+      // _onSessionExpired already signed out.
     } catch (_) {
-      // Network hiccup — keep the stored session; screens can retry.
+      // Network hiccup — keep the stored session; screens can retry. Keep
+      // trying /me in the background: screens need user.id to tell which side
+      // of a bet is ours.
       _set(AuthStatus.signedIn, null);
+      unawaited(_retryMe());
     }
+  }
+
+  Future<void> _retryMe() async {
+    for (final wait in const [2, 5, 10, 30]) {
+      await Future<void>.delayed(Duration(seconds: wait));
+      if (status != AuthStatus.signedIn || user != null) return;
+      try {
+        final u = await _auth.me();
+        if (status == AuthStatus.signedIn) _set(AuthStatus.signedIn, u);
+        return;
+      } on SessionExpired {
+        return;
+      } catch (_) {/* still offline — try again */}
+    }
+  }
+
+  /// A request 401'd and the refresh failed — drop the session so _Root shows
+  /// login instead of leaving screens stuck on errors.
+  void _onSessionExpired() {
+    if (status == AuthStatus.signedOut) return;
+    _set(AuthStatus.signedOut, null);
+    unawaited(_tokens.clear());
   }
 
   Future<String?> startOtp(String phone) => _auth.startOtp(phone);

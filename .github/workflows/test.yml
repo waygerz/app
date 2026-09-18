@@ -13,7 +13,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [auth, contests, leagues, ingestor]
+        service:
+          - auth
+          - users
+          - friends
+          - comments
+          - messaging
+          - ingestor
+          - wallet
+          - contests
+          - leagues
+          - media
+          - notifications
+          - twilio
 
     services:
       postgres:

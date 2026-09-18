@@ -113,8 +113,12 @@ async function withCrossTabLock(fn: () => Promise<boolean>): Promise<boolean> {
   return withLocalStorageLock(fn);
 }
 
-/** Single-flight session refresh, deduped within the tab and across tabs. */
-function refreshSession(): Promise<boolean> {
+/**
+ * Single-flight session refresh, deduped within the tab and across tabs. The
+ * only safe way to call /refresh — a direct call can race another tab and trip
+ * reuse detection.
+ */
+export function refreshSession(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight;
   // Cap the whole refresh so a stuck Web Lock or hung request can never wedge
   // the caller (e.g. the auth bootstrap) on the loading screen.

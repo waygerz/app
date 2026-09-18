@@ -11,13 +11,14 @@ INTERVAL = int(os.environ.get("SCHEDULER_INTERVAL_SECONDS", 30))
 TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 HEADERS = {"X-Internal-Token": TOKEN, "Content-Type": "application/json"}
 
+# Every service mounts /internal under its /v1/{group}/{svc} prefix, so each
+# default carries it — a bare host:8000 default 404s. Uses the Service Connect
+# mesh names; leave these *_URL vars unset in prod.
 JOBS = (
-    ("contests", f"{os.environ.get('CONTESTS_URL', 'http://contests:8000')}/internal/tick"),
-    ("leagues", f"{os.environ.get('LEAGUES_URL', 'http://leagues:8000')}/internal/tick"),
-    ("ingestor", f"{os.environ.get('INGESTOR_URL', 'http://ingestor:8000')}/internal/tick"),
-    # users owns the no-favorites nudge. Its /internal/tick is under the /v1
-    # prefix, so the default carries it. Uses the Service Connect mesh name
-    # http://users:8000 like the others — leave USERS_URL unset in prod.
+    ("contests", f"{os.environ.get('CONTESTS_URL', 'http://contests:8000/v1/gameplay/contests')}/internal/tick"),
+    ("leagues", f"{os.environ.get('LEAGUES_URL', 'http://leagues:8000/v1/gameplay/leagues')}/internal/tick"),
+    ("ingestor", f"{os.environ.get('INGESTOR_URL', 'http://ingestor:8000/v1/platform/ingestor')}/internal/tick"),
+    # users owns the no-favorites nudge.
     ("users", f"{os.environ.get('USERS_URL', 'http://users:8000/v1/platform/users')}/internal/tick"),
 )
 

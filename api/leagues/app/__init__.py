@@ -3,12 +3,14 @@ from flask import Flask
 from sqlalchemy import text
 
 from app.utils.config import Config
+from app.utils.guards import require_prod_secrets
 from app.extensions import cors, db, jwt, migrate
 
 
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+    require_prod_secrets(app)
 
     db.init_app(app)
     migrate.init_app(app, db)

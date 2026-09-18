@@ -24,6 +24,7 @@ schema, go through its API.
 | `leagues` | `api/leagues/` | `leagues` |
 | `media` | `api/media/` | `media` |
 | `notifications` | `api/notifications/` | `notifications` |
+| `twilio` | `api/twilio/` | — (no DB; Twilio webhooks, signature-verified) |
 
 `auth` mints the JWT; every service verifies it locally with the shared
 `JWT_SECRET_KEY`. `users` was split out of `auth` (profiles moved to the `users`
@@ -33,9 +34,9 @@ schema; `auth` keeps credentials and dual-writes at signup).
 
 | Service | Path | Notes |
 |---------|------|-------|
-| `scheduler` | `api/scheduler/` | Poll loop; `POST /internal/tick` on contests, leagues, ingestor (no DB) |
+| `scheduler` | `api/scheduler/` | Poll loop; `POST /internal/tick` on contests, leagues, ingestor, users (no DB) |
 | `webui` | `web/` | Next.js 16 SSR app on `:3000` (App Router, React 19); compose context `../web` |
-| `gateway` | `api/gateway/` | nginx TLS + `/api` router + certbot renew; certs in `api/gateway/certbot/` |
+| `gateway` | `api/gateway/` | Compose only (prod uses the ALB): nginx TLS + `/api` router + certbot renew |
 
 `pgsql` and `redis` are image-only services (no source folder).
 

@@ -1,6 +1,7 @@
 from flask import Blueprint
 
 from app.controllers import controller_events as ctrl
+from app.utils.guards import internal_only
 
 ingestor_events_bp = Blueprint("events", __name__)
 
@@ -36,5 +37,6 @@ def get_event(key):
 
 
 @ingestor_events_bp.post("/events/sync")
+@internal_only  # triggers upstream fetches (force=true skips the cache) — ops only
 def sync():
     return ctrl.sync()

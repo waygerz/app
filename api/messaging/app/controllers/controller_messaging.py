@@ -70,7 +70,7 @@ def send_message(conversation_id):
     return jsonify(body), status
 
 
-@jwt_required(locations=["cookies", "headers", "query_string"])
+@jwt_required()
 def stream_messages(conversation_id):
     result = service.stream_messages(conversation_id, get_jwt_identity())
     if isinstance(result, tuple):

@@ -5,9 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 `waygerz` is a social sports pick'em / head-to-head wagering app built as a
-**Docker Compose stack of ~10 Flask microservices + a Next.js webui + an nginx
-gateway + a poll-loop scheduler**, all on a single host (`t4g.small`, 2 GB RAM).
-Images are built for `linux/arm64` and deployed to AWS ECS/ECR.
+**12 Flask microservices + a Next.js webui + a poll-loop scheduler**, deployed
+to AWS ECS (images built for `linux/arm64`, pushed to ECR). An nginx gateway +
+Docker Compose stack exists for running everything on one host, but prod routes
+`/v1/*` through the ALB directly.
 
 > **Ground truth:** `AGENTS.md` is the concise service map and agrees with this
 > file (`api/` backend, `web/` Next.js SSR, `mobile/` Flutter). If any doc ever
@@ -20,13 +21,13 @@ Top-level split: **`api/`** (backend), **`web/`** (Next.js), and **`mobile/`**
 (Flutter — iOS + Android). The repo **root** holds these plus docs and CI.
 
 Every backend container lives under **`api/`**: each service is its own directory
-(`api/auth/`, `api/friends/`, `api/comments/`, `api/messaging/`, `api/ingestor/`,
-`api/wallet/`, `api/contests/`, `api/leagues/`, `api/media/`,
-`api/notifications/`), plus `api/scheduler/` and `api/gateway/`.
+(`api/auth/`, `api/users/`, `api/friends/`, `api/comments/`, `api/messaging/`,
+`api/ingestor/`, `api/wallet/`, `api/contests/`, `api/leagues/`, `api/media/`,
+`api/notifications/`, `api/twilio/`), plus `api/scheduler/` and `api/gateway/`.
 `docker-compose.yml` lives **inside `api/`**; run compose from there. Backend
 build contexts are relative to it (`./auth`, `./gateway`, …) and `.env` sits at
-`api/.env`. webui is the exception — it lives at the repo root, so its compose
-context is `../webui`.
+`api/.env`. webui is the exception — it lives in `web/` at the repo root, so its
+compose context is `../web`.
 
 ECR repo and ECS service names stay unversioned (`waygerz/<service>`, service
 `<service>`). The directory layout is independent of the `/v1/{group}/{service}`
@@ -50,6 +51,9 @@ Every Flask service is the **same shape** — `api/auth/` is the reference templ
   tests/                  # pytest
 ```
 
+`api/twilio/` is the exception: webhook-only (Twilio voice/SMS), no DB, models,
+migrations or JWT — requests are authenticated by `X-Twilio-Signature`.
+
 Conventions that matter across all services:
 
 - **One Postgres schema per service.** `Config` sets
@@ -68,14 +72,17 @@ Conventions that matter across all services:
   the JSON body instead (refresh accepts the token from the body too); every
   service already verifies `Authorization: Bearer` via `locations=["cookies","headers"]`.
 - **Internal endpoints are token-guarded.** Routes under `/internal/*` (and
-  wagers `/admin/*`) are guarded by the `X-Internal-Token` header
+  contests `/admin/*`) are guarded by the `X-Internal-Token` header
   (`app/utils/guards.py::internal_only`). The service `location` blocks in the
   gateway are prefix matches, so they *would* forward `/api/.../internal/*` too —
   the gateway therefore has an explicit regex that **404s any `/internal` or
   `/admin` subpath at the edge** (defense in depth). In prod, `/v1/*` is routed by
   the **ALB directly** (no gateway container), so the same deny must exist as an
   ALB rule — see `.docs/complete/INTERNAL_SERVICE_CONNECT.md`. The `scheduler`
-  reaches internal endpoints over the mesh (`http://<svc>:8000`).
+  reaches internal endpoints over the mesh (`http://<svc>:8000/v1/<group>/<svc>`).
+- **Prod refuses dev secrets.** With `APP_ENV=production`, `create_app()` raises
+  if `JWT_SECRET_KEY` or `INTERNAL_TOKEN` is unset or a dev default
+  (`guards.py::require_prod_secrets`). Every task def must set both.
 - Login is **OTP-only**, delivered by real SMS through the notifications service
   (Twilio in prod; `SMS_PROVIDER=log` locally writes the code to the notifications
   log). The code is **never** returned in the API response. Outside production,
@@ -101,15 +108,16 @@ and the default just works. A new service MUST be registered in Service Connect
 
 ### Scheduler
 
-`scheduler/scheduler.py` is a DB-less poll loop that `POST`s `/internal/tick` to
-`contests`, `leagues`, and `ingestor` every `SCHEDULER_INTERVAL_SECONDS` (30).
-Each service owns the work done on tick (settling wagers, advancing pick'em
-periods, ingesting schedules). Add periodic work by implementing a service's
+`api/scheduler/scheduler.py` is a DB-less poll loop that `POST`s
+`/v1/<group>/<svc>/internal/tick` to `contests`, `leagues`, `ingestor` and
+`users` every `SCHEDULER_INTERVAL_SECONDS` (30). Each service owns the work done
+on tick (settling wagers, advancing pick'em periods, ingesting schedules, the
+no-favorites nudge). Add periodic work by implementing a service's
 own `/internal/tick`, not by adding logic to the scheduler.
 
 ### Gateway
 
-`api/gateway/conf.d/default.conf` is nginx: TLS terminator + `/api/*` router +
+`api/gateway/conf.d/default.conf` (Compose stack only — prod uses the ALB) is nginx: TLS terminator + `/api/*` router +
 certbot renewal. It **strips the `/api` prefix** and proxies to the service's
 `/v1/...` path (literal `proxy_pass` URI substitution — do not switch to
 `rewrite ... break` with captures, it 500s). Everything not under `/api/` goes
@@ -124,15 +132,17 @@ Prisma instructions; this app has no Prisma).
 - `app/(app)` (auth-gated), `app/(guest)` (login/signup), `app/(public)`
   (shareable deep links) route groups.
 - `proxy.ts` is the Next middleware: gates routes by presence of the
-  `waygerz_access` cookie (public / guest-only / auth-required prefixes).
+  `waygerz_access` or `waygerz_refresh` cookie (public / guest-only /
+  auth-required prefixes). All pages are client components — there is no SSR
+  data fetching.
 - `lib/` holds one data-client module per backend service (`leagues.ts`,
-  `wagers.ts`, `wallet.ts`, …). `lib/api-paths.ts` mirrors each backend's
+  `wagers.ts` → contests, `wallet.ts`, …). `lib/api-paths.ts` mirrors each backend's
   `api_prefix()` — **keep it in sync with the services**. `lib/http.ts`
   (`apiFetch` / `apiJson`) is the shared fetch wrapper (sends cookies via
-  `credentials: 'include'`).
+  `credentials: 'include'`) and owns the single-flight, cross-tab session
+  refresh — always refresh via `refreshSession()`, never call `/refresh` directly.
 - **API base URL:** `NEXT_PUBLIC_API_URL` is baked at build (`/api` behind the
-  nginx gateway; `""` for the ALB so the browser hits `/v1/...` directly). SSR
-  calls use `API_INTERNAL_URL` (`http://gateway`) over the compose network.
+  nginx gateway; `""` for the ALB so the browser hits `/v1/...` directly).
 
 ## Commands
 
@@ -175,7 +185,7 @@ flask init-schema                       # custom cmd: CREATE SCHEMA IF NOT EXIST
 ### webui
 
 ```bash
-cd webui
+cd web
 npm install --force    # React 19 peer-dep conflicts require --force
 npm run dev            # dev server
 npm run build          # production build
@@ -197,7 +207,10 @@ The dev host has the AWS CLI configured and working:
 
 ## Deploy
 
-CI is `.github/workflows/build-and-deploy.yml` — **manual `workflow_dispatch`**
+Tests: `.github/workflows/test.yml` runs pytest for all 12 services on push to
+`main` and on PRs (it does not gate deploys).
+
+Deploy is `.github/workflows/build-and-deploy.yml` — **manual `workflow_dispatch`**
 (no auto-deploy on push). Pick a service (or `all`), it builds arm64, pushes to
 ECR `waygerz/<service>`, optionally registers a new task def from
 `<service>/taskdef.json` and rolls the ECS service. webui builds from

@@ -27,6 +27,10 @@ class ApiClient {
   final TokenStore _tokens;
   final http.Client _http;
 
+  /// Called before [SessionExpired] is thrown, so the app can sign out and
+  /// route to login no matter which screen made the request.
+  void Function()? onSessionExpired;
+
   // Single-flight refresh: concurrent 401s share one refresh call.
   Future<bool>? _refreshing;
 
@@ -54,11 +58,16 @@ class ApiClient {
     var res = await _raw(method, path, body: body, auth: auth);
     if (res.statusCode == 401 && auth) {
       final ok = await _refreshOnce();
-      if (!ok) throw SessionExpired();
+      if (!ok) _expired();
       res = await _raw(method, path, body: body, auth: auth);
-      if (res.statusCode == 401) throw SessionExpired();
+      if (res.statusCode == 401) _expired();
     }
     return res;
+  }
+
+  Never _expired() {
+    onSessionExpired?.call();
+    throw SessionExpired();
   }
 
   Future<http.Response> _raw(String method, String path, {Object? body, bool auth = true}) async {

@@ -1,7 +1,7 @@
 // Client for the Waygerz auth service (passwordless phone + OTP, cookie sessions).
 import { API } from './api-paths';
 import { getDeviceUuid } from './device';
-import { apiFetch, apiJson } from './http';
+import { apiFetch, apiJson, refreshSession } from './http';
 import type { FavoriteTeam } from './users';
 
 const AUTH_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -74,14 +74,6 @@ export const authApi = {
   // AuthContext. Profile writes live on usersApi (see lib/users.ts).
   me: () => apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/me`),
 
-  refresh: () =>
-    apiJson<{ message: string }>(`${AUTH_URL}${API.auth}/refresh`, {
-      method: 'POST',
-      body: JSON.stringify({ device_uuid: getDeviceUuid() }),
-      device: true,
-      skipAuthRetry: true,
-    }),
-
   logout: () =>
     apiJson<{ message: string }>(`${AUTH_URL}${API.auth}/logout`, {
       method: 'POST',
@@ -134,11 +126,6 @@ export interface DeleteAccountError extends Error {
 }
 
 /** Proactive refresh when the session marker is present (best-effort). */
-export async function tryRefreshSession(): Promise<boolean> {
-  try {
-    await authApi.refresh();
-    return true;
-  } catch {
-    return false;
-  }
+export function tryRefreshSession(): Promise<boolean> {
+  return refreshSession();
 }
