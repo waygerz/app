@@ -184,6 +184,41 @@ def test_settle_auto_pays_winner_on_final(app, calls, monkeypatch):
     assert ("payout", U1, 10000) in calls  # both 5000 stakes
 
 
+def test_resettle_refunds_pays_winner_after_result_corrected(app, calls, monkeypatch):
+    # 2026-09-18: a 0-0 placeholder "final" refunded the bet as a push; once the
+    # real score lands, the repair charges the loser a stake and pays the winner
+    # a stake (both were already refunded) and settles the wager.
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(0, 0))
+    svc.settle_one(w)
+    assert w.status == REFUNDED
+    since = w.settled_at - timedelta(minutes=1)
+
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(41, 31))  # U1 (home) won
+    calls.clear()
+    rows = svc.resettle_refunds(since)  # dry run
+    assert [r["action"] for r in rows] == ["would settle"]
+    assert calls == [] and w.status == REFUNDED
+
+    rows = svc.resettle_refunds(since, apply=True)
+    assert [r["action"] for r in rows] == ["settled"]
+    assert w.status == SETTLED and w.winner_user_id == U1
+    assert calls == [("hold", U2, 5000), ("payout", U1, 5000)]
+    # Settled wagers drop out, so a re-run moves nothing.
+    assert svc.resettle_refunds(since, apply=True) == []
+
+
+def test_resettle_refunds_leaves_genuine_push(app, calls, monkeypatch):
+    w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w, U2)
+    monkeypatch.setattr(svc, "get_event", lambda eid: _final(3, 3))
+    svc.settle_one(w)
+    rows = svc.resettle_refunds(w.settled_at - timedelta(minutes=1), apply=True)
+    assert [r["action"] for r in rows] == ["skip (push)"]
+    assert w.status == REFUNDED
+
+
 def test_settle_stays_accepted_when_unresolvable(app, calls, monkeypatch):
     # Final but no score to read: don't complete with a null winner — leave it
     # accepted so it retries (the pair can still mutually cancel).

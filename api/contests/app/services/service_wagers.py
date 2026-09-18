@@ -1132,6 +1132,64 @@ def _void_refund(wager, account, headline):
     _post_settled_activity(wager, headline)
 
 
+def resettle_refunds(since, apply=False) -> list[dict]:
+    """Repair wagers refunded as a push/void on a result that has since been
+    corrected (2026-09-15..18: the ingestor finalized unscored games as 0-0
+    draws). For each REFUNDED wager settled at/after ``since`` whose event is now
+    FINAL with a decided outcome, move it to SETTLED: both stakes were already
+    refunded, so charge the loser one stake and pay the winner one stake under a
+    fresh ``wager:{id}:fix`` ref — the same net as a normal settle. Idempotent per
+    (user, ref) in the wallet and guarded by the row lock + status re-check.
+
+    Dry run unless ``apply``. Returns one row per candidate with its action."""
+    rows = []
+    candidates = (
+        Wager.query.filter(Wager.status == REFUNDED, Wager.settled_at >= since)
+        .order_by(Wager.settled_at.asc())
+        .all()
+    )
+    for wager in candidates:
+        row = {"wager": str(wager.id), "league": str(wager.league_id),
+               "event": wager.event_id, "amount_cents": wager.amount_cents}
+        try:
+            outcome = _resolve_outcome(wager, get_event(wager.event_id))
+            if outcome not in ("proposer", "acceptor"):
+                row["action"] = f"skip ({outcome or 'no result'})"  # a real push / void
+                rows.append(row)
+                continue
+            winner = _outcome_winner_id(wager, outcome)
+            loser = wager.other_party(winner)
+            row.update(winner=str(winner), loser=str(loser))
+            if not apply:
+                row["action"] = "would settle"
+                rows.append(row)
+                continue
+            _lock(wager)
+            if wager.status != REFUNDED:
+                row["action"] = f"skip (now {wager.status})"
+                db.session.rollback()
+                rows.append(row)
+                continue
+            account, ref = _account(wager.league_id), f"{_ref(wager.id)}:fix"
+            hold(account, loser, wager.amount_cents, ref)  # InsufficientFunds -> skip
+            payout(account, winner, wager.amount_cents, ref)
+            wager.winner_user_id = winner
+            wager.status = SETTLED
+            wager.settled_at = datetime.utcnow()
+            db.session.commit()
+            _post_completed_activity(wager)
+            _notify_settled(wager)
+            row["action"] = "settled"
+        except InsufficientFunds:
+            db.session.rollback()
+            row["action"] = "FAILED: loser balance too low to recharge the stake"
+        except Exception as exc:  # noqa: BLE001 — report and keep going
+            db.session.rollback()
+            row["action"] = f"FAILED: {exc}"
+        rows.append(row)
+    return rows
+
+
 def purge_user(data: dict) -> tuple[dict, int]:
     """Account deletion in the contests service.
 

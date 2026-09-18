@@ -1,3 +1,6 @@
+from datetime import datetime
+
+import click
 from flask import Flask
 from sqlalchemy import text
 
@@ -56,5 +59,17 @@ def create_app(config_class=Config):
             except Exception as exc:  # noqa: BLE001
                 print(f"  skip {w.id}: {exc}", flush=True)
         print(f"backfilled {done}/{len(rows)} decided wagers into the feed", flush=True)
+
+    @app.cli.command("resettle-refunds")
+    @click.option("--since", required=True, help="Refunds settled at/after this UTC date, YYYY-MM-DD.")
+    @click.option("--apply", is_flag=True, help="Move money. Without it, only report.")
+    def resettle_refunds(since, apply):
+        """Settle wagers refunded as a push on a result that was later corrected."""
+        from app.services.service_wagers import resettle_refunds as run
+
+        rows = run(datetime.strptime(since, "%Y-%m-%d"), apply=apply)
+        for r in rows:
+            print(" ".join(f"{k}={v}" for k, v in r.items()), flush=True)
+        print(f"{'applied' if apply else 'dry run'}: {len(rows)} refunded wagers checked", flush=True)
 
     return app
