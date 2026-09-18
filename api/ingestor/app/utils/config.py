@@ -56,6 +56,10 @@ class Config:
     # until quota reset, but never wait longer than this between live calls (so a
     # huge remaining budget still refreshes the catalog on a sane cadence).
     SPORTS_MAX_INTERVAL = int(os.environ.get("SPORTS_MAX_INTERVAL", 3600))  # 1h cap
+    # /internal/events/<id>/refresh serves the stored row without an RTS call when
+    # ESPN synced it this recently (or it's finished). ESPN refreshes live games
+    # every minute, so RTS is only the fallback when ESPN stalls.
+    EVENT_REFRESH_FRESH = int(os.environ.get("EVENT_REFRESH_FRESH", 300))
     # Only surface these sport slugs from the catalog (the pickers). RTS returns
     # ~17 sports; we only support these for betting, so hide cricket/golf/rugby/
     # etc. Empty string = no filter (show everything). Comma-separated slugs.
@@ -74,6 +78,9 @@ class Config:
     ESPN_BASE = os.environ.get("ESPN_BASE", "https://site.web.api.espn.com/apis/site/v2/sports")
     ESPN_CACHE_TTL = int(os.environ.get("ESPN_CACHE_TTL", 600))  # 10 minutes
     ESPN_TIMEOUT = int(os.environ.get("ESPN_TIMEOUT", 8))  # seconds; serve stale/empty on timeout
+    # How often the next 7 days' boards are re-read per league (their lines and
+    # reschedules). Free; only dates that have games are fetched.
+    ESPN_ODDS_TTL = int(os.environ.get("ESPN_ODDS_TTL", 3600))
     # Team-sport schedule ingest (service_schedule): how far ahead date-based
     # sports pull fixtures, and how often the scheduler tick actually re-hits ESPN
     # for fixtures (weekly) vs live scores (5 min).
@@ -92,23 +99,25 @@ class Config:
     SCHEDULE_SCORE_TTL_IDLE = int(os.environ.get("SCHEDULE_SCORE_TTL_IDLE", 900))  # 15 min idle
 
     # ---- The Odds API — prices the ESPN team events for H2H betting, matched by
-    # team-set + date (odds ride on Event.odds). Free tier is 500 credits/mo and a
-    # /odds call costs 1 credit PER market, so refresh is bounded hard: only a
-    # league with a game inside the lookahead window, at most once per TTL, and
-    # never below the quota floor.
+    # team-set + date (odds ride on Event.odds). Cadence is budget-driven (see
+    # service_odds.refresh_interval): the plan read from the response headers is
+    # spread evenly over the month across leagues with games to price.
     ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
     ODDS_API_BASE = os.environ.get("ODDS_API_BASE", "https://api.the-odds-api.com/v4")
     ODDS_API_MARKETS = os.environ.get("ODDS_API_MARKETS", "h2h,spreads,totals")
     ODDS_API_REGIONS = os.environ.get("ODDS_API_REGIONS", "us")
-    # 6h per league: one /odds call per sport returns ~2-3 days of games, so the
-    # cost is unchanged by lookahead — only the refresh cadence spends credits.
-    # 6h catches newly-posted next-day lines within a few hours (was 12h, which
-    # left tomorrow's games showing "—" until the next cycle). ~2x the credits;
-    # well within the plan given typical usage (monitor via x-requests-remaining).
+    # One book, same as ESPN's line, so the two sources agree. Up to 10 books
+    # bill as one region; when set, it replaces ODDS_API_REGIONS.
+    ODDS_API_BOOKMAKERS = os.environ.get("ODDS_API_BOOKMAKERS", "draftkings")
+    # Plan size until the first response reports it (x-requests-used + remaining).
+    ODDS_MONTHLY_CREDITS = int(os.environ.get("ODDS_MONTHLY_CREDITS", 500))
+    # Bounds on a league's refresh interval: never faster than 15 min, never
+    # slower than 6h however tight the budget.
+    ODDS_MIN_INTERVAL = int(os.environ.get("ODDS_MIN_INTERVAL", 900))
     ODDS_REFRESH_TTL = int(os.environ.get("ODDS_REFRESH_TTL", 21600))
-    # Price games up to 2 days out (matches the "next 10 games" board). Free —
-    # the per-sport response already includes them; this only widens the match.
-    ODDS_LOOKAHEAD_HOURS = int(os.environ.get("ODDS_LOOKAHEAD_HOURS", 48))
+    # Price a pick'em week from the day it opens. Free — one /odds call returns
+    # every listed game for the sport; this only widens which of ours get matched.
+    ODDS_LOOKAHEAD_HOURS = int(os.environ.get("ODDS_LOOKAHEAD_HOURS", 168))
     ODDS_QUOTA_FLOOR = int(os.environ.get("ODDS_QUOTA_FLOOR", 25))
     ODDS_TIMEOUT = int(os.environ.get("ODDS_TIMEOUT", 10))
     # Leagues/tours per ESPN sport (slug lists).

@@ -1,10 +1,11 @@
 """Internal ingestor endpoints for cross-service calls."""
 import uuid
+from datetime import datetime, timedelta
 
-from flask import request
+from flask import current_app, request
 
 from app.extensions import db
-from app.models.event import Event
+from app.models.event import CANCELLED, FINAL, Event
 from app.models.sport_league import SportLeague
 from app.services import service_events as events
 from app.services import service_sports as sports
@@ -14,6 +15,18 @@ def refresh_event(key):
     ev = Event.query.filter_by(external_id=key).first()
     if not ev:
         return {"error": "event not found"}, 404
+    # contests calls this for every started, wagered game on every 30s tick. For
+    # the ESPN-owned leagues the stored row is already current (live scores
+    # refresh each minute, free), so only spend an RTS call when ESPN hasn't
+    # touched the game recently — and never on a finished one.
+    from app.services.service_schedule import REGISTRY_KEYS
+
+    fresh = timedelta(seconds=current_app.config["EVENT_REFRESH_FRESH"])
+    if (ev.sport, ev.league) in REGISTRY_KEYS and (
+        ev.status in (FINAL, CANCELLED)
+        or (ev.last_synced_at and datetime.utcnow() - ev.last_synced_at < fresh)
+    ):
+        return {"event": ev.to_dict(), "quota": sports.quota_status()}, 200
     try:
         raw = sports.fetch_event(ev.sport, ev.league, key)
     except Exception as exc:

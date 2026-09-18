@@ -29,7 +29,7 @@ from app.models.event import CANCELLED, FINAL, LIVE, SCHEDULED, Event
 from app.models.sport_league import SportLeague
 from app.services import service_sports as sports
 from app.services.service_espn import espn_get
-from app.services.service_events import _parse_dt, parse_event, upsert_event
+from app.services.service_events import _parse_dt, upsert_event
 from app.services.service_logos import cache_logo
 
 # ---------------------------------------------------------------- registry
@@ -97,6 +97,73 @@ def _espn_status(status):
     return SCHEDULED
 
 
+def _price(value):
+    """ESPN American odds string ('-135', '+114', 'EVEN') -> int, else None."""
+    if value is None:
+        return None
+    s = str(value).strip().upper()
+    if s == "EVEN":
+        return 100
+    try:
+        return int(float(s))
+    except ValueError:
+        return None
+
+
+def _point(value):
+    """ESPN line string ('-2.5', '+2.5', 'o46.5', 'u46.5') -> float, else None."""
+    if value is None:
+        return None
+    s = str(value).strip().lower().lstrip("ou")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _espn_odds(comp):
+    """The competition's first bookmaker line (DraftKings on ESPN) -> the same
+    normalized odds block The Odds API produces (service_odds._book_odds):
+    moneyline / spread (line = home number) / overUnder, American prices. ESPN
+    labels the current line `close` (vs `open`). None when no line is posted."""
+    books = comp.get("odds") or []
+    if not books:
+        return None
+    o = books[0]
+
+    def cur(market, side, field):
+        leg = ((o.get(market) or {}).get(side) or {})
+        return (leg.get("close") or leg.get("open") or {}).get(field)
+
+    out = {
+        "source": "espn",
+        "book": ((o.get("provider") or {}).get("name") or "").lower() or None,
+        "fetched_at": datetime.utcnow().isoformat() + "Z",
+    }
+    ml = {k: _price(cur("moneyline", k, "odds")) for k in ("home", "away")}
+    if any(v is not None for v in ml.values()):
+        out["moneyline"] = ml
+    line = _point(cur("pointSpread", "home", "line"))
+    if line is None:
+        line = _point(o.get("spread"))
+    if line is not None:
+        out["spread"] = {
+            "line": line,
+            "home": _price(cur("pointSpread", "home", "odds")),
+            "away": _price(cur("pointSpread", "away", "odds")),
+        }
+    total = _point(cur("total", "over", "line"))
+    if total is None:
+        total = _point(o.get("overUnder"))
+    if total is not None:
+        out["overUnder"] = {
+            "total": total,
+            "over": _price(cur("total", "over", "odds")),
+            "under": _price(cur("total", "under", "odds")),
+        }
+    return out if any(k in out for k in ("moneyline", "spread", "overUnder")) else None
+
+
 def _parse_espn_event(ev, sport, league, week_label=None):
     """ESPN scoreboard event (competitions/competitors shape) -> Event fields."""
     comp = (ev.get("competitions") or [{}])[0]
@@ -140,6 +207,12 @@ def _parse_espn_event(ev, sport, league, week_label=None):
     # context) doesn't wipe the label written by the fixture ingest.
     if week_label is not None:
         fields["week_label"] = _clip(week_label, 80)
+    # Same for odds: ESPN drops the line from some boards (e.g. after the game),
+    # and that must not erase the last one we stored.
+    odds = _espn_odds(comp)
+    if odds is not None:
+        fields["odds"] = odds
+        fields["odds_updated_at"] = datetime.utcnow()
     return fields
 
 
@@ -362,6 +435,49 @@ def refresh_scores(sport, league, force=False):
     return n
 
 
+def _k_upcoming(sport, league):
+    return f"sched:up:{sport}:{league}"
+
+
+# Upcoming games are re-read this far ahead so a pick'em week has lines from the
+# day it opens, not just the last 48h before kickoff.
+_UPCOMING_WINDOW = timedelta(days=7)
+
+
+def refresh_upcoming(sport, league, force=False):
+    """Re-read the ESPN boards that hold this league's scheduled games in the
+    next week, so their lines (and any reschedules) stay current. ESPN is free
+    and only the dates that actually have games are fetched; gated per league by
+    ESPN_ODDS_TTL. A game's board date is its start in US Eastern, approximated
+    as UTC-6h so a 00:15Z kickoff lands on the prior local day."""
+    if not force and not _stale(_k_upcoming(sport, league), current_app.config["ESPN_ODDS_TTL"]):
+        return 0
+    now = datetime.utcnow()
+    rows = (
+        db.session.query(Event.start_time)
+        .filter(
+            Event.sport == sport,
+            Event.league == league,
+            Event.status == SCHEDULED,
+            Event.start_time >= now,
+            Event.start_time <= now + _UPCOMING_WINDOW,
+        )
+        .all()
+    )
+    dates = sorted({(start - timedelta(hours=6)).date() for (start,) in rows})
+    n = 0
+    try:
+        for day in dates:
+            board = _scoreboard(sport, league, {"dates": day.strftime("%Y%m%d")})
+            n += _ingest_events(board.get("events"), sport, league)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    _mark(_k_upcoming(sport, league))
+    return n
+
+
 def rescore_dates(start, end) -> dict:
     """Re-read every registered league's ESPN board for each day in [start, end]
     and upsert, overwriting whatever we stored — the repair for results written
@@ -475,6 +591,15 @@ def tick():
             scores += refresh_scores(sport, league)
         except Exception as exc:  # noqa: BLE001
             current_app.logger.warning("schedule scores %s/%s: %s", sport, league, exc)
+    # Next week's boards, hourly: keeps ESPN's lines (and reschedules) current
+    # for games that aren't on today's board yet.
+    upcoming = 0
+    for entry in LEAGUE_REGISTRY:
+        sport, league = entry["sport"], entry["league"]
+        try:
+            upcoming += refresh_upcoming(sport, league)
+        except Exception as exc:  # noqa: BLE001
+            current_app.logger.warning("schedule upcoming %s/%s: %s", sport, league, exc)
     # Odds ride on the same events; refresh is quota-gated internally. Local
     # import avoids a circular dependency (service_odds imports this module).
     odds = 0
@@ -501,14 +626,6 @@ def tick():
     except Exception as exc:  # noqa: BLE001
         db.session.rollback()
         current_app.logger.warning("field sync: %s", exc)
-    # Pull the real final for games ESPN left stuck 'live' past their max
-    # duration (by event id) before the score-based reaper runs.
-    try:
-        finalized = finalize_stale_live()
-    except Exception as exc:  # noqa: BLE001
-        db.session.rollback()
-        current_app.logger.warning("finalize stale live: %s", exc)
-        finalized = 0
     try:
         reaped = reap_stale_events()
     except Exception as exc:  # noqa: BLE001
@@ -516,8 +633,8 @@ def tick():
         current_app.logger.warning("reap stale events: %s", exc)
         reaped = 0
     return {
-        "fixtures": fixtures_state, "scores": scores, "odds": odds,
-        "combat": combat, "field": field, "finalized": finalized, "reaped": reaped,
+        "fixtures": fixtures_state, "scores": scores, "upcoming": upcoming, "odds": odds,
+        "combat": combat, "field": field, "reaped": reaped,
     }
 
 
@@ -569,11 +686,10 @@ def reap_stale_events() -> int:
     return n
 
 
-# A game still 'live'/'scheduled' this long after kickoff is certainly over —
-# ESPN just never flipped it, or it dropped off the daily board before we saw
-# the final. Comfortably longer than any real game (incl. OT / delays), shorter
-# than the 12h reaper's score-based fallback. Team sports only; field (golf,
-# racing) and combat (mma) have their own handlers.
+# A game still 'live'/'scheduled' this long after kickoff is certainly over, so
+# refresh_scores re-reads its board date (_stuck_dates). Comfortably longer than
+# any real game (incl. OT / delays). Team sports only; field (golf, racing) and
+# combat (mma) have their own handlers.
 _MAX_GAME_DURATION = {
     "football": timedelta(hours=5),
     "basketball": timedelta(hours=4),
@@ -581,51 +697,6 @@ _MAX_GAME_DURATION = {
     "hockey": timedelta(hours=4),
     "soccer": timedelta(hours=3),
 }
-
-
-def finalize_stale_live() -> int:
-    """Re-fetch games still live/scheduled longer than they could possibly run,
-    by event id. refresh_scores only reads today+yesterday's board, so a game
-    whose final-flip we missed while it dropped off that board would sit 'live'
-    until the 12h reaper. Fetching the event by id queries its own date, where
-    ESPN keeps the real final — so the week grades the same day, from ESPN's
-    actual result, not a guess. Bounded to the [maxdur, 12h] window; older games
-    are the reaper's job."""
-    now = datetime.utcnow()
-    floor = now - _STALE_EVENT_GRACE  # older than this → reaper handles it
-    candidates = (
-        Event.query
-        .filter(
-            Event.status.in_([SCHEDULED, LIVE]),
-            Event.start_time.isnot(None),
-            Event.start_time < now,
-            Event.start_time > floor,
-        )
-        .all()
-    )
-    n = 0
-    for ev in candidates:
-        maxdur = _MAX_GAME_DURATION.get(ev.sport)
-        if maxdur is None:
-            continue  # field / combat sports have their own tick handlers
-        if ev.start_time > now - maxdur:
-            continue  # could still genuinely be in progress
-        try:
-            raw = sports.fetch_event(ev.sport, ev.league, ev.external_id, force=True)
-        except Exception as exc:  # noqa: BLE001
-            current_app.logger.warning(
-                "finalize_stale_live %s/%s %s: %s", ev.sport, ev.league, ev.external_id, exc
-            )
-            continue
-        if not raw:
-            continue
-        fields = parse_event(raw, ev.sport, ev.league)
-        if fields.get("external_id"):
-            upsert_event(fields)
-            n += 1
-    if n:
-        db.session.commit()
-    return n
 
 
 # ---------------------------------------------------------------- weeks endpoint
