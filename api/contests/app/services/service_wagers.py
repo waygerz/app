@@ -80,6 +80,52 @@ def get_event(external_id):
     return resp.json().get("event")
 
 
+# Ingestor caps POST /internal/events/lookup at this many ids per call.
+EVENT_LOOKUP_CHUNK = 500
+
+
+def get_events(external_ids) -> dict:
+    """Batch get_event: {external_id: event, or None when the ingestor doesn't
+    know it}. One POST per EVENT_LOOKUP_CHUNK ids instead of a GET per id.
+
+    A failed batch call (network, non-2xx, or 404 from an older ingestor without
+    the endpoint) falls back to get_event per id for that chunk. An id whose
+    single read also fails is left OUT of the map, so callers can tell "not
+    found" (None) from "couldn't read" (absent) — see _event_from."""
+    ids = list(dict.fromkeys(i for i in external_ids if i))
+    out = {}
+    base = current_app.config["INGESTOR_URL"]
+    for n in range(0, len(ids), EVENT_LOOKUP_CHUNK):
+        chunk = ids[n:n + EVENT_LOOKUP_CHUNK]
+        try:
+            resp = requests.post(
+                f"{base}/internal/events/lookup",
+                json={"ids": chunk},
+                headers=_itoken(),
+                timeout=10,
+            )
+            resp.raise_for_status()
+            found = resp.json().get("events") or {}
+            out.update({eid: found.get(eid) for eid in chunk})
+        except Exception as exc:  # noqa: BLE001 — degrade to the per-id read
+            current_app.logger.warning("get_events: batch lookup failed (%s), reading singly", exc)
+            for eid in chunk:
+                try:
+                    out[eid] = get_event(eid)
+                except Exception:  # noqa: BLE001 — absent = unreadable
+                    pass
+    return out
+
+
+def _event_from(events, external_id):
+    """The event from a get_events map, else a live get_event. An id missing from
+    the map (no map, or its read failed) is re-read singly, so a read error still
+    raises at the caller exactly as a direct get_event would."""
+    if events is not None and external_id in events:
+        return events[external_id]
+    return get_event(external_id)
+
+
 def refresh_event(external_id):
     base = current_app.config["INGESTOR_URL"]
     resp = requests.post(
@@ -1148,11 +1194,12 @@ def resettle_refunds(since, apply=False) -> list[dict]:
         .order_by(Wager.settled_at.asc())
         .all()
     )
+    events = get_events(w.event_id for w in candidates)
     for wager in candidates:
         row = {"wager": str(wager.id), "league": str(wager.league_id),
                "event": wager.event_id, "amount_cents": wager.amount_cents}
         try:
-            outcome = _resolve_outcome(wager, get_event(wager.event_id))
+            outcome = _resolve_outcome(wager, _event_from(events, wager.event_id))
             if outcome not in ("proposer", "acceptor"):
                 row["action"] = f"skip ({outcome or 'no result'})"  # a real push / void
                 rows.append(row)
@@ -1271,7 +1318,7 @@ def purge_user(data: dict) -> tuple[dict, int]:
     return {"resolved": resolved, "purged": {"wager_invite_codes": codes}}, 200
 
 
-def settle_one(wager):
+def settle_one(wager, events=None):
     """Advance an accepted wager once its event is over.
 
     On a final result we compute the winner from the score (moneyline/spread/
@@ -1279,6 +1326,9 @@ def settle_one(wager):
     can claim the payout (see confirm). A push refunds both automatically, as
     does a cancelled event. If the result can't be determined (no score data),
     winner_user_id stays null and the pair fall back to peer concession.
+
+    ``events`` is an optional get_events map prefetched by the tick; without it
+    (or for an id it couldn't read) the event is fetched singly.
     """
     # Serialize against a concurrent user action on this same wager (accept /
     # confirm / cancel) — lock the row and re-read its status under the lock.
@@ -1286,7 +1336,7 @@ def settle_one(wager):
     if wager.status != ACCEPTED:
         return wager
     account = _account(wager.league_id)
-    event = get_event(wager.event_id)
+    event = _event_from(events, wager.event_id)
     status = event.get("status") if event else None
 
     if status == "cancelled":
@@ -1309,7 +1359,7 @@ def settle_one(wager):
             wager.status = SETTLED
             wager.settled_at = datetime.utcnow()
             db.session.commit()
-            _post_completed_activity(wager)
+            _post_completed_activity(wager, event)
             _notify_settled(wager)
             return wager
         # Final but the score is unreadable (data gap). Give the feed a grace
@@ -1365,9 +1415,10 @@ _TRASH_TALK = (
 )
 
 
-def _post_completed_activity(wager):
+def _post_completed_activity(wager, event=None):
     # A completed wager always has a score-decided winner now. Defensive guard:
-    # if somehow called without one, there's nothing to narrate.
+    # if somehow called without one, there's nothing to narrate. ``event`` is the
+    # final event when the caller already holds it (settle_one); else re-read.
     if not wager.winner_user_id:
         return
 
@@ -1411,7 +1462,7 @@ def _post_completed_activity(wager):
     # Attach the game data so the feed post can show the matchup + final score,
     # not just the trash talk. Best-effort: a missing event just omits the score.
     try:
-        ev = get_event(wager.event_id) or {}
+        ev = event or get_event(wager.event_id) or {}
     except Exception:  # noqa: BLE001
         ev = {}
     meta = {
@@ -1513,6 +1564,7 @@ def settle_due(refresh=True) -> int:
 def _settle_due(refresh=True) -> int:
     accepted = Wager.query.filter_by(status=ACCEPTED).all()
 
+    events = {}
     if refresh:
         refreshed = set()
         for wager in accepted:
@@ -1520,15 +1572,29 @@ def _settle_due(refresh=True) -> int:
                 continue
             refreshed.add(wager.event_id)
             try:
-                refresh_event(wager.event_id)
+                fresh = refresh_event(wager.event_id)
             except Exception:  # noqa: BLE001
-                pass
+                fresh = None
+            if fresh:
+                events[wager.event_id] = fresh
+
+    # One batch read for every event this tick needs (accepted wagers + legacy
+    # completed ones still missing a winner), after the refreshes above so it sees
+    # their writes. Events refresh_event already returned are reused, not re-read;
+    # anything not in the map is read singly at its use (_event_from).
+    needed = {w.event_id for w in accepted}
+    needed.update(
+        row[0] for row in db.session.query(Wager.event_id)
+        .filter(Wager.status == COMPLETED, Wager.winner_user_id.is_(None))
+        .distinct()
+    )
+    events.update(get_events(needed - events.keys()))
 
     moved = 0
     for wager in accepted:
         before = wager.status
         try:
-            settle_one(wager)
+            settle_one(wager, events)
         except Exception:  # noqa: BLE001
             db.session.rollback()
             continue
@@ -1548,7 +1614,7 @@ def _settle_due(refresh=True) -> int:
             account = _account(wager.league_id)
             winner = wager.winner_user_id
             if not winner:
-                outcome = _resolve_outcome(wager, get_event(wager.event_id))
+                outcome = _resolve_outcome(wager, _event_from(events, wager.event_id))
                 if outcome == "push":
                     _refund_both(wager, account)
                     wager.status = REFUNDED

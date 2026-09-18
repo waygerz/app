@@ -62,3 +62,19 @@ def mock_clients(monkeypatch):
     monkeypatch.setattr(svc, "wallet_balances",
                         lambda uid, accts: {a: 0 for a in accts})
     monkeypatch.setattr(svc, "wallet_grant", lambda *a, **k: {"ok": True})
+    # Batch event reads go through get_event, looked up at CALL time so a test
+    # that re-patches get_event still drives them. Mirrors the real contract: an
+    # id whose read raises is absent from the map.
+    monkeypatch.setattr(svc, "get_events", events_via_get_event(svc))
+
+
+def events_via_get_event(svc):
+    def _get_events(ids):
+        out = {}
+        for i in dict.fromkeys(i for i in ids if i):
+            try:
+                out[i] = svc.get_event(i)
+            except Exception:  # noqa: BLE001
+                pass
+        return out
+    return _get_events

@@ -414,3 +414,76 @@ def test_member_picks_hidden_when_start_unknown(client, auth_headers):
     r = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/members/{u2}/picks",
                    headers=auth_headers(u3))
     assert r.status_code == 403
+
+
+# ---- batch event reads (get_events) ---------------------------------------
+from app.services import service_leagues as _svc
+
+# conftest routes get_events through get_event for every test; keep the real one
+# (bound at import, before any fixture patches it) to exercise it directly.
+_REAL_GET_EVENTS = _svc.get_events
+
+
+class _Resp:
+    def __init__(self, status, body=None):
+        self.status_code, self._body = status, body or {}
+
+    def json(self):
+        return self._body
+
+    def raise_for_status(self):
+        import requests
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code}")
+
+
+def test_get_events_dedupes_and_chunks(app, monkeypatch):
+    posts = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        posts.append((url, list(json["ids"]), headers))
+        return _Resp(200, {"events": {i: {"id": i} for i in json["ids"] if i != "missing"}})
+
+    monkeypatch.setattr(_svc.requests, "post", fake_post)
+    monkeypatch.setattr(_svc, "get_event", lambda eid: (_ for _ in ()).throw(AssertionError(eid)))
+    ids = [f"e{i}" for i in range(1001)] + ["e0", "missing"]
+    with app.app_context():
+        out = _REAL_GET_EVENTS(ids)
+    assert [len(p[1]) for p in posts] == [500, 500, 2]
+    assert all(p[0].endswith("/internal/events/lookup") for p in posts)
+    assert all(p[2] == {"X-Internal-Token": app.config["INTERNAL_TOKEN"]} for p in posts)
+    assert out["e1000"] == {"id": "e1000"} and out["missing"] is None
+
+
+def test_get_events_falls_back_to_single_reads(app, monkeypatch):
+    # An older ingestor without the endpoint 404s — read each id singly instead.
+    monkeypatch.setattr(_svc.requests, "post", lambda *a, **k: _Resp(404))
+
+    def single(eid):
+        if eid == "boom":
+            raise RuntimeError("ingestor down")
+        return {"id": eid} if eid == "a" else None
+
+    monkeypatch.setattr(_svc, "get_event", single)
+    with app.app_context():
+        out = _REAL_GET_EVENTS(["a", "b", "boom"])
+    assert out == {"a": {"id": "a"}, "b": None}  # unreadable id is absent, not None
+
+
+def test_grading_reads_events_in_one_batch(client, auth_headers, app, monkeypatch):
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
+    lid, pid = d["id"], _period_id(d)
+    client.put(
+        f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
+        json={"picks": [{"event_id": "EVT1", "side": "home"},
+                        {"event_id": "EVT2", "side": "away"}]},
+        headers=auth_headers(U1),
+    )
+    batches, singles = [], []
+    monkeypatch.setattr(_svc, "get_events", lambda ids: batches.append(set(ids)) or {
+        i: {"status": "final", "winner_side": "home"} for i in batches[-1]})
+    monkeypatch.setattr(_svc, "get_event", lambda eid: singles.append(eid))
+    with app.app_context():
+        assert _svc.grade_open_periods() == 2
+    assert batches == [{"EVT1", "EVT2"}] and singles == []

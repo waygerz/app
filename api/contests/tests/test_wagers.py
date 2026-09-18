@@ -751,3 +751,71 @@ def test_unresolvable_final_posts_nothing(app, calls, monkeypatch):
     svc.settle_one(w)
     assert w.status == ACCEPTED
     assert not [p for p in posts if p["event_type"] == "wager_completed"]
+
+
+# ---- batch event reads (get_events) ---------------------------------------
+# conftest routes svc.get_events through get_event for every test; keep the real
+# one (bound at import, before any fixture patches it) to exercise it directly.
+_REAL_GET_EVENTS = svc.get_events
+
+
+class _Resp:
+    def __init__(self, status, body=None):
+        self.status_code, self._body = status, body or {}
+
+    def json(self):
+        return self._body
+
+    def raise_for_status(self):
+        import requests
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code}")
+
+
+def test_get_events_dedupes_and_chunks(app, monkeypatch):
+    posts = []
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        posts.append((url, list(json["ids"]), headers))
+        # "missing" is unknown to the ingestor -> absent from the response
+        return _Resp(200, {"events": {i: {"id": i} for i in json["ids"] if i != "missing"}})
+
+    monkeypatch.setattr(svc.requests, "post", fake_post)
+    monkeypatch.setattr(svc, "get_event", lambda eid: pytest.fail("no single reads on success"))
+    ids = [f"e{i}" for i in range(1001)] + ["e0", "e1", "missing"]  # dupes collapse
+    out = _REAL_GET_EVENTS(ids)
+    assert [len(p[1]) for p in posts] == [500, 500, 2]
+    assert all(p[0].endswith("/internal/events/lookup") for p in posts)
+    assert all(p[2] == {"X-Internal-Token": app.config["INTERNAL_TOKEN"]} for p in posts)
+    assert out["e0"] == {"id": "e0"} and out["e1000"] == {"id": "e1000"}
+    assert "missing" in out and out["missing"] is None  # not found = None
+    assert len(out) == 1002
+
+
+def test_get_events_falls_back_to_single_reads(app, monkeypatch):
+    # An older ingestor without the endpoint 404s — read each id singly instead.
+    monkeypatch.setattr(svc.requests, "post", lambda *a, **k: _Resp(404))
+
+    def single(eid):
+        if eid == "boom":
+            raise RuntimeError("ingestor down")
+        return {"id": eid} if eid == "a" else None
+
+    monkeypatch.setattr(svc, "get_event", single)
+    out = _REAL_GET_EVENTS(["a", "b", "boom"])
+    assert out == {"a": {"id": "a"}, "b": None}  # unreadable id is absent, not None
+
+
+def test_settle_due_reads_events_in_one_batch(app, calls, monkeypatch):
+    w1 = svc.propose(U1, LG, "ev1", "home", 5000, U2)
+    svc.accept(w1, U2)
+    w2 = svc.propose(U1, LG, "ev2", "away", 5000, U2)
+    svc.accept(w2, U2)
+    batches, singles = [], []
+    monkeypatch.setattr(svc, "get_events",
+                        lambda ids: batches.append(set(ids)) or {i: _final(5, 3) for i in batches[-1]})
+    monkeypatch.setattr(svc, "get_event", lambda eid: singles.append(eid))
+    svc.settle_due(refresh=False)
+    assert batches == [{"ev1", "ev2"}] and singles == []
+    assert w1.status == SETTLED and w1.winner_user_id == U1  # home won
+    assert w2.status == SETTLED and w2.winner_user_id == U2

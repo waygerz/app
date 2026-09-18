@@ -29,6 +29,29 @@ def app():
             db.session.commit()
 
 
+def events_via_get_event(svc):
+    """A get_events stand-in built from svc.get_event, looked up at CALL time so a
+    test that re-patches get_event after this fixture still drives the batch.
+    Mirrors the real contract: an id whose read raises is absent from the map."""
+    def _get_events(ids):
+        out = {}
+        for i in dict.fromkeys(i for i in ids if i):
+            try:
+                out[i] = svc.get_event(i)
+            except Exception:  # noqa: BLE001
+                pass
+        return out
+    return _get_events
+
+
+@pytest.fixture(autouse=True)
+def batch_events(monkeypatch):
+    """Route the batch event read through (the test's) get_event — no real HTTP."""
+    from app.services import service_wagers as svc
+
+    monkeypatch.setattr(svc, "get_events", events_via_get_event(svc))
+
+
 @pytest.fixture()
 def calls(monkeypatch):
     """Stub the cross-service clients; record account-scoped wallet ops."""

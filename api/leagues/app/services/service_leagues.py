@@ -283,6 +283,51 @@ def get_event(external_id):
     return r.json().get("event")
 
 
+# Ingestor caps POST /internal/events/lookup at this many ids per call.
+EVENT_LOOKUP_CHUNK = 500
+
+
+def get_events(external_ids) -> dict:
+    """Batch get_event: {external_id: event, or None when the ingestor doesn't
+    know it}. One POST per EVENT_LOOKUP_CHUNK ids instead of a GET per id.
+
+    A failed batch call (network, non-2xx, or 404 from an older ingestor without
+    the endpoint) falls back to get_event per id for that chunk. An id whose
+    single read also fails is left OUT of the map, so callers can tell "not
+    found" (None) from "couldn't read" (absent) — see _event_from."""
+    ids = list(dict.fromkeys(i for i in external_ids if i))
+    out = {}
+    for n in range(0, len(ids), EVENT_LOOKUP_CHUNK):
+        chunk = ids[n:n + EVENT_LOOKUP_CHUNK]
+        try:
+            r = requests.post(
+                f"{current_app.config['INGESTOR_URL']}/internal/events/lookup",
+                json={"ids": chunk},
+                headers=_headers(),
+                timeout=10,
+            )
+            r.raise_for_status()
+            found = r.json().get("events") or {}
+            out.update({eid: found.get(eid) for eid in chunk})
+        except Exception as exc:  # noqa: BLE001 — degrade to the per-id read
+            current_app.logger.warning("get_events: batch lookup failed (%s), reading singly", exc)
+            for eid in chunk:
+                try:
+                    out[eid] = get_event(eid)
+                except Exception:  # noqa: BLE001 — absent = unreadable
+                    pass
+    return out
+
+
+def _event_from(events, external_id):
+    """The event from a get_events map, else a live get_event. An id missing from
+    the map (no map, or its read failed) is re-read singly, so a read error still
+    raises at the caller exactly as a direct get_event would."""
+    if events is not None and external_id in events:
+        return events[external_id]
+    return get_event(external_id)
+
+
 def ingestor_weeks(sport_league_id):
     """The prebuilt week list for a catalog sport-league (label + start/end +
     game count), used to seed pick'em periods."""
@@ -510,16 +555,20 @@ def _event_result(event):
     return None
 
 
-def grade_period(period) -> int:
+def grade_period(period, events=None) -> int:
+    """Grade a period's pending picks. ``events`` is an optional get_events map
+    prefetched by the caller; without one the period's events are batch-read here."""
     picks = Pick.query.filter(
         Pick.period_id == period.id,
         Pick.correct.is_(None),
         Pick.voided.is_(False),
     ).all()
+    if events is None:
+        events = get_events(p.event_id for p in picks)
     graded = 0
     for pick in picks:
         try:
-            event = get_event(pick.event_id)
+            event = _event_from(events, pick.event_id)
             if not event:
                 continue
             status = event.get("status")
@@ -568,10 +617,17 @@ def grade_open_periods() -> int:
         LeaguePeriod.query.filter(LeaguePeriod.id.in_(pending_period_ids)).all()
         if pending_period_ids else []
     )
+    # One batch read for every pending pick's event across all periods.
+    events = get_events(
+        row[0] for row in
+        db.session.query(Pick.event_id)
+        .filter(Pick.correct.is_(None), Pick.voided.is_(False))
+        .distinct()
+    ) if periods else {}
     total = 0
     for period in periods:
         try:
-            total += grade_period(period)
+            total += grade_period(period, events)
         except Exception as exc:  # noqa: BLE001
             db.session.rollback()
             print(f"[grading] failed to grade period {period.id}: {exc}", flush=True)
@@ -590,8 +646,8 @@ def reconcile_recent_finals(window_days: int = 3) -> int:
 
     Bounded to in-progress and recently-ended periods so it only re-checks weeks
     whose results could still move — an open week included, so a corrected result
-    fixes its standings now rather than after rollover. get_event is a cached
-    ingestor read, deduped per period.
+    fixes its standings now rather than after rollover. Every period's events are
+    read in one get_events batch up front.
     """
     cutoff = datetime.utcnow() - timedelta(days=window_days)
     periods = LeaguePeriod.query.filter(
@@ -604,6 +660,15 @@ def reconcile_recent_finals(window_days: int = 3) -> int:
             ),
         )
     ).all()
+    events = get_events(
+        row[0] for row in
+        db.session.query(Pick.event_id)
+        .filter(
+            Pick.period_id.in_([p.id for p in periods]),
+            db.or_(Pick.correct.isnot(None), Pick.voided.is_(True)),
+        )
+        .distinct()
+    ) if periods else {}
     changed = 0
     for period in periods:
         picks = Pick.query.filter(
@@ -612,14 +677,10 @@ def reconcile_recent_finals(window_days: int = 3) -> int:
         ).all()
         if not picks:
             continue
-        events: dict = {}
         flips = 0
         try:
             for pick in picks:
-                event = events.get(pick.event_id)
-                if event is None:
-                    event = get_event(pick.event_id) or {}
-                    events[pick.event_id] = event
+                event = _event_from(events, pick.event_id) or {}
                 # Only a FINAL game with a usable result overrides a settled pick.
                 # A genuinely cancelled / not-yet-final game leaves it untouched, so
                 # we never un-settle a pick that shouldn't be.
@@ -1282,12 +1343,9 @@ def submit_picks(league_id, period_id, me, data):
     # that are still open. (The webui hides these; the server is the authority.)
     now = datetime.utcnow()
     started = {}
+    events = get_events(e for e, _, _ in cleaned)  # an unreadable event is absent → None
     for event_id in {e for e, _, _ in cleaned}:
-        try:
-            ev = get_event(event_id)
-        except Exception:  # noqa: BLE001
-            ev = None
-        start = _parse_dt((ev or {}).get("start_time"))
+        start = _parse_dt((events.get(event_id) or {}).get("start_time"))
         started[event_id] = bool(start) and now >= start
 
     for event_id, side, tb_val in cleaned:
@@ -1332,14 +1390,8 @@ def get_picks(league_id, period_id, me):
         .order_by(Pick.created_at.asc())
         .all()
     )
-    events = {}
-    for p in picks:
-        if p.event_id in events:
-            continue
-        try:
-            events[p.event_id] = get_event(p.event_id)
-        except Exception:  # noqa: BLE001
-            events[p.event_id] = None
+    # One batch read; an unreadable event is simply absent (→ None below).
+    events = get_events(p.event_id for p in picks)
     out = []
     for p in picks:
         d = p.to_dict()
@@ -1438,12 +1490,7 @@ def _period_leaderboard(league_id, period_id):
 
     # Resolve the period's events to find the last game + its final total.
     event_ids = list({p.event_id for p in picks})
-    events = {}
-    for eid in event_ids:
-        try:
-            events[eid] = get_event(eid)
-        except Exception:  # noqa: BLE001
-            events[eid] = None
+    events = get_events(event_ids)  # an unreadable event is absent → None
 
     def _start(eid):
         return (events.get(eid) or {}).get("start_time") or ""
@@ -1619,14 +1666,8 @@ def member_picks(league_id, period_id, user_id, me):
         .order_by(Pick.created_at.asc())
         .all()
     )
-    events = {}
-    for p in picks:
-        if p.event_id in events:
-            continue
-        try:
-            events[p.event_id] = get_event(p.event_id)
-        except Exception:  # noqa: BLE001
-            events[p.event_id] = None
+    # One batch read; an unreadable event is simply absent (→ None below).
+    events = get_events(p.event_id for p in picks)
 
     if picks and user_id != me and league.commissioner_id != me:
         starts = [
