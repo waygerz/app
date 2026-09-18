@@ -104,5 +104,5 @@
   "requiresCompatibilities": [
     "EC2"
   ],
-  "memory": "320"
+  "memory": "256"
 }
