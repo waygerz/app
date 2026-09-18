@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.waygerz.app",
+      "sha256_cert_fingerprints": [
+        "15:23:95:FD:80:E5:6C:41:FD:56:75:B7:DE:5B:39:BC:F9:BF:E1:26:B2:39:0A:7E:68:EB:B5:9E:E0:0C:05:84"
+      ]
+    }
+  }
+]

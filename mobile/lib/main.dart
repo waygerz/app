@@ -1,22 +1,30 @@
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'app_nav.dart';
 import 'auth/auth_controller.dart';
+import 'push/push_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Push (optional): once `flutterfire configure` has been run, add
-  //   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // here, then call PushService(...).register() after sign-in.
+  await PushService.start(); // no-op until Firebase is configured for the app
+
+  final nav = AppNav();
+  // waygerz.com links (/c/<code>, /leagues/<id>, …) opened on this device —
+  // the launch link included. Held until sign-in when signed out.
+  AppLinks().uriLinkStream.listen((uri) => nav.open(uri.toString()));
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthController()..bootstrap()),
         // Per-device appearance (colors, dark shade, theme mode), like the web.
         ChangeNotifierProvider(create: (_) => AppearanceController()..load()),
+        ChangeNotifierProvider.value(value: nav),
       ],
       child: const WaygerzApp(),
     ),
@@ -32,6 +40,7 @@ class WaygerzApp extends StatelessWidget {
     return MaterialApp(
       title: 'Waygerz',
       debugShowCheckedModeBanner: false,
+      navigatorKey: context.read<AppNav>().navigatorKey,
       // Same tokens as the webui; follows the OS light/dark setting by default.
       theme: buildTheme(Brightness.light, appearance),
       darkTheme: buildTheme(Brightness.dark, appearance),

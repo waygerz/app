@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 
 import '../api/messaging_api.dart';
 import '../api/notifications_api.dart';
+import '../app_nav.dart';
 import '../auth/auth_controller.dart';
 import '../models.dart';
+import '../push/push_service.dart';
 import '../shell/app_header.dart';
 import '../shell/bottom_nav.dart';
 import '../theme/app_theme.dart';
@@ -32,7 +34,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   static const _titles = ['My Leagues', 'My Bets', 'Notifications', 'Messages'];
 
-  int _tab = 0;
   int _alerts = 0;
   int _messages = 0;
   Timer? _poll;
@@ -41,6 +42,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // AuthController, so rebuilds don't churn API objects.
   late final NotificationsApi _notifications;
   late final MessagingApi _messaging;
+  late final PushService _push;
+  late final AppNav _nav;
 
   @override
   void initState() {
@@ -48,6 +51,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final api = context.read<AuthController>().api;
     _notifications = NotificationsApi(api);
     _messaging = MessagingApi(api);
+    _push = PushService(_notifications);
+    _nav = context.read<AppNav>();
+    // Signed in: open any link that arrived while signed out, and start push.
+    _nav.attach(api);
+    _push.register(
+      onOpen: _nav.open,
+      onForeground: (title, body) {
+        _refreshBadges();
+        if (mounted && title.isNotEmpty) Toaster.of(context).info(body.isEmpty ? title : '$title — $body');
+      },
+    );
     _refreshBadges();
     // The web polls both counts every 60s.
     _poll = Timer.periodic(const Duration(seconds: 60), (_) => _refreshBadges());
@@ -56,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _poll?.cancel();
+    _nav.attach(null);
     super.dispose();
   }
 
@@ -76,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _openProfile();
       return;
     }
-    setState(() => _tab = i);
+    _nav.selectTab(i);
     _refreshBadges();
   }
 
@@ -84,7 +99,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = context.read<AuthController>();
     showModalBottomSheet<void>(
       context: context,
-      builder: (_) => _ProfileSheet(user: auth.user, onLogout: auth.logout),
+      builder: (_) => _ProfileSheet(
+        user: auth.user,
+        onLogout: () async {
+          await _push.unregister(); // no more pushes to this device for this account
+          await auth.logout();
+        },
+      ),
     );
   }
 
@@ -92,6 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
     final user = auth.user;
+    final tab = context.watch<AppNav>().tab;
 
     final tabs = <Widget>[
       LeaguesScreen(api: auth.api),
@@ -101,10 +123,10 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     return Scaffold(
-      appBar: WaygerzHeader.page(_titles[_tab]),
-      body: IndexedStack(index: _tab, children: tabs),
+      appBar: WaygerzHeader.page(_titles[tab]),
+      body: IndexedStack(index: tab, children: tabs),
       bottomNavigationBar: WaygerzBottomNav(
-        index: _tab,
+        index: tab,
         onTap: _onTap,
         items: [
           const NavItem(label: 'Leagues', icon: WaygerzBottomNav.leagues),

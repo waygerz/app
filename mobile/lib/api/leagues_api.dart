@@ -20,6 +20,30 @@ class LeaguesApi {
     return League.fromJson(res['league'] as Map<String, dynamic>);
   }
 
+  /// Create a league (the caller becomes its commissioner).
+  Future<League> create({
+    required String name,
+    String? description,
+    String? logoKey,
+    required String leagueType,
+    required String periodType,
+    int? startingBalanceCents,
+    required List<({String id, String name})> sports,
+    required Map<String, dynamic> rules,
+  }) async {
+    final res = await _api.post('$_p/', body: {
+      'name': name,
+      'description': description,
+      'logo_url': logoKey,
+      'league_type': leagueType,
+      'period_type': periodType,
+      'starting_balance_cents': startingBalanceCents,
+      'sports': [for (final s in sports) {'sport_league_id': s.id, 'name': s.name}],
+      'rules': rules,
+    });
+    return League.fromJson(res['league'] as Map<String, dynamic>);
+  }
+
   Future<League> activate(String id) async {
     final res = await _api.post('$_p/$id/activate');
     return League.fromJson(res['league'] as Map<String, dynamic>);

@@ -268,5 +268,13 @@ come from the audit pass and should be double-checked before acting on them.
   H2H Upcoming (Today / This week, sport pills, Winner/Spread/Total board) →
   two-step bet sheet (market + line, stake chips with 🍺/🥃, member picker);
   Counter sheet from bet cards and notifications.
+- [x] **Mobile links, push, create league (feature plan group 2):** `/c/<code>`
+  invite screen (league join, friend add/accept, bet accept/counter/reject or
+  outcome), app-wide link router (`AppNav`: App Links, push taps,
+  notifications; links held until sign-in), Android App Links for `/c/` and
+  `/leagues/` + `assetlinks.json`, push registration/tap routing/unregister on
+  logout, Create league.
+- [ ] **Push + App Links need account setup** — Firebase project, FCM service
+  account in SSM, Play signing SHA-256; see `.docs/pending/MOBILE_PUSH_AND_LINKS.md`.
 - [ ] Still web-only (mobile feature plan): feed, results, members, manage,
-  create league, friends, messages, deep links, push, the Sports tab.
+  friends, messages, the Sports tab.

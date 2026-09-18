@@ -137,15 +137,23 @@ class UserProfile {
 
 /// A sports-catalog entry (ingestor): a sport or a league within one.
 class CatalogItem {
-  CatalogItem({required this.slug, required this.name, this.logo});
+  CatalogItem({required this.slug, required this.name, this.logo, this.id = '', this.sportLeagueId, this.abbreviation});
   final String slug;
   final String name;
   final String? logo;
+  final String id;
+
+  /// A league's catalog id (what a Waygerz league references).
+  final String? sportLeagueId;
+  final String? abbreviation;
 
   factory CatalogItem.fromJson(Map<String, dynamic> j) => CatalogItem(
         slug: (j['slug'] ?? j['id'] ?? '') as String,
         name: (j['displayName'] ?? j['name'] ?? j['slug'] ?? '') as String,
         logo: j['logo'] as String?,
+        id: '${j['id'] ?? ''}',
+        sportLeagueId: j['sport_league_id'] as String?,
+        abbreviation: j['abbreviation'] as String?,
       );
 }
 
@@ -500,6 +508,8 @@ class Wager {
     this.heldId,
     this.pendingId,
     this.myTurn,
+    this.stakeRound = 0,
+    this.leagueName,
   });
 
   final String id;
@@ -538,6 +548,12 @@ class Wager {
   /// Server-derived for the viewer: is it their turn to act?
   final bool? myTurn;
 
+  /// Bumped on each counter (0 = the original proposal).
+  final int stakeRound;
+
+  /// The league's name, where the payload carries it (bet links).
+  final String? leagueName;
+
   bool get isOpen => status == 'open';
   bool get isSettled => status == 'settled';
 
@@ -567,6 +583,8 @@ class Wager {
         heldId: j['held_id'] as String?,
         pendingId: j['pending_id'] as String?,
         myTurn: j['my_turn'] as bool?,
+        stakeRound: (j['stake_round'] as int?) ?? 0,
+        leagueName: j['league'] as String?,
       );
 }
 

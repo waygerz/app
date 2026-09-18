@@ -8,13 +8,13 @@ import '../api/invites_api.dart';
 import '../api/leagues_api.dart';
 import '../api/notifications_api.dart';
 import '../api/wagers_api.dart';
+import '../app_nav.dart';
 import '../auth/auth_controller.dart';
 import '../format.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
 import '../widgets/counter_sheet.dart';
-import 'league_detail_screen.dart';
 import 'widgets.dart';
 
 enum _Action { bet, friend, league }
@@ -194,20 +194,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  /// Opening marks it read and goes where the action lives (league links open
-  /// the league; other destinations arrive with deep links on mobile).
+  /// Opening marks it read and goes where the action lives. Bet notifications
+  /// open the bet's /c view (Accept / Counter / Reject + the game), derived
+  /// from the code even when the stored deep link is older; everything else
+  /// follows its deep link (web openItem).
   void _open(FeedNotification n) {
     if (!n.read) {
       setState(() => _readLocally.add(n.id));
       _markRead([n.id]);
     }
     _notifications.recordOpen(n.id).catchError((_) {});
-    final m = RegExp(r'^/leagues/([0-9a-fA-F-]{36})').firstMatch(n.deepLink ?? '');
-    if (m != null) {
-      final stub = League(id: m.group(1)!, name: n.refType == 'league' ? (n.actorName ?? '') : '',
-          leagueType: 'pickem', status: 'active');
-      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LeagueDetailScreen(api: widget.api, league: stub)));
-    }
+    final isBet = (n.templateKey ?? '').startsWith('wager_') || n.category == 'wager_alert';
+    final code = isBet ? _betCode(n) : null;
+    final dest = code != null ? '/c/$code' : n.deepLink;
+    if (dest != null && dest.isNotEmpty) context.read<AppNav>().open(dest);
   }
 
   @override

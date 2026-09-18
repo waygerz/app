@@ -24,6 +24,20 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- App Links: waygerz.com invite/bet links (/c/<code>) and league
+                 links open in the app. Verified against
+                 https://waygerz.com/.well-known/assetlinks.json (web/public),
+                 which must list this build's signing-cert SHA-256. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="waygerz.com" android:pathPrefix="/c/"/>
+                <data android:scheme="https" android:host="waygerz.com" android:pathPrefix="/leagues/"/>
+            </intent-filter>
+            <!-- Links are routed by app_links (lib/app_nav.dart), not Flutter's
+                 built-in deep linking, which would otherwise push its own route. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

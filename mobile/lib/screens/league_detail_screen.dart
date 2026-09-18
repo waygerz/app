@@ -36,7 +36,9 @@ class LeagueDetailScreen extends StatefulWidget {
 class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
   late final LeaguesApi _leagues = LeaguesApi(widget.api);
   late Future<League> _future = _leagues.league(widget.league.id);
-  late _Section _section = widget.league.isMoney ? _Section.upcoming : _Section.play;
+  /// Null until chosen: the default depends on the league's type, which a
+  /// link-opened screen only knows once the league has loaded.
+  _Section? _chosen;
   bool _activating = false;
 
   Future<void> _reload() async {
@@ -81,9 +83,10 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
               ]),
             );
           }
-          final header = _header(context, lg);
+          final section = _chosen ?? (lg.isMoney ? _Section.upcoming : _Section.play);
+          final header = _header(context, lg, section);
           // Play needs an active league (web LeaguePlay).
-          if (_section == _Section.play && !lg.isActive) {
+          if (section == _Section.play && !lg.isActive) {
             final c = WaygerzColors.of(context);
             return ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
               ...header,
@@ -92,14 +95,14 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
               ]),
             ]);
           }
-          return switch (_section) {
+          return switch (section) {
             _Section.upcoming => UpcomingTab(
                 key: ValueKey('upcoming-${lg.id}'),
                 api: widget.api,
                 league: lg,
                 header: header,
                 onBetSent: () {
-                  setState(() => _section = _Section.play);
+                  setState(() => _chosen = _Section.play);
                   _reload(); // the stake leaves the balance
                 },
               ),
@@ -113,7 +116,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
   }
 
   /// Header + section pills, scrolled with each section's list.
-  List<Widget> _header(BuildContext context, League lg) {
+  List<Widget> _header(BuildContext context, League lg, _Section section) {
     final c = WaygerzColors.of(context);
     final isCommish = lg.myRole == 'commissioner';
     final period = lg.currentPeriod;
@@ -161,8 +164,8 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
           PillTab(_Section.play, lg.isPickem ? 'My Picks' : 'My Bets'),
           const PillTab(_Section.standings, 'Standings'),
         ],
-        value: _section,
-        onChanged: (s) => setState(() => _section = s),
+        value: section,
+        onChanged: (s) => setState(() => _chosen = s),
       ),
       const SizedBox(height: 24),
     ];

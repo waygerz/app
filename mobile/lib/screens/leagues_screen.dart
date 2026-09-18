@@ -9,6 +9,7 @@ import '../format.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
+import 'create_league_screen.dart';
 import 'league_detail_screen.dart';
 import 'widgets.dart';
 
@@ -95,12 +96,20 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _LeagueCard(api: widget.api, league: l, onReturn: _reload),
                   ),
+                const SizedBox(height: 12),
+                WzButton(label: 'Create league', icon: LucideIcons.plus, variant: ButtonVariant.outline,
+                    size: ButtonSize.lg, onPressed: _createLeague),
               ]);
             },
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _createLeague() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => CreateLeagueScreen(api: widget.api)));
+    await _reload();
   }
 
   Widget _invitesSection(BuildContext context, List<LeagueInvite> invites) {
@@ -185,6 +194,8 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
       Text('No leagues yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.foreground)),
       Text('Create a league or join one with a code to start playing.',
           textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
+      const SizedBox(height: 8),
+      _GradientButton(label: 'Create your first league', onPressed: _createLeague),
     ]);
   }
 }
@@ -318,6 +329,40 @@ class _LeagueCardSkeleton extends StatelessWidget {
             ]),
           ),
         ]),
+      ),
+    );
+  }
+}
+
+/// The empty state's CTA: primary → fuchsia gradient with a soft glow (web).
+class _GradientButton extends StatelessWidget {
+  const _GradientButton({required this.label, required this.onPressed});
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = WaygerzColors.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [c.primary, Tw.fuchsia600]),
+        borderRadius: BorderRadius.circular(WaygerzRadius.md),
+        boxShadow: [BoxShadow(color: c.primary.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 4))],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(WaygerzRadius.md),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(LucideIcons.plus, size: 16, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white)),
+            ]),
+          ),
+        ),
       ),
     );
   }
