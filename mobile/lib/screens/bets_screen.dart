@@ -5,6 +5,7 @@ import '../api/api_client.dart';
 import '../api/wagers_api.dart';
 import '../auth/auth_controller.dart';
 import '../models.dart';
+import '../shell/app_header.dart';
 import 'widgets.dart';
 
 /// The caller's H2H wagers. Used both as the top-level Bets tab (all leagues)
@@ -67,7 +68,7 @@ class _BetsScreenState extends State<BetsScreen> {
     // When pushed from a league (has a title) show its own app bar; as the tab
     // it inherits the HomeScreen app bar.
     if (widget.title != null) {
-      return Scaffold(appBar: AppBar(title: Text('${widget.title} · Bets')), body: RefreshIndicator(onRefresh: _reload, child: body));
+      return Scaffold(appBar: WaygerzHeader.page('${widget.title} · Bets'), body: RefreshIndicator(onRefresh: _reload, child: body));
     }
     return RefreshIndicator(onRefresh: _reload, child: body);
   }

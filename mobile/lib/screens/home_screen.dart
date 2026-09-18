@@ -1,13 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../api/messaging_api.dart';
 import '../api/notifications_api.dart';
 import '../auth/auth_controller.dart';
 import '../models.dart';
+import '../shell/app_header.dart';
+import '../shell/bottom_nav.dart';
+import '../theme/app_theme.dart';
 import 'bets_screen.dart';
 import 'leagues_screen.dart';
 import 'notifications_screen.dart';
+import 'widgets.dart';
 
+/// The signed-in app shell, matching the webui on a phone: the dark top header
+/// with the page title, and the bottom nav (Leagues · Bets · Alerts · Messages ·
+/// Profile) with unread badges. Profile opens a sheet rather than a tab, as the
+/// web's ProfileMenu does.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -16,71 +28,148 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const _titles = ['My Leagues', 'My Bets', 'Notifications', 'Messages'];
+
   int _tab = 0;
+  int _alerts = 0;
+  int _messages = 0;
+  Timer? _poll;
 
   // Created once per State (not per build) on the shared ApiClient owned by
   // AuthController, so rebuilds don't churn API objects.
   late final NotificationsApi _notifications;
+  late final MessagingApi _messaging;
 
   @override
   void initState() {
     super.initState();
-    _notifications = NotificationsApi(context.read<AuthController>().api);
+    final api = context.read<AuthController>().api;
+    _notifications = NotificationsApi(api);
+    _messaging = MessagingApi(api);
+    _refreshBadges();
+    // The web polls both counts every 60s.
+    _poll = Timer.periodic(const Duration(seconds: 60), (_) => _refreshBadges());
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshBadges() async {
+    final results = await Future.wait<int?>([
+      _notifications.unreadCount().then<int?>((v) => v).catchError((_) => null),
+      _messaging.unreadCount().then<int?>((v) => v).catchError((_) => null),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _alerts = results[0] ?? _alerts;
+      _messages = results[1] ?? _messages;
+    });
+  }
+
+  void _onTap(int i) {
+    if (i == 4) {
+      _openProfile();
+      return;
+    }
+    setState(() => _tab = i);
+    _refreshBadges();
+  }
+
+  void _openProfile() {
+    final auth = context.read<AuthController>();
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => _ProfileSheet(user: auth.user, onLogout: auth.logout),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthController>();
+    final user = auth.user;
 
     final tabs = <Widget>[
       LeaguesScreen(api: auth.api),
       BetsScreen(api: auth.api),
       NotificationsScreen(api: _notifications),
-      _ProfileTab(user: auth.user, onLogout: auth.logout),
+      const _MessagesPlaceholder(),
     ];
 
-    const titles = ['Leagues', 'Bets', 'Notifications', 'Profile'];
     return Scaffold(
-      appBar: AppBar(title: Text(titles[_tab])),
+      appBar: WaygerzHeader.page(_titles[_tab]),
       body: IndexedStack(index: _tab, children: tabs),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.sports_basketball_outlined), label: 'Leagues'),
-          NavigationDestination(icon: Icon(Icons.sports_mma_outlined), label: 'Bets'),
-          NavigationDestination(icon: Icon(Icons.notifications_outlined), label: 'Alerts'),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
+      bottomNavigationBar: WaygerzBottomNav(
+        index: _tab,
+        onTap: _onTap,
+        items: [
+          const NavItem(label: 'Leagues', icon: WaygerzBottomNav.leagues),
+          const NavItem(label: 'Bets', icon: WaygerzBottomNav.bets),
+          NavItem(label: 'Alerts', icon: WaygerzBottomNav.alerts, badge: _alerts),
+          NavItem(label: 'Messages', icon: WaygerzBottomNav.messages, badge: _messages),
+          NavItem(
+            label: 'Profile',
+            avatar: UserAvatar(userId: user?.id ?? '', name: user?.displayName ?? '?', size: 24),
+          ),
         ],
       ),
     );
   }
 }
 
-class _ProfileTab extends StatelessWidget {
-  const _ProfileTab({required this.user, required this.onLogout});
+class _MessagesPlaceholder extends StatelessWidget {
+  const _MessagesPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const EmptyState(
+      icon: LucideIcons.messageCircle,
+      label: 'Messages are coming to the app soon.\nUse waygerz.com to chat for now.',
+    );
+  }
+}
+
+class _ProfileSheet extends StatelessWidget {
+  const _ProfileSheet({required this.user, required this.onLogout});
   final User? user;
   final Future<void> Function() onLogout;
 
   @override
   Widget build(BuildContext context) {
+    final c = WaygerzColors.of(context);
     final u = user;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircleAvatar(radius: 36, child: Icon(Icons.person, size: 36)),
-          const SizedBox(height: 12),
-          Text(u?.displayName ?? 'You', style: Theme.of(context).textTheme.titleLarge),
-          if (u != null && u.phone.isNotEmpty)
-            Text(u.phone, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 24),
-          OutlinedButton.icon(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout),
-            label: const Text('Log out'),
-          ),
-        ],
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              UserAvatar(userId: u?.id ?? '', name: u?.displayName ?? '?', size: 48),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(u?.displayName ?? 'You',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  if (u != null && u.phone.isNotEmpty)
+                    Text(u.phone, style: TextStyle(fontSize: 13, color: c.mutedForeground)),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                onLogout();
+              },
+              icon: const Icon(LucideIcons.logOut, size: 16),
+              label: const Text('Log out'),
+            ),
+          ],
+        ),
       ),
     );
   }

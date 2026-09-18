@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'auth/auth_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,10 +27,10 @@ class WaygerzApp extends StatelessWidget {
     return MaterialApp(
       title: 'Waygerz',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFF97316)), // brand orange
-        useMaterial3: true,
-      ),
+      // Same tokens as the webui; follows the OS light/dark setting like the web.
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
       home: const _Root(),
     );
   }

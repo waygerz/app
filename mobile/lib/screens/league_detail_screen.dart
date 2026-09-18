@@ -6,6 +6,7 @@ import '../api/leagues_api.dart';
 import '../api/wallet_api.dart';
 import '../auth/auth_controller.dart';
 import '../models.dart';
+import '../shell/app_header.dart';
 import 'bets_screen.dart';
 import 'widgets.dart';
 
@@ -67,7 +68,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.league.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
+      appBar: WaygerzHeader.league(name: widget.league.name, id: widget.league.id),
       body: FutureBuilder<_DetailData>(
         future: _future,
         builder: (context, snap) {
@@ -100,7 +101,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
 
   Widget _header(League l) {
     return Row(children: [
-      LeagueAvatar(name: l.name, radius: 26),
+      LeagueAvatar(name: l.name, id: l.id, size: 72),
       const SizedBox(width: 12),
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
