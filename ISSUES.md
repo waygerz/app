@@ -81,18 +81,23 @@ come from the audit pass and should be double-checked before acting on them.
 ## Low / cleanup
 
 ### Backend
-- [ ] `docker-compose.yml`: gateway `depends_on` is missing users, notifications
+- [x] `docker-compose.yml`: gateway `depends_on` is missing users, notifications
   and twilio (nginx proxies to them); scheduler doesn't depend on ingestor. The
   memory table (lines 13-31) omits users/notifications/twilio; header comment
   (line 38) still says `../webui`.
-- [ ] `api/gateway/conf.d/default.conf` header comment describes old routes
+  **Fixed (b8a6a04).**
+- [x] `api/gateway/conf.d/default.conf` header comment describes old routes
   (`/auth`, `/events`, `/wagers`, "React SPA").
-- [ ] No `api/.env.example`; compose fails on a fresh checkout.
-- [ ] `notifications/taskdef.json` and `web/taskdef.json` deploy `:latest` and
+  **Fixed (b8a6a04).**
+- [x] No `api/.env.example`; compose fails on a fresh checkout.
+  **Fixed (b8a6a04):** `docker compose config` validates with it.
+- [x] `notifications/taskdef.json` and `web/taskdef.json` deploy `:latest` and
   hardcode the AWS account ID. Only these two services support `register_taskdef`.
-- [ ] Duplicated code in every service: `guards.py`, `wsgi.py`, `migrations/env.py`,
+  **Fixed (b8a6a04):** every deploy now registers a revision pinned to the commit's image; the files use `__ACCOUNT_ID__`/`__IMAGE__` placeholders.
+- [x] Duplicated code in every service: `guards.py`, `wsgi.py`, `migrations/env.py`,
   `config.py`. Two naming styles for peer URLs (`INTERNAL_*_URL` attrs in auth vs
   `*_URL` attrs elsewhere).
+  **Guarded (b8a6a04):** `scripts/check_shared_files.py` (a CI job) fails if guards.py / wsgi.py / Alembic env drift from api/auth's. The two peer-URL naming styles remain.
 - [x] Ingestor Dockerfile has no `--worker-class` (sync worker, unlike the others).
   **Moot:** the tick no longer runs in the request thread (a14771c).
 
@@ -111,27 +116,37 @@ come from the audit pass and should be double-checked before acting on them.
 - [ ] Template leftovers: `package.json` name `metronic-react-starter-kit`,
   stock `README.md`, `documentation.html`, eslint ignore for `prisma/**`,
   `app/api/health/route.ts` reports `service: 'metronic-react-starter-kit'`.
-- [ ] `app/(app)/leagues/[id]/sections.tsx` is 3,723 lines — split per tab.
-- [ ] 15 copies of `process.env.NEXT_PUBLIC_API_URL ?? ''` and a `req()` wrapper
+- [x] `app/(app)/leagues/[id]/sections.tsx` is 3,723 lines — split per tab.
+  **Fixed (bf0c59c):** 12 modules under `_sections/`, none over 800 lines.
+- [x] 15 copies of `process.env.NEXT_PUBLIC_API_URL ?? ''` and a `req()` wrapper
   per lib module; `hasSessionMarker` duplicated with different logic
   (`lib/http.ts:28` vs `lib/session.ts:4`).
-- [ ] `tsconfig.json`: `target es5`, `moduleResolution node10`, path alias to
+  **Fixed:** one `API_BASE` (lib/api-paths.ts) + shared `apiRequest`; one `hasSessionMarker` (lib/session.ts).
+- [x] `tsconfig.json`: `target es5`, `moduleResolution node10`, path alias to
   nonexistent `./app/components/*`. `eslint-config-next` 15.5 vs next 16.1.6;
   `@eslint/eslintrc` used but not declared.
-- [ ] `build:staging` needs a nonexistent `.env.staging` and uses `cp` (breaks on Windows).
-- [ ] Privacy/terms titles double-suffix ("· Waygerz | Waygerz"); `/logo.png`
+  **Fixed:** ES2017 / bundler resolution, dead alias gone; eslint-config-next 16 flat config (no FlatCompat).
+- [x] `build:staging` needs a nonexistent `.env.staging` and uses `cp` (breaks on Windows).
+  **Fixed:** script removed.
+- [x] Privacy/terms titles double-suffix ("· Waygerz | Waygerz"); `/logo.png`
   img tags ignore `basePath`.
-- [ ] `favorites.ts` is still localStorage-only (users service now owns favorites).
+  **Fixed:** single brand in titles (incl. /welcome); logos + favicons go through `toAbsoluteUrl` (basePath).
+- [x] `favorites.ts` is still localStorage-only (users service now owns favorites).
+  **Won't fix for now:** it stores favorite *sports leagues*; the users service only owns favorite *teams* and there's no leagues endpoint to move to.
 
 ### Mobile
-- [ ] `PushService` is never called; Firebase init is only a comment in `main.dart`.
-- [ ] Query strings in `wallet_api.dart` / `wagers_api.dart` aren't URL-encoded
+- [x] `PushService` is never called; Firebase init is only a comment in `main.dart`.
+  **Deferred:** push is out of scope for v1 (MOBILE_STORE_LAUNCH_PLAN.md).
+- [x] Query strings in `wallet_api.dart` / `wagers_api.dart` aren't URL-encoded
   (`account=league:<id>`).
-- [ ] API objects created inline per build (e.g. `NotificationsApi` in
+  **Fixed (1f96ac7):** `withQuery()` encodes them.
+- [x] API objects created inline per build (e.g. `NotificationsApi` in
   `home_screen.dart:24`).
+  **Fixed (1f96ac7).**
 - [x] `mobile/.gitignore` ignores `pubspec.lock` — apps should commit it.
-- [ ] `mobile/README.md` is stale: says OTP is never returned (the app reads
+- [x] `mobile/README.md` is stale: says OTP is never returned (the app reads
   `dev_otp`), lists only 2 model classes (there are 8).
+  **Fixed (1f96ac7).**
 - [ ] Feature gaps vs web (see `.docs/pending/MOBILE_PARITY_PLAN.md`): pick
   submission, propose bet, friends, messaging, avatars, deep links, unread badges,
   wallet ledger, notification prefs, push.
@@ -145,7 +160,8 @@ come from the audit pass and should be double-checked before acting on them.
   (it accepts access or refresh); describes SSR via `API_INTERNAL_URL` (nothing
   reads it; no SSR fetches); mentions `i18n/` (doesn't exist).
 - [x] `AGENTS.md`: missing twilio.
-- [ ] `build-and-deploy.yml` references `_docs/INF_PROD.md`, which doesn't exist.
+- [x] `build-and-deploy.yml` references `_docs/INF_PROD.md`, which doesn't exist.
+  **Fixed (b8a6a04).**
 
 ## Added 2026-09-18 (after the audit)
 
@@ -187,3 +203,6 @@ come from the audit pass and should be double-checked before acting on them.
   must stay public (Twilio signs requests against it).
 - [x] **`CLAUDE.md` "AWS environment" section** described only the old EC2 dev
   host (`waygerz` profile). **Fixed:** documents the `waygerz_aws` profile too.
+- [ ] **React Compiler lint warnings.** eslint-config-next 16 brings
+  react-hooks v7; `set-state-in-effect` (24), `purity` (22) and `refs` (3) fire
+  in 24 files and are set to `warn` in `web/eslint.config.mjs` until fixed.

@@ -1,9 +1,11 @@
 // Client for the ingestor's ESPN-sourced sports (golf, racing, mma, cricket) —
 // the ones RealTimeSportsAPI can't do. Redis-only, on-demand; different shapes
 // than the two-team SportEvent, so they get their own client + views.
-import { API } from './api-paths';
+import { API, API_BASE } from './api-paths';
 
-const INGESTOR_API = `${process.env.NEXT_PUBLIC_API_URL ?? ''}${API.ingestor}`;
+// Public, unauthenticated endpoints: deliberately raw fetch (no session
+// cookies, no 401 refresh) rather than apiRequest.
+const INGESTOR_API = `${API_BASE}${API.ingestor}`;
 
 export type EspnShape = 'field' | '1v1' | 'team';
 

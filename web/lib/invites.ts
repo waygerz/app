@@ -1,12 +1,10 @@
 // Unified invite-code client for the /c/<code> route. The code's leading
 // letter picks the owning service (L -> leagues, F -> friends); both return the
 // same shared contract shape (see INVITE_CODES_DESIGN.md).
-import { API } from './api-paths';
-import { apiFetch, apiJson } from './http';
+import { API, API_BASE } from './api-paths';
+import { apiFetch, apiRequest } from './http';
 import type { LeagueType } from './leagues';
 import type { Wager } from './wagers';
-
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export type InviteType = 'league' | 'friend' | 'bet';
 export type CodeState = 'ok' | 'invalid' | 'expired' | 'consumed';
@@ -75,7 +73,7 @@ function serviceFor(code: string): string {
  * 404 so invalid/expired/consumed states still render. */
 export async function resolveCode(code: string): Promise<ResolvedCode> {
   const c = normalizeCode(code);
-  const res = await apiFetch(`${BASE}${serviceFor(c)}/c/${encodeURIComponent(c)}`);
+  const res = await apiFetch(`${API_BASE}${serviceFor(c)}/c/${encodeURIComponent(c)}`);
   const data = await res.json().catch(() => null);
   if (data && typeof data === 'object' && 'type' in data) {
     return data as ResolvedCode;
@@ -95,7 +93,7 @@ export async function resolveCode(code: string): Promise<ResolvedCode> {
 /** Perform an action on a code; returns where the client should navigate. */
 export function actOnCode(code: string, action: InviteAction): Promise<ActResult> {
   const c = normalizeCode(code);
-  return apiJson<ActResult>(`${BASE}${serviceFor(c)}/c/${encodeURIComponent(c)}/act`, {
+  return apiRequest<ActResult>(`${serviceFor(c)}/c/${encodeURIComponent(c)}/act`, {
     method: 'POST',
     body: JSON.stringify({ action }),
   });
@@ -103,7 +101,7 @@ export function actOnCode(code: string, action: InviteAction): Promise<ActResult
 
 /** Get-or-create the caller's reusable personal friend link code. */
 export function myFriendCode(): Promise<{ code: string }> {
-  return apiJson<{ code: string }>(`${BASE}${API.friends}/my-code`);
+  return apiRequest<{ code: string }>(`${API.friends}/my-code`);
 }
 
 /** Build the shareable deep link for a code. Client-only (uses window). */

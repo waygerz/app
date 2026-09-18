@@ -1,3 +1,10 @@
+/**
+ * Origin prepended to every API path. Baked at build time: `/api` behind the
+ * nginx gateway, `""` for the ALB (the browser hits `/v1/...` directly).
+ * Read it here once — never re-read `process.env.NEXT_PUBLIC_API_URL` per module.
+ */
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+
 /** Versioned public API prefixes — must match backend Config.api_prefix() per service. */
 export const API = {
   auth: '/v1/platform/auth',

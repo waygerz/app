@@ -1,10 +1,8 @@
 // Client for the Waygerz auth service (passwordless phone + OTP, cookie sessions).
-import { API } from './api-paths';
+import { API, API_BASE } from './api-paths';
 import { getDeviceUuid } from './device';
-import { apiFetch, apiJson, refreshSession } from './http';
+import { apiFetch, apiRequest, refreshSession } from './http';
 import type { FavoriteTeam } from './users';
-
-const AUTH_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export interface AuthUser {
   id: string;
@@ -44,8 +42,8 @@ export const authApi = {
   // without `smsConsent`, a new number comes back `consent_required` and NO code
   // is sent. Existing numbers (and consented new ones) get `message: 'code sent'`.
   otpStart: (phone: string, smsConsent?: boolean) =>
-    apiJson<{ message?: string; phone: string; is_new?: boolean; consent_required?: boolean; opted_out?: boolean }>(
-      `${AUTH_URL}${API.auth}/otp/start`,
+    apiRequest<{ message?: string; phone: string; is_new?: boolean; consent_required?: boolean; opted_out?: boolean }>(
+      `${API.auth}/otp/start`,
       {
         method: 'POST',
         body: JSON.stringify({ phone, sms_consent: !!smsConsent }),
@@ -54,7 +52,7 @@ export const authApi = {
     ),
 
   otpVerify: (phone: string, otp: string) =>
-    apiJson<OtpVerifyResult>(`${AUTH_URL}${API.auth}/otp/verify`, {
+    apiRequest<OtpVerifyResult>(`${API.auth}/otp/verify`, {
       method: 'POST',
       body: JSON.stringify({ phone, otp, device_uuid: getDeviceUuid() }),
       device: true,
@@ -62,7 +60,7 @@ export const authApi = {
     }),
 
   otpComplete: (ticket: string, display_name: string, consent?: SignupConsent) =>
-    apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/otp/complete`, {
+    apiRequest<{ user: AuthUser }>(`${API.auth}/otp/complete`, {
       method: 'POST',
       body: JSON.stringify({ ticket, display_name, device_uuid: getDeviceUuid(), ...consent }),
       device: true,
@@ -72,10 +70,10 @@ export const authApi = {
   // /me returns identity/credentials only now (id, phone, created_at, tos_*);
   // display_name/avatar are fetched from the users service and merged in
   // AuthContext. Profile writes live on usersApi (see lib/users.ts).
-  me: () => apiJson<{ user: AuthUser }>(`${AUTH_URL}${API.auth}/me`),
+  me: () => apiRequest<{ user: AuthUser }>(`${API.auth}/me`),
 
   logout: () =>
-    apiJson<{ message: string }>(`${AUTH_URL}${API.auth}/logout`, {
+    apiRequest<{ message: string }>(`${API.auth}/logout`, {
       method: 'POST',
       body: JSON.stringify({ device_uuid: getDeviceUuid() }),
       device: true,
@@ -87,7 +85,7 @@ export const authApi = {
   // leagues in `.data.leagues`; the thrown error exposes `status` + `data` so the
   // caller can surface them.
   deleteAccount: async (): Promise<DeleteAccountResult> => {
-    const res = await apiFetch(`${AUTH_URL}${API.auth}/account`, {
+    const res = await apiFetch(`${API_BASE}${API.auth}/account`, {
       method: 'DELETE',
       device: true,
       skipAuthRetry: true,

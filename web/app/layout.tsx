@@ -1,6 +1,7 @@
 import { ReactNode, Suspense } from 'react';
 import { Inter } from 'next/font/google';
 import { cn } from '@/lib/utils';
+import { toAbsoluteUrl } from '@/lib/helpers';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 import { Metadata, Viewport } from 'next';
@@ -18,8 +19,9 @@ export const metadata: Metadata = {
   },
   description: 'Social sports wagering with friends.',
   icons: {
-    icon: [{ url: '/favicon.png', type: 'image/png', sizes: '32x32' }],
-    apple: '/favicon.png',
+    // Metadata URLs aren't basePath-aware — prefix explicitly.
+    icon: [{ url: toAbsoluteUrl('/favicon.png'), type: 'image/png', sizes: '32x32' }],
+    apple: toAbsoluteUrl('/favicon.png'),
   },
 };
 

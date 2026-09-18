@@ -1,5 +1,8 @@
-import { API } from './api-paths';
+import { API, API_BASE } from './api-paths';
 import { getDeviceUuid } from './device';
+import { hasSessionMarker } from './session';
+
+export { API_BASE };
 
 export type ApiFetchOptions = RequestInit & {
   /** Attach X-Device-UUID (auth refresh/logout). Default true for mutating auth calls only when set by caller. */
@@ -7,8 +10,6 @@ export type ApiFetchOptions = RequestInit & {
   /** Internal: skip the 401 → refresh → retry interceptor (used by the refresh call itself). */
   skipAuthRetry?: boolean;
 };
-
-const AUTH_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 // Cross-tab/refresh coordination. Refresh rotates the token and the server
 // treats a stale refresh token as reuse (→ hard logout), so we must never fire
@@ -24,12 +25,6 @@ let refreshInFlight: Promise<boolean> | null = null;
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** The non-HttpOnly marker cookie is present whenever the user has a session. */
-function hasSessionMarker(): boolean {
-  if (typeof document === 'undefined') return false;
-  return document.cookie.split('; ').some((c) => c.startsWith('waygerz_session='));
-}
-
 function readTs(key: string): number {
   try {
     return Number(localStorage.getItem(key) || 0);
@@ -40,7 +35,7 @@ function readTs(key: string): number {
 
 async function callRefresh(): Promise<boolean> {
   try {
-    const res = await apiFetch(`${AUTH_BASE}${API.auth}/refresh`, {
+    const res = await apiFetch(`${API_BASE}${API.auth}/refresh`, {
       method: 'POST',
       body: JSON.stringify({ device_uuid: getDeviceUuid() }),
       device: true,
@@ -176,4 +171,13 @@ export async function apiJson<T>(url: string, options: ApiFetchOptions = {}): Pr
     throw new Error((data as { error?: string }).error || `Request failed (${res.status})`);
   }
   return data as T;
+}
+
+/**
+ * The shared per-service request helper: `apiJson` against `API_BASE + path`
+ * (session cookies, 401 → refresh → retry, `{error}` → thrown Error). Service
+ * clients call this with an `API.<service>` path instead of rolling their own.
+ */
+export function apiRequest<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  return apiJson<T>(`${API_BASE}${path}`, options);
 }

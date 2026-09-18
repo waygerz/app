@@ -1,8 +1,6 @@
 // Client for the Waygerz wallet service (cookie session).
 import { API } from './api-paths';
-import { apiJson } from './http';
-
-const WALLET_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+import { apiRequest } from './http';
 
 export interface Wallet {
   account: string;
@@ -21,18 +19,14 @@ export interface WalletTxn {
   created_at: string;
 }
 
-function req<T = any>(path: string): Promise<T> {
-  return apiJson<T>(`${WALLET_URL}${path}`);
-}
-
 // Balances are league-scoped: account is `league:{leagueId}`.
 export async function fetchWallet(account: string): Promise<Wallet> {
-  return (await req<{ wallet: Wallet }>(`${API.wallet}/me?account=${encodeURIComponent(account)}`)).wallet;
+  return (await apiRequest<{ wallet: Wallet }>(`${API.wallet}/me?account=${encodeURIComponent(account)}`)).wallet;
 }
 
 export async function fetchTransactions(account: string): Promise<WalletTxn[]> {
   return (
-    await req<{ transactions: WalletTxn[] }>(
+    await apiRequest<{ transactions: WalletTxn[] }>(
       `${API.wallet}/me/transactions?account=${encodeURIComponent(account)}`,
     )
   ).transactions ?? [];

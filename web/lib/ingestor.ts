@@ -1,10 +1,11 @@
 // Client for the Waygerz ingestor service (sports data).
 // The browser talks to the ingestor, never to realtimesportsapi.com directly —
 // the ingestor holds the API key and does the caching / quota guarding.
-import { API } from './api-paths';
+import { API, API_BASE } from './api-paths';
 
-const INGESTOR_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
-const INGESTOR_API = `${INGESTOR_URL}${API.ingestor}`;
+// Public, unauthenticated endpoints: deliberately raw fetch (no session
+// cookies, no 401 refresh) rather than apiRequest.
+const INGESTOR_API = `${API_BASE}${API.ingestor}`;
 
 export interface Sport {
   id: string;

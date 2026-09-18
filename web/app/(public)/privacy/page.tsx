@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { PrivacyContent, LEGAL_EFFECTIVE } from '@/components/legal/legal-content';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy · Waygerz',
+  // Root layout's title template appends "| Waygerz".
+  title: 'Privacy Policy',
   description: 'How Waygerz collects, uses, and shares your information.',
 };
 

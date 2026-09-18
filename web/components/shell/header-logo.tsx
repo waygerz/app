@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { leaguesApi } from '@/lib/leagues';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { cn } from '@/lib/utils';
+import { toAbsoluteUrl } from '@/lib/helpers';
 import { isEspnSport } from '@/lib/espn';
 
 const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -66,7 +67,7 @@ export function HeaderLogo() {
       {/* Brand — links home. On a league page, mobile swaps this for the league's
           own avatar + name (below); desktop always keeps the brand + wordmark. */}
       <Link href="/" className={cn('items-center gap-2', leagueId ? 'hidden lg:flex' : 'flex')}>
-        <img src="/logo-64.png" alt="Waygerz" className="size-9 shrink-0" />
+        <img src={toAbsoluteUrl('/logo-64.png')} alt="Waygerz" className="size-9 shrink-0" />
         <span className="hidden text-lg font-extrabold tracking-tight text-white lg:inline">Waygerz</span>
       </Link>
       {leagueId ? (

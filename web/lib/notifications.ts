@@ -1,10 +1,8 @@
 // Client for the Waygerz notifications service — the user-facing feed (cookie session).
 import { useQuery } from '@tanstack/react-query';
 import { API } from './api-paths';
-import { apiJson } from './http';
+import { apiRequest } from './http';
 import { useAuth } from '@/auth/AuthContext';
-
-const NOTIFICATIONS_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export type NotificationRefType = 'wager' | 'league' | 'friend' | null;
 
@@ -50,30 +48,26 @@ export interface NotificationPreferencesPatch {
   channels?: Partial<Record<NotificationCategory, Partial<ChannelToggles>>>;
 }
 
-function req<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
-  return apiJson<T>(`${NOTIFICATIONS_URL}${path}`, options);
-}
-
 export const notificationsApi = {
   list: (limit = 50) =>
-    req<{ notifications: FeedNotification[]; unread: number }>(`${API.notifications}/me?limit=${limit}`),
-  unreadCount: () => req<{ unread: number }>(`${API.notifications}/me/unread-count`),
+    apiRequest<{ notifications: FeedNotification[]; unread: number }>(`${API.notifications}/me?limit=${limit}`),
+  unreadCount: () => apiRequest<{ unread: number }>(`${API.notifications}/me/unread-count`),
   // Mark the given ids read, or all when omitted.
   markRead: (ids?: string[]) =>
-    req<{ updated: number }>(`${API.notifications}/me/read`, {
+    apiRequest<{ updated: number }>(`${API.notifications}/me/read`, {
       method: 'POST',
       body: JSON.stringify({ ids: ids ?? null }),
     }),
   // Log a genuine in-app OPEN (engagement tracking). Fire-and-forget.
   recordOpen: (id: string) =>
-    req<{ ok: boolean }>(`${API.notifications}/me/opened`, {
+    apiRequest<{ ok: boolean }>(`${API.notifications}/me/opened`, {
       method: 'POST',
       body: JSON.stringify({ id }),
     }),
   getPreferences: () =>
-    req<{ preferences: NotificationPreferences }>(`${API.notifications}/me/preferences`),
+    apiRequest<{ preferences: NotificationPreferences }>(`${API.notifications}/me/preferences`),
   updatePreferences: (patch: NotificationPreferencesPatch) =>
-    req<{ preferences: NotificationPreferences }>(`${API.notifications}/me/preferences`, {
+    apiRequest<{ preferences: NotificationPreferences }>(`${API.notifications}/me/preferences`, {
       method: 'PUT',
       body: JSON.stringify(patch),
     }),

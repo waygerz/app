@@ -1,8 +1,7 @@
 // Client for the Waygerz leagues service (via the gateway at /api).
-import { apiJson } from '@/lib/http';
+import { apiRequest } from '@/lib/http';
 import { API } from './api-paths';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 const LEAGUES_API = API.leagues;
 
 export type LeagueType = 'head_to_head' | 'pickem';
@@ -106,61 +105,57 @@ export interface CreateLeagueInput {
   rules?: Record<string, unknown>;
 }
 
-function req<T = any>(path: string, options: RequestInit = {}): Promise<T> {
-  return apiJson<T>(`${BASE}${path}`, options);
-}
-
 export const leaguesApi = {
-  list: () => req<{ leagues: LeagueCard[] }>(`${LEAGUES_API}/`).then((d) => d.leagues ?? []),
-  get: (id: string) => req<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}`).then((d) => d.league),
+  list: () => apiRequest<{ leagues: LeagueCard[] }>(`${LEAGUES_API}/`).then((d) => d.leagues ?? []),
+  get: (id: string) => apiRequest<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}`).then((d) => d.league),
   create: (input: CreateLeagueInput) =>
-    req<{ league: LeagueDetail }>(`${LEAGUES_API}/`, { method: 'POST', body: JSON.stringify(input) }).then((d) => d.league),
+    apiRequest<{ league: LeagueDetail }>(`${LEAGUES_API}/`, { method: 'POST', body: JSON.stringify(input) }).then((d) => d.league),
   activate: (id: string) =>
-    req<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}/activate`, { method: 'POST' }).then((d) => d.league),
+    apiRequest<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}/activate`, { method: 'POST' }).then((d) => d.league),
   // Commissioner: manually (re)send the pick'em week notification to all members.
   notifyWeek: (id: string) =>
-    req<{ sent: boolean; members: number; finalized: string; opened: string | null; winner_line: string }>(
+    apiRequest<{ sent: boolean; members: number; finalized: string; opened: string | null; winner_line: string }>(
       `${LEAGUES_API}/${id}/notify-week`, { method: 'POST' },
     ),
   update: (id: string, payload: Record<string, unknown>) =>
-    req<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }).then((d) => d.league),
+    apiRequest<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }).then((d) => d.league),
   advancePeriod: (id: string) =>
-    req<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}/advance-period`, { method: 'POST' }).then((d) => d.league),
-  leave: (id: string) => req(`${LEAGUES_API}/${id}/leave`, { method: 'POST' }),
-  archive: (id: string) => req(`${LEAGUES_API}/${id}/archive`, { method: 'POST' }),
+    apiRequest<{ league: LeagueDetail }>(`${LEAGUES_API}/${id}/advance-period`, { method: 'POST' }).then((d) => d.league),
+  leave: (id: string) => apiRequest(`${LEAGUES_API}/${id}/leave`, { method: 'POST' }),
+  archive: (id: string) => apiRequest(`${LEAGUES_API}/${id}/archive`, { method: 'POST' }),
   removeMember: (id: string, uid: string) =>
-    req(`${LEAGUES_API}/${id}/members/${uid}`, { method: 'DELETE' }),
+    apiRequest(`${LEAGUES_API}/${id}/members/${uid}`, { method: 'DELETE' }),
   setMemberRole: (id: string, uid: string, role: 'moderator' | 'member') =>
-    req(`${LEAGUES_API}/${id}/members/${uid}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+    apiRequest(`${LEAGUES_API}/${id}/members/${uid}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
   transferCommissioner: (id: string, uid: string) =>
-    req(`${LEAGUES_API}/${id}/members/${uid}/transfer`, { method: 'POST' }),
-  invites: () => req<{ invites: Invite[] }>(`${LEAGUES_API}/invites`).then((d) => d.invites ?? []),
-  acceptInvite: (id: string) => req(`${LEAGUES_API}/${id}/join`, { method: 'POST' }),
+    apiRequest(`${LEAGUES_API}/${id}/members/${uid}/transfer`, { method: 'POST' }),
+  invites: () => apiRequest<{ invites: Invite[] }>(`${LEAGUES_API}/invites`).then((d) => d.invites ?? []),
+  acceptInvite: (id: string) => apiRequest(`${LEAGUES_API}/${id}/join`, { method: 'POST' }),
   sendInvites: (id: string, invitee_ids: string[]) =>
-    req(`${LEAGUES_API}/${id}/invites`, { method: 'POST', body: JSON.stringify({ invitee_ids }) }),
-  feed: (id: string) => req<{ feed: FeedItem[] }>(`${LEAGUES_API}/${id}/feed`).then((d) => d.feed ?? []),
+    apiRequest(`${LEAGUES_API}/${id}/invites`, { method: 'POST', body: JSON.stringify({ invitee_ids }) }),
+  feed: (id: string) => apiRequest<{ feed: FeedItem[] }>(`${LEAGUES_API}/${id}/feed`).then((d) => d.feed ?? []),
   postFeed: (id: string, payload: { title?: string; body?: string; link_url?: string; link_label?: string }) =>
-    req(`${LEAGUES_API}/${id}/feed`, { method: 'POST', body: JSON.stringify(payload) }),
+    apiRequest(`${LEAGUES_API}/${id}/feed`, { method: 'POST', body: JSON.stringify(payload) }),
   standings: (id: string) =>
-    req<{ standings: StandingRow[]; period_id: string | null }>(`${LEAGUES_API}/${id}/standings`),
+    apiRequest<{ standings: StandingRow[]; period_id: string | null }>(`${LEAGUES_API}/${id}/standings`),
   periods: (id: string) =>
-    req<{ periods: LeaguePeriod[] }>(`${LEAGUES_API}/${id}/periods`).then((d) => d.periods ?? []),
+    apiRequest<{ periods: LeaguePeriod[] }>(`${LEAGUES_API}/${id}/periods`).then((d) => d.periods ?? []),
   regeneratePeriods: (id: string) =>
-    req<{ periods: LeaguePeriod[] }>(`${LEAGUES_API}/${id}/periods/regenerate`, { method: 'POST' }).then((d) => d.periods ?? []),
+    apiRequest<{ periods: LeaguePeriod[] }>(`${LEAGUES_API}/${id}/periods/regenerate`, { method: 'POST' }).then((d) => d.periods ?? []),
   getPicks: (id: string, periodId: string) =>
-    req<{ picks: PickRow[] }>(`${LEAGUES_API}/${id}/periods/${periodId}/picks`).then((d) => d.picks ?? []),
+    apiRequest<{ picks: PickRow[] }>(`${LEAGUES_API}/${id}/periods/${periodId}/picks`).then((d) => d.picks ?? []),
   submitPicks: (
     id: string,
     periodId: string,
     picks: { event_id: string; side: 'home' | 'away'; tiebreaker_total?: number }[],
   ) =>
-    req(`${LEAGUES_API}/${id}/periods/${periodId}/picks`, { method: 'PUT', body: JSON.stringify({ picks }) }),
+    apiRequest(`${LEAGUES_API}/${id}/periods/${periodId}/picks`, { method: 'PUT', body: JSON.stringify({ picks }) }),
   periodResults: (id: string, periodId: string) =>
-    req<PeriodResults>(`${LEAGUES_API}/${id}/periods/${periodId}/results`),
+    apiRequest<PeriodResults>(`${LEAGUES_API}/${id}/periods/${periodId}/results`),
   memberPicks: (id: string, periodId: string, userId: string) =>
-    req<{ picks: PickRow[] }>(`${LEAGUES_API}/${id}/periods/${periodId}/members/${userId}/picks`).then((d) => d.picks ?? []),
+    apiRequest<{ picks: PickRow[] }>(`${LEAGUES_API}/${id}/periods/${periodId}/members/${userId}/picks`).then((d) => d.picks ?? []),
   confirmMember: (id: string, periodId: string, userId: string, confirmed: boolean) =>
-    req(`${LEAGUES_API}/${id}/periods/${periodId}/members/${userId}/confirm`, {
+    apiRequest(`${LEAGUES_API}/${id}/periods/${periodId}/members/${userId}/confirm`, {
       method: 'PUT',
       body: JSON.stringify({ confirmed }),
     }),

@@ -6,6 +6,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { safeReturnPath } from '@/auth/return-path';
 import { PendingLinkBanner } from '@/components/pending-link-banner';
 import { formatUsPhone } from '@/lib/phone';
+import { toAbsoluteUrl } from '@/lib/helpers';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -132,7 +133,7 @@ export default function LoginPage() {
       <div className="my-auto flex w-full max-w-md flex-col items-center gap-4">
         <Card className="w-full max-w-md gap-6 p-8">
         <div className="flex flex-col items-center gap-3 text-center">
-          <img src="/logo.png" alt="Waygerz" className="h-20 w-auto" />
+          <img src={toAbsoluteUrl('/logo.png')} alt="Waygerz" className="h-20 w-auto" />
           <h1 className="text-3xl font-bold text-primary">Waygerz</h1>
           {subtitle && <p className="text-base text-foreground">{subtitle}</p>}
         </div>

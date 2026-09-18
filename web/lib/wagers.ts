@@ -1,8 +1,7 @@
 // Client for the Waygerz contests service — head-to-head wagers (cookie session).
 import { API } from './api-paths';
-import { apiJson } from './http';
+import { apiRequest } from './http';
 
-const WAGERS_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 const WAGERS_API = `${API.contests}/wagers`;
 
 export type WagerStatus =
@@ -73,10 +72,6 @@ export function cancelLocked(w: Wager): boolean {
   const t = new Date(w.start_time).getTime();
   if (Number.isNaN(t)) return false;
   return Date.now() >= t - CANCEL_LOCK_MS;
-}
-
-function req<T = any>(path: string, options: RequestInit = {}): Promise<T> {
-  return apiJson<T>(`${WAGERS_URL}${path}`, options);
 }
 
 export type BetType = 'moneyline' | 'spread' | 'total';
@@ -236,7 +231,7 @@ export const wagersApi = {
   mine: (leagueId: string, status?: WagerStatus) => {
     const q = new URLSearchParams({ league_id: leagueId });
     if (status) q.set('status', status);
-    return req<{ wagers: Wager[] }>(`${WAGERS_API}?${q}`).then((d) => d.wagers ?? []);
+    return apiRequest<{ wagers: Wager[] }>(`${WAGERS_API}?${q}`).then((d) => d.wagers ?? []);
   },
   // All of the current user's wagers across every league (league_id is optional
   // on the backend) — used by the notifications sheet.
@@ -244,25 +239,25 @@ export const wagersApi = {
     const q = new URLSearchParams();
     if (status) q.set('status', status);
     const qs = q.toString();
-    return req<{ wagers: Wager[] }>(`${WAGERS_API}${qs ? `?${qs}` : ''}`).then((d) => d.wagers ?? []);
+    return apiRequest<{ wagers: Wager[] }>(`${WAGERS_API}${qs ? `?${qs}` : ''}`).then((d) => d.wagers ?? []);
   },
   propose: (input: ProposeInput) =>
-    req<ProposeResult>(WAGERS_API, { method: 'POST', body: JSON.stringify(input) }),
-  accept: (id: string) => req(`${WAGERS_API}/${id}/accept`, { method: 'POST' }),
-  decline: (id: string) => req(`${WAGERS_API}/${id}/decline`, { method: 'POST' }),
+    apiRequest<ProposeResult>(WAGERS_API, { method: 'POST', body: JSON.stringify(input) }),
+  accept: (id: string) => apiRequest(`${WAGERS_API}/${id}/accept`, { method: 'POST' }),
+  decline: (id: string) => apiRequest(`${WAGERS_API}/${id}/decline`, { method: 'POST' }),
   // Reverse a decline — reopen a declined bet so it can be accepted after all.
-  undecline: (id: string) => req(`${WAGERS_API}/${id}/undecline`, { method: 'POST' }),
-  cancel: (id: string) => req(`${WAGERS_API}/${id}/cancel`, { method: 'POST' }),
+  undecline: (id: string) => apiRequest(`${WAGERS_API}/${id}/undecline`, { method: 'POST' }),
+  cancel: (id: string) => apiRequest(`${WAGERS_API}/${id}/cancel`, { method: 'POST' }),
   // Renegotiate an open bet: new stake, and for a spread/total a new line in the
   // caller's own perspective (the server normalizes it to proposer-perspective).
   counter: (id: string, input: { amount_cents: number; line?: number | null; treat?: 'beer' | 'shot' }) =>
-    req(`${WAGERS_API}/${id}/counter`, { method: 'POST', body: JSON.stringify(input) }),
+    apiRequest(`${WAGERS_API}/${id}/counter`, { method: 'POST', body: JSON.stringify(input) }),
   // Accepted wagers hold both stakes, so calling one off takes both sides:
   // one requests, the other approves (or rejects, leaving the bet standing).
-  requestCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/request`, { method: 'POST' }),
-  approveCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/approve`, { method: 'POST' }),
-  rejectCancel: (id: string) => req(`${WAGERS_API}/${id}/cancel/reject`, { method: 'POST' }),
+  requestCancel: (id: string) => apiRequest(`${WAGERS_API}/${id}/cancel/request`, { method: 'POST' }),
+  approveCancel: (id: string) => apiRequest(`${WAGERS_API}/${id}/cancel/approve`, { method: 'POST' }),
+  rejectCancel: (id: string) => apiRequest(`${WAGERS_API}/${id}/cancel/reject`, { method: 'POST' }),
   // Confirm a completed wager: only the score-decided winner may, which pays
   // them the pot. Nobody else has an action.
-  confirm: (id: string) => req(`${WAGERS_API}/${id}/confirm`, { method: 'POST' }),
+  confirm: (id: string) => apiRequest(`${WAGERS_API}/${id}/confirm`, { method: 'POST' }),
 };

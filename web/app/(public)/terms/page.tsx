@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { TermsContent, LEGAL_EFFECTIVE } from '@/components/legal/legal-content';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service · Waygerz',
+  // Root layout's title template appends "| Waygerz".
+  title: 'Terms of Service',
   description: 'The terms that govern your use of Waygerz.',
 };
 

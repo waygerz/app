@@ -1,8 +1,6 @@
 // Client for the Waygerz media service (presigned S3 uploads).
 import { API } from './api-paths';
-import { apiJson } from './http';
-
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+import { apiRequest } from './http';
 
 export type MediaPurpose = 'comment' | 'message' | 'league_logo' | 'avatar';
 
@@ -30,7 +28,7 @@ export interface PresignResponse {
 
 export const mediaApi = {
   presign: (purpose: MediaPurpose, file: File) =>
-    apiJson<PresignResponse>(`${BASE}${API.media}/uploads/presign`, {
+    apiRequest<PresignResponse>(`${API.media}/uploads/presign`, {
       method: 'POST',
       body: JSON.stringify({
         purpose,
@@ -40,24 +38,24 @@ export const mediaApi = {
     }),
 
   complete: (assetId: string) =>
-    apiJson<{ asset: MediaAsset }>(`${BASE}${API.media}/uploads/${assetId}/complete`, {
+    apiRequest<{ asset: MediaAsset }>(`${API.media}/uploads/${assetId}/complete`, {
       method: 'POST',
     }),
 
   get: (assetId: string) =>
-    apiJson<{ asset: MediaAsset }>(`${BASE}${API.media}/uploads/${assetId}`),
+    apiRequest<{ asset: MediaAsset }>(`${API.media}/uploads/${assetId}`),
 
   /** The caller's own recent uploads of a purpose (newest first) — e.g. the
    *  last N avatars, so they can re-select a previous one. */
   myUploads: (purpose: MediaPurpose, limit = 10) =>
-    apiJson<{ assets: MediaAsset[] }>(
-      `${BASE}${API.media}/uploads/mine?purpose=${purpose}&limit=${limit}`,
+    apiRequest<{ assets: MediaAsset[] }>(
+      `${API.media}/uploads/mine?purpose=${purpose}&limit=${limit}`,
     ).then((d) => d.assets ?? []),
 
   /** Resolve a member-visible display key (league logo / avatar) to a short-lived
    *  presigned GET URL. Any signed-in user may resolve these. */
   resolve: (key: string) =>
-    apiJson<{ url: string }>(`${BASE}${API.media}/uploads/resolve?key=${encodeURIComponent(key)}`).then((d) => d.url),
+    apiRequest<{ url: string }>(`${API.media}/uploads/resolve?key=${encodeURIComponent(key)}`).then((d) => d.url),
 
   /** Upload file end-to-end: presign → PUT to S3 (or mock skip) → complete. */
   async upload(purpose: MediaPurpose, file: File): Promise<MediaAsset> {

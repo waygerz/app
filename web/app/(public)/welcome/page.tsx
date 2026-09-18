@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { toAbsoluteUrl } from '@/lib/helpers';
 import {
   Trophy,
   Users,
@@ -14,7 +15,8 @@ import {
 } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Waygerz — Play-money sports betting with friends',
+  // Already branded — bypass the root layout's "%s | Waygerz" template.
+  title: { absolute: 'Waygerz — Play-money sports betting with friends' },
   description:
     'Private sports leagues with your friends. Challenge each other head-to-head or run a weekly pick’em pool. Play money only — all bragging rights, no cash.',
 };
@@ -89,7 +91,7 @@ export default function WelcomePage() {
       {/* Top bar */}
       <header className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="" className="h-8 w-auto" />
+          <img src={toAbsoluteUrl('/logo.png')} alt="" className="h-8 w-auto" />
           <span className="text-lg font-bold text-primary">Waygerz</span>
         </div>
         <Button asChild variant="ghost" size="sm">
@@ -308,7 +310,7 @@ export default function WelcomePage() {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-4 px-4 py-8 text-xs text-muted-foreground sm:px-6">
           <div className="flex w-full flex-col items-center justify-between gap-3 sm:flex-row">
             <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="" className="h-5 w-auto" />
+              <img src={toAbsoluteUrl('/logo.png')} alt="" className="h-5 w-auto" />
               <span>© {new Date().getFullYear()} Waygerz</span>
             </div>
             <nav className="flex items-center gap-5">
