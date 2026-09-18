@@ -4,18 +4,121 @@
 library;
 
 class User {
-  User({required this.id, required this.phone, required this.displayName, this.avatarKey});
+  User({
+    required this.id,
+    required this.phone,
+    required this.displayName,
+    this.avatarKey,
+    this.tosAcceptedAt,
+    this.favoriteTeams = const [],
+  });
 
   final String id;
   final String phone;
   final String displayName;
   final String? avatarKey;
 
+  /// When the user accepted the Terms/Privacy at signup (null for accounts
+  /// created before consent was recorded).
+  final DateTime? tosAcceptedAt;
+
+  /// From the users (profile) service; merged in by AuthController.
+  final List<FavoriteTeam> favoriteTeams;
+
   factory User.fromJson(Map<String, dynamic> j) => User(
         id: j['id'] as String,
         phone: (j['phone'] ?? '') as String,
         displayName: (j['display_name'] ?? '') as String,
         avatarKey: j['avatar_key'] as String?,
+        tosAcceptedAt: DateTime.tryParse((j['tos_accepted_at'] ?? '') as String),
+      );
+
+  /// Auth's /me carries identity only since the users-service split; the
+  /// display name, avatar and favorites come from the profile.
+  User withProfile(UserProfile p) => User(
+        id: id,
+        phone: phone,
+        displayName: p.displayName.isNotEmpty ? p.displayName : displayName,
+        avatarKey: p.avatarKey,
+        tosAcceptedAt: tosAcceptedAt,
+        favoriteTeams: p.favoriteTeams,
+      );
+}
+
+/// Max favorite teams per user — keep in sync with users FAVORITE_TEAMS_MAX.
+const maxFavoriteTeams = 6;
+
+/// A favorite team snapshot (users service). Order in the list is the order;
+/// the first is the user's primary team.
+class FavoriteTeam {
+  FavoriteTeam({
+    required this.sport,
+    required this.league,
+    required this.externalId,
+    required this.name,
+    required this.abbreviation,
+    this.logo,
+    this.color,
+  });
+
+  final String sport;
+  final String league;
+  final String externalId;
+  final String name;
+  final String abbreviation;
+  final String? logo;
+  final String? color;
+
+  bool sameAs(FavoriteTeam o) => sport == o.sport && league == o.league && externalId == o.externalId;
+
+  factory FavoriteTeam.fromJson(Map<String, dynamic> j) => FavoriteTeam(
+        sport: j['sport'] as String,
+        league: j['league'] as String,
+        externalId: '${j['external_id']}',
+        name: (j['name'] ?? '') as String,
+        abbreviation: (j['abbreviation'] ?? '') as String,
+        logo: j['logo'] as String?,
+        color: j['color'] as String?,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'sport': sport,
+        'league': league,
+        'external_id': externalId,
+        'name': name,
+        'abbreviation': abbreviation,
+        'logo': logo,
+        'color': color,
+      };
+}
+
+/// The signed-in user's profile from the users service.
+class UserProfile {
+  UserProfile({required this.displayName, this.avatarKey, this.favoriteTeams = const []});
+  final String displayName;
+  final String? avatarKey;
+  final List<FavoriteTeam> favoriteTeams;
+
+  factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
+        displayName: (j['display_name'] ?? '') as String,
+        avatarKey: j['avatar_key'] as String?,
+        favoriteTeams: ((j['favorite_teams'] as List<dynamic>?) ?? [])
+            .map((e) => FavoriteTeam.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+/// A sports-catalog entry (ingestor): a sport or a league within one.
+class CatalogItem {
+  CatalogItem({required this.slug, required this.name, this.logo});
+  final String slug;
+  final String name;
+  final String? logo;
+
+  factory CatalogItem.fromJson(Map<String, dynamic> j) => CatalogItem(
+        slug: (j['slug'] ?? j['id'] ?? '') as String,
+        name: (j['displayName'] ?? j['name'] ?? j['slug'] ?? '') as String,
+        logo: j['logo'] as String?,
       );
 }
 

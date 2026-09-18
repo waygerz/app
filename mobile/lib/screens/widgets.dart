@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:provider/provider.dart';
+
+import '../api/users_api.dart';
+import '../auth/auth_controller.dart';
 import '../theme/app_theme.dart';
 
 /// Small shared UI bits used across screens.
@@ -55,13 +59,43 @@ class LeagueAvatar extends StatelessWidget {
 /// User avatar fallback as on the web (lib/avatar.ts): initials in a hue, on a
 /// 10% tint of the same hue, picked by hashing the user id.
 class UserAvatar extends StatelessWidget {
-  const UserAvatar({super.key, required this.userId, required this.name, this.size = 40});
+  const UserAvatar({super.key, required this.userId, required this.name, this.avatarKey, this.size = 40});
   final String userId;
   final String name;
+
+  /// An uploaded avatar's media key; resolved to a presigned URL and shown in
+  /// place of the initials when set.
+  final String? avatarKey;
   final double size;
 
   @override
   Widget build(BuildContext context) {
+    final key = avatarKey;
+    if (key == null || key.isEmpty) return _initials(context);
+    // A cached URL renders immediately, so rebuilds don't flash the initials.
+    final cached = MediaApi.cachedUrl(key);
+    if (cached != null) return _image(context, cached);
+    final media = MediaApi(context.read<AuthController>().api);
+    return FutureBuilder<String?>(
+      future: media.resolve(key),
+      builder: (context, snap) {
+        final url = snap.data;
+        return url == null ? _initials(context) : _image(context, url);
+      },
+    );
+  }
+
+  Widget _image(BuildContext context, String url) => ClipOval(
+        child: Image.network(
+          url,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stack) => _initials(context),
+        ),
+      );
+
+  Widget _initials(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final c = WaygerzColors.of(context);
     final hues = [
@@ -147,5 +181,90 @@ class StatusChip extends StatelessWidget {
       ),
       child: Text(label, style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w600)),
     );
+  }
+}
+
+/// A titled card section, as the web's account cards: 20px padding, 16px
+/// title (600), optional 12px muted description.
+class SectionCard extends StatelessWidget {
+  const SectionCard({super.key, this.title, this.description, required this.children, this.titleColor, this.borderColor, this.trailing});
+  final String? title;
+  final String? description;
+  final List<Widget> children;
+  final Color? titleColor;
+  final Color? borderColor;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = WaygerzColors.of(context);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(WaygerzRadius.xl),
+        border: Border.all(color: borderColor ?? c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (title != null)
+            Row(children: [
+              Expanded(
+                child: Text(title!,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: titleColor ?? c.foreground)),
+              ),
+              if (trailing != null) trailing!,
+            ]),
+          if (description != null) ...[
+            const SizedBox(height: 4),
+            Text(description!, style: TextStyle(fontSize: 12, color: c.mutedForeground)),
+          ],
+          if (title != null || description != null) const SizedBox(height: 16),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+/// Team logo (network) with the web's fallback: a colored circle with the
+/// abbreviation.
+class TeamLogo extends StatelessWidget {
+  const TeamLogo({super.key, required this.name, required this.abbreviation, this.logo, this.color, this.size = 28});
+  final String name;
+  final String abbreviation;
+  final String? logo;
+  final String? color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = WaygerzColors.of(context);
+    final fallback = Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: _hex(color) ?? c.muted, shape: BoxShape.circle),
+      child: Text(
+        abbreviation.isEmpty ? initialsOf(name) : abbreviation,
+        style: TextStyle(
+          fontSize: size * 0.34,
+          fontWeight: FontWeight.w700,
+          color: _hex(color) == null ? c.mutedForeground : Colors.white,
+        ),
+      ),
+    );
+    final url = logo;
+    if (url == null || url.isEmpty) return fallback;
+    return Image.network(url, width: size, height: size, errorBuilder: (context, error, stack) => fallback);
+  }
+
+  static Color? _hex(String? v) {
+    if (v == null) return null;
+    final h = v.replaceFirst('#', '');
+    if (h.length != 6) return null;
+    final n = int.tryParse(h, radix: 16);
+    return n == null ? null : Color(0xFF000000 | n);
   }
 }

@@ -11,6 +11,7 @@ import '../models.dart';
 import '../shell/app_header.dart';
 import '../shell/bottom_nav.dart';
 import '../theme/app_theme.dart';
+import 'account/account_screen.dart';
 import 'bets_screen.dart';
 import 'leagues_screen.dart';
 import 'notifications_screen.dart';
@@ -111,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
           NavItem(label: 'Messages', icon: WaygerzBottomNav.messages, badge: _messages),
           NavItem(
             label: 'Profile',
-            avatar: UserAvatar(userId: user?.id ?? '', name: user?.displayName ?? '?', size: 24),
+            avatar: UserAvatar(userId: user?.id ?? '', name: user?.displayName ?? '?', avatarKey: user?.avatarKey, size: 24),
           ),
         ],
       ),
@@ -148,7 +149,7 @@ class _ProfileSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(children: [
-              UserAvatar(userId: u?.id ?? '', name: u?.displayName ?? '?', size: 48),
+              UserAvatar(userId: u?.id ?? '', name: u?.displayName ?? '?', avatarKey: u?.avatarKey, size: 48),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -160,6 +161,16 @@ class _ProfileSheet extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: () {
+                final nav = Navigator.of(context);
+                nav.pop();
+                nav.push(MaterialPageRoute<void>(builder: (_) => const AccountScreen()));
+              },
+              icon: const Icon(LucideIcons.settings, size: 16),
+              label: const Text('Account'),
+            ),
+            const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () {
                 Navigator.of(context).pop();

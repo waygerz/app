@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
 import '../api/auth_api.dart';
+import '../api/users_api.dart';
 import '../models.dart';
 import 'token_store.dart';
 
@@ -15,11 +16,13 @@ class AuthController extends ChangeNotifier {
     _api = api ?? ApiClient(_tokens);
     _api.onSessionExpired = _onSessionExpired;
     _auth = AuthApi(_api);
+    _users = UsersApi(_api);
   }
 
   final TokenStore _tokens;
   late final ApiClient _api;
   late final AuthApi _auth;
+  late final UsersApi _users;
 
   ApiClient get api => _api;
   TokenStore get tokens => _tokens;
@@ -36,6 +39,7 @@ class AuthController extends ChangeNotifier {
     try {
       final u = await _auth.me();
       _set(AuthStatus.signedIn, u);
+      unawaited(refreshProfile());
     } on SessionExpired {
       // _onSessionExpired already signed out.
     } catch (_) {
@@ -53,7 +57,10 @@ class AuthController extends ChangeNotifier {
       if (status != AuthStatus.signedIn || user != null) return;
       try {
         final u = await _auth.me();
-        if (status == AuthStatus.signedIn) _set(AuthStatus.signedIn, u);
+        if (status == AuthStatus.signedIn) {
+          _set(AuthStatus.signedIn, u);
+          unawaited(refreshProfile());
+        }
         return;
       } on SessionExpired {
         return;
@@ -98,6 +105,33 @@ class AuthController extends ChangeNotifier {
       await _tokens.saveTokens(res.accessToken!, res.refreshToken!);
     }
     _set(AuthStatus.signedIn, res.user);
+    unawaited(refreshProfile());
+  }
+
+  /// Merge the users-service profile (display name, avatar, favorites) into
+  /// [user] — auth's /me carries identity only since the users split, like the
+  /// web's AuthContext does. Best effort: a failure keeps what we have.
+  Future<void> refreshProfile() async {
+    if (user == null) return;
+    try {
+      applyProfile(await _users.myProfile());
+    } catch (_) {/* keep the current user */}
+  }
+
+  /// Apply a profile returned by a users-service write.
+  void applyProfile(UserProfile p) {
+    final u = user;
+    if (u == null) return;
+    user = u.withProfile(p);
+    notifyListeners();
+  }
+
+  /// Permanently delete the account, then drop the local session. Rethrows
+  /// the ApiException (e.g. 409 `owns_leagues`) for the caller to show.
+  Future<void> deleteAccount() async {
+    await _auth.deleteAccount();
+    await _tokens.clear();
+    _set(AuthStatus.signedOut, null);
   }
 
   void _set(AuthStatus s, User? u) {

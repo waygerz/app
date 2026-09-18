@@ -12,8 +12,12 @@ void main() {
   //   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // here, then call PushService(...).register() after sign-in.
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthController()..bootstrap(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthController()..bootstrap()),
+        // Per-device appearance (colors, dark shade, theme mode), like the web.
+        ChangeNotifierProvider(create: (_) => AppearanceController()..load()),
+      ],
       child: const WaygerzApp(),
     ),
   );
@@ -24,13 +28,14 @@ class WaygerzApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final appearance = context.watch<AppearanceController>().value;
     return MaterialApp(
       title: 'Waygerz',
       debugShowCheckedModeBanner: false,
-      // Same tokens as the webui; follows the OS light/dark setting like the web.
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      // Same tokens as the webui; follows the OS light/dark setting by default.
+      theme: buildTheme(Brightness.light, appearance),
+      darkTheme: buildTheme(Brightness.dark, appearance),
+      themeMode: appearance.mode,
       home: const _Root(),
     );
   }

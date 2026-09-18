@@ -33,9 +33,9 @@ class WaygerzHeader extends StatelessWidget implements PreferredSizeWidget {
     return Container(
       height: kHeaderHeight + top,
       padding: EdgeInsets.only(top: top, left: canPop ? 4 : 16, right: 8),
-      decoration: const BoxDecoration(
-        color: kHeaderBackground,
-        border: Border(bottom: BorderSide(color: kHeaderBorder)),
+      decoration: BoxDecoration(
+        color: WaygerzColors.of(context).headerBackground,
+        border: Border(bottom: BorderSide(color: WaygerzColors.of(context).headerBorder)),
       ),
       child: Row(
         children: [

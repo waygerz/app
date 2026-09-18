@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Colors the Material ColorScheme has no slot for (brand, success, muted
 /// text, input border, …). Read with `WaygerzColors.of(context)`.
@@ -27,6 +28,8 @@ class WaygerzColors extends ThemeExtension<WaygerzColors> {
     required this.warning,
     required this.info,
     required this.picked,
+    required this.headerBackground,
+    required this.headerBorder,
   });
 
   final Color background;
@@ -47,44 +50,39 @@ class WaygerzColors extends ThemeExtension<WaygerzColors> {
   /// A selected (not yet graded) pick — blue-500, used at 20% as a fill.
   final Color picked;
 
-  static const light = WaygerzColors(
-    background: Color(0xFFFFFFFF),
-    foreground: Color(0xFF09090B),
-    card: Color(0xFFFFFFFF),
-    primary: Color(0xFF7F22FE), // violet-600
-    brand: Color(0xFF00A63E), // green-600
-    secondary: Color(0xFFF4F4F5),
-    muted: Color(0xFFF4F4F5),
-    mutedForeground: Color(0xFF71717B),
-    border: Color(0xFFEBEBEE),
-    input: Color(0xFFE4E4E7),
-    destructive: Color(0xFFE7000B),
-    success: Color(0xFF00A63E),
-    warning: Color(0xFFFE9A00),
-    info: Color(0xFF155DFC),
-    picked: Color(0xFF2B7FFF),
-  );
+  /// The top bar is dark in both themes (the web header always carries
+  /// `.dark`), in the chosen dark surface.
+  final Color headerBackground;
+  final Color headerBorder;
 
-  static const dark = WaygerzColors(
-    background: Color(0xFF0E0F14), // slate surface
-    foreground: Color(0xFFFAFAFA),
-    card: Color(0xFF191B24),
-    primary: Color(0xFF8E51FF), // violet-500
-    brand: Color(0xFF00C950), // green-500
-    secondary: Color(0xFF262935),
-    muted: Color(0xFF22242E),
-    mutedForeground: Color(0xFF71717B),
-    border: Color(0xFF2E3040),
-    input: Color(0xFF2E3040),
-    destructive: Color(0xFFE7000B),
-    success: Color(0xFF00A63E),
-    warning: Color(0xFFFE9A00),
-    info: Color(0xFF155DFC),
-    picked: Color(0xFF2B7FFF),
-  );
+  /// The token set for a brightness and the user's appearance choices.
+  factory WaygerzColors.resolve(Brightness brightness, Appearance a) {
+    final dark = brightness == Brightness.dark;
+    final surface = a.surface.tokens;
+    return WaygerzColors(
+      background: dark ? surface.background : const Color(0xFFFFFFFF),
+      foreground: dark ? const Color(0xFFFAFAFA) : const Color(0xFF09090B),
+      card: dark ? surface.card : const Color(0xFFFFFFFF),
+      primary: a.primary.shade(dark),
+      brand: a.accent.shade(dark),
+      secondary: dark ? surface.secondary : const Color(0xFFF4F4F5),
+      muted: dark ? surface.muted : const Color(0xFFF4F4F5),
+      mutedForeground: const Color(0xFF71717B),
+      border: dark ? surface.border : const Color(0xFFEBEBEE),
+      input: dark ? surface.border : const Color(0xFFE4E4E7),
+      destructive: const Color(0xFFE7000B),
+      success: const Color(0xFF00A63E),
+      warning: const Color(0xFFFE9A00),
+      info: const Color(0xFF155DFC),
+      picked: const Color(0xFF2B7FFF),
+      headerBackground: surface.background,
+      headerBorder: surface.border,
+    );
+  }
 
   static WaygerzColors of(BuildContext context) =>
-      Theme.of(context).extension<WaygerzColors>() ?? light;
+      Theme.of(context).extension<WaygerzColors>() ??
+      WaygerzColors.resolve(Theme.of(context).brightness, const Appearance());
 
   @override
   WaygerzColors copyWith() => this;
@@ -102,18 +100,15 @@ class WaygerzRadius {
   static const xl = 12.0;
 }
 
-/// The header is dark in both themes on the web (it always carries `.dark`).
-const kHeaderBackground = Color(0xFF0E0F14);
-const kHeaderBorder = Color(0xFF2E3040);
 const kHeaderHeight = 70.0;
 const kBottomNavHeight = 64.0;
 
-ThemeData buildTheme(Brightness brightness) {
-  final c = brightness == Brightness.dark ? WaygerzColors.dark : WaygerzColors.light;
+ThemeData buildTheme(Brightness brightness, [Appearance appearance = const Appearance()]) {
+  final c = WaygerzColors.resolve(brightness, appearance);
   final scheme = ColorScheme(
     brightness: brightness,
     primary: c.primary,
-    onPrimary: Colors.white,
+    onPrimary: appearance.primary.onColor,
     secondary: c.secondary,
     onSecondary: c.foreground,
     tertiary: c.brand,
@@ -169,7 +164,7 @@ ThemeData buildTheme(Brightness brightness) {
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: c.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: appearance.primary.onColor,
         minimumSize: buttonSize,
         shape: controlShape,
         textStyle: buttonText,
@@ -179,7 +174,7 @@ ThemeData buildTheme(Brightness brightness) {
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: c.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: appearance.primary.onColor,
         elevation: 0,
         minimumSize: buttonSize,
         shape: controlShape,
@@ -247,13 +242,119 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     // Screens that still push their own AppBar get the same dark header look.
     appBarTheme: AppBarTheme(
-      backgroundColor: kHeaderBackground,
+      backgroundColor: c.headerBackground,
       foregroundColor: Colors.white,
       elevation: 0,
       scrolledUnderElevation: 0,
       toolbarHeight: kHeaderHeight,
       titleTextStyle: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
-      shape: const Border(bottom: BorderSide(color: kHeaderBorder)),
+      shape: Border(bottom: BorderSide(color: c.headerBorder)),
     ),
   );
+}
+
+
+// ---------------------------------------------------------------- appearance
+// The web's Appearance settings (components/theme/color-theme.tsx): a primary
+// and an accent hue (light uses the -600 shade, dark the -500) and a dark
+// surface, stored per device. Theme mode (system/light/dark) is added here
+// because the phone has no browser-level toggle.
+
+enum Hue {
+  red('Red', Color(0xFFE7000B), Color(0xFFFB2C36)),
+  orange('Orange', Color(0xFFF54900), Color(0xFFFF6900)),
+  yellow('Yellow', Color(0xFFF0B100), Color(0xFFF0B100)),
+  green('Green', Color(0xFF00A63E), Color(0xFF00C950)),
+  blue('Blue', Color(0xFF155DFC), Color(0xFF2B7FFF)),
+  indigo('Indigo', Color(0xFF4F39F6), Color(0xFF615FFF)),
+  violet('Violet', Color(0xFF7F22FE), Color(0xFF8E51FF));
+
+  const Hue(this.label, this._light, this._dark);
+  final String label;
+  final Color _light;
+  final Color _dark;
+
+  Color shade(bool dark) => dark ? _dark : _light;
+
+  /// Yellow needs dark text on top (as on the web).
+  Color get onColor => this == Hue.yellow ? const Color(0xFF09090B) : Colors.white;
+}
+
+class SurfaceTokens {
+  const SurfaceTokens(this.background, this.card, this.secondary, this.muted, this.border);
+  final Color background;
+  final Color card;
+  final Color secondary;
+  final Color muted;
+  final Color border;
+}
+
+enum Surface {
+  slate('Slate', SurfaceTokens(Color(0xFF0E0F14), Color(0xFF191B24), Color(0xFF262935), Color(0xFF22242E), Color(0xFF2E3040))),
+  soft('Soft', SurfaceTokens(Color(0xFF0F0F12), Color(0xFF17171B), Color(0xFF26262E), Color(0xFF1F1F26), Color(0xFF2B2B33))),
+  lifted('Lifted', SurfaceTokens(Color(0xFF131318), Color(0xFF1E1E26), Color(0xFF2F2F3A), Color(0xFF26262F), Color(0xFF33333D))),
+  flat('Flat', SurfaceTokens(Color(0xFF09090B), Color(0xFF09090B), Color(0xFF27272A), Color(0xFF18181B), Color(0xFF27272A)));
+
+  const Surface(this.label, this.tokens);
+  final String label;
+  final SurfaceTokens tokens;
+}
+
+@immutable
+class Appearance {
+  const Appearance({
+    this.mode = ThemeMode.system,
+    this.primary = Hue.violet,
+    this.accent = Hue.green,
+    this.surface = Surface.slate,
+  });
+  final ThemeMode mode;
+  final Hue primary;
+  final Hue accent;
+  final Surface surface;
+
+  Appearance copyWith({ThemeMode? mode, Hue? primary, Hue? accent, Surface? surface}) => Appearance(
+        mode: mode ?? this.mode,
+        primary: primary ?? this.primary,
+        accent: accent ?? this.accent,
+        surface: surface ?? this.surface,
+      );
+}
+
+/// Holds the appearance and persists it on the device (the web keeps the same
+/// choices in localStorage). Any storage failure just leaves the defaults.
+class AppearanceController extends ChangeNotifier {
+  Appearance value = const Appearance();
+
+  static const _kMode = 'waygerz-mode';
+  static const _kPrimary = 'waygerz-primary';
+  static const _kAccent = 'waygerz-accent';
+  static const _kSurface = 'waygerz-surface';
+
+  Future<void> load() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      T pick<T extends Enum>(List<T> values, String? name, T fallback) =>
+          values.where((v) => v.name == name).firstOrNull ?? fallback;
+      value = Appearance(
+        mode: pick(ThemeMode.values, p.getString(_kMode), ThemeMode.system),
+        primary: pick(Hue.values, p.getString(_kPrimary), Hue.violet),
+        accent: pick(Hue.values, p.getString(_kAccent), Hue.green),
+        surface: pick(Surface.values, p.getString(_kSurface), Surface.slate),
+      );
+      notifyListeners();
+    } catch (_) {/* defaults */}
+  }
+
+  Future<void> update(Appearance next) async {
+    value = next;
+    notifyListeners();
+    try {
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kMode, next.mode.name);
+      await p.setString(_kPrimary, next.primary.name);
+      await p.setString(_kAccent, next.accent.name);
+      await p.setString(_kSurface, next.surface.name);
+    } catch (_) {/* still applied for this session */}
+  }
 }

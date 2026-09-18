@@ -20,9 +20,13 @@ String withQuery(String path, Map<String, Object?> params) {
 }
 
 class ApiException implements Exception {
-  ApiException(this.statusCode, this.message);
+  ApiException(this.statusCode, this.message, [this.data = const {}]);
   final int statusCode;
   final String message;
+
+  /// The decoded error body, for errors that carry detail (e.g. the leagues
+  /// blocking an account delete).
+  final Map<String, dynamic> data;
   @override
   String toString() => 'ApiException($statusCode): $message';
 }
@@ -50,6 +54,7 @@ class ApiClient {
   Future<Map<String, dynamic>> post(String path, {Object? body, bool auth = true}) =>
       _json('POST', path, body: body, auth: auth);
   Future<Map<String, dynamic>> put(String path, {Object? body}) => _json('PUT', path, body: body);
+  Future<Map<String, dynamic>> patch(String path, {Object? body}) => _json('PATCH', path, body: body);
   Future<Map<String, dynamic>> delete(String path, {Object? body}) =>
       _json('DELETE', path, body: body);
 
@@ -60,10 +65,13 @@ class ApiClient {
     if (res.statusCode >= 200 && res.statusCode < 300) {
       return decoded is Map<String, dynamic> ? decoded : {'data': decoded};
     }
-    final msg = (decoded is Map && decoded['error'] is String)
-        ? decoded['error'] as String
-        : 'Request failed (${res.statusCode})';
-    throw ApiException(res.statusCode, msg);
+    final err = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+    final msg = err['message'] is String
+        ? err['message'] as String
+        : err['error'] is String
+            ? err['error'] as String
+            : 'Request failed (${res.statusCode})';
+    throw ApiException(res.statusCode, msg, err);
   }
 
   Future<http.Response> _send(String method, String path, {Object? body, bool auth = true}) async {
@@ -100,6 +108,8 @@ class ApiClient {
         return _http.post(uri, headers: headers, body: payload);
       case 'PUT':
         return _http.put(uri, headers: headers, body: payload);
+      case 'PATCH':
+        return _http.patch(uri, headers: headers, body: payload);
       case 'DELETE':
         return _http.delete(uri, headers: headers, body: payload);
       default:

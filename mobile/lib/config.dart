@@ -15,6 +15,7 @@ class Config {
   // API path prefixes — mirror api/<service>/app/utils/config.py::api_prefix()
   // and web/lib/api-paths.ts. Keep in sync when a service group changes.
   static const String auth = '/v1/platform/auth';
+  static const String users = '/v1/platform/users';
   static const String friends = '/v1/social/friends';
   static const String wallet = '/v1/gameplay/wallet';
   static const String contests = '/v1/gameplay/contests';

@@ -6,6 +6,10 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose a photo for your Waygerz avatar.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo for your Waygerz avatar.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Waygerz</string>
 	<key>CFBundleExecutable</key>

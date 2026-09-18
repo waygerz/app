@@ -59,4 +59,9 @@ class AuthApi {
     final device = await _api.ensureDeviceUuid();
     await _api.post('${Config.auth}/logout', body: {'device_uuid': device});
   }
+
+  /// Permanently delete the signed-in account (cross-service purge). A 409
+  /// `owns_leagues` comes back as an ApiException whose `data['leagues']` lists
+  /// the leagues the user must hand off or archive first.
+  Future<void> deleteAccount() => _api.delete('${Config.auth}/account');
 }
