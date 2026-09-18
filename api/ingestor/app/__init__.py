@@ -42,7 +42,12 @@ def create_app(config_class=Config):
 
         start = datetime.strptime(since, "%Y-%m-%d").date()
         end = datetime.strptime(until, "%Y-%m-%d").date() if until else datetime.utcnow().date()
-        for league, n in rescore_dates(start, end).items():
+        result = rescore_dates(start, end)
+        failed = result.pop("failed")
+        for league, n in result.items():
             print(f"rescored {league}: {n} events")
+        if failed:
+            # Non-zero so the deploy workflow's one-off step fails loudly.
+            raise click.ClickException(f"{len(failed)} league-days failed: {', '.join(failed)}")
 
     return app

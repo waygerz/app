@@ -366,8 +366,9 @@ def rescore_dates(start, end) -> dict:
     """Re-read every registered league's ESPN board for each day in [start, end]
     and upsert, overwriting whatever we stored — the repair for results written
     while score refresh was down (e.g. games the reaper closed as 0-0 draws).
-    Each league/day commits on its own."""
-    out = {}
+    Each league/day commits on its own; failed days are listed under
+    ``"failed"`` so the caller can exit non-zero."""
+    out = {"failed": []}
     for entry in LEAGUE_REGISTRY:
         sport, league = entry["sport"], entry["league"]
         n = 0
@@ -380,6 +381,7 @@ def rescore_dates(start, end) -> dict:
             except Exception as exc:  # noqa: BLE001 — one bad day shouldn't sink the rest
                 db.session.rollback()
                 current_app.logger.warning("rescore %s/%s %s: %s", sport, league, day, exc)
+                out["failed"].append(f"{sport}/{league} {day}")
             day += timedelta(days=1)
         out[f"{sport}/{league}"] = n
     return out
