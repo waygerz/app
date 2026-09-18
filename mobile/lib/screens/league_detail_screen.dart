@@ -68,7 +68,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: WaygerzHeader.league(name: widget.league.name, id: widget.league.id),
+      appBar: WaygerzHeader.league(name: widget.league.name, id: widget.league.id, logo: widget.league.logoUrl),
       body: FutureBuilder<_DetailData>(
         future: _future,
         builder: (context, snap) {
@@ -101,7 +101,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
 
   Widget _header(League l) {
     return Row(children: [
-      LeagueAvatar(name: l.name, id: l.id, size: 72),
+      LeagueAvatar(name: l.name, id: l.id, logo: l.logoUrl, size: 72),
       const SizedBox(width: 12),
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

@@ -29,16 +29,56 @@ const _leaguePalette = [
   Color(0xFF3B82F6), Color(0xFFEF4444), Color(0xFF8B5CF6), Color(0xFF14B8A6),
 ];
 
-/// League avatar as on the web: a 12px-rounded square in the league's hashed
-/// color with white bold initials (logo/avatar-key resolution comes later).
-class LeagueAvatar extends StatelessWidget {
-  const LeagueAvatar({super.key, required this.name, this.id, this.size = 40});
-  final String name;
-  final String? id;
+/// A stored image value → something displayable, like the web's useMediaSrc:
+/// an S3 key ("members/…") is resolved to a presigned URL via the media
+/// service; a direct URL passes through. Renders [fallback] until (or unless)
+/// there is an image.
+class MediaImage extends StatelessWidget {
+  const MediaImage({super.key, required this.value, required this.size, required this.fallback, this.circle = false, this.radius = 0});
+  final String? value;
   final double size;
+  final Widget fallback;
+  final bool circle;
+  final double radius;
 
   @override
   Widget build(BuildContext context) {
+    final v = value;
+    if (v == null || v.isEmpty) return fallback;
+    if (!v.startsWith('members/')) return _image(v);
+    final cached = MediaApi.cachedUrl(v);
+    if (cached != null) return _image(cached);
+    return FutureBuilder<String?>(
+      future: MediaApi(context.read<AuthController>().api).resolve(v),
+      builder: (context, snap) => snap.data == null ? fallback : _image(snap.data!),
+    );
+  }
+
+  Widget _image(String url) {
+    final img = Image.network(url, width: size, height: size, fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => fallback);
+    return circle ? ClipOval(child: img) : ClipRRect(borderRadius: BorderRadius.circular(radius), child: img);
+  }
+}
+
+/// League avatar as on the web: a 12px-rounded square in the league's hashed
+/// color with white bold initials (logo/avatar-key resolution comes later).
+class LeagueAvatar extends StatelessWidget {
+  const LeagueAvatar({super.key, required this.name, this.id, this.logo, this.size = 40});
+  final String name;
+  final String? id;
+
+  /// The league's `logo_url` (an uploaded media key or a URL).
+  final String? logo;
+  final double size;
+
+  double get _radius => size >= 32 ? WaygerzRadius.xl : WaygerzRadius.md;
+
+  @override
+  Widget build(BuildContext context) =>
+      MediaImage(value: logo, size: size, radius: _radius, fallback: _initials());
+
+  Widget _initials() {
     final color = _leaguePalette[_hash(id ?? name) % _leaguePalette.length];
     return Container(
       width: size,
@@ -46,7 +86,7 @@ class LeagueAvatar extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(size >= 32 ? WaygerzRadius.xl : WaygerzRadius.md),
+        borderRadius: BorderRadius.circular(_radius),
       ),
       child: Text(
         initialsOf(name),
@@ -70,30 +110,8 @@ class UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final key = avatarKey;
-    if (key == null || key.isEmpty) return _initials(context);
-    // A cached URL renders immediately, so rebuilds don't flash the initials.
-    final cached = MediaApi.cachedUrl(key);
-    if (cached != null) return _image(context, cached);
-    final media = MediaApi(context.read<AuthController>().api);
-    return FutureBuilder<String?>(
-      future: media.resolve(key),
-      builder: (context, snap) {
-        final url = snap.data;
-        return url == null ? _initials(context) : _image(context, url);
-      },
-    );
+    return MediaImage(value: avatarKey, size: size, circle: true, fallback: _initials(context));
   }
-
-  Widget _image(BuildContext context, String url) => ClipOval(
-        child: Image.network(
-          url,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stack) => _initials(context),
-        ),
-      );
 
   Widget _initials(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;

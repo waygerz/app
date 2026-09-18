@@ -9,18 +9,19 @@ import '../theme/app_theme.dart';
 /// Waygerz logo + page title — or, on a league page, the league avatar + name.
 /// Pushed routes get a back chevron (the web relies on the browser for that).
 class WaygerzHeader extends StatelessWidget implements PreferredSizeWidget {
-  const WaygerzHeader({super.key, required this.title, this.leagueId, this.actions = const []});
+  const WaygerzHeader({super.key, required this.title, this.leagueId, this.leagueLogo, this.actions = const []});
 
   /// A plain page header with the logo.
   const WaygerzHeader.page(String title, {Key? key, List<Widget> actions = const []})
       : this(key: key, title: title, actions: actions);
 
   /// A league page header with the league's avatar.
-  const WaygerzHeader.league({Key? key, required String name, required String id, List<Widget> actions = const []})
-      : this(key: key, title: name, leagueId: id, actions: actions);
+  const WaygerzHeader.league({Key? key, required String name, required String id, String? logo, List<Widget> actions = const []})
+      : this(key: key, title: name, leagueId: id, leagueLogo: logo, actions: actions);
 
   final String title;
   final String? leagueId;
+  final String? leagueLogo;
   final List<Widget> actions;
 
   @override
@@ -46,7 +47,7 @@ class WaygerzHeader extends StatelessWidget implements PreferredSizeWidget {
               tooltip: 'Back',
             ),
           if (leagueId != null)
-            LeagueAvatar(name: title, id: leagueId, size: 32)
+            LeagueAvatar(name: title, id: leagueId, logo: leagueLogo, size: 32)
           else
             ClipRRect(
               borderRadius: BorderRadius.circular(WaygerzRadius.md),

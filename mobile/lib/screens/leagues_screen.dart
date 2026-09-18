@@ -68,7 +68,7 @@ class _LeagueTile extends StatelessWidget {
       '${league.memberCount} member${league.memberCount == 1 ? '' : 's'}',
     ].join(' · ');
     return ListTile(
-      leading: LeagueAvatar(name: league.name, id: league.id, size: 48),
+      leading: LeagueAvatar(name: league.name, id: league.id, logo: league.logoUrl, size: 48),
       title: Text(league.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(subtitle),
       trailing: league.isDraft
