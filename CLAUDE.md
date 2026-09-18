@@ -209,8 +209,9 @@ The AWS CLI is configured on the dev machines:
   it is separate from CI: the deploy pipeline authenticates via GitHub OIDC.
 - **Postgres + Redis** run as docker containers (`pgsql`, `redis`) on the EC2
   host `waygerz-data` (`i-05d5d3c6de3711767`), reachable via SSM Run Command.
-  `pgsql` runs with `max_connections=100`; the host's user-data `docker run`
-  still says 30 — keep them in sync. `flask db-stats` (ingestor, via the deploy
+  `pgsql` runs with `max_connections=100`; see `.docs/complete/DATA_HOST.md`
+  for the canonical container commands (the host's first-boot user-data still
+  says 30 — don't rebuild from it). `flask db-stats` (ingestor, via the deploy
   workflow's `run_command`) shows usage per service.
 
 ## Deploy

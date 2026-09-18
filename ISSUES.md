@@ -168,8 +168,10 @@ come from the audit pass and should be double-checked before acting on them.
 ### Open
 - [x] **Postgres `max_connections=30`** on `waygerz-data` (docker `pgsql`).
   **Fixed 2026-09-18:** container recreated with `max_connections=100` (same
-  image, flags, volume). **Still open:** the EC2 user-data `docker run` says 30,
-  so a rebuilt host would come back at 30 — update it on the next stop/start.
+  image, flags, volume). The host was launched by hand (no launch template/IaC)
+  and user-data only runs at first boot, so rather than stopping the DB host to
+  edit it, the canonical container commands (100) live in
+  `.docs/complete/DATA_HOST.md` — build any new host from those.
 - [x] **auth / friends / wallet / ingestor `INTERNAL_*_URL` pointed at
   `https://waygerz.com`** (unreachable from inside the VPC — confirmed when a
   one-off task timed out on it). **Fixed 2026-09-18:** removed from their task
@@ -177,7 +179,11 @@ come from the audit pass and should be double-checked before acting on them.
   defaults apply. Ingestor also resized to 0.25 vCPU / 512 MB.
 - [x] **8 bets pushed on fake 0-0 finals** — settled with `flask
   resettle-refunds --apply` (all $0; feed posts/notifications not sent).
-- [ ] **media and twilio aren't on Service Connect**, so their `INTERNAL_*_URL`
-  still point at `https://waygerz.com` (the ALB path CLAUDE.md warns drifts).
+- [x] **media and twilio weren't on Service Connect.** **Fixed 2026-09-18:**
+  media (`waygerz-media:3`) now names its port `http` and registers as `media` in
+  the `waygerz` namespace, and its unused public `INTERNAL_*_URL` are gone; auth
+  was redeployed so its account-deletion purge (`http://media:8000`) resolves.
+  twilio needs nothing: it makes no internal calls, and `TWILIO_WEBHOOK_BASE_URL`
+  must stay public (Twilio signs requests against it).
 - [x] **`CLAUDE.md` "AWS environment" section** described only the old EC2 dev
   host (`waygerz` profile). **Fixed:** documents the `waygerz_aws` profile too.
