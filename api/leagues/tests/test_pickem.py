@@ -87,11 +87,11 @@ def test_picks_locked_when_period_not_open(client, auth_headers, app):
     d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
     d = _activate(client, auth_headers(U1), d["id"]).get_json()["league"]
     lid, pid = d["id"], _period_id(d)
-    # close the period directly in the DB
-    with app.app_context():
-        p = db.session.get(LeaguePeriod, pid)
-        p.status = period_model.CLOSED
-        db.session.commit()
+    # Close the period directly in the DB, through the same session the test
+    # client uses (the fixture's app context) so its identity map sees it.
+    p = db.session.get(LeaguePeriod, pid)
+    p.status = period_model.CLOSED
+    db.session.commit()
     r = client.put(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks",
                    json={"picks": [{"event_id": "EVT1", "side": "home"}]},
                    headers=auth_headers(U1))

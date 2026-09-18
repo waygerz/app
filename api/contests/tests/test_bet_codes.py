@@ -92,12 +92,15 @@ def test_act_rejected_for_non_acceptor(app, calls):
     assert w.status == OPEN
 
 
-def test_consumed_after_accept(app, calls):
+def test_viewable_without_actions_after_accept(app, calls):
     w = svc.propose(U1, LG, "ev1", "home", 5000, U2)
     code = _code_for(w)
     svc.act_on_code(U2, code, {"action": "accept"})
-    body, _ = svc.resolve_code(U2, code)
-    assert body["state"] == "consumed"
+    body, status = svc.resolve_code(U2, code)
+    # A bet code stays viewable for the wager's life (746961c); only actions close.
+    assert status == 200
+    assert body["state"] == "ok"
+    assert body["preview"]["wager"]["status"] == ACCEPTED
     assert body["actions"] == []
 
 

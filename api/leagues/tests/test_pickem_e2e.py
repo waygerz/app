@@ -97,7 +97,9 @@ def test_weekly_pickem_end_to_end(client, auth_headers, app, monkeypatch):
     events["G3"].update(status="final", winner_side="home", home_score=24, away_score=20)  # total 44
     with app.app_context():
         p = db.session.get(LeaguePeriod, pid)
-        p.ends_at = now - timedelta(hours=1)
+        # Pick'em weeks roll at the first Tue 09:00 local >= ends_at (5dc6305);
+        # >7 days back guarantees that boundary has passed.
+        p.ends_at = now - timedelta(days=8)
         db.session.commit()
 
     t = client.post(TICK, headers=tick_hdr).get_json()
@@ -194,7 +196,9 @@ def test_late_game_still_grades_after_week_rolls_over(client, auth_headers, app,
     events["L1"].update(status="final", winner_side="home", home_score=20, away_score=10)
     with app.app_context():
         p = db.session.get(LeaguePeriod, pid)
-        p.ends_at = now - timedelta(hours=1)
+        # Pick'em weeks roll at the first Tue 09:00 local >= ends_at (5dc6305);
+        # >7 days back guarantees that boundary has passed.
+        p.ends_at = now - timedelta(days=8)
         db.session.commit()
 
     t = client.post(TICK, headers=tick_hdr).get_json()

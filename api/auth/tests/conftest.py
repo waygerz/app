@@ -58,11 +58,24 @@ def read_otp(app):
     return _read
 
 
+@pytest.fixture(autouse=True)
+def profiles(monkeypatch):
+    """Stub the users-service profile create (no sibling services in tests).
+    Returns the list of (user_id, display_name) calls."""
+    from app.services import service_users
+
+    calls = []
+    monkeypatch.setattr(
+        service_users, "create_profile", lambda uid, name, avatar_key=None: calls.append((str(uid), name))
+    )
+    return calls
+
+
 @pytest.fixture()
 def user(app):
     with app.app_context():
         phone = normalize_phone("9042398484")
-        u = User(phone=phone, pin_hash=hash_pin("1234"), display_name="Tester")
+        u = User(phone=phone, pin_hash=hash_pin("1234"))
         db.session.add(u)
         db.session.commit()
         db.session.refresh(u)

@@ -34,7 +34,7 @@ def test_otp_login_existing_user_sets_cookies(client, user, device_uuid, read_ot
     assert any(SESSION_MARKER_COOKIE in c for c in cookies)
 
 
-def test_signup_new_user_flow(client, device_uuid, read_otp):
+def test_signup_new_user_flow(client, device_uuid, read_otp, profiles):
     phone_raw = "9042398485"  # valid US number, not yet registered
     # New number → must opt into SMS before the first message (the code) is sent.
     start = client.post(
@@ -66,7 +66,8 @@ def test_signup_new_user_flow(client, device_uuid, read_otp):
         },
     )
     assert done.status_code == 201
-    assert done.get_json()["user"]["display_name"] == "Newbie"
+    # display_name lives in the users service now; auth creates the profile there.
+    assert profiles == [(done.get_json()["user"]["id"], "Newbie")]
     access_name, _ = auth_cookie_names()
     assert any(access_name in c for c in done.headers.getlist("Set-Cookie"))
 
