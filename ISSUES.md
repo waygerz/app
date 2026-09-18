@@ -1,0 +1,176 @@
+# Issues
+
+Findings from a read-only audit of `api/`, `web/` and `mobile/` (2026-09-18).
+Items marked **(verified)** were confirmed by reading the code directly; the rest
+come from the audit pass and should be double-checked before acting on them.
+
+## High
+
+- [x] **Scheduler ticks likely 404 (verified).**
+  `api/scheduler/scheduler.py:15-17` defaults `CONTESTS_URL`, `LEAGUES_URL` and
+  `INGESTOR_URL` to bare `http://<svc>:8000`, then appends `/internal/tick`.
+  Those services mount internal routes at `api_prefix() + "/internal"`
+  (e.g. `api/contests/app/routes/__init__.py:24`), so the real path is
+  `/v1/<group>/<svc>/internal/tick`. Only the `users` job carries the prefix.
+  No scheduler taskdef is in the repo, so unless prod sets these env vars
+  elsewhere, wager settlement, pick'em period advancement and ingest ticks don't
+  run. Check CloudWatch for `[scheduler] contests error: 404`.
+  **Prod was unaffected:** the live `waygerz-scheduler:7` task def sets the
+  prefixed `CONTESTS_URL`/`LEAGUES_URL`/`INGESTOR_URL`. Only compose/local used
+  the broken defaults.
+  **Fixed:** defaults are now `http://contests:8000/v1/gameplay/contests`,
+  `http://leagues:8000/v1/gameplay/leagues`,
+  `http://ingestor:8000/v1/platform/ingestor`.
+
+- [x] **Unauthenticated `POST /v1/platform/ingestor/events/sync` (verified).**
+  `api/ingestor/app/routes/route_events.py:38` has no JWT or internal-token
+  guard and is publicly routed. `force=true` bypasses the upstream cache, so
+  anyone can trigger external ESPN/odds API fetches.
+  **Fixed:** now `@internal_only` (no client calls it).
+
+- [x] **Secrets silently fall back to dev defaults.** Every service's
+  `config.py` falls back to `dev-secret-change-me`, `dev-jwt-secret-change-me`
+  and `dev-internal-token` when env vars are unset. Only `twilio` fails fast.
+  A missing SSM secret in prod would run with a known JWT key.
+  **Fixed:** `require_prod_secrets()` in each service's `create_app` refuses to boot
+  when `APP_ENV=production` and `JWT_SECRET_KEY`/`INTERNAL_TOKEN` are unset or dev
+  defaults (`SECRET_KEY` is never read, so it's not enforced). **Before deploying,
+  confirm every ECS task def sets both** — only `notifications/taskdef.json` is in
+  the repo.
+
+## Medium
+
+- [x] **Web refresh race.** `tryRefreshSession` (`web/lib/auth.ts`, called from
+  `web/auth/AuthContext.tsx`) calls `/refresh` outside the single-flight /
+  cross-tab lock used by `apiFetch` (`web/lib/http.ts`). With refresh-token
+  rotation, concurrent refreshes can trigger reuse detection and log users out.
+  **Fixed:** `tryRefreshSession` now goes through the exported `refreshSession()`
+  lock; the unlocked `authApi.refresh` was removed.
+
+- [x] **Mobile never recovers from an expired session.** Nothing catches
+  `SessionExpired` to return to login; screens just show `ErrorState`.
+  `bootstrap()` also treats a network error as signed-in with `user = null`
+  (`mobile/lib/auth/auth_controller.dart:39-41`).
+  **Fixed:** `ApiClient.onSessionExpired` signs out via `AuthController` (routes to
+  login from any screen); bootstrap retries `/me` in the background after a
+  network error.
+
+- [x] **CI only tests 4 of 12 services.** `.github/workflows/test.yml` runs pytest
+  for auth, contests, leagues and ingestor. users, friends, comments, messaging,
+  wallet, media, notifications and twilio have `tests/` that never run.
+  **Fixed:** `test.yml` matrix now covers all 12 services (first run may surface
+  failures in suites that never ran in CI).
+
+- [x] **Messaging accepts JWT in the query string** (`api/messaging/app/utils/config.py:30,38`)
+  for SSE. Tokens can end up in ALB/proxy access logs.
+  **Fixed:** removed `query_string` — nothing used it (web SSE authenticates with
+  cookies; a future mobile stream can send the `Authorization` header).
+
+- [x] **Open-redirect gap.** `safeReturnPath` (`web/auth/return-path.ts:2`) doesn't
+  reject `/\evil.com`.
+  **Fixed:** resolves with `new URL()` and requires same origin.
+
+- [x] **`internal_only` uses `!=` for token comparison** (`app/utils/guards.py` in
+  each service). **Fixed:** `hmac.compare_digest`.
+
+- [x] **Web ingestor/ESPN clients bypass `apiFetch`.** `web/lib/ingestor.ts:17`
+  and `web/lib/espn.ts:108,115` use raw `fetch` (no credentials, no 401 refresh).
+  Fine only while those endpoints stay public.
+  **Won't fix:** the ingestor read endpoints are public by design.
+
+## Low / cleanup
+
+### Backend
+- [ ] `docker-compose.yml`: gateway `depends_on` is missing users, notifications
+  and twilio (nginx proxies to them); scheduler doesn't depend on ingestor. The
+  memory table (lines 13-31) omits users/notifications/twilio; header comment
+  (line 38) still says `../webui`.
+- [ ] `api/gateway/conf.d/default.conf` header comment describes old routes
+  (`/auth`, `/events`, `/wagers`, "React SPA").
+- [ ] No `api/.env.example`; compose fails on a fresh checkout.
+- [ ] `notifications/taskdef.json` and `web/taskdef.json` deploy `:latest` and
+  hardcode the AWS account ID. Only these two services support `register_taskdef`.
+- [ ] Duplicated code in every service: `guards.py`, `wsgi.py`, `migrations/env.py`,
+  `config.py`. Two naming styles for peer URLs (`INTERNAL_*_URL` attrs in auth vs
+  `*_URL` attrs elsewhere).
+- [x] Ingestor Dockerfile has no `--worker-class` (sync worker, unlike the others).
+  **Moot:** the tick no longer runs in the request thread (a14771c).
+
+### Web
+- [ ] About 35–40% of non-page code is unused Metronic template code: about 50 of 79
+  `components/ui` files (about 9k lines; `file-upload.tsx` is 0 bytes), 5 hooks,
+  `config/general.config.ts`, `components/shell/logo.tsx`, `lib/dom.ts`.
+- [ ] About 25 MB of demo assets in `web/public/media`; only `/media/app/mini-logo.svg`
+  is used.
+- [ ] Unused deps: apexcharts, react-apexcharts, leaflet, react-leaflet,
+  react-i18next, @remixicon/react, date-fns, react-wrap-balancer,
+  @tanstack/react-query-devtools, react-aspect-ratio (plus several only used by
+  dead UI files: dnd-kit, react-table, headless-tree, embla, recharts, motion).
+- [ ] `styles/config.metronic.css` imports apexcharts/leaflet/rating/demo1 CSS and
+  `image-input.css` twice.
+- [ ] Template leftovers: `package.json` name `metronic-react-starter-kit`,
+  stock `README.md`, `documentation.html`, eslint ignore for `prisma/**`,
+  `app/api/health/route.ts` reports `service: 'metronic-react-starter-kit'`.
+- [ ] `app/(app)/leagues/[id]/sections.tsx` is 3,723 lines — split per tab.
+- [ ] 15 copies of `process.env.NEXT_PUBLIC_API_URL ?? ''` and a `req()` wrapper
+  per lib module; `hasSessionMarker` duplicated with different logic
+  (`lib/http.ts:28` vs `lib/session.ts:4`).
+- [ ] `tsconfig.json`: `target es5`, `moduleResolution node10`, path alias to
+  nonexistent `./app/components/*`. `eslint-config-next` 15.5 vs next 16.1.6;
+  `@eslint/eslintrc` used but not declared.
+- [ ] `build:staging` needs a nonexistent `.env.staging` and uses `cp` (breaks on Windows).
+- [ ] Privacy/terms titles double-suffix ("· Waygerz | Waygerz"); `/logo.png`
+  img tags ignore `basePath`.
+- [ ] `favorites.ts` is still localStorage-only (users service now owns favorites).
+
+### Mobile
+- [ ] `PushService` is never called; Firebase init is only a comment in `main.dart`.
+- [ ] Query strings in `wallet_api.dart` / `wagers_api.dart` aren't URL-encoded
+  (`account=league:<id>`).
+- [ ] API objects created inline per build (e.g. `NotificationsApi` in
+  `home_screen.dart:24`).
+- [x] `mobile/.gitignore` ignores `pubspec.lock` — apps should commit it.
+- [ ] `mobile/README.md` is stale: says OTP is never returned (the app reads
+  `dev_otp`), lists only 2 model classes (there are 8).
+- [ ] Feature gaps vs web (see `.docs/pending/MOBILE_PARITY_PLAN.md`): pick
+  submission, propose bet, friends, messaging, avatars, deep links, unread badges,
+  wallet ledger, notification prefs, push.
+- [ ] Android SDK setup on the dev machine: cmdline-tools missing, licenses not
+  accepted (`flutter doctor`).
+
+### Docs
+- [x] `CLAUDE.md`: lists 10 services (missing users, twilio); says `webui/` /
+  `../webui` (it's `web/`); says scheduler ticks 3 services (it's 4); references a
+  `wagers` service (it's contests); says proxy gates on `waygerz_access` only
+  (it accepts access or refresh); describes SSR via `API_INTERNAL_URL` (nothing
+  reads it; no SSR fetches); mentions `i18n/` (doesn't exist).
+- [x] `AGENTS.md`: missing twilio.
+- [ ] `build-and-deploy.yml` references `_docs/INF_PROD.md`, which doesn't exist.
+
+## Added 2026-09-18 (after the audit)
+
+### Fixed
+- [x] **Scores froze; unplayed games became 0-0 draws.** ESPN rejects
+  `dates=YYYYMMDD-YYYYMMDD` (HTTP 400) since ~2026-09-15; the reaper then
+  finalized games from ESPN's pre-game "0" placeholders. Per-day fetches, a
+  catch-up pass, and a reaper that only scores games it saw live (855dbb9).
+  36 games backfilled with `flask rescore`; picks re-graded (open weeks too).
+- [x] **Spreads missing until 48h before kickoff.** ESPN's scoreboard carries
+  DraftKings lines for free; they're now stored and refreshed for the next 7
+  days (a54c7d7).
+- [x] **Data-provider budgets.** Odds API paced to its 20K/mo plan with
+  carry-forward and near-kickoff weighting; RTS (10K/mo) only fills gaps; quota
+  report via `flask quota` / `/internal/quota` / hourly log (5591b11, 90c57ef).
+- [x] **Ingestion performance.** Background tick (no more 504s), diff-only
+  upserts, parallel ESPN fetches, batch event lookups for leagues/contests,
+  capped DB pools in every service (a14771c, 77e51e2, ff516bc).
+
+### Open
+- [ ] **Postgres `max_connections=30`** on `waygerz-data` (docker `pgsql`,
+  set in the EC2 user-data `docker run`). Pools are capped to fit; raising it
+  needs the container recreated — and the user-data updated so a rebuilt host
+  keeps it.
+- [ ] **media and twilio aren't on Service Connect**, so their `INTERNAL_*_URL`
+  still point at `https://waygerz.com` (the ALB path CLAUDE.md warns drifts).
+- [ ] **`CLAUDE.md` "AWS environment" section** describes the old EC2 dev host
+  (`waygerz` profile); this machine uses the `waygerz_aws` profile.
