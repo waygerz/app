@@ -1177,9 +1177,12 @@ def resettle_refunds(since, apply=False) -> list[dict]:
             wager.status = SETTLED
             wager.settled_at = datetime.utcnow()
             db.session.commit()
-            _post_completed_activity(wager)
-            _notify_settled(wager)
             row["action"] = "settled"
+            try:  # best-effort announce; the settle above already stands
+                _post_completed_activity(wager)
+                _notify_settled(wager)
+            except Exception as exc:  # noqa: BLE001
+                row["action"] = f"settled (announce failed: {exc})"
         except InsufficientFunds:
             db.session.rollback()
             row["action"] = "FAILED: loser balance too low to recharge the stake"

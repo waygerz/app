@@ -63,10 +63,15 @@ def create_app(config_class=Config):
     @app.cli.command("resettle-refunds")
     @click.option("--since", required=True, help="Refunds settled at/after this UTC date, YYYY-MM-DD.")
     @click.option("--apply", is_flag=True, help="Move money. Without it, only report.")
-    def resettle_refunds(since, apply):
+    @click.option("--ingestor-url", default=None,
+                  help="Read events here instead of the mesh (one-off tasks run outside "
+                       "Service Connect), e.g. https://waygerz.com/v1/platform/ingestor.")
+    def resettle_refunds(since, apply, ingestor_url):
         """Settle wagers refunded as a push on a result that was later corrected."""
         from app.services.service_wagers import resettle_refunds as run
 
+        if ingestor_url:
+            app.config["INGESTOR_URL"] = ingestor_url.rstrip("/")
         rows = run(datetime.strptime(since, "%Y-%m-%d"), apply=apply)
         for r in rows:
             print(" ".join(f"{k}={v}" for k, v in r.items()), flush=True)
