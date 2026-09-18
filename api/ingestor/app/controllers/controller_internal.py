@@ -1,6 +1,7 @@
 from flask import jsonify
 
 from app.services import service_internal as service
+from app.services import service_quota
 from app.services import service_schedule
 
 
@@ -16,3 +17,7 @@ def schedule_tick():
 def catalog_sync():
     body, status = service.catalog_sync()
     return jsonify(body), status
+
+
+def quota():
+    return jsonify(service_quota.report()), 200

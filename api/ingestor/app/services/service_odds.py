@@ -9,9 +9,10 @@ miss simply leaves odds absent (the event still renders and settles).
 A /odds call costs markets x regions credits (3 as configured: h2h, spreads,
 totals from DraftKings). The plan is spent evenly rather than capped by a fixed
 TTL: refresh_interval() turns the plan (used + remaining, from the response
-headers) into a daily budget of plan/31 and shares it across the leagues that
-have games inside the lookahead window — ~30 min per league on the 20K plan
-with five leagues in season. Only leagues with games to price spend credits, and
+headers) into a daily budget — what's left spread over the days to the reset
+(learned when `used` drops, or ODDS_RESET_DAY), else plan/31 — and shares it
+across leagues with games to price, weighted toward the ones kicking off soon
+(daily_budget, league_weight). Only leagues with games to price spend credits, and
 nothing is spent below ODDS_QUOTA_FLOOR. ESPN's scoreboard carries the same
 DraftKings line for free (service_schedule._espn_odds); whichever refreshed
 last wins.
@@ -43,6 +44,7 @@ ODDS_SPORT_KEYS = {
 
 _QUOTA_KEY = "odds:quota:remaining"
 _USED_KEY = "odds:quota:used"
+_RESET_DAY_KEY = "odds:quota:reset_day"
 
 
 # ---------------------------------------------------------------- matching
@@ -139,6 +141,15 @@ def _quota_ok():
 
 def _record_quota(resp):
     r = get_redis()
+    # `used` falling back means the plan just reset: remember the day, so the
+    # budget can carry unspent credits to the end of each billing month.
+    try:
+        new_used = int(float(resp.headers.get("x-requests-used")))
+        prev = r.get(_USED_KEY)
+        if prev is not None and new_used < int(prev):
+            r.set(_RESET_DAY_KEY, min(datetime.utcnow().day, 28))
+    except (TypeError, ValueError):
+        pass
     for header, key in (("x-requests-remaining", _QUOTA_KEY), ("x-requests-used", _USED_KEY)):
         val = resp.headers.get(header)
         if val is not None:
@@ -160,18 +171,61 @@ def _credits_per_call():
     return max(1, markets * regions)
 
 
-def refresh_interval(active_leagues):
-    """Seconds between one league's refreshes so the whole plan is spent evenly:
-    a daily budget of plan/31 credits (plan = used + remaining from the headers,
-    else ODDS_MONTHLY_CREDITS) shared by the leagues that have games to price.
-    Dividing by 31 can't overrun any billing month, whatever its reset day.
-    Clamped to [ODDS_MIN_INTERVAL, ODDS_REFRESH_TTL]."""
+def _days_to_reset(now):
+    """Days (>= 1) until the plan's next reset, from ODDS_RESET_DAY or the day
+    _record_quota saw `used` drop. None when unknown."""
+    day = current_app.config["ODDS_RESET_DAY"]
+    if not day:
+        try:
+            day = int(get_redis().get(_RESET_DAY_KEY) or 0)
+        except (TypeError, ValueError):
+            day = 0
+    if not 1 <= day <= 28:
+        return None
+    nxt = now.replace(day=day, hour=0, minute=0, second=0, microsecond=0)
+    if nxt <= now:
+        nxt = (nxt.replace(day=1) + timedelta(days=32)).replace(day=day)
+    return max((nxt - now).total_seconds() / 86400, 1.0)
+
+
+def daily_budget(now=None):
+    """Credits to spend per day. With a known reset day, what's left spread over
+    the days to it — quiet days carry forward so each month ends near zero.
+    Otherwise plan/31 (plan = used + remaining), which can't overrun any billing
+    month whatever its reset day; before any response, ODDS_MONTHLY_CREDITS."""
     cfg = current_app.config
+    now = now or datetime.utcnow()
     rem, used = _quota()
+    floor = cfg["ODDS_QUOTA_FLOOR"]
+    days = _days_to_reset(now)
+    if rem is not None and days is not None:
+        return max(rem - floor, 0) / days
     plan = (rem + used) if rem is not None and used is not None else cfg["ODDS_MONTHLY_CREDITS"]
-    daily = max(plan - cfg["ODDS_QUOTA_FLOOR"], 1) / 31
-    calls_per_league = daily / (_credits_per_call() * max(active_leagues, 1))
-    interval = 86400 / calls_per_league if calls_per_league > 0 else cfg["ODDS_REFRESH_TTL"]
+    return max(plan - floor, 0) / 31
+
+
+def league_weight(upcoming, now):
+    """How much of the budget a league earns: lines move most near kickoff, so a
+    league with a game in the next 24h counts 3x, within 72h 2x, else 1x."""
+    if not upcoming:
+        return 0
+    first = min(ev.start_time for ev in upcoming if ev.start_time)
+    if first <= now + timedelta(hours=24):
+        return 3
+    if first <= now + timedelta(hours=72):
+        return 2
+    return 1
+
+
+def refresh_interval(weight, total_weight, now=None):
+    """Seconds between refreshes for a league of ``weight`` when the leagues with
+    games to price weigh ``total_weight`` together: its share of the daily
+    budget, in calls. Clamped to [ODDS_MIN_INTERVAL, ODDS_REFRESH_TTL]."""
+    cfg = current_app.config
+    if weight <= 0 or total_weight <= 0:
+        return cfg["ODDS_REFRESH_TTL"]
+    calls = daily_budget(now) * weight / total_weight / _credits_per_call()
+    interval = 86400 / calls if calls > 0 else cfg["ODDS_REFRESH_TTL"]
     return int(min(max(interval, cfg["ODDS_MIN_INTERVAL"]), cfg["ODDS_REFRESH_TTL"]))
 
 
@@ -290,11 +344,13 @@ def refresh_all_odds():
     for entry in LEAGUE_REGISTRY:
         sport, league = entry["sport"], entry["league"]
         if (sport, league) in ODDS_SPORT_KEYS:
-            pending[(sport, league)] = _upcoming(league, now)
-    interval = refresh_interval(sum(1 for evs in pending.values() if evs))
+            evs = _upcoming(league, now)
+            pending[(sport, league)] = (evs, league_weight(evs, now))
+    total_weight = sum(w for _, w in pending.values())
     total = 0
-    for (sport, league), evs in pending.items():
+    for (sport, league), (evs, weight) in pending.items():
         try:
+            interval = refresh_interval(weight, total_weight, now)
             total += refresh_league_odds(sport, league, interval=interval, upcoming=evs)
         except Exception as exc:  # noqa: BLE001
             db.session.rollback()

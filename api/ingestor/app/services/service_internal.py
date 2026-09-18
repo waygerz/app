@@ -28,7 +28,7 @@ def refresh_event(key):
     ):
         return {"event": ev.to_dict(), "quota": sports.quota_status()}, 200
     try:
-        raw = sports.fetch_event(ev.sport, ev.league, key)
+        raw = sports.fetch_event(ev.sport, ev.league, key, priority=True)
     except Exception as exc:
         return {"event": ev.to_dict(), "stale": True, "error": str(exc)}, 200
     if raw:

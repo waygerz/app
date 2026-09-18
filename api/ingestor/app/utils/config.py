@@ -55,7 +55,11 @@ class Config:
     # Adaptive governor: spread the remaining monthly budget across the time left
     # until quota reset, but never wait longer than this between live calls (so a
     # huge remaining budget still refreshes the catalog on a sane cadence).
-    SPORTS_MAX_INTERVAL = int(os.environ.get("SPORTS_MAX_INTERVAL", 3600))  # 1h cap
+    # Longest the pacer will space calls. A day, so a nearly spent budget really
+    # slows down (the old 1h cap still allowed 24+ calls/day past the budget).
+    SPORTS_MAX_INTERVAL = int(os.environ.get("SPORTS_MAX_INTERVAL", 86400))
+    # Routine RTS calls wait this many pacer intervals; live-game refreshes one.
+    SPORTS_LOW_PRIORITY_FACTOR = int(os.environ.get("SPORTS_LOW_PRIORITY_FACTOR", 2))
     # /internal/events/<id>/refresh serves the stored row without an RTS call when
     # ESPN synced it this recently (or it's finished). ESPN refreshes live games
     # every minute, so RTS is only the fallback when ESPN stalls.
@@ -81,6 +85,11 @@ class Config:
     # How often the next 7 days' boards are re-read per league (their lines and
     # reschedules). Free; only dates that have games are fetched.
     ESPN_ODDS_TTL = int(os.environ.get("ESPN_ODDS_TTL", 3600))
+    # ...and this often for a league with a game in the next 48h (lines move
+    # most close to kickoff).
+    ESPN_ODDS_TTL_SOON = int(os.environ.get("ESPN_ODDS_TTL_SOON", 1800))
+    # Pause all ESPN calls this long after a 429 / 5xx.
+    ESPN_BACKOFF_SECS = int(os.environ.get("ESPN_BACKOFF_SECS", 300))
     # Team-sport schedule ingest (service_schedule): how far ahead date-based
     # sports pull fixtures, and how often the scheduler tick actually re-hits ESPN
     # for fixtures (weekly) vs live scores (5 min).
@@ -95,7 +104,7 @@ class Config:
     # are idle most of the day, making this both fresher in-game and cheaper
     # overall than one flat interval — which matters on ESPN's unmetered-but-
     # unofficial API.
-    SCHEDULE_SCORE_TTL_LIVE = int(os.environ.get("SCHEDULE_SCORE_TTL_LIVE", 60))  # 1 min in-game
+    SCHEDULE_SCORE_TTL_LIVE = int(os.environ.get("SCHEDULE_SCORE_TTL_LIVE", 30))  # every tick in-game
     SCHEDULE_SCORE_TTL_IDLE = int(os.environ.get("SCHEDULE_SCORE_TTL_IDLE", 900))  # 15 min idle
 
     # ---- The Odds API — prices the ESPN team events for H2H betting, matched by
@@ -111,6 +120,9 @@ class Config:
     ODDS_API_BOOKMAKERS = os.environ.get("ODDS_API_BOOKMAKERS", "draftkings")
     # Plan size until the first response reports it (x-requests-used + remaining).
     ODDS_MONTHLY_CREDITS = int(os.environ.get("ODDS_MONTHLY_CREDITS", 500))
+    # Day of month the plan resets (1-28), from the Odds API dashboard. 0 = learn
+    # it from the headers at the first reset; until then budget plan/31 a day.
+    ODDS_RESET_DAY = int(os.environ.get("ODDS_RESET_DAY", 0))
     # Bounds on a league's refresh interval: never faster than 15 min, never
     # slower than 6h however tight the budget.
     ODDS_MIN_INTERVAL = int(os.environ.get("ODDS_MIN_INTERVAL", 900))

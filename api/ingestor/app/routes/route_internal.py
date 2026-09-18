@@ -22,3 +22,9 @@ def schedule_tick():
 @internal_only
 def catalog_sync():
     return ctrl.catalog_sync()
+
+
+@ingestor_internal_bp.get("/quota")
+@internal_only
+def quota():
+    return ctrl.quota()

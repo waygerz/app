@@ -51,12 +51,41 @@ def resolve_leagues(requested, allowed):
     return [requested] if requested in allowed else []
 
 
+# ESPN is unmetered but unofficial: count what we send (per UTC day, for the
+# quota report) and, when it pushes back (429 / 5xx), stop every caller for a
+# while instead of retrying on each 30s tick.
+_BACKOFF_KEY = "espn:backoff"
+
+
+def _k_requests(day=None):
+    return f"espn:req:{(day or datetime.utcnow()).strftime('%Y%m%d')}"
+
+
+class ESPNBackoff(Exception):
+    """ESPN recently rate-limited or errored; calls are paused."""
+
+
 def espn_get(sport: str, league: str, path: str = ""):
+    r = get_redis()
+    if r.get(_BACKOFF_KEY):
+        raise ESPNBackoff("ESPN paused after a 429/5xx")
     base = current_app.config["ESPN_BASE"]
     timeout = current_app.config["ESPN_TIMEOUT"]
+    key = _k_requests()
+    r.incr(key)
+    r.expire(key, 3 * 86400)
     resp = requests.get(f"{base}/{sport}/{league}{path}", headers=_UA, timeout=timeout)
+    if resp.status_code == 429 or resp.status_code >= 500:
+        r.setex(_BACKOFF_KEY, current_app.config["ESPN_BACKOFF_SECS"], resp.status_code)
     resp.raise_for_status()
     return resp.json()
+
+
+def requests_today():
+    try:
+        return int(get_redis().get(_k_requests()) or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _k_sched(sport, league):

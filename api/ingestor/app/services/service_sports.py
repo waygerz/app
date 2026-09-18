@@ -135,13 +135,17 @@ def _adaptive_min_interval():
     return max(MIN_INTERVAL_SEC, min(interval, current_app.config["SPORTS_MAX_INTERVAL"]))
 
 
-def _pace_allows_live():
+def _pace_allows_live(priority=False):
     """Non-blocking budget governor: True only if enough time has passed since the
     last call to keep the monthly budget on pace. Never sleeps — a throttled call
-    serves cache/stale instead of blocking a worker."""
+    serves cache/stale instead of blocking a worker. Routine calls (catalogs,
+    per-card odds) wait SPORTS_LOW_PRIORITY_FACTOR x longer, leaving the
+    remaining budget to live-game refreshes (``priority``)."""
     interval = _adaptive_min_interval()
     if interval is None:
         return False  # budget exhausted for the month
+    if not priority:
+        interval *= current_app.config["SPORTS_LOW_PRIORITY_FACTOR"]
     last = get_redis().get(LAST_CALL_KEY)
     if last is not None and (time.time() - float(last)) < interval:
         return False
@@ -169,7 +173,7 @@ def _fetch_live(path, ttl):
     return data
 
 
-def get(path, ttl=None, force=False):
+def get(path, ttl=None, force=False, priority=False):
     """Cache-first catalog fetch with an adaptive budget governor + stale fallback.
     Order: fresh cache -> (budget-paced) live call -> last-known-good stale."""
     r = get_redis()
@@ -179,7 +183,7 @@ def get(path, ttl=None, force=False):
         if cached is not None:
             return json.loads(cached)
 
-    if force or _pace_allows_live():
+    if force or _pace_allows_live(priority):
         try:
             return _fetch_live(path, ttl)
         except SportsAPIError:
@@ -211,8 +215,8 @@ def fetch_league_events(sport, league, force=False):
     return get(f"/sports/{sport}/leagues/{league}/events", force=force) or []
 
 
-def fetch_event(sport, league, event_id, force=False):
-    return get(f"/sports/{sport}/leagues/{league}/events/{event_id}", force=force)
+def fetch_event(sport, league, event_id, force=False, priority=False):
+    return get(f"/sports/{sport}/leagues/{league}/events/{event_id}", force=force, priority=priority)
 
 
 def fetch_teams(sport, league, force=False):

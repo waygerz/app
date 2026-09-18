@@ -33,6 +33,15 @@ def create_app(config_class=Config):
         db.session.commit()
         print(f"schema ready: {schema}")
 
+    @app.cli.command("quota")
+    def quota():
+        """Print every data provider's budget, usage and pace."""
+        import json
+
+        from app.services.service_quota import report
+
+        print(json.dumps(report(), indent=2))
+
     @app.cli.command("rescore")
     @click.option("--since", required=True, help="First day to re-read, YYYY-MM-DD (UTC).")
     @click.option("--until", default=None, help="Last day, YYYY-MM-DD (default: today).")

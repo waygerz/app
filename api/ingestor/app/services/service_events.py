@@ -165,7 +165,12 @@ def sync_league(sport, league, force=False):
     if not current_app.config["SPORTS_API_MOCK"]:
         from app.services import service_schedule
         if (sport, league) in service_schedule.REGISTRY_KEYS:
-            return service_schedule.refresh_fixtures(sport, league, force=force)
+            # The tick's background fixture pass keeps these current (one league
+            # at a time, under a lease). A page view or league join must not
+            # start its own full import — concurrent requests each ran one.
+            if not force:
+                return 0
+            return service_schedule.refresh_fixtures(sport, league, force=True)
 
     if current_app.config["SPORTS_API_MOCK"]:
         raw_events = mock_league_events(sport, league)

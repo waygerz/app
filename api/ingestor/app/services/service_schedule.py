@@ -271,6 +271,7 @@ def _ingest_native(sport, league):
     fetching each week's board and tagging events with the week label. Each week
     commits on its own and rolls back on error, so one bad week neither loses the
     others nor poisons the session for the leagues that follow."""
+    now = datetime.utcnow()
     sb = _scoreboard(sport, league)
     leagues0 = (sb.get("leagues") or [{}])[0]
     calendar = leagues0.get("calendar") or []
@@ -286,6 +287,12 @@ def _ingest_native(sport, league):
             week = entry.get("value")
             label = entry.get("label")
             if year is None or seasontype is None or week is None:
+                continue
+            # A week that ended over two days ago can't change; refresh_scores
+            # and the catch-up own any late result. Saves ~a season of requests
+            # per daily pass.
+            ended = _parse_dt(entry.get("endDate"))
+            if ended is not None and ended < now - timedelta(days=2):
                 continue
             try:
                 board = _scoreboard(
@@ -450,9 +457,22 @@ def refresh_upcoming(sport, league, force=False):
     and only the dates that actually have games are fetched; gated per league by
     ESPN_ODDS_TTL. A game's board date is its start in US Eastern, approximated
     as UTC-6h so a 00:15Z kickoff lands on the prior local day."""
-    if not force and not _stale(_k_upcoming(sport, league), current_app.config["ESPN_ODDS_TTL"]):
-        return 0
     now = datetime.utcnow()
+    cfg = current_app.config
+    soon = (
+        db.session.query(Event.id)
+        .filter(
+            Event.sport == sport,
+            Event.league == league,
+            Event.status == SCHEDULED,
+            Event.start_time >= now,
+            Event.start_time <= now + timedelta(hours=48),
+        )
+        .first()
+    )
+    ttl = cfg["ESPN_ODDS_TTL_SOON"] if soon else cfg["ESPN_ODDS_TTL"]
+    if not force and not _stale(_k_upcoming(sport, league), ttl):
+        return 0
     rows = (
         db.session.query(Event.start_time)
         .filter(
@@ -632,6 +652,11 @@ def tick():
         db.session.rollback()
         current_app.logger.warning("reap stale events: %s", exc)
         reaped = 0
+    try:
+        from app.services import service_quota
+        service_quota.log_hourly()
+    except Exception as exc:  # noqa: BLE001 — reporting must never break the tick
+        current_app.logger.warning("quota report: %s", exc)
     return {
         "fixtures": fixtures_state, "scores": scores, "upcoming": upcoming, "odds": odds,
         "combat": combat, "field": field, "reaped": reaped,
