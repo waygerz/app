@@ -200,7 +200,12 @@ def daily_budget(now=None):
     days = _days_to_reset(now)
     if rem is not None and days is not None:
         return max(rem - floor, 0) / days
-    plan = (rem + used) if rem is not None and used is not None else cfg["ODDS_MONTHLY_CREDITS"]
+    if rem is not None and used is not None:
+        plan = rem + used
+    else:
+        # The plan is at least what's still left (older code stored only
+        # `remaining`), so never assume less than that.
+        plan = max(rem or 0, cfg["ODDS_MONTHLY_CREDITS"])
     return max(plan - floor, 0) / 31
 
 

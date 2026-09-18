@@ -89,6 +89,14 @@ def test_refresh_interval_spreads_plan_over_the_month(app, monkeypatch):
     assert odds.refresh_interval(1, 5) == app.config["ODDS_REFRESH_TTL"]
 
 
+def test_daily_budget_never_assumes_a_plan_smaller_than_remaining(app, monkeypatch):
+    # Only `remaining` known (stored by older code): 19,280 left means the plan is
+    # at least that, not the 500 fallback.
+    monkeypatch.setattr(odds, "_quota", lambda: (19280, None))
+    monkeypatch.setattr(odds, "_days_to_reset", lambda now: None)
+    assert round(odds.daily_budget()) == round((19280 - 25) / 31)
+
+
 def test_daily_budget_carries_unspent_credits_to_the_reset(app, monkeypatch):
     monkeypatch.setattr(odds, "_quota", lambda: (10025, 9975))
     # 10 days left with 10,000 spendable -> 1,000/day (vs 20,000/31 = 644).
