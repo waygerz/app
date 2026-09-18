@@ -206,3 +206,25 @@ come from the audit pass and should be double-checked before acting on them.
 - [ ] **React Compiler lint warnings.** eslint-config-next 16 brings
   react-hooks v7; `set-state-in-effect` (24), `purity` (22) and `refs` (3) fire
   in 24 files and are set to `warn` in `web/eslint.config.mjs` until fixed.
+
+## Re-audit 2026-09-18 — web/mobile on one API
+
+### Critical (fixed)
+- [x] **Refresh leaked tokens to cookie clients.** `/refresh` returned
+  `access_token`/`refresh_token` in the JSON body even when the refresh token
+  came from the HttpOnly cookie, handing them to page JS. Now the transport
+  follows the credential: cookie in → cookies out; body in (mobile) → body out.
+  Mobile login (`X-Client-Type: mobile`) no longer also sets cookies.
+- [x] **`POST /leagues/{id}/join` joined anyone to any league by id.** It now
+  requires a pending invite (404 otherwise) and marks it accepted. Join by code
+  and by invite both refuse archived/completed leagues (409) and members the
+  commissioner removed, unless re-invited (403).
+- [x] **Mobile signup could not succeed.** It sent no `sms_consent` /
+  `tos_accepted`. The login screen now mirrors web `/login`: phone → consent
+  (new numbers) → code → name → terms, with the same legal copy
+  (`mobile/lib/legal.dart`, version `2026-08-01`). The removed `dev_otp` path is
+  gone from the client.
+- [x] **Mobile bet proposals sent `proposer_side`** (backend reads `side`), and
+  `POST /wagers` answered 200 with nothing created. Mobile sends `side`; the
+  backend returns 400 `{error, created: [], errors}` when nothing is created and
+  201 (with per-item `errors`) otherwise.

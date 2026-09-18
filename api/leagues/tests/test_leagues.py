@@ -139,6 +139,39 @@ def test_invite_and_accept(client, auth_headers):
     assert client.get("/v1/gameplay/leagues/invites", headers=auth_headers(u2)).get_json()["invites"] == []
 
 
+def test_join_requires_a_pending_invite(client, auth_headers):
+    # Without an invite, POST /{id}/join must not add anyone (it used to join any
+    # signed-in user to any league by id).
+    lid = _create(client, auth_headers(U1)).get_json()["league"]["id"]
+    stranger = str(uuid.uuid4())
+    assert client.post(f"/v1/gameplay/leagues/{lid}/join", headers=auth_headers(stranger)).status_code == 404
+    assert client.get(f"/v1/gameplay/leagues/{lid}", headers=auth_headers(stranger)).status_code == 404
+
+
+def test_closed_league_and_removed_member_cannot_join_by_code(client, auth_headers, app):
+    from app.extensions import db
+    from app.models.league import ARCHIVED, League
+    from app.models.member import REMOVED, LeagueMember
+
+    created = _create(client, auth_headers(U1)).get_json()["league"]
+    lid, code = created["id"], created["invite_code"]
+    u2 = str(uuid.uuid4())
+    act = lambda who: client.post(f"/v1/gameplay/leagues/c/{code}/act",  # noqa: E731
+                                  json={"action": "join"}, headers=auth_headers(who))
+    assert act(u2).status_code == 200
+
+    # A member the commissioner removed can't come back through the shared code.
+    m = LeagueMember.query.filter_by(league_id=lid, user_id=u2).one()
+    m.status = REMOVED
+    db.session.commit()
+    assert act(u2).status_code == 403
+
+    # A closed league takes no one.
+    db.session.get(League, lid).status = ARCHIVED
+    db.session.commit()
+    assert act(str(uuid.uuid4())).status_code == 409
+
+
 def test_member_can_leave_commish_cannot(client, auth_headers):
     created = _create(client, auth_headers(U1)).get_json()["league"]
     lid, code = created["id"], created["invite_code"]

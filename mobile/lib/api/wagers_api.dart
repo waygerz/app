@@ -24,24 +24,38 @@ class WagersApi {
 
   /// Propose a wager to one or more co-members. `acceptorIds` fans out to one
   /// independent 1v1 offer each. `amountCents` may be 0 (bragging rights).
-  Future<void> propose({
+  /// Offer a bet to one or more members. Same contract as the web: `side` is
+  /// the proposer's side (home|away or over|under); a $0 bet names a `treat`;
+  /// field-sport matchups pass `homeTeam` / `awayTeam`. Returns how many offers
+  /// were created plus the per-member errors (a 400 if none were).
+  Future<({int created, List<String> errors})> propose({
     required String leagueId,
     required String eventId,
-    required String betType, // moneyline | spread | total
-    required String proposerSide, // home|away or over|under
+    required String side,
     required int amountCents,
     required List<String> acceptorIds,
+    String betType = 'moneyline', // moneyline | spread | total
     double? line,
-  }) {
-    return _api.post('$_p/wagers', body: {
+    String? treat, // beer | shot, for $0 bets
+    String? homeTeam,
+    String? awayTeam,
+  }) async {
+    final res = await _api.post('$_p/wagers', body: {
       'league_id': leagueId,
       'event_id': eventId,
       'bet_type': betType,
-      'proposer_side': proposerSide,
+      'side': side,
       'amount_cents': amountCents,
       'acceptor_ids': acceptorIds,
       if (line != null) 'line': line,
+      if (treat != null) 'treat': treat,
+      if (homeTeam != null) 'home_team': homeTeam,
+      if (awayTeam != null) 'away_team': awayTeam,
     });
+    final errors = ((res['errors'] as List<dynamic>?) ?? [])
+        .map((e) => '${(e as Map<String, dynamic>)['error']}')
+        .toList();
+    return (created: ((res['created'] as List<dynamic>?) ?? []).length, errors: errors);
   }
 
   Future<void> accept(String id) => _api.post('$_p/wagers/$id/accept');

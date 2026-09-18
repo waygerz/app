@@ -92,7 +92,8 @@ def _refresh_ttl() -> int:
 
 
 def _device_uuid(data: dict) -> str | None:
-    value = data.get("device_uuid")
+    # Same rule as refresh/logout: the X-Device-UUID header or the body field.
+    value = request.headers.get("X-Device-UUID") or data.get("device_uuid")
     if value is None or value == "":
         return None
     return str(value)
@@ -138,9 +139,12 @@ def _issue_auth_response(user, *, device_uuid: str | None, status: int = 200):
         )
 
     body = {"user": user.to_dict()}
+    # One transport per client: native apps get the pair in the body and no
+    # cookies; browsers get HttpOnly cookies and never see the tokens.
     if wants_tokens():
         body["access_token"] = access_token
         body["refresh_token"] = refresh_token
+        return make_response(jsonify(body), status)
     response = make_response(jsonify(body), status)
     attach_auth_cookies(response, access_token, refresh_token)
     return response

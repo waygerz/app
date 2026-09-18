@@ -76,7 +76,8 @@ class AuthController extends ChangeNotifier {
     unawaited(_tokens.clear());
   }
 
-  Future<String?> startOtp(String phone) => _auth.startOtp(phone);
+  Future<OtpStart> startOtp(String phone, {bool smsConsent = false}) =>
+      _auth.startOtp(phone, smsConsent: smsConsent);
 
   /// Verify the code. Returns the ticket if the account is new (caller then
   /// calls [completeSignup]); returns null once signed in.
@@ -87,8 +88,8 @@ class AuthController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> completeSignup(String ticket, String displayName) async {
-    final res = await _auth.completeSignup(ticket, displayName);
+  Future<void> completeSignup(String ticket, String displayName, SignupConsent consent) async {
+    final res = await _auth.completeSignup(ticket, displayName, consent);
     await _persist(res);
   }
 

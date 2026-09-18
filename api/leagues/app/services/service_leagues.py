@@ -10,6 +10,7 @@ from app.extensions import db
 from app.models.league import (
     ACTIVE as L_ACTIVE,
     ARCHIVED,
+    COMPLETED as L_COMPLETED,
     DRAFT,
     LEAGUE_TYPES,
     PERIOD_TYPES,
@@ -957,6 +958,18 @@ def _detail(league, me):
     return d
 
 
+def _join_blocked(league, user_id, *, invited):
+    """Why this user can't join, or None. A closed league takes no one; a member
+    the commissioner removed can only come back through a fresh direct invite,
+    not a shared code."""
+    if league.status in (ARCHIVED, L_COMPLETED):
+        return {"error": "this league is closed"}, 409
+    existing = LeagueMember.query.filter_by(league_id=league.id, user_id=user_id).first()
+    if existing and existing.status == REMOVED and not invited:
+        return {"error": "you were removed from this league"}, 403
+    return None
+
+
 def _join(league, user_id):
     existing = LeagueMember.query.filter_by(league_id=league.id, user_id=user_id).first()
     if existing:
@@ -1193,6 +1206,10 @@ def act_on_code(me, code, data):
         return {"error": f"invite {state}"}, 409
     if action != "join":
         return {"error": "unsupported action"}, 400
+    if not _membership(league.id, me):
+        blocked = _join_blocked(league, me, invited=False)
+        if blocked:
+            return blocked
     _join(league, me)
     if rec.single_use:
         rec.consumed_at = datetime.utcnow()
@@ -1739,11 +1756,21 @@ def accept_invite(league_id, me):
     league = db.session.get(League, league_id)
     if not league:
         return {"error": "league not found"}, 404
+    member = _membership(league_id, me)
+    if member:  # already in: nothing to accept (idempotent)
+        return {"league": _detail(league, me)}, 200
+    # Joining this way needs a pending invite for the caller — without one, any
+    # signed-in user could add themselves to any league by id. Shared links go
+    # through /c/<code>/act instead.
     inv = LeagueInvite.query.filter_by(
         league_id=league_id, invitee_id=me, status=INV_PENDING
     ).first()
-    if inv:
-        inv.status = INV_ACCEPTED
+    if not inv:
+        return {"error": "no pending invite for this league"}, 404
+    blocked = _join_blocked(league, me, invited=True)
+    if blocked:
+        return blocked
+    inv.status = INV_ACCEPTED
     _join(league, me)
     return {"league": _detail(league, me)}, 201
 

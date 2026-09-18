@@ -25,15 +25,46 @@ class AuthResult {
   }
 }
 
+/// The otp/start outcome.
+class OtpStart {
+  OtpStart({required this.isNew, required this.consentRequired, required this.optedOut, this.message});
+  final bool isNew;
+  final bool consentRequired;
+  final bool optedOut;
+  final String? message;
+}
+
+/// The consent record sent with a new signup.
+class SignupConsent {
+  const SignupConsent({
+    required this.tosVersion,
+    required this.tosAccepted,
+    required this.smsTransactional,
+    required this.smsMarketing,
+  });
+  final String tosVersion;
+  final bool tosAccepted;
+  final bool smsTransactional;
+  final bool smsMarketing;
+}
+
 class AuthApi {
   AuthApi(this._api);
   final ApiClient _api;
 
-  /// Request an OTP for [phone]. In non-prod (or with AUTH_REVEAL_OTP) the code
-  /// comes back as `dev_otp` for testing.
-  Future<String?> startOtp(String phone) async {
-    final res = await _api.post('${Config.auth}/otp/start', auth: false, body: {'phone': phone});
-    return res['dev_otp'] as String?;
+  /// Request a sign-in code. A NEW number gets no text until it opts in to
+  /// SMS (the code is itself a text): without [smsConsent] the result comes back
+  /// `consentRequired` and nothing is sent. `optedOut` means the number replied
+  /// STOP. Same contract as the web.
+  Future<OtpStart> startOtp(String phone, {bool smsConsent = false}) async {
+    final res = await _api.post('${Config.auth}/otp/start',
+        auth: false, body: {'phone': phone, 'sms_consent': smsConsent});
+    return OtpStart(
+      isNew: (res['is_new'] as bool?) ?? false,
+      consentRequired: (res['consent_required'] as bool?) ?? false,
+      optedOut: (res['opted_out'] as bool?) ?? false,
+      message: res['message'] as String?,
+    );
   }
 
   Future<AuthResult> verifyOtp(String phone, String otp) async {
@@ -43,10 +74,19 @@ class AuthApi {
     return AuthResult.fromJson(res);
   }
 
-  Future<AuthResult> completeSignup(String ticket, String displayName) async {
+  /// Finish a new signup with the name and the consent record (Terms +
+  /// Privacy acceptance at [legalVersion], and the SMS choices).
+  Future<AuthResult> completeSignup(String ticket, String displayName, SignupConsent consent) async {
     final device = await _api.ensureDeviceUuid();
-    final res = await _api.post('${Config.auth}/otp/complete',
-        auth: false, body: {'ticket': ticket, 'display_name': displayName, 'device_uuid': device});
+    final res = await _api.post('${Config.auth}/otp/complete', auth: false, body: {
+      'ticket': ticket,
+      'display_name': displayName,
+      'device_uuid': device,
+      'tos_version': consent.tosVersion,
+      'tos_accepted': consent.tosAccepted,
+      'sms_transactional': consent.smsTransactional,
+      'sms_marketing': consent.smsMarketing,
+    });
     return AuthResult.fromJson(res);
   }
 

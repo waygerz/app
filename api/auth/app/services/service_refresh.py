@@ -21,9 +21,14 @@ def _refresh_ttl() -> int:
 def refresh_access_token(request):
     _, refresh_name = auth_cookie_names()
     body = request.get_json(silent=True) or {}
-    # Web presents the refresh token via its HttpOnly cookie; native clients (no
-    # cookie jar) POST it in the body.
-    token = request.cookies.get(refresh_name) or body.get("refresh_token")
+    # Two transports, chosen by how the refresh token ARRIVED — never by a
+    # header alone. Web presents it in its HttpOnly cookie and gets cookies back;
+    # native clients (no cookie jar) POST it in the body and get the rotated pair
+    # in the body. A cookie-authenticated call must never return tokens in the
+    # body: any script on the page could ask for them and defeat HttpOnly.
+    cookie_token = request.cookies.get(refresh_name)
+    via_cookie = bool(cookie_token)
+    token = cookie_token or body.get("refresh_token")
     device_uuid = request.headers.get("X-Device-UUID") or body.get("device_uuid")
 
     if not token or not device_uuid:
@@ -50,14 +55,13 @@ def refresh_access_token(request):
         return make_response(jsonify({"error": "service temporarily unavailable"}), 503)
 
     payload = {"message": "access token refreshed"}
-    # Native clients (X-Client-Type: mobile) read the rotated pair from the body;
-    # web keeps riding the refreshed HttpOnly cookies.
-    if request.headers.get("X-Client-Type", "").strip().lower() == "mobile":
-        payload["access_token"] = access_token
-        payload["refresh_token"] = new_refresh
-    response = make_response(jsonify(payload), 200)
-    attach_auth_cookies(response, access_token, new_refresh)
-    return response
+    if via_cookie:
+        response = make_response(jsonify(payload), 200)
+        attach_auth_cookies(response, access_token, new_refresh)
+        return response
+    payload["access_token"] = access_token
+    payload["refresh_token"] = new_refresh
+    return make_response(jsonify(payload), 200)
 
 
 def _rotate_refresh_token(refresh_token: str, device_uuid: str) -> tuple[str, str, str, str]:

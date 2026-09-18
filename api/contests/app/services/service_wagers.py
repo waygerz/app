@@ -1756,8 +1756,12 @@ def propose_wagers(me, data):
         for r in results
         if "error" in r
     ]
-    status = 201 if created else 200
-    return {"created": _enrich(created, me), "errors": errors}, status
+    if not created:
+        # Nothing was offered: that's a failed request, not a 200 the client has
+        # to inspect. Carry the per-member reasons too.
+        reasons = sorted({e["error"] for e in errors}) or ["no bet was created"]
+        return {"error": "; ".join(reasons), "created": [], "errors": errors}, 400
+    return {"created": _enrich(created, me), "errors": errors}, 201
 
 
 def my_wagers(me):

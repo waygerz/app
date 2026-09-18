@@ -819,3 +819,26 @@ def test_settle_due_reads_events_in_one_batch(app, calls, monkeypatch):
     assert batches == [{"ev1", "ev2"}] and singles == []
     assert w1.status == SETTLED and w1.winner_user_id == U1  # home won
     assert w2.status == SETTLED and w2.winner_user_id == U2
+
+
+def test_propose_wagers_is_a_400_when_nothing_is_created(app, calls, monkeypatch):
+    # Every offer failing (here: not co-members) must fail the request instead of
+    # returning 200 with an empty `created` the client has to inspect.
+    monkeypatch.setattr(svc, "are_comembers", lambda lid, a, b: False)
+    body, status = svc.propose_wagers(U1, {
+        "league_id": LG, "event_id": "ev1", "side": "home",
+        "amount_cents": 500, "acceptor_ids": [U2, U3],
+    })
+    assert status == 400
+    assert body["created"] == [] and len(body["errors"]) == 2
+    assert body["error"]
+
+
+def test_propose_wagers_partial_success_is_201_with_errors(app, calls, monkeypatch):
+    monkeypatch.setattr(svc, "are_comembers", lambda lid, a, b: b != U3)
+    body, status = svc.propose_wagers(U1, {
+        "league_id": LG, "event_id": "ev1", "side": "home",
+        "amount_cents": 500, "acceptor_ids": [U2, U3],
+    })
+    assert status == 201
+    assert len(body["created"]) == 1 and [e["acceptor_id"] for e in body["errors"]] == [U3]

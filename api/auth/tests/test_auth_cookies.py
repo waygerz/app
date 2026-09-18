@@ -264,6 +264,38 @@ def test_mobile_refresh_via_body_rotates(client, user, device_uuid, read_otp):
     assert data["refresh_token"] != old_refresh  # rotated
 
 
+def test_mobile_login_sets_no_cookies(client, user, device_uuid, read_otp):
+    """One transport per client: native apps get body tokens and no cookies."""
+    client.post("/v1/platform/auth/otp/start", json={"phone": user["phone"]})
+    res = client.post(
+        "/v1/platform/auth/otp/verify",
+        json={"phone": user["phone"], "otp": read_otp(user["phone"]), "device_uuid": device_uuid},
+        headers={"X-Client-Type": "mobile"},
+    )
+    assert res.status_code == 200
+    access_name, refresh_name = auth_cookie_names()
+    cookies = res.headers.getlist("Set-Cookie")
+    assert not any(access_name in c or refresh_name in c for c in cookies)
+
+
+def test_cookie_refresh_never_returns_tokens_in_body(client, user, device_uuid, read_otp):
+    """A cookie-authenticated refresh must not hand the tokens to page script,
+    even when it claims to be a mobile client (XSS on the site could otherwise
+    read the pair and defeat HttpOnly)."""
+    res = _login(client, user, device_uuid, read_otp)
+    access_name, refresh_name = auth_cookie_names()
+    client.set_cookie(refresh_name, _cookie_value(res.headers.getlist("Set-Cookie"), refresh_name))
+
+    refreshed = client.post(
+        "/v1/platform/auth/refresh",
+        headers={"X-Device-UUID": device_uuid, "X-Client-Type": "mobile"},
+    )
+    assert refreshed.status_code == 200
+    data = refreshed.get_json()
+    assert "access_token" not in data and "refresh_token" not in data
+    assert any(access_name in c for c in refreshed.headers.getlist("Set-Cookie"))
+
+
 def test_logout_clears_session(client, user, device_uuid, read_otp):
     res = _login(client, user, device_uuid, read_otp)
     access_name, refresh_name = auth_cookie_names()

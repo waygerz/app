@@ -30,3 +30,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/logo-64.png
+    - assets/images/logo.png
