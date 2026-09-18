@@ -6,6 +6,7 @@ called by auth at signup (and by its create-user CLI) to create the profile row
 alongside the credential row.
 """
 from app.extensions import db
+from app.models.favorite_league import FavoriteLeague
 from app.models.favorite_team import FavoriteTeam
 from app.models.profile import Profile
 
@@ -51,7 +52,8 @@ def purge_user(data: dict) -> tuple[dict, int]:
 
     The profile row is the tombstone every other service resolves a name/avatar
     through, so it is KEPT but ANONYMIZED: display_name -> "Deleted user",
-    avatar_key -> null. Favorite teams are personal and hard-deleted. Idempotent
+    avatar_key -> null. Favorite teams and pinned leagues are personal and
+    hard-deleted. Idempotent
     (re-running just re-sets the same tombstone). If the profile is already gone
     there's nothing to anonymize.
     """
@@ -62,6 +64,9 @@ def purge_user(data: dict) -> tuple[dict, int]:
     favorites = FavoriteTeam.query.filter(FavoriteTeam.user_id == uid).delete(
         synchronize_session=False
     )
+    leagues = FavoriteLeague.query.filter(FavoriteLeague.user_id == uid).delete(
+        synchronize_session=False
+    )
     p = Profile.query.filter_by(user_id=uid).first()
     anonymized = False
     if p is not None:
@@ -70,6 +75,6 @@ def purge_user(data: dict) -> tuple[dict, int]:
         anonymized = True
     db.session.commit()
     return {
-        "purged": {"favorite_teams": favorites},
+        "purged": {"favorite_teams": favorites, "favorite_leagues": leagues},
         "anonymized": {"profile": anonymized},
     }, 200

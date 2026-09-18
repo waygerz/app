@@ -1,4 +1,4 @@
-"""Favorite-team management: replace the user's whole ordered list.
+"""Favorite teams and pinned leagues: replace the user's whole ordered list.
 
 The contract is deliberately "send the new list" — add / remove / reorder /
 set-primary all collapse to one PUT. Position is the array index (0 = primary).
@@ -9,6 +9,7 @@ without a live ingestor call.
 from flask import current_app
 
 from app.extensions import db
+from app.models.favorite_league import FavoriteLeague
 from app.models.favorite_team import FavoriteTeam
 
 
@@ -98,3 +99,70 @@ def save_favorites(user_id, data):
         .all()
     )
     return {"favorite_teams": [r.to_dict() for r in rows]}, 200
+
+
+# ---------------------------------------------------------------- leagues
+# Pinned leagues follow the same replace-the-list contract. They are private
+# (not part of the public profile), so they have their own read endpoint.
+
+def _normalize_leagues(items):
+    if not isinstance(items, list):
+        return None, "leagues must be a list"
+    cleaned = []
+    seen = set()
+    for it in items:
+        if not isinstance(it, dict):
+            return None, "each league must be an object"
+        sport = _s(it.get("sport"))
+        league = _s(it.get("league"))
+        name = _s(it.get("name"))
+        abbreviation = _s(it.get("abbreviation"))
+        logo = _s(it.get("logo"))
+        if None in (sport, league, name, abbreviation, logo):
+            return None, "league fields must be strings"
+        if not (sport and league and name):
+            return None, "each league needs sport, league, and name"
+        key = (sport, league)
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(
+            {
+                "sport": sport[:32],
+                "league": league[:32],
+                "name": name[:120],
+                "abbreviation": abbreviation[:24] or None,
+                "logo": logo[:400] or None,
+            }
+        )
+    return cleaned, None
+
+
+def _league_rows(user_id):
+    return (
+        FavoriteLeague.query.filter_by(user_id=user_id)
+        .order_by(FavoriteLeague.position.asc())
+        .all()
+    )
+
+
+def get_favorite_leagues(user_id):
+    return {"favorite_leagues": [r.to_dict() for r in _league_rows(user_id)]}, 200
+
+
+def save_favorite_leagues(user_id, data):
+    items = data.get("leagues") if isinstance(data, dict) else None
+    if items is None:
+        return {"error": "leagues is required"}, 400
+    cleaned, err = _normalize_leagues(items)
+    if err:
+        return {"error": err}, 400
+    cap = current_app.config["FAVORITE_LEAGUES_MAX"]
+    if len(cleaned) > cap:
+        return {"error": f"you can pin at most {cap} leagues"}, 400
+
+    FavoriteLeague.query.filter_by(user_id=user_id).delete()
+    for i, lg in enumerate(cleaned):
+        db.session.add(FavoriteLeague(user_id=user_id, position=i, **lg))
+    db.session.commit()
+    return get_favorite_leagues(user_id)

@@ -132,7 +132,7 @@ come from the audit pass and should be double-checked before acting on them.
   img tags ignore `basePath`.
   **Fixed:** single brand in titles (incl. /welcome); logos + favicons go through `toAbsoluteUrl` (basePath).
 - [x] `favorites.ts` is still localStorage-only (users service now owns favorites).
-  **Won't fix for now:** it stores favorite *sports leagues*; the users service only owns favorite *teams* and there's no leagues endpoint to move to.
+  **Fixed:** pinned leagues now live in the users service (`GET`/`PUT /favorites/leagues`, private to the user, purged on account delete); web imports any browser-saved pins once, and mobile has the same client.
 
 ### Mobile
 - [x] `PushService` is never called; Firebase init is only a comment in `main.dart`.

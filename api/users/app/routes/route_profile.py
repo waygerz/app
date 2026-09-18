@@ -30,6 +30,18 @@ def save_favorites():
     return ctrl.save_favorites()
 
 
+@profile_bp.get("/favorites/leagues")
+@jwt_required()
+def get_favorite_leagues():
+    return ctrl.get_favorite_leagues()
+
+
+@profile_bp.put("/favorites/leagues")
+@jwt_required()
+def save_favorite_leagues():
+    return ctrl.save_favorite_leagues()
+
+
 @profile_bp.get("/users/<user_id>/profile")
 @jwt_required()
 def public_profile(user_id):

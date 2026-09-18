@@ -28,6 +28,22 @@ export type FavoriteTeamInput = Omit<FavoriteTeam, 'position'>;
 /** Max favorite teams per user — keep in sync with users FAVORITE_TEAMS_MAX. */
 export const MAX_FAVORITE_TEAMS = 6;
 
+/** A pinned sports league (private to the user; not on the public profile). */
+export interface FavoriteLeague {
+  sport: string;
+  league: string;
+  name: string;
+  abbreviation: string | null;
+  logo: string | null;
+  position: number;
+}
+
+/** A league to pin (no position — order in the array is the order). */
+export type FavoriteLeagueInput = Omit<FavoriteLeague, 'position'>;
+
+/** Max pinned leagues per user — keep in sync with users FAVORITE_LEAGUES_MAX. */
+export const MAX_FAVORITE_LEAGUES = 20;
+
 export const usersApi = {
   /** The signed-in user's own profile (display name, avatar, favorites). */
   getMyProfile: () => apiRequest<{ profile: UserProfile }>(`${API.users}/profile`),
@@ -49,6 +65,17 @@ export const usersApi = {
     apiRequest<{ favorite_teams: FavoriteTeam[] }>(`${API.users}/favorites/teams`, {
       method: 'PUT',
       body: JSON.stringify({ teams }),
+    }),
+
+  /** The signed-in user's pinned leagues, in pin order. */
+  getFavoriteLeagues: () =>
+    apiRequest<{ favorite_leagues: FavoriteLeague[] }>(`${API.users}/favorites/leagues`),
+
+  /** Replace the whole ordered pinned-leagues list. */
+  saveFavoriteLeagues: (leagues: FavoriteLeagueInput[]) =>
+    apiRequest<{ favorite_leagues: FavoriteLeague[] }>(`${API.users}/favorites/leagues`, {
+      method: 'PUT',
+      body: JSON.stringify({ leagues }),
     }),
 
   /** Another user's public profile (name, avatar, favorite teams). */

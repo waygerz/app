@@ -33,6 +33,19 @@ class UsersApi {
         .map((e) => FavoriteTeam.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  /// The user's pinned leagues, in pin order.
+  Future<List<FavoriteLeague>> favoriteLeagues() async =>
+      _leagues(await _api.get('${Config.users}/favorites/leagues'));
+
+  /// Replace the whole ordered pinned-leagues list.
+  Future<List<FavoriteLeague>> saveFavoriteLeagues(List<FavoriteLeague> leagues) async => _leagues(
+      await _api.put('${Config.users}/favorites/leagues', body: {'leagues': leagues.map((l) => l.toJson()).toList()}));
+
+  static List<FavoriteLeague> _leagues(Map<String, dynamic> res) =>
+      ((res['favorite_leagues'] as List<dynamic>?) ?? [])
+          .map((e) => FavoriteLeague.fromJson(e as Map<String, dynamic>))
+          .toList();
 }
 
 /// An uploaded media asset (only what the app needs).

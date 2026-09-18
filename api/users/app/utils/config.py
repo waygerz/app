@@ -66,6 +66,8 @@ class Config:
 
     # Favorite-team cap per user (enforced in the service, not the DB).
     FAVORITE_TEAMS_MAX = int(os.environ.get("FAVORITE_TEAMS_MAX", 6))
+    # Pinned leagues (the star on the sports pages) per user.
+    FAVORITE_LEAGUES_MAX = int(os.environ.get("FAVORITE_LEAGUES_MAX", 20))
 
     # No-favorites nudge (scheduler-driven /internal/tick). A user with zero
     # favorites this long after signup gets a one-time in-app notification. The

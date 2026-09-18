@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { fetchLeagues, type League } from '@/lib/ingestor';
 import { isEspnSport } from '@/lib/espn';
 import { EspnSportList } from '@/components/espn/sport-list';
-import { useFavorites, toggleFavorite } from '@/lib/favorites';
+import { useFavoriteLeagues } from '@/lib/favorites';
 import { Card } from '@/components/ui/card';
 import { CenterCard } from '@/components/ui/center-card';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +23,7 @@ export default function SportPage() {
 
 function TeamLeagues({ slug }: { slug: string }) {
   const title = slug.replace(/-/g, ' ');
-  const favorites = useFavorites();
+  const { isFavorite, toggle: toggleFavorite } = useFavoriteLeagues();
 
   const {
     data: leagues,
@@ -67,9 +67,7 @@ function TeamLeagues({ slug }: { slug: string }) {
           ))}
 
         {leagues?.map((league: League) => {
-          const isFav = favorites.some(
-            (f) => f.sport === slug && f.league === league.slug,
-          );
+          const isFav = isFavorite(slug, league.slug);
           return (
             <Link
               key={league.id}
@@ -86,7 +84,8 @@ function TeamLeagues({ slug }: { slug: string }) {
                     sport: slug,
                     league: league.slug,
                     name: league.name,
-                    abbr: league.abbreviation,
+                    abbreviation: league.abbreviation ?? null,
+                    logo: league.logo ?? null,
                   });
                 }}
                 className="absolute right-2 top-2 z-10 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"

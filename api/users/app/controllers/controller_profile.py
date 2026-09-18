@@ -22,6 +22,16 @@ def save_favorites():
     return jsonify(body), status
 
 
+def get_favorite_leagues():
+    body, status = fav_svc.get_favorite_leagues(get_jwt_identity())
+    return jsonify(body), status
+
+
+def save_favorite_leagues():
+    body, status = fav_svc.save_favorite_leagues(get_jwt_identity(), request.get_json(silent=True) or {})
+    return jsonify(body), status
+
+
 def update_profile():
     body, status = svc.update_display_name(get_jwt_identity(), request.get_json(silent=True) or {})
     return jsonify(body), status

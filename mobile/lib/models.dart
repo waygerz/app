@@ -92,6 +92,33 @@ class FavoriteTeam {
       };
 }
 
+/// Max pinned leagues per user — keep in sync with users FAVORITE_LEAGUES_MAX.
+const maxFavoriteLeagues = 20;
+
+/// A pinned sports league (users service; private to the user, shared with
+/// the web). Order in the list is pin order.
+class FavoriteLeague {
+  FavoriteLeague({required this.sport, required this.league, required this.name, this.abbreviation, this.logo});
+  final String sport;
+  final String league;
+  final String name;
+  final String? abbreviation;
+  final String? logo;
+
+  bool sameAs(String s, String l) => sport == s && league == l;
+
+  factory FavoriteLeague.fromJson(Map<String, dynamic> j) => FavoriteLeague(
+        sport: j['sport'] as String,
+        league: j['league'] as String,
+        name: (j['name'] ?? '') as String,
+        abbreviation: j['abbreviation'] as String?,
+        logo: j['logo'] as String?,
+      );
+
+  Map<String, dynamic> toJson() =>
+      {'sport': sport, 'league': league, 'name': name, 'abbreviation': abbreviation, 'logo': logo};
+}
+
 /// The signed-in user's profile from the users service.
 class UserProfile {
   UserProfile({required this.displayName, this.avatarKey, this.favoriteTeams = const []});
