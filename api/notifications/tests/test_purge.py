@@ -4,12 +4,13 @@ import uuid
 from tests.conftest import API_PREFIX
 
 from app.extensions import db
+from app.utils.config import Config
 from app.models.channel_pref import NotificationChannelPref
 from app.models.device_token import DeviceToken
 from app.models.notification import Notification
 from app.models.preference import NotificationPreference
 
-ITOKEN = {"X-Internal-Token": "dev-internal-token"}
+ITOKEN = {"X-Internal-Token": Config.INTERNAL_TOKEN}
 URL = f"{API_PREFIX}/internal/purge-user"
 
 

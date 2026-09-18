@@ -4,9 +4,10 @@ import uuid
 from tests.conftest import API_PREFIX
 
 from app.extensions import db
+from app.utils.config import Config
 from app.models.asset import PURPOSE_AVATAR, STATUS_READY, Asset
 
-ITOKEN = {"X-Internal-Token": "dev-internal-token"}
+ITOKEN = {"X-Internal-Token": Config.INTERNAL_TOKEN}
 URL = f"{API_PREFIX}/internal/purge-user"
 
 

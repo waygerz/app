@@ -4,6 +4,7 @@ import uuid
 from tests.conftest import API_PREFIX
 
 from app.extensions import db
+from app.utils.config import Config
 from app.models.feed import ACTIVITY, LeagueFeed
 from app.models.feed_read import LeagueFeedRead
 from app.models.invite import LeagueInvite
@@ -11,7 +12,7 @@ from app.models.invite_code import LeagueInviteCode
 from app.models.league import ACTIVE as LG_ACTIVE, ARCHIVED, HEAD_TO_HEAD, League
 from app.models.member import ACTIVE, LeagueMember
 
-ITOKEN = {"X-Internal-Token": "dev-internal-token"}
+ITOKEN = {"X-Internal-Token": Config.INTERNAL_TOKEN}
 PURGE = f"{API_PREFIX}/internal/purge-user"
 COMMISSIONED = f"{API_PREFIX}/internal/commissioned-leagues"
 

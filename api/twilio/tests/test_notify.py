@@ -40,7 +40,9 @@ def test_notify_sms_uses_support_display_override(app, client, notify_no_redis):
 def test_notify_sms_stop_keyword_gets_no_reply(client, notify_no_redis):
     # A lone opt-out keyword must not draw a marketing-style reply.
     r = client.post("/v1/platform/twilio/notify/sms", data={"From": "+15551230000", "Body": " stop "})
-    assert r.get_data(as_text=True).strip() in ("<Response></Response>", "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>")
+    # Empty TwiML; the library may render it as <Response></Response> or <Response />.
+    body = r.get_data(as_text=True)
+    assert "<Response" in body and "<Message" not in body
 
 
 def test_notify_sms_keyword_in_sentence_still_replies(client, notify_no_redis):

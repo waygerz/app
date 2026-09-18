@@ -56,8 +56,14 @@ def mock_clients(monkeypatch):
         "_user_league_ids",
         lambda uid: [LEAGUE_ID] if str(uid) in (U1, U2) else [],
     )
+    # Stub the users-service call itself; resolve_users wraps it.
     monkeypatch.setattr(
-        svc, "resolve_users", lambda ids: {str(i): f"User {str(i)[:4]}" for i in ids}
+        svc,
+        "resolve_users_full",
+        lambda ids: {
+            str(i): {"id": str(i), "display_name": f"User {str(i)[:4]}", "avatar_key": None}
+            for i in ids
+        },
     )
     monkeypatch.setattr(svc, "_publish", lambda *a, **k: None)
     monkeypatch.setattr("app.extensions.get_redis", lambda: None)

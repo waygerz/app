@@ -4,10 +4,11 @@ import uuid
 from tests.conftest import API_PREFIX
 
 from app.extensions import db
+from app.utils.config import Config
 from app.models.favorite_team import FavoriteTeam
 from app.models.profile import Profile
 
-ITOKEN = {"X-Internal-Token": "dev-internal-token"}
+ITOKEN = {"X-Internal-Token": Config.INTERNAL_TOKEN}
 URL = f"{API_PREFIX}/internal/purge-user"
 
 

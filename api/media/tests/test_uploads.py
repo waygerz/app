@@ -32,7 +32,7 @@ def test_internal_verify(client, auth_headers):
     client.post(f"{API}/uploads/{asset_id}/complete", headers=auth_headers)
 
     verify = client.post(
-        "/internal/verify",
+        f"{API}/internal/verify",
         json={
             "user_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             "purpose": "message",
