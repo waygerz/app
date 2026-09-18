@@ -193,17 +193,25 @@ npm run lint           # eslint
 npm run format         # prettier --write
 ```
 
-## AWS environment (this host)
+## AWS environment
 
-The dev host has the AWS CLI configured and working:
+The AWS CLI is configured on the dev machines:
 
-- **Profile:** `waygerz` (active via `AWS_PROFILE`), **region** `us-east-1`.
+- **Profile:** `waygerz` on the old EC2 dev host; **`waygerz_aws`** on the
+  Windows workstation (pass `--profile waygerz_aws` or set `AWS_PROFILE`).
+  Other profiles there (`sanixay_aws`, `aviator360`) are different accounts.
+  **Region** `us-east-1`, ECS cluster `waygerz-prod`.
 - **Identity:** IAM user `waygerz_aws`, account `882781856019`
   (`arn:aws:iam::882781856019:user/waygerz_aws`).
 - Credentials live in `~/.aws/credentials` (not in this repo — never commit key
   material). Verify with `aws sts get-caller-identity`.
 - This is a plain IAM user, **not** an EC2 instance role (IMDS has no role), and
   it is separate from CI: the deploy pipeline authenticates via GitHub OIDC.
+- **Postgres + Redis** run as docker containers (`pgsql`, `redis`) on the EC2
+  host `waygerz-data` (`i-05d5d3c6de3711767`), reachable via SSM Run Command.
+  `pgsql` runs with `max_connections=100`; the host's user-data `docker run`
+  still says 30 — keep them in sync. `flask db-stats` (ingestor, via the deploy
+  workflow's `run_command`) shows usage per service.
 
 ## Deploy
 

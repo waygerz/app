@@ -166,11 +166,18 @@ come from the audit pass and should be double-checked before acting on them.
   capped DB pools in every service (a14771c, 77e51e2, ff516bc).
 
 ### Open
-- [ ] **Postgres `max_connections=30`** on `waygerz-data` (docker `pgsql`,
-  set in the EC2 user-data `docker run`). Pools are capped to fit; raising it
-  needs the container recreated — and the user-data updated so a rebuilt host
-  keeps it.
+- [x] **Postgres `max_connections=30`** on `waygerz-data` (docker `pgsql`).
+  **Fixed 2026-09-18:** container recreated with `max_connections=100` (same
+  image, flags, volume). **Still open:** the EC2 user-data `docker run` says 30,
+  so a rebuilt host would come back at 30 — update it on the next stop/start.
+- [x] **auth / friends / wallet / ingestor `INTERNAL_*_URL` pointed at
+  `https://waygerz.com`** (unreachable from inside the VPC — confirmed when a
+  one-off task timed out on it). **Fixed 2026-09-18:** removed from their task
+  defs (auth:11, friends:7, wallet:4, ingestor:7) so the Service Connect mesh
+  defaults apply. Ingestor also resized to 0.25 vCPU / 512 MB.
+- [x] **8 bets pushed on fake 0-0 finals** — settled with `flask
+  resettle-refunds --apply` (all $0; feed posts/notifications not sent).
 - [ ] **media and twilio aren't on Service Connect**, so their `INTERNAL_*_URL`
   still point at `https://waygerz.com` (the ALB path CLAUDE.md warns drifts).
-- [ ] **`CLAUDE.md` "AWS environment" section** describes the old EC2 dev host
-  (`waygerz` profile); this machine uses the `waygerz_aws` profile.
+- [x] **`CLAUDE.md` "AWS environment" section** described only the old EC2 dev
+  host (`waygerz` profile). **Fixed:** documents the `waygerz_aws` profile too.
