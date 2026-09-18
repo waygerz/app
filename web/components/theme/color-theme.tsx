@@ -4,8 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
 } from 'react';
 
@@ -76,22 +75,37 @@ function coerceSurface(value: string | null | undefined): Surface {
   return value && SURFACE_KEYS.has(value) ? (value as Surface) : DEFAULT_SURFACE;
 }
 
+// The source of truth is the data-* attributes on <html> (stamped before paint by
+// colorThemeScript, updated by the setters below); React subscribes to them.
+function subscribeTheme(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-primary', 'data-accent', 'data-surface'],
+  });
+  return () => observer.disconnect();
+}
+
 export function ColorThemeProvider({ children }: { children: ReactNode }) {
   // SSR renders the defaults; the blocking script (see colorThemeScript) has
   // already set the real values on <html> before paint, so there's no flash.
-  const [primary, setPrimaryState] = useState<Hue>(DEFAULT_PRIMARY);
-  const [accent, setAccentState] = useState<Hue>(DEFAULT_ACCENT);
-  const [surface, setSurfaceState] = useState<Surface>(DEFAULT_SURFACE);
-
-  useEffect(() => {
-    const el = document.documentElement;
-    setPrimaryState(coerce(el.dataset.primary, DEFAULT_PRIMARY));
-    setAccentState(coerce(el.dataset.accent, DEFAULT_ACCENT));
-    setSurfaceState(coerceSurface(el.dataset.surface));
-  }, []);
+  const primary = useSyncExternalStore(
+    subscribeTheme,
+    () => coerce(document.documentElement.dataset.primary, DEFAULT_PRIMARY),
+    () => DEFAULT_PRIMARY,
+  );
+  const accent = useSyncExternalStore(
+    subscribeTheme,
+    () => coerce(document.documentElement.dataset.accent, DEFAULT_ACCENT),
+    () => DEFAULT_ACCENT,
+  );
+  const surface = useSyncExternalStore(
+    subscribeTheme,
+    () => coerceSurface(document.documentElement.dataset.surface),
+    () => DEFAULT_SURFACE,
+  );
 
   const setPrimary = useCallback((hue: Hue) => {
-    setPrimaryState(hue);
     document.documentElement.dataset.primary = hue;
     try {
       localStorage.setItem(PRIMARY_KEY, hue);
@@ -102,7 +116,6 @@ export function ColorThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setAccent = useCallback((hue: Hue) => {
-    setAccentState(hue);
     document.documentElement.dataset.accent = hue;
     try {
       localStorage.setItem(ACCENT_KEY, hue);
@@ -112,7 +125,6 @@ export function ColorThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setSurface = useCallback((next: Surface) => {
-    setSurfaceState(next);
     document.documentElement.dataset.surface = next;
     try {
       localStorage.setItem(SURFACE_KEY, next);

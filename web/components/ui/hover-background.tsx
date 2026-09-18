@@ -29,6 +29,9 @@ function HoverBackground({ className, objectCount = 12, children, colors = {}, .
   } = colors;
 
   const [isHovered, setIsHovered] = React.useState(false);
+  // Particle positions/delays, drawn fresh on each hover start (in the handler,
+  // keeping render pure).
+  const [particles, setParticles] = React.useState<{ left: number; top: number; delay: number }[]>([]);
 
   // Mouse position tracking for parallax
   const mouseX = useMotionValue(0);
@@ -49,25 +52,41 @@ function HoverBackground({ className, objectCount = 12, children, colors = {}, .
     restDelta: 0.1,
   });
 
+  // Random draws happen once (lazy state) so render stays pure; the objects
+  // below are derived from them.
+  const [seeds] = React.useState(() =>
+    Array.from({ length: 12 }, () => ({
+      shape: Math.random(),
+      x: Math.random(),
+      y: Math.random(),
+      size: Math.random(),
+      delay: Math.random(),
+      floatDirection: Math.random(),
+      breathDuration: Math.random(),
+      parallaxStrength: Math.random(),
+      baseRotation: Math.random(),
+    })),
+  );
+
   const animatedObjects = React.useMemo(
     () =>
-      Array.from({ length: objectCount }, (_, i) => {
-        const shape = Math.random() > 0.5 ? 'circle' : 'square';
+      seeds.slice(0, objectCount).map((seed, i) => {
+        const shape = seed.shape > 0.5 ? 'circle' : 'square';
         return {
           id: i,
-          x: Math.random() * 90 + 5, // 5-95% to avoid edges
-          y: Math.random() * 90 + 5,
-          size: Math.random() * 60 + 20, // 20-80px
+          x: seed.x * 90 + 5, // 5-95% to avoid edges
+          y: seed.y * 90 + 5,
+          size: seed.size * 60 + 20, // 20-80px
           color: objects[i % objects.length],
-          delay: Math.random() * 2,
+          delay: seed.delay * 2,
           shape,
-          floatDirection: Math.random() > 0.5 ? 1 : -1,
-          breathDuration: Math.random() * 3 + 3, // 3-6 seconds
-          parallaxStrength: Math.random() * 0.5 + 0.3, // 0.3-0.8 for more varied parallax depth
-          baseRotation: Math.random() * 360, // Random starting rotation offset
+          floatDirection: seed.floatDirection > 0.5 ? 1 : -1,
+          breathDuration: seed.breathDuration * 3 + 3, // 3-6 seconds
+          parallaxStrength: seed.parallaxStrength * 0.5 + 0.3, // 0.3-0.8 for more varied parallax depth
+          baseRotation: seed.baseRotation * 360, // Random starting rotation offset
         };
       }),
-    [objectCount, objects],
+    [seeds, objectCount, objects],
   );
 
   const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -86,6 +105,13 @@ function HoverBackground({ className, objectCount = 12, children, colors = {}, .
   };
 
   const handleHoverStart = () => {
+    setParticles(
+      Array.from({ length: 20 }, () => ({
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        delay: Math.random() * 2,
+      })),
+    );
     setIsHovered(true);
   };
 
@@ -178,13 +204,13 @@ function HoverBackground({ className, objectCount = 12, children, colors = {}, .
       {/* Floating Particles on Hover */}
       {isHovered && (
         <div className="absolute inset-0 pointer-events-none">
-          {Array.from({ length: 20 }).map((_, i) => (
+          {particles.map((particle, i) => (
             <motion.div
               key={`particle-${i}`}
               className="absolute w-1 h-1 bg-white/60 rounded-full"
               style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
+                left: `${particle.left}%`,
+                top: `${particle.top}%`,
               }}
               initial={{ opacity: 0, scale: 0 }}
               animate={{
@@ -194,7 +220,7 @@ function HoverBackground({ className, objectCount = 12, children, colors = {}, .
               }}
               transition={{
                 duration: 3,
-                delay: Math.random() * 2,
+                delay: particle.delay,
                 repeat: Infinity,
                 ease: 'easeOut',
               }}

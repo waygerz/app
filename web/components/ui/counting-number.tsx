@@ -41,8 +41,8 @@ export function CountingNumber({
 
   useEffect(() => {
     if (!shouldStart) return;
-    setHasAnimated(true);
     const timeout = setTimeout(() => {
+      setHasAnimated(true);
       const controls = animate(motionValue, to, {
         duration,
         onUpdate: (v) => setDisplay(v),

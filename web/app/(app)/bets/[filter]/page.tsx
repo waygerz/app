@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Ticket } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
+import { useNow } from '@/hooks/use-now';
 import { leaguesApi } from '@/lib/leagues';
 import { cancelLocked, groupWagers, wagersApi, type WagerGroup } from '@/lib/wagers';
 import { fetchEvent, type SportEvent } from '@/lib/ingestor';
@@ -32,6 +33,7 @@ export default function BetsView() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const me = user?.id ?? '';
+  const now = useNow();
 
   const wagersQ = useQuery({ queryKey: ['wagers-all'], queryFn: () => wagersApi.all() });
   const leaguesQ = useQuery({ queryKey: ['leagues'], queryFn: leaguesApi.list });
@@ -199,7 +201,7 @@ export default function BetsView() {
     // so you can accept it after all.
     if (w.status === 'declined') {
       const iDeclined = w.pending_id != null ? w.pending_id === me : w.acceptor_id === me;
-      const started = w.start_time ? Date.now() >= new Date(w.start_time).getTime() : false;
+      const started = w.start_time ? now >= new Date(w.start_time).getTime() : false;
       if (iDeclined && !started) {
         return (
           <Button size="sm" className="h-9 w-full" disabled={undeclineM.isPending} onClick={() => undeclineM.mutate(ids)}>Un-decline</Button>

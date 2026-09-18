@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  pendingLinkFromReturnPath,
   readPendingLink,
   savePendingLinkFromReturnPath,
-  type PendingLink,
 } from '@/lib/pending-link';
 import {
   resolveCode,
@@ -16,15 +16,24 @@ import {
 import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
 
+// sessionStorage has no same-tab change events; the stash is only read here.
+const subscribeNoop = () => () => {};
+
 export function PendingLinkBanner({ returnPath }: { returnPath?: string }) {
-  const [pending, setPending] = useState<PendingLink | null>(() => readPendingLink());
+  // A /c/<code> return path is the pending link (stashed for after login below);
+  // otherwise fall back to a code an earlier visit stashed.
+  const fromReturn = returnPath ? pendingLinkFromReturnPath(returnPath) : null;
+  const storedCode = useSyncExternalStore(
+    subscribeNoop,
+    () => readPendingLink()?.code ?? null,
+    () => null,
+  );
 
   useEffect(() => {
     if (returnPath) savePendingLinkFromReturnPath(returnPath);
-    setPending(readPendingLink());
   }, [returnPath]);
 
-  const code = pending?.code ?? '';
+  const code = fromReturn?.code ?? storedCode ?? '';
 
   const resolved = useQuery({
     queryKey: ['pending-link', code],
@@ -33,7 +42,7 @@ export function PendingLinkBanner({ returnPath }: { returnPath?: string }) {
     retry: false,
   });
 
-  if (!pending) return null;
+  if (!code) return null;
 
   if (resolved.isLoading) {
     return (

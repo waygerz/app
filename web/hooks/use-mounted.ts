@@ -1,11 +1,12 @@
 import * as React from 'react';
 
+const subscribeNoop = () => () => {};
+
+/** False during SSR and hydration, true once rendering on the client. */
 export function useMounted() {
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  return mounted;
+  return React.useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
 }

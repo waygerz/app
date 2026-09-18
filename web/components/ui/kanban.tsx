@@ -15,6 +15,7 @@ import {
   KeyboardSensor,
   PointerSensor,
   UniqueIdentifier,
+  useDndMonitor,
   useSensor,
   useSensors,
   type DraggableAttributes,
@@ -465,21 +466,22 @@ export interface KanbanOverlayProps {
 
 function KanbanOverlay({ children, className }: KanbanOverlayProps) {
   const { activeId, isColumn } = React.useContext(KanbanContext);
-  const [dimensions, setDimensions] = React.useState<{ width: number; height: number } | null>(null);
+  const [measured, setMeasured] = React.useState<{ id: UniqueIdentifier; width: number; height: number } | null>(null);
+  // Only the measurement of the item being dragged right now applies.
+  const dimensions = activeId && measured?.id === activeId ? measured : null;
 
-  React.useEffect(() => {
-    if (activeId) {
+  // Measure the dragged element when the drag starts.
+  useDndMonitor({
+    onDragStart: ({ active }) => {
       const element = document.querySelector(
-        `[data-slot="kanban-${isColumn(activeId) ? 'column' : 'item'}"][data-value="${activeId}"]`,
+        `[data-slot="kanban-${isColumn(active.id) ? 'column' : 'item'}"][data-value="${active.id}"]`,
       );
       if (element) {
         const rect = element.getBoundingClientRect();
-        setDimensions({ width: rect.width, height: rect.height });
+        setMeasured({ id: active.id, width: rect.width, height: rect.height });
       }
-    } else {
-      setDimensions(null);
-    }
-  }, [activeId, isColumn]);
+    },
+  });
 
   const style = {
     width: dimensions?.width,

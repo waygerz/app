@@ -82,20 +82,15 @@ export function SlidingNumber({
   const [hasAnimated, setHasAnimated] = useState(false);
   const [animationKey, setAnimationKey] = useState(0);
 
-  // Reset animation state on component mount (route changes)
-  useEffect(() => {
+  // Reset animation state when from/to values change (initial state already
+  // covers a fresh mount, e.g. a route change).
+  const [prevRange, setPrevRange] = useState({ from, to });
+  if (from !== prevRange.from || to !== prevRange.to) {
+    setPrevRange({ from, to });
     setCurrentValue(from);
     setHasAnimated(false);
     setAnimationKey((prev) => prev + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array - runs on every mount
-
-  // Reset animation state when from/to values change
-  useEffect(() => {
-    setCurrentValue(from);
-    setHasAnimated(false);
-    setAnimationKey((prev) => prev + 1);
-  }, [from, to]);
+  }
 
   // Manage animation triggering manually
   useEffect(() => {
@@ -116,9 +111,9 @@ export function SlidingNumber({
 
   useEffect(() => {
     if (!shouldStart) return;
-    setHasAnimated(true);
 
     const timer = setTimeout(() => {
+      setHasAnimated(true);
       const startTime = Date.now();
       const startValue = currentValue;
       const difference = to - startValue;

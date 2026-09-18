@@ -62,12 +62,25 @@ function GridBackground({
   // Parse grid dimensions
   const [cols, rows] = gridSize.split(':').map(Number);
 
+  // Random draws happen once (lazy state) so render stays pure; the beam
+  // configurations below are derived from them.
+  const [seeds] = React.useState(() =>
+    Array.from({ length: 12 }, () => ({
+      direction: Math.random(),
+      startPosition: Math.random(),
+      gridLine: Math.random(),
+      delay: Math.random(),
+      duration: Math.random(),
+      repeatDelay: Math.random(),
+    })),
+  );
+
   // Generate beam configurations
   const animatedBeams = React.useMemo(
     () =>
-      Array.from({ length: Math.min(count, 12) }, (_, i) => {
-        const direction = Math.random() > 0.5 ? 'horizontal' : 'vertical';
-        const startPosition = Math.random() > 0.5 ? 'start' : 'end';
+      seeds.slice(0, Math.min(count, 12)).map((seed, i) => {
+        const direction = seed.direction > 0.5 ? 'horizontal' : 'vertical';
+        const startPosition = seed.startPosition > 0.5 ? 'start' : 'end';
 
         return {
           id: i,
@@ -78,13 +91,14 @@ function GridBackground({
           // For vertical beams: choose a column index (1 to cols-1) - exclude edges
           gridLine:
             direction === 'horizontal'
-              ? Math.floor(Math.random() * (rows - 1)) + 1
-              : Math.floor(Math.random() * (cols - 1)) + 1,
-          delay: Math.random() * 2,
-          duration: speed + Math.random() * 2,
+              ? Math.floor(seed.gridLine * (rows - 1)) + 1
+              : Math.floor(seed.gridLine * (cols - 1)) + 1,
+          delay: seed.delay * 2,
+          duration: speed + seed.duration * 2,
+          repeatDelay: seed.repeatDelay * 3 + 2, // 2-5s pause between repeats
         };
       }),
-    [count, beamColors, speed, cols, rows],
+    [seeds, count, beamColors, speed, cols, rows],
   );
 
   const gridStyle = {
@@ -175,7 +189,7 @@ function GridBackground({
               duration: beam.duration,
               delay: beam.delay,
               repeat: Infinity,
-              repeatDelay: Math.random() * 3 + 2, // 2-5s pause between repeats
+              repeatDelay: beam.repeatDelay,
               ease: 'linear',
               times: [0, 0.1, 0.9, 1], // Quick fade in, maintain, quick fade out
             }}

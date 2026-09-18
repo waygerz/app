@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Star, X } from 'lucide-react';
@@ -30,9 +30,8 @@ export function FavoriteTeamsCard() {
     enabled: !!user,
     staleTime: 30_000,
   });
-  useEffect(() => {
-    if (profileQ.data && teams === null) setTeams(profileQ.data.profile.favorite_teams);
-  }, [profileQ.data, teams]);
+  // Seed once from the first profile load (during render, not in an effect).
+  if (profileQ.data && teams === null) setTeams(profileQ.data.profile.favorite_teams);
 
   // Optimistic: apply locally, then persist the whole list via the context
   // saveFavorites (which merges the result back into AuthContext). Don't

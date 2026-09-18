@@ -28,6 +28,27 @@ async function withProfile(creds: AuthUser): Promise<AuthUser> {
   }
 }
 
+/** Resolve the session's user on load (null when signed out), refreshing an
+ *  expired access token once. The provider applies the result. */
+async function bootstrapSession(): Promise<AuthUser | null> {
+  if (!hasSessionMarker()) return null;
+  try {
+    const { user: me } = await authApi.me();
+    return await withProfile(me);
+  } catch {
+    const ok = await tryRefreshSession();
+    if (ok) {
+      try {
+        const { user: me } = await authApi.me();
+        return await withProfile(me);
+      } catch {
+        // fall through
+      }
+    }
+    return null;
+  }
+}
+
 interface VerifyResult {
   needsProfile: boolean;
   ticket?: string;
@@ -72,34 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function bootstrap() {
-    if (!hasSessionMarker()) {
-      setUser(null);
-      return;
-    }
-    try {
-      const { user: me } = await authApi.me();
-      setUser(await withProfile(me));
-    } catch {
-      const ok = await tryRefreshSession();
-      if (ok) {
-        try {
-          const { user: me } = await authApi.me();
-          setUser(await withProfile(me));
-          return;
-        } catch {
-          // fall through
-        }
-      }
-      setUser(null);
-    }
-  }
-
   useEffect(() => {
     // Never let the loading screen hang: cap bootstrap so loading always clears
     // even if a request or refresh stalls (belt-and-suspenders for mobile).
     const cap = new Promise<void>((resolve) => setTimeout(resolve, 12000));
-    Promise.race([bootstrap(), cap]).finally(() => setLoading(false));
+    Promise.race([bootstrapSession().then(setUser), cap]).finally(() => setLoading(false));
   }, []);
 
   async function startOtp(phone: string, smsConsent?: boolean): Promise<StartOtpResult> {

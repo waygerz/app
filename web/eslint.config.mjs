@@ -19,12 +19,11 @@ const eslintConfig = defineConfig([
       // React Hooks rules
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
-      // React Compiler rules new in eslint-plugin-react-hooks v7 (pulled in by
-      // eslint-config-next 16). Existing code predates them — surfaced as
-      // warnings until the violations are cleaned up, then promote to 'error'.
-      'react-hooks/purity': 'warn',
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
+      // React Compiler rules from eslint-plugin-react-hooks v7 (pulled in by
+      // eslint-config-next 16) are enforced as errors.
+      'react-hooks/purity': 'error',
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/refs': 'error',
       '@next/next/no-img-element': 'off',
     },
   },

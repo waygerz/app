@@ -54,9 +54,11 @@ function AccordionMenu({
   ...props
 }: React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Root> & AccordionMenuProps) {
   const [internalSelectedValue, setInternalSelectedValue] = React.useState<string | undefined>(selectedValue);
-  React.useEffect(() => {
+  const [prevSelectedValue, setPrevSelectedValue] = React.useState(selectedValue);
+  if (selectedValue !== prevSelectedValue) {
+    setPrevSelectedValue(selectedValue);
     setInternalSelectedValue(selectedValue);
-  }, [selectedValue]);
+  }
 
   const initialNestedStates = React.useMemo(() => {
     const getActiveChain = (nodes: React.ReactNode, chain: string[] = []): string[] => {

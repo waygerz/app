@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useLeague } from '../league-context';
@@ -107,7 +107,10 @@ export function LeagueSports() {
   // How many weeks of a sport's schedule to reveal (per-sport tabs only). The
   // "Show next week" button bumps this; switching tabs restarts at one week.
   const [weeksShown, setWeeksShown] = useState(1);
-  useEffect(() => { setWeeksShown(1); }, [tab]);
+  const selectTab = (next: string) => {
+    if (next !== tab) setWeeksShown(1);
+    setTab(next);
+  };
   const [query, setQuery] = useState('');
 
   const events = useScheduled(lg.sports.map((s) => s.sport_league_id));
@@ -180,14 +183,14 @@ export function LeagueSports() {
       {/* Scrollable pill tabs: Upcoming + each sport. */}
       <div className="w-full min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex w-max min-w-full gap-2">
-          <button type="button" onClick={() => setTab('upcoming')} className={pill(tab === 'upcoming')}>
+          <button type="button" onClick={() => selectTab('upcoming')} className={pill(tab === 'upcoming')}>
             Upcoming
           </button>
           {sortedSports.map((s) => (
             <button
               key={s.sport_league_id}
               type="button"
-              onClick={() => setTab(s.sport_league_id)}
+              onClick={() => selectTab(s.sport_league_id)}
               className={pill(tab === s.sport_league_id)}
             >
               {s.name || s.sport_league_id}

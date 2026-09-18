@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLeague } from '../league-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,7 @@ import { BetSortMenu, sortGroups, type SortKey } from '@/components/bet-sort-men
 import { CounterButton } from '@/components/counter-dialog';
 import { fetchPeriodEvents, fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { useAuth } from '@/auth/AuthContext';
+import { useNow } from '@/hooks/use-now';
 import { TeamLogo, formatStart } from '@/components/event-card';
 import { Combobox } from '@/components/ui/combobox';
 import { CenterCard } from '@/components/ui/center-card';
@@ -86,7 +87,13 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
   const [sel, setSel] = useState<Record<string, 'home' | 'away'>>({});
   const [tiebreaker, setTiebreaker] = useState('');
   // Drop local edits when switching weeks.
-  useEffect(() => { setSel({}); setTiebreaker(''); }, [selectedId]);
+  const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
+  if (selectedId !== prevSelectedId) {
+    setPrevSelectedId(selectedId);
+    setSel({});
+    setTiebreaker('');
+  }
+  const now = useNow();
 
   const regen = useMutation({
     mutationFn: () => leaguesApi.regeneratePeriods(lg.id),
@@ -107,9 +114,13 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
   const lastGameId = lastGame?.external_id ?? null;
   const existingTb = lastGameId ? graded.get(lastGameId)?.tiebreaker_total ?? null : null;
 
-  useEffect(() => {
+  // Prefill the saved tie-breaker whenever it loads or changes (null start so an
+  // already-cached value still prefills on mount).
+  const [prevExistingTb, setPrevExistingTb] = useState<number | null>(null);
+  if (existingTb !== prevExistingTb) {
+    setPrevExistingTb(existingTb);
     if (existingTb != null) setTiebreaker(String(existingTb));
-  }, [existingTb]);
+  }
 
   const save = useMutation({
     mutationFn: () => {
@@ -156,7 +167,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
     .filter((t) => !isNaN(t));
   const firstStart = startTimes.length ? Math.min(...startTimes) : null;
   const lockAt = firstStart !== null ? firstStart - 60 * 60 * 1000 : null;
-  const picksLocked = lockAt !== null && Date.now() >= lockAt;
+  const picksLocked = lockAt !== null && now >= lockAt;
   const canEdit = !!editable && !picksLocked;
   const unsaved = Object.keys(sel).length;
   const tbDirty = tiebreaker !== '' && (existingTb === null || Number(tiebreaker) !== existingTb);

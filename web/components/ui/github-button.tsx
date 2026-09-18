@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Star } from 'lucide-react';
 import { motion, useInView, type SpringOptions, type UseInViewOptions } from 'motion/react';
@@ -92,7 +92,9 @@ function GithubButton({
   ...props
 }: GithubButtonProps) {
   const [currentStars, setCurrentStars] = useState(initialStars);
-  const [isAnimating, setIsAnimating] = useState(false);
+  // A guard only (never rendered), so a ref: starting the animation from an
+  // effect then doesn't set state synchronously.
+  const isAnimatingRef = useRef(false);
   const [starProgress, setStarProgress] = useState(filled ? 100 : 0);
   const [hasAnimated, setHasAnimated] = useState(false);
 
@@ -119,9 +121,9 @@ function GithubButton({
 
   // Start animation
   const startAnimation = useCallback(() => {
-    if (isAnimating || hasAnimated) return;
+    if (isAnimatingRef.current || hasAnimated) return;
 
-    setIsAnimating(true);
+    isAnimatingRef.current = true;
     const startTime = Date.now();
     const startValue = 0; // Always start from 0 for number animation
     const endValue = targetStars;
@@ -146,7 +148,7 @@ function GithubButton({
       } else {
         setCurrentStars(endValue);
         setStarProgress(100);
-        setIsAnimating(false);
+        isAnimatingRef.current = false;
         setHasAnimated(true);
       }
     };
@@ -154,17 +156,19 @@ function GithubButton({
     setTimeout(() => {
       requestAnimationFrame(animate);
     }, animationDelay * 1000);
-  }, [isAnimating, hasAnimated, targetStars, animationDuration, animationDelay]);
+  }, [hasAnimated, targetStars, animationDuration, animationDelay]);
 
   // Use in-view detection if enabled
   const ref = React.useRef(null);
   const isInView = useInView(ref, inViewOptions);
 
   // Reset animation state when targetStars changes
-  useEffect(() => {
+  const [prevStars, setPrevStars] = useState({ targetStars, initialStars });
+  if (targetStars !== prevStars.targetStars || initialStars !== prevStars.initialStars) {
+    setPrevStars({ targetStars, initialStars });
     setHasAnimated(false);
     setCurrentStars(initialStars);
-  }, [targetStars, initialStars]);
+  }
 
   // Auto-start animation or use in-view trigger
   useEffect(() => {

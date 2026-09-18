@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { type LeagueDetail } from '@/lib/leagues';
@@ -151,12 +151,14 @@ export function ScheduleBetDialog({
   const total = oddsQ.data?.overUnder;
 
   // Reset the flow whenever a new game is opened.
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState({ open, id: event?.external_id });
+  if (open !== prevOpen.open || event?.external_id !== prevOpen.id) {
+    setPrevOpen({ open, id: event?.external_id });
     if (open) {
       setStep('config'); setSide('away'); setBetType('moneyline'); setLine(null);
       setPicked(false); setCredits('10'); setTreat('beer'); setSelected([]);
     }
-  }, [open, event?.external_id]);
+  }
 
   // Tapping a cell fixes the side, market and (for spread/total) the line.
   const pickCell = (s: WagerSide, bt: BetType, ln: number | null) => {
@@ -350,9 +352,11 @@ export function MatchupBetDialog({
     .filter((c) => c.name)
     .map((c) => ({ value: c.name, label: c.name }));
 
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState({ open, id: event?.external_id });
+  if (open !== prevOpen.open || event?.external_id !== prevOpen.id) {
+    setPrevOpen({ open, id: event?.external_id });
     if (open) { setStep('config'); setMyPick(''); setTheirPick(''); setCredits('10'); setTreat('beer'); setSelected([]); }
-  }, [open, event?.external_id]);
+  }
 
   const opponents = lg.members.filter((m) => m.user_id !== me);
   const toggle = (uid: string) =>

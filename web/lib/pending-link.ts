@@ -46,9 +46,17 @@ export function savePendingLinkFromLocation(pathname: string): PendingLink | nul
   return null;
 }
 
-export function savePendingLinkFromReturnPath(returnPath: string): PendingLink | null {
-  if (!returnPath.startsWith('/')) return null;
+/** The share code a return path points at (`/c/<code>[?…]`), without saving it. */
+export function pendingLinkFromReturnPath(returnPath: string): PendingLink | null {
+  if (!returnPath.startsWith('/c/')) return null;
   const q = returnPath.indexOf('?');
   const pathname = q === -1 ? returnPath : returnPath.slice(0, q);
-  return savePendingLinkFromLocation(pathname);
+  const code = pathname.slice('/c/'.length).split('/')[0].trim().toUpperCase();
+  return code ? { code } : null;
+}
+
+export function savePendingLinkFromReturnPath(returnPath: string): PendingLink | null {
+  const link = pendingLinkFromReturnPath(returnPath);
+  if (link) savePendingLink(link);
+  return link;
 }

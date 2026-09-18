@@ -2,6 +2,7 @@
 
 import { useLeague } from '../league-context';
 import { useQuery } from '@tanstack/react-query';
+import { useNow } from '@/hooks/use-now';
 import { fetchTransactions, formatCredits, type WalletTxn } from '@/lib/wallet';
 import { Card } from '@/components/ui/card';
 import { CenterCard } from '@/components/ui/center-card';
@@ -107,6 +108,7 @@ function TxnRow({ t }: { t: WalletTxn }) {
 export function LeagueActivity() {
   const lg = useLeague();
   const isMoney = lg.league_type !== 'pickem';
+  const now = useNow();
   const q = useQuery({
     queryKey: ['wallet-txns', lg.id],
     queryFn: () => fetchTransactions(`league:${lg.id}`),
@@ -121,7 +123,7 @@ export function LeagueActivity() {
 
   // txns are newest-first, so [0] holds the current balance.
   const balance = txns[0].balance_after_cents;
-  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
   const weekNet = txns
     .filter((t) => new Date(t.created_at).getTime() >= weekAgo)
     .reduce((s, t) => s + t.amount_cents, 0);

@@ -32,7 +32,6 @@ export function WordRotate({
 }: WordRotateProps) {
   const ref = useRef<HTMLSpanElement>(null);
   const isInView = useInView(ref, { once, margin: inViewMargin as UseInViewOptions['margin'] });
-  const [hasAnimated, setHasAnimated] = useState(false);
   const [currentWord, setCurrentWord] = useState(0);
   const [show, setShow] = useState(true);
 
@@ -141,12 +140,12 @@ export function WordRotate({
     },
   };
 
-  // Determine if we should start animation
-  const shouldStart = !startOnView || (isInView && (!once || !hasAnimated));
+  // Determine if we should start animation. With `once`, useInView latches
+  // true after the first reveal, so rotation keeps running once started.
+  const shouldStart = !startOnView || isInView;
 
   useEffect(() => {
     if (!shouldStart) return;
-    setHasAnimated(true);
     const interval = setInterval(() => {
       setShow(false);
       setTimeout(() => {

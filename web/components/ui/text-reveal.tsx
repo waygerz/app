@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { motion, useInView, Variants } from 'motion/react';
 import { cn } from '@/lib/utils';
 
@@ -232,7 +232,6 @@ export function TextReveal({
 }: TextRevealProps) {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once, margin: '-10%' });
-  const [hasAnimated, setHasAnimated] = useState(false);
 
   const shouldAnimate = startOnView ? isInView : true;
 
@@ -267,12 +266,6 @@ export function TextReveal({
             },
           },
         };
-
-  useEffect(() => {
-    if (shouldAnimate && !hasAnimated) {
-      setHasAnimated(true);
-    }
-  }, [shouldAnimate, hasAnimated]);
 
   const MotionComponent = variant === 'typewriter' ? motion.div : motion.span;
 

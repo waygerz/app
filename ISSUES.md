@@ -203,9 +203,10 @@ come from the audit pass and should be double-checked before acting on them.
   must stay public (Twilio signs requests against it).
 - [x] **`CLAUDE.md` "AWS environment" section** described only the old EC2 dev
   host (`waygerz` profile). **Fixed:** documents the `waygerz_aws` profile too.
-- [ ] **React Compiler lint warnings.** eslint-config-next 16 brings
-  react-hooks v7; `set-state-in-effect` (24), `purity` (22) and `refs` (3) fire
-  in 24 files and are set to `warn` in `web/eslint.config.mjs` until fixed.
+- [x] **React Compiler lint warnings.** All 49 (`set-state-in-effect`,
+  `purity`, `refs`) fixed — state derived in render or read via
+  `useSyncExternalStore`, "now" from `hooks/use-now.ts` — and the rules are
+  back to `error` with no suppressions.
 
 ## Re-audit 2026-09-18 — web/mobile on one API
 

@@ -1,30 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 type UseViewport = [number, number];
 
+function subscribe(onChange: () => void): () => void {
+  window.addEventListener('resize', onChange);
+  return () => window.removeEventListener('resize', onChange);
+}
+
 export function useViewport(): UseViewport {
-  const [dimensions, setDimensions] = useState<UseViewport>([0, 0]);
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-    setDimensions([window.innerHeight, window.innerWidth]);
-
-    const handleResize = (): void => {
-      setDimensions([window.innerHeight, window.innerWidth]);
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  // Return safe defaults during SSR
-  if (!isClient) {
-    return [0, 0];
-  }
-
-  return dimensions;
+  // Return safe defaults during SSR (server snapshot)
+  const height = useSyncExternalStore(subscribe, () => window.innerHeight, () => 0);
+  const width = useSyncExternalStore(subscribe, () => window.innerWidth, () => 0);
+  return [height, width];
 }
