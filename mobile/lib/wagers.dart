@@ -131,3 +131,28 @@ List<WagerGroup> sortGroups(List<WagerGroup> groups, BetSort sort) {
       });
   return out;
 }
+
+/// The current line from a side's perspective (stored proposer-perspective;
+/// only a spread flips for the acceptor). Null for a moneyline.
+double? lineForSide(Wager w, String side) {
+  if (w.line == null || w.betType == 'moneyline') return null;
+  if (w.betType == 'spread') return side == w.proposerSide ? w.line : -w.line!;
+  return w.line; // total — same both sides
+}
+
+/// A line as read on the viewer's side: signed spread ("+3.5"), bare total ("47").
+String lineStr(String betType, double? line) {
+  if (line == null) return '';
+  if (betType == 'total') return formatLine(line);
+  return '${line > 0 ? '+' : ''}${formatLine(line)}';
+}
+
+/// Dollars for an editable stake field: "10", "12.50".
+String centsToDollars(int cents) => cents % 100 == 0 ? '${cents ~/ 100}' : (cents / 100).toStringAsFixed(2);
+
+/// A stake the user typed, in cents; null when it isn't a valid amount.
+int? parseStakeCents(String dollars) {
+  final n = double.tryParse(dollars.trim());
+  if (n == null || n.isNaN || n < 0) return null;
+  return (n * 100).round();
+}

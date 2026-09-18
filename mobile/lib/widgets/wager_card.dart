@@ -104,7 +104,8 @@ class WagerBetCard extends StatelessWidget {
       const SizedBox(width: gap),
       Container(
         width: 80,
-        height: h * 2 + gap,
+        // Spans both rows; grows when it holds three action buttons.
+        constraints: const BoxConstraints(minHeight: h * 2 + gap),
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
         child: Center(child: _result(c, v)),

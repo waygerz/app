@@ -10,6 +10,7 @@ import '../models.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
 import '../wagers.dart';
+import '../widgets/counter_sheet.dart';
 import '../widgets/wager_card.dart';
 
 /// My Bets (web app/(app)/bets): filter pills with counts, search + sort, and
@@ -248,6 +249,13 @@ class _BetsScreenState extends State<BetsScreen> {
     if (respondTurn) {
       return [
         btn('Accept', () => _act(g, _wagers.accept, 'Bet accepted')),
+        // Counter acts on one wager; hidden when identical challenges from
+        // different people merged into one card (it splits once countered).
+        if (w.pendingId != null && g.wagers.length == 1)
+          btn('Counter', () async {
+            final sent = await showCounterSheet(context, api: widget.api, wager: w, me: me);
+            if (sent) await _reload();
+          }, variant: ButtonVariant.outline),
         btn('Decline', () => _act(g, _wagers.decline, 'Bet declined'), variant: ButtonVariant.outline),
       ];
     }

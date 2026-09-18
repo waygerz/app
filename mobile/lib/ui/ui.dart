@@ -10,6 +10,7 @@ export 'dialog.dart';
 export 'feedback.dart';
 export 'pill_tabs.dart';
 export 'search_field.dart';
+export 'select.dart';
 export 'skeleton.dart';
 export 'toast.dart';
 export 'tokens.dart';

@@ -262,6 +262,11 @@ come from the audit pass and should be double-checked before acting on them.
   un-decline), Notifications (actor avatars, inline Accept/Reject/Join,
   resolved outcomes, mark all read).
 - [x] Mobile unit tests + a Flutter CI job (analyze + test).
-- [ ] Still web-only (mobile feature plan): making picks, proposing and
-  countering bets, feed, results, members, manage, create league, friends,
-  messages, deep links, push.
+- [x] **Mobile play (feature plan group 1):** Pick'em My Picks (week
+  selector, tap-to-pick with spreads, tie-breaker on the last game, lock an
+  hour before the first game, pinned save bar, commissioner schedule sync);
+  H2H Upcoming (Today / This week, sport pills, Winner/Spread/Total board) →
+  two-step bet sheet (market + line, stake chips with 🍺/🥃, member picker);
+  Counter sheet from bet cards and notifications.
+- [ ] Still web-only (mobile feature plan): feed, results, members, manage,
+  create league, friends, messages, deep links, push, the Sports tab.

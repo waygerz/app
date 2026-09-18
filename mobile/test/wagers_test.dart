@@ -77,4 +77,24 @@ void main() {
     expect(cancelLocked(w(start: later)), isFalse);
     expect(cancelLocked(w()), isFalse); // unknown start never locks
   });
+
+  test('lineForSide flips only a spread for the acceptor', () {
+    expect(lineForSide(w(), 'home'), -3.5);
+    expect(lineForSide(w(), 'away'), 3.5);
+    expect(lineForSide(w(betType: 'total', line: 47.5, proposerSide: 'over', acceptorSide: 'under'), 'under'), 47.5);
+    expect(lineForSide(w(betType: 'moneyline', line: null), 'home'), isNull);
+  });
+
+  test('counter helpers', () {
+    expect(lineStr('spread', 3.5), '+3.5');
+    expect(lineStr('spread', -3.0), '-3');
+    expect(lineStr('total', 47.5), '47.5');
+    expect(lineStr('spread', null), '');
+    expect(centsToDollars(1000), '10');
+    expect(centsToDollars(1250), '12.50');
+    expect(parseStakeCents('12.5'), 1250);
+    expect(parseStakeCents('0'), 0);
+    expect(parseStakeCents(''), isNull);
+    expect(parseStakeCents('-1'), isNull);
+  });
 }

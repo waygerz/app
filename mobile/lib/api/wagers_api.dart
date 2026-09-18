@@ -67,6 +67,15 @@ class WagersApi {
   /// Withdraw your own open offer.
   Future<void> cancel(String id) => _api.post('$_p/wagers/$id/cancel');
 
+  /// Renegotiate an open bet: a new stake and, for a spread/total, a new line
+  /// in the caller's own perspective (the server normalizes it).
+  Future<void> counter(String id, {required int amountCents, double? line, String? treat}) =>
+      _api.post('$_p/wagers/$id/counter', body: {
+        'amount_cents': amountCents,
+        'line': line,
+        if (treat != null) 'treat': treat,
+      });
+
   /// The score-decided winner confirms a completed bet, which pays them.
   Future<void> confirm(String id) => _api.post('$_p/wagers/$id/confirm');
   Future<void> requestCancel(String id) => _api.post('$_p/wagers/$id/cancel/request');

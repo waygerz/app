@@ -31,6 +31,13 @@ class LeaguesApi {
     return list.map((e) => LeaguePeriod.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Commissioner: rebuild the weeks from the sports' schedules.
+  Future<List<LeaguePeriod>> regeneratePeriods(String id) async {
+    final res = await _api.post('$_p/$id/periods/regenerate');
+    final list = (res['periods'] as List<dynamic>? ?? []);
+    return list.map((e) => LeaguePeriod.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<List<Pick>> getPicks(String leagueId, String periodId) async {
     final res = await _api.get('$_p/$leagueId/periods/$periodId/picks');
     final list = (res['picks'] as List<dynamic>? ?? []);

@@ -13,14 +13,17 @@ import '../shell/app_header.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
 import 'bets_screen.dart';
+import 'league/picks_tab.dart';
+import 'league/upcoming_tab.dart';
 import 'widgets.dart';
 
-enum _Section { play, standings }
+enum _Section { upcoming, play, standings }
 
 /// League detail (web app/(app)/leagues/[id]/layout.tsx): the header — logo
 /// (tap for details + invite), type/Draft badges, balance, members · period —
-/// then the section pills. Sections not built on mobile yet (feed, results,
-/// members, manage, …) arrive with the mobile feature plan.
+/// then the section pills: Upcoming (H2H: tap a game to bet), My Bets / My
+/// Picks, Standings. Sections not built on mobile yet (feed, results, members,
+/// manage, …) arrive with the mobile feature plan.
 class LeagueDetailScreen extends StatefulWidget {
   const LeagueDetailScreen({super.key, required this.api, required this.league});
   final ApiClient api;
@@ -33,7 +36,7 @@ class LeagueDetailScreen extends StatefulWidget {
 class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
   late final LeaguesApi _leagues = LeaguesApi(widget.api);
   late Future<League> _future = _leagues.league(widget.league.id);
-  _Section _section = _Section.play;
+  late _Section _section = widget.league.isMoney ? _Section.upcoming : _Section.play;
   bool _activating = false;
 
   Future<void> _reload() async {
@@ -79,9 +82,29 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
             );
           }
           final header = _header(context, lg);
+          // Play needs an active league (web LeaguePlay).
+          if (_section == _Section.play && !lg.isActive) {
+            final c = WaygerzColors.of(context);
+            return ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
+              ...header,
+              CenterCard(children: [
+                Text('This league isn’t active yet.', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
+              ]),
+            ]);
+          }
           return switch (_section) {
+            _Section.upcoming => UpcomingTab(
+                key: ValueKey('upcoming-${lg.id}'),
+                api: widget.api,
+                league: lg,
+                header: header,
+                onBetSent: () {
+                  setState(() => _section = _Section.play);
+                  _reload(); // the stake leaves the balance
+                },
+              ),
             _Section.play when lg.isMoney => BetsScreen(key: ValueKey('bets-${lg.id}'), api: widget.api, leagueId: lg.id, header: header),
-            _Section.play => _PicksTab(api: widget.api, league: lg, header: header, onRefresh: _reload),
+            _Section.play => PicksTab(key: ValueKey('picks-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
             _Section.standings => _StandingsTab(api: widget.api, league: lg, header: header, onRefresh: _reload),
           };
         },
@@ -134,6 +157,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
       const SizedBox(height: 16),
       PillTabs<_Section>(
         tabs: [
+          if (lg.isMoney) const PillTab(_Section.upcoming, 'Upcoming'),
           PillTab(_Section.play, lg.isPickem ? 'My Picks' : 'My Bets'),
           const PillTab(_Section.standings, 'Standings'),
         ],
@@ -319,137 +343,6 @@ class _StandingsTabState extends State<_StandingsTab> {
                     fontFeatures: const [FontFeature.tabularFigures()])),
             Text('W–L', style: TextStyle(fontSize: 12, color: c.mutedForeground)),
           ]),
-      ]),
-    );
-  }
-}
-
-// --------------------------------------------------------------------- picks
-
-/// The caller's picks for the open week, read-only (making picks on mobile
-/// comes with the feature plan).
-class _PicksTab extends StatefulWidget {
-  const _PicksTab({required this.api, required this.league, required this.header, required this.onRefresh});
-  final ApiClient api;
-  final League league;
-  final List<Widget> header;
-  final Future<void> Function() onRefresh;
-
-  @override
-  State<_PicksTab> createState() => _PicksTabState();
-}
-
-class _PicksTabState extends State<_PicksTab> {
-  late final LeaguesApi _leagues = LeaguesApi(widget.api);
-  late Future<List<Pick>> _future = _load();
-
-  Future<List<Pick>> _load() {
-    final period = widget.league.currentPeriod?.id ?? widget.league.currentPeriodId;
-    return period == null ? Future.value(const <Pick>[]) : _leagues.getPicks(widget.league.id, period);
-  }
-
-  Future<void> _reload() async {
-    final f = _load();
-    setState(() => _future = f);
-    await Future.wait([f, widget.onRefresh()]);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = WaygerzColors.of(context);
-    final period = widget.league.currentPeriod;
-    return RefreshIndicator(
-      onRefresh: _reload,
-      child: FutureBuilder<List<Pick>>(
-        future: _future,
-        builder: (context, snap) {
-          final picks = snap.data;
-          return ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
-            ...widget.header,
-            if (picks == null && snap.connectionState == ConnectionState.waiting)
-              ...List.generate(3, (_) => const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Skeleton(height: 96, radius: WaygerzRadius.xl),
-                  ))
-            else if (snap.hasError)
-              ErrorCard(title: "Couldn't load your picks", error: snap.error, onRetry: _reload)
-            else if (picks!.isEmpty)
-              CenterCard(children: [
-                Icon(LucideIcons.trophy, size: 24, color: c.mutedForeground),
-                Text(period == null ? 'No open week yet.' : 'No picks yet for ${period.label}.',
-                    textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-              ])
-            else ...[
-              if (period != null) ...[
-                Text(period.label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.foreground)),
-                const SizedBox(height: 16),
-              ],
-              for (final p in picks)
-                Padding(padding: const EdgeInsets.only(bottom: 12), child: _PickRow(pick: p)),
-            ],
-          ]);
-        },
-      ),
-    );
-  }
-}
-
-/// One pick: both teams (the picked one highlighted by outcome), scores once
-/// the game starts, and a result badge.
-class _PickRow extends StatelessWidget {
-  const _PickRow({required this.pick});
-  final Pick pick;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = WaygerzColors.of(context);
-    final p = pick;
-    final started = p.status != null && p.status != 'scheduled' && p.status != 'cancelled';
-    final Color tone = p.voided
-        ? c.mutedForeground
-        : p.correct == true
-            ? c.brand
-            : p.correct == false
-                ? c.destructive
-                : Tw.blue500;
-    final badge = p.voided
-        ? const WzBadge('Void', variant: BadgeVariant.secondary)
-        : p.correct == true
-            ? const WzBadge('Won', variant: BadgeVariant.success)
-            : p.correct == false
-                ? const WzBadge('Lost', variant: BadgeVariant.destructive)
-                : WzBadge(started ? 'Live' : 'Pending', variant: BadgeVariant.secondary);
-
-    Widget team(String? name, String? logo, int? score, bool picked) => Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: picked ? tone.withValues(alpha: 0.2) : c.muted.withValues(alpha: 0.6),
-            borderRadius: BorderRadius.circular(WaygerzRadius.md),
-          ),
-          child: Row(children: [
-            TeamLogo(name: name ?? '', abbreviation: '', logo: logo, size: 24),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(name ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, fontWeight: picked ? FontWeight.w600 : FontWeight.w400, color: c.foreground)),
-            ),
-            if (started && score != null)
-              Text('$score', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.foreground)),
-          ]),
-        );
-
-    return WzCard(
-      padding: const EdgeInsets.all(12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(child: Text(formatStart(p.startTime), style: TextStyle(fontSize: 12, color: c.mutedForeground))),
-          badge,
-        ]),
-        const SizedBox(height: 8),
-        team(p.awayTeam, p.awayLogo, p.awayScore, p.pickSide == 'away'),
-        const SizedBox(height: 6),
-        team(p.homeTeam, p.homeLogo, p.homeScore, p.pickSide == 'home'),
       ]),
     );
   }

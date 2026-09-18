@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
 import '../api/friends_api.dart';
@@ -7,10 +8,12 @@ import '../api/invites_api.dart';
 import '../api/leagues_api.dart';
 import '../api/notifications_api.dart';
 import '../api/wagers_api.dart';
+import '../auth/auth_controller.dart';
 import '../format.dart';
 import '../models.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
+import '../widgets/counter_sheet.dart';
 import 'league_detail_screen.dart';
 import 'widgets.dart';
 
@@ -53,10 +56,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   /// challenge that has moved on (accepted elsewhere, expired at kickoff, …).
   Map<String, String> _wagerStatus = {};
 
+  /// Full bets by id, so a challenge can open the Counter sheet in place.
+  Map<String, Wager> _wagerById = {};
+
   /// Notifications resolved inline this session → their "done" label.
   final Map<String, String> _resolved = {};
   final Set<String> _readLocally = {};
   String? _busy;
+  String? get _me => context.read<AuthController>().user?.id;
   bool _markingAll = false;
 
   @override
@@ -68,7 +75,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _loadWagerStatus() async {
     try {
       final all = await _wagers.mine();
-      if (mounted) setState(() => _wagerStatus = {for (final w in all) w.id: w.status});
+      if (mounted) {
+        setState(() {
+          _wagerStatus = {for (final w in all) w.id: w.status};
+          _wagerById = {for (final w in all) w.id: w};
+        });
+      }
     } catch (_) {/* best-effort: rows just keep their actions */}
   }
 
@@ -300,6 +312,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           WzButton(label: yes, size: ButtonSize.sm, dense: true, busy: busy,
               onPressed: busy ? null : () => _act(n, meta.action!, true)),
           const SizedBox(width: 8),
+          // Counter opens the full editor in place; Accept/Reject stay one-tap.
+          if (meta.action == _Action.bet && _wagerById[n.refId] != null && _me != null) ...[
+            WzButton(label: 'Counter', size: ButtonSize.sm, dense: true, variant: ButtonVariant.outline,
+                onPressed: busy ? null : () async {
+                  final sent = await showCounterSheet(context, api: widget.api, wager: _wagerById[n.refId]!, me: _me!);
+                  if (!sent || !mounted) return;
+                  setState(() => _resolved[n.id] = 'Countered');
+                  if (!n.read) _markRead([n.id]);
+                  _loadWagerStatus();
+                }),
+            const SizedBox(width: 8),
+          ],
           WzButton(label: no, size: ButtonSize.sm, dense: true, variant: ButtonVariant.outline,
               onPressed: busy ? null : () => _act(n, meta.action!, false)),
         ]),

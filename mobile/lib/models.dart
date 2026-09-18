@@ -228,6 +228,7 @@ class League {
     this.unreadFeedCount = 0,
     this.topMembers = const [],
     this.members = const [],
+    this.sports = const [],
   });
 
   final String id;
@@ -256,6 +257,11 @@ class League {
 
   /// Every active member (league detail only).
   final List<LeagueMember> members;
+
+  /// The league's sport-leagues: `(id: sport_league_id, name)` (detail only).
+  final List<({String id, String name})> sports;
+
+  bool get isActive => status == 'active';
 
   bool get isMoney => leagueType == 'head_to_head';
   bool get isPickem => leagueType == 'pickem';
@@ -286,6 +292,10 @@ class League {
         unreadFeedCount: (j['unread_feed_count'] as int?) ?? 0,
         topMembers: _members(j['top_members']),
         members: _members(j['members']),
+        sports: [
+          for (final e in (j['sports'] as List<dynamic>?) ?? const [])
+            (id: '${(e as Map)['sport_league_id']}', name: (e['name'] ?? e['sport_league_id'] ?? '') as String),
+        ],
       );
 
   static List<LeagueMember> _members(Object? v) => ((v as List<dynamic>?) ?? const [])
@@ -577,10 +587,22 @@ class SportEvent {
     this.homeLogo,
     this.awayLogo,
     this.startTime,
+    this.league = '',
+    this.sportLeagueId,
+    this.shortName,
+    this.odds,
   });
 
   final String externalId;
   final String sport;
+
+  /// The ingestor's league slug (for the odds endpoint) and catalog id.
+  final String league;
+  final String? sportLeagueId;
+  final String? shortName;
+
+  /// Last-known lines persisted by the ingestor (null until posted).
+  final EventOdds? odds;
   final String status; // scheduled | live | final | cancelled
   final String name;
   final String homeTeam;
@@ -612,6 +634,26 @@ class SportEvent {
         homeLogo: j['home_logo'] as String?,
         awayLogo: j['away_logo'] as String?,
         startTime: j['start_time'] as String?,
+        league: (j['league'] ?? '') as String,
+        sportLeagueId: j['sport_league_id'] as String?,
+        shortName: j['short_name'] as String?,
+        odds: j['odds'] is Map ? EventOdds.fromJson((j['odds'] as Map).cast<String, dynamic>()) : null,
+      );
+}
+
+/// Betting lines for a game (web lib/ingestor.ts EventOdds). Waygerz bets
+/// straight up, so only the spread line (home team's number; away is its
+/// inverse) and the total are used — no prices.
+class EventOdds {
+  EventOdds({this.spreadLine, this.total});
+  final double? spreadLine;
+  final double? total;
+
+  bool get isEmpty => spreadLine == null && total == null;
+
+  factory EventOdds.fromJson(Map<String, dynamic> j) => EventOdds(
+        spreadLine: (j['spread'] is Map) ? ((j['spread'] as Map)['line'] as num?)?.toDouble() : null,
+        total: (j['overUnder'] is Map) ? ((j['overUnder'] as Map)['total'] as num?)?.toDouble() : null,
       );
 }
 

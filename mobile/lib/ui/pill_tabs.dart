@@ -61,3 +61,38 @@ class PillTabs<T> extends StatelessWidget {
     );
   }
 }
+
+/// A compact segmented toggle (web: the Today / This week switch) — a pill
+/// track with the active option filled in primary.
+class WzSegmented<T> extends StatelessWidget {
+  const WzSegmented({super.key, required this.options, required this.value, required this.onChanged});
+  final List<({T value, String label})> options;
+  final T value;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = WaygerzColors.of(context);
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(border: Border.all(color: c.input), borderRadius: BorderRadius.circular(999)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        for (final o in options)
+          Material(
+            color: o.value == value ? c.primary : Colors.transparent,
+            shape: const StadiumBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => onChanged(o.value),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(o.label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+                    color: o.value == value ? onPrimary : c.mutedForeground)),
+              ),
+            ),
+          ),
+      ]),
+    );
+  }
+}
