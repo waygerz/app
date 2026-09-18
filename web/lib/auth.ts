@@ -1,7 +1,7 @@
 // Client for the Waygerz auth service (passwordless phone + OTP, cookie sessions).
 import { API, API_BASE } from './api-paths';
 import { getDeviceUuid } from './device';
-import { apiFetch, apiRequest, refreshSession } from './http';
+import { apiFetch, apiRequest, refreshSession, type ApiErrorBody } from './http';
 import type { FavoriteTeam } from './users';
 
 export interface AuthUser {
@@ -82,7 +82,7 @@ export const authApi = {
 
   // Permanently delete the signed-in account (cross-service purge). On success
   // the server clears the auth cookies. A 409 `owns_leagues` carries the blocking
-  // leagues in `.data.leagues`; the thrown error exposes `status` + `data` so the
+  // leagues in `.data.leagues` (`error_code: 'owns_leagues'`); the thrown error exposes `status` + `data` so the
   // caller can surface them.
   deleteAccount: async (): Promise<DeleteAccountResult> => {
     const res = await apiFetch(`${API_BASE}${API.auth}/account`, {
@@ -90,14 +90,9 @@ export const authApi = {
       device: true,
       skipAuthRetry: true,
     });
-    const data = (await res.json().catch(() => ({}))) as DeleteAccountResult & {
-      error?: string;
-      message?: string;
-    };
+    const data = (await res.json().catch(() => ({}))) as DeleteAccountResult & ApiErrorBody;
     if (!res.ok) {
-      const err = new Error(
-        data.message || data.error || `Request failed (${res.status})`,
-      ) as DeleteAccountError;
+      const err = new Error(data.error || `Request failed (${res.status})`) as DeleteAccountError;
       err.status = res.status;
       err.data = data;
       throw err;
@@ -120,7 +115,7 @@ export interface DeleteAccountResult {
 
 export interface DeleteAccountError extends Error {
   status?: number;
-  data?: DeleteAccountResult & { error?: string; message?: string };
+  data?: DeleteAccountResult & ApiErrorBody;
 }
 
 /** Proactive refresh when the session marker is present (best-effort). */

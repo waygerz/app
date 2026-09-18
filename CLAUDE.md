@@ -80,6 +80,10 @@ Conventions that matter across all services:
   the **ALB directly** (no gateway container), so the same deny must exist as an
   ALB rule — see `.docs/complete/INTERNAL_SERVICE_CONNECT.md`. The `scheduler`
   reaches internal endpoints over the mesh (`http://<svc>:8000/v1/<group>/<svc>`).
+- **One error shape.** Every service registers `app/utils/errors.py` (a shared,
+  drift-checked copy): errors are JSON `{error: <text to show>, error_code?:
+  <slug>}` and every auth failure is a 401. Return `{"error": ...}` (plus
+  `error_code` when a client must branch on it) — never `message` for errors.
 - **Prod refuses dev secrets.** With `APP_ENV=production`, `create_app()` raises
   if `JWT_SECRET_KEY` or `INTERNAL_TOKEN` is unset or a dev default
   (`guards.py::require_prod_secrets`). Every task def must set both.

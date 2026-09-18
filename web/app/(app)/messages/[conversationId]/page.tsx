@@ -11,7 +11,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { messagingApi, type ChatMessage } from '@/lib/messaging';
+import { messagingApi, openThreadStream, type ChatMessage, type ThreadStreamEvent } from '@/lib/messaging';
 import { leaguesApi } from '@/lib/leagues';
 import { wagersApi } from '@/lib/wagers';
 import { fetchEvent, type SportEvent } from '@/lib/ingestor';
@@ -108,55 +108,53 @@ export default function ThreadPage() {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [conversationId, msgsQ.data?.length, typingUser]);
 
-  // Live thread via SSE. Closes automatically when navigating away.
+  // Live thread via SSE; reconnects itself (see openThreadStream) and closes
+  // when navigating away.
   useEffect(() => {
     if (!conversationId) return;
-    const es = new EventSource(messagingApi.streamUrl(conversationId));
-    es.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(ev.data) as {
-          event?: string; message?: ChatMessage; user_id?: string; display_name?: string;
-          typing?: boolean; message_ids?: string[]; read_at?: string;
-        };
-        if (data.event === 'message' && data.message) {
-          qc.setQueryData<ChatMessage[]>(['messages', conversationId], (old) => {
-            const prev = old ?? [];
-            if (prev.some((m) => m.id === data.message!.id)) return prev;
-            return [...prev, data.message!];
-          });
-          qc.invalidateQueries({ queryKey: ['conversations'] });
-          qc.invalidateQueries({ queryKey: ['conversations-unread'] });
-          messagingApi.markRead(conversationId).catch(() => {});
-          return;
+    const onEvent = (data: ThreadStreamEvent) => {
+      if (data.event === 'message' && data.message) {
+        qc.setQueryData<ChatMessage[]>(['messages', conversationId], (old) => {
+          const prev = old ?? [];
+          if (prev.some((m) => m.id === data.message!.id)) return prev;
+          return [...prev, data.message!];
+        });
+        qc.invalidateQueries({ queryKey: ['conversations'] });
+        qc.invalidateQueries({ queryKey: ['conversations-unread'] });
+        messagingApi.markRead(conversationId).catch(() => {});
+        return;
+      }
+      if (data.event === 'typing' && data.user_id !== me) {
+        if (data.typing) {
+          setTypingUser(data.display_name ?? 'Someone');
+          if (typingStopRef.current) clearTimeout(typingStopRef.current);
+          typingStopRef.current = setTimeout(() => setTypingUser(null), 3000);
+        } else {
+          setTypingUser(null);
         }
-        if (data.event === 'typing' && data.user_id !== me) {
-          if (data.typing) {
-            setTypingUser(data.display_name ?? 'Someone');
-            if (typingStopRef.current) clearTimeout(typingStopRef.current);
-            typingStopRef.current = setTimeout(() => setTypingUser(null), 3000);
-          } else {
-            setTypingUser(null);
-          }
-          return;
-        }
-        if (data.event === 'messages_read' && data.message_ids?.length) {
-          qc.setQueryData<ChatMessage[]>(['messages', conversationId], (old) =>
-            (old ?? []).map((m) =>
-              data.message_ids!.includes(m.id) ? { ...m, read_at: data.read_at ?? m.read_at } : m),
-          );
-          return;
-        }
-        if ((data.event === 'message_updated' || data.event === 'message_deleted') && data.message) {
-          const updated = data.message;
-          qc.setQueryData<ChatMessage[]>(['messages', conversationId], (old) =>
-            (old ?? []).map((m) => (m.id === updated.id ? updated : m)));
-          qc.invalidateQueries({ queryKey: ['conversations'] });
-        }
-      } catch {
-        /* ignore malformed SSE payloads */
+        return;
+      }
+      if (data.event === 'messages_read' && data.message_ids?.length) {
+        qc.setQueryData<ChatMessage[]>(['messages', conversationId], (old) =>
+          (old ?? []).map((m) =>
+            data.message_ids!.includes(m.id) ? { ...m, read_at: data.read_at ?? m.read_at } : m),
+        );
+        return;
+      }
+      if ((data.event === 'message_updated' || data.event === 'message_deleted') && data.message) {
+        const updated = data.message;
+        qc.setQueryData<ChatMessage[]>(['messages', conversationId], (old) =>
+          (old ?? []).map((m) => (m.id === updated.id ? updated : m)));
+        qc.invalidateQueries({ queryKey: ['conversations'] });
       }
     };
-    return () => { es.close(); setTypingUser(null); };
+    // Back after a drop: pick up anything sent while the stream was down.
+    const onReconnect = () => {
+      qc.invalidateQueries({ queryKey: ['messages', conversationId] });
+      qc.invalidateQueries({ queryKey: ['conversations'] });
+    };
+    const close = openThreadStream(conversationId, onEvent, onReconnect);
+    return () => { close(); setTypingUser(null); };
   }, [conversationId, me, qc]);
 
   const onErr = (e: Error) => toast.error(e.message);

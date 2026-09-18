@@ -243,6 +243,34 @@ class League {
       );
 }
 
+/// A pending league invite (`GET /leagues/invites`).
+class LeagueInvite {
+  LeagueInvite({
+    required this.inviteId,
+    required this.leagueId,
+    required this.leagueName,
+    required this.leagueType,
+    this.leagueLogo,
+    this.inviterName,
+  });
+
+  final String inviteId;
+  final String leagueId;
+  final String leagueName;
+  final String leagueType;
+  final String? leagueLogo;
+  final String? inviterName;
+
+  factory LeagueInvite.fromJson(Map<String, dynamic> j) => LeagueInvite(
+        inviteId: j['invite_id'] as String,
+        leagueId: j['league_id'] as String,
+        leagueName: (j['league_name'] ?? '') as String,
+        leagueType: (j['league_type'] ?? 'pickem') as String,
+        leagueLogo: j['league_logo'] as String?,
+        inviterName: j['inviter_name'] as String?,
+      );
+}
+
 class LeaguePeriod {
   LeaguePeriod({
     required this.id,

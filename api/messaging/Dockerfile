@@ -17,4 +17,4 @@ EXPOSE 8000
 ARG GIT_SHA=dev
 ENV GIT_SHA=$GIT_SHA
 
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "wsgi:app", "--workers", "1", "--threads", "4", "--worker-class", "gthread", "--timeout", "120"]
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "wsgi:app", "--workers", "1", "--threads", "64", "--worker-class", "gthread", "--timeout", "120"]

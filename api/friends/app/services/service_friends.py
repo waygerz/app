@@ -151,7 +151,8 @@ def resolve_code(me: str | None, code: str) -> tuple[dict, int]:
         return {"type": "friend", "code": code, "target_id": None,
                 "state": "invalid", "single_use": False,
                 "viewer": {"authenticated": bool(me), "relationship": "none"},
-                "preview": None, "actions": []}, 404
+                "preview": None, "actions": [],
+                "error": "This invite link isn't valid.", "error_code": "invalid_code"}, 404
     owner = str(rec.owner_id)
     user = resolve_users_full([owner]).get(owner) or {}
     state = _code_state(rec)

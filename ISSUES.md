@@ -228,3 +228,23 @@ come from the audit pass and should be double-checked before acting on them.
   `POST /wagers` answered 200 with nothing created. Mobile sends `side`; the
   backend returns 400 `{error, created: [], errors}` when nothing is created and
   201 (with per-item `errors`) otherwise.
+
+### High (fixed)
+- [x] **Four error shapes.** Services answered `{error}`, `{error, message}`,
+  flask-jwt-extended's `{msg}` (422 for a malformed token) and HTML pages.
+  Now every service registers `app/utils/errors.py` (shared, drift-checked):
+  every error is `{error, error_code?}` and every auth failure is a 401. Web
+  throws a typed `ApiError` (`status`, `code`); mobile's `ApiException.code`
+  reads `error_code` and survives non-JSON bodies.
+- [x] **Mobile league invites.** `invites()` parsed invites as `League` (would
+  crash); now `LeagueInvite`. New `InvitesApi` routes `/c/<code>` by prefix
+  (F → friends, B → contests, else leagues) like web `lib/invites.ts`.
+- [x] **League shapes.** League detail has `member_count`; PUT picks returns the
+  same event-enriched rows as GET; standings carry a server `rank` (ties share
+  it), used by web and mobile.
+- [x] **Live messages.** Each SSE stream held a gunicorn thread (4 total) and a
+  DB connection for its whole life. Now 64 threads, a 48-stream cap (503
+  `streams_full` beyond it), the DB connection released before streaming,
+  and a 10-minute stream lifetime. Web `openThreadStream` refreshes the session
+  and reconnects with backoff when the browser gives up (401/503), and
+  refetches the thread after a reconnect.

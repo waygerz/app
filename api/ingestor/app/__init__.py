@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.utils.config import Config
 from app.utils.guards import require_prod_secrets
+from app.utils.errors import register_error_handlers
 from app.extensions import cors, db, init_redis, jwt, migrate
 
 
@@ -17,6 +18,7 @@ def create_app(config_class=Config):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    register_error_handlers(app, jwt)
     cors.init_app(app, resources={r"/*": {"origins": "*"}})
     init_redis(app)
 

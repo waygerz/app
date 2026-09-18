@@ -1852,7 +1852,8 @@ def resolve_code(me, code):
         return {"type": "bet", "code": code, "target_id": None,
                 "state": "invalid", "single_use": True,
                 "viewer": {"authenticated": bool(me), "relationship": "other"},
-                "preview": None, "actions": []}, 404
+                "preview": None, "actions": [],
+                "error": "This invite link isn't valid.", "error_code": "invalid_code"}, 404
     # A bet code stays viewable for the life of the wager (accepted, declined,
     # settled) so a tap from a notification always SHOWS the bet with its current
     # status — never a dead "invite already used". Actions are separately gated

@@ -1,5 +1,6 @@
 """Realtime messaging: direct DMs + league group chats."""
 import json
+import threading
 import time
 from datetime import datetime
 
@@ -404,37 +405,67 @@ def delete_message(message_id, me):
     return {"message": payload}, 200
 
 
+# Open SSE streams in this worker (gunicorn runs one worker per task).
+_streams_lock = threading.Lock()
+_open_streams = 0
+
+
+def _claim_stream_slot(limit):
+    global _open_streams
+    with _streams_lock:
+        if _open_streams >= limit:
+            return False
+        _open_streams += 1
+        return True
+
+
+def _release_stream_slot():
+    global _open_streams
+    with _streams_lock:
+        _open_streams = max(0, _open_streams - 1)
+
+
 def stream_messages(conversation_id, me):
     conv = db.session.get(Conversation, str(conversation_id))
     if not conv or not _can_access(conv, me):
         return {"error": "conversation not found"}, 404
 
-    poll_s = current_app.config["SSE_POLL_SECONDS"]
+    cfg = current_app.config
+    poll_s = cfg["SSE_POLL_SECONDS"]
+    max_s = cfg["SSE_MAX_SECONDS"]
     channel = _channel(conversation_id)
+    if not _claim_stream_slot(cfg["SSE_MAX_STREAMS"]):
+        return {"error": "Live updates are busy. Retrying…", "error_code": "streams_full"}, 503
+    # The stream never touches the DB again: hand the connection back to the
+    # pool now instead of holding it for the life of the stream.
+    db.session.close()
 
     def generate():
         redis = get_redis()
         pubsub = redis.pubsub(ignore_subscribe_messages=True) if redis else None
-        if pubsub:
-            pubsub.subscribe(channel)
-        yield f"data: {json.dumps({'event': 'connected'})}\n\n"
-        last_ping = time.time()
         try:
-            while True:
+            if pubsub:
+                pubsub.subscribe(channel)
+            # `retry` sets the browser's reconnect delay after the stream ends.
+            yield f"retry: 2000\ndata: {json.dumps({'event': 'connected'})}\n\n"
+            opened = last_ping = time.time()
+            while time.time() - opened < max_s:
                 if pubsub:
                     msg = pubsub.get_message(timeout=1.0)
                     if msg and msg.get("type") == "message":
                         yield f"data: {msg['data']}\n\n"
                         last_ping = time.time()
+                else:
+                    time.sleep(1.0)
                 if time.time() - last_ping >= poll_s:
-                    yield f": ping\n\n"
+                    yield ": ping\n\n"
                     last_ping = time.time()
         finally:
             if pubsub:
                 pubsub.unsubscribe(channel)
                 pubsub.close()
 
-    return Response(
+    response = Response(
         stream_with_context(generate()),
         mimetype="text/event-stream",
         headers={
@@ -442,3 +473,7 @@ def stream_messages(conversation_id, me):
             "X-Accel-Buffering": "no",
         },
     )
+    # Released when the server closes the response — even if the client left
+    # before the generator started (its `finally` would never run then).
+    response.call_on_close(_release_stream_slot)
+    return response

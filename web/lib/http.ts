@@ -164,18 +164,40 @@ export async function apiFetch(url: string, options: ApiFetchOptions = {}): Prom
   return retry;
 }
 
+/**
+ * Every backend error body (api/<service>/app/utils/errors.py): `error` is the
+ * text to show; `error_code` is set where a caller needs to branch on it.
+ */
+export interface ApiErrorBody {
+  error?: string;
+  error_code?: string;
+}
+
+/** A non-2xx API response. `message` is the server's `error` text. */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly data: Record<string, unknown>;
+
+  constructor(status: number, data: Record<string, unknown> & ApiErrorBody) {
+    super(data.error || `Request failed (${status})`);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = data.error_code;
+    this.data = data;
+  }
+}
+
 export async function apiJson<T>(url: string, options: ApiFetchOptions = {}): Promise<T> {
   const res = await apiFetch(url, options);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error((data as { error?: string }).error || `Request failed (${res.status})`);
-  }
+  if (!res.ok) throw new ApiError(res.status, data as Record<string, unknown>);
   return data as T;
 }
 
 /**
  * The shared per-service request helper: `apiJson` against `API_BASE + path`
- * (session cookies, 401 → refresh → retry, `{error}` → thrown Error). Service
+ * (session cookies, 401 → refresh → retry, `{error}` → thrown ApiError). Service
  * clients call this with an `API.<service>` path instead of rolling their own.
  */
 export function apiRequest<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {

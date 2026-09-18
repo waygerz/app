@@ -184,3 +184,23 @@ def test_league_list_uses_membership_filter(client, auth_headers, monkeypatch):
     listed = client.get(f"{API}/conversations", headers=auth_headers(U2))
     assert listed.status_code == 200
     assert listed.get_json()["conversations"] == []
+
+def test_stream_cap_refuses_with_503_and_frees_slots(client, auth_headers, app):
+    # Each stream holds a gunicorn thread; past SSE_MAX_STREAMS new streams get a
+    # 503 (so ordinary requests keep threads) and closed streams free their slot.
+    r = client.post(f"{API}/conversations", json={"type": "direct", "user_id": U2},
+                    headers=auth_headers(U1))
+    cid = r.get_json()["conversation"]["id"]
+    url = f"{API}/conversations/{cid}/stream"
+    app.config["SSE_MAX_STREAMS"] = 1
+    try:
+        first = client.get(url, headers=auth_headers(U1), buffered=False)
+        assert first.status_code == 200
+        busy = client.get(url, headers=auth_headers(U1))
+        assert busy.status_code == 503 and busy.get_json()["error_code"] == "streams_full"
+        first.close()
+        again = client.get(url, headers=auth_headers(U1), buffered=False)
+        assert again.status_code == 200
+        again.close()
+    finally:
+        app.config["SSE_MAX_STREAMS"] = 48

@@ -17,6 +17,10 @@ SHARED = {
         "auth", "users", "friends", "comments", "messaging", "ingestor",
         "wallet", "contests", "leagues", "media", "notifications",
     ],
+    "app/utils/errors.py": [
+        "auth", "users", "friends", "comments", "messaging", "ingestor",
+        "wallet", "contests", "leagues", "media", "notifications", "twilio",
+    ],
     "wsgi.py": [
         "auth", "users", "friends", "comments", "messaging", "ingestor",
         "wallet", "contests", "leagues", "media", "notifications", "twilio",

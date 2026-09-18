@@ -87,9 +87,9 @@ def delete_account(user_id: str):
         return (
             jsonify(
                 {
-                    "error": "owns_leagues",
-                    "message": "You're the commissioner of a league. Transfer it to "
+                    "error": "You're the commissioner of a league. Transfer it to "
                     "another member or archive it before deleting your account.",
+                    "error_code": "owns_leagues",
                     "leagues": owned,
                 }
             ),
@@ -106,10 +106,10 @@ def delete_account(user_id: str):
             return (
                 jsonify(
                     {
-                        "error": "purge_failed",
-                        "service": name,
-                        "message": "Something went wrong deleting your data. "
+                        "error": "Something went wrong deleting your data. "
                         "Please try again.",
+                        "error_code": "purge_failed",
+                        "service": name,
                     }
                 ),
                 500,

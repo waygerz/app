@@ -198,6 +198,8 @@ export interface StandingRow {
   wins: number;
   losses: number;
   pushes?: number;
+  /** Competition rank from the server; tied members share it ("1, 2, 2, 4"). */
+  rank: number;
 }
 
 export interface PickEventInfo {

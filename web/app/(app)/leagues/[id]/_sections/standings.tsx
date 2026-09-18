@@ -41,8 +41,8 @@ export function LeagueStandings() {
     <div className="flex flex-col gap-4">
       <h2 className="text-base font-semibold text-foreground sm:text-lg">Standings ({rows.length})</h2>
       <div className="flex flex-col gap-3">
-        {rows.map((r, i) => {
-          const rank = i + 1;
+        {rows.map((r) => {
+          const rank = r.rank;
           const isMe = String(r.user_id) === me;
           return (
             <Card

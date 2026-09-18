@@ -27,6 +27,10 @@ class ApiException implements Exception {
   /// The decoded error body, for errors that carry detail (e.g. the leagues
   /// blocking an account delete).
   final Map<String, dynamic> data;
+
+  /// The server's `error_code` slug, where it sets one (e.g. `owns_leagues`).
+  String? get code => data['error_code'] as String?;
+
   @override
   String toString() => 'ApiException($statusCode): $message';
 }
@@ -61,16 +65,19 @@ class ApiClient {
   Future<Map<String, dynamic>> _json(String method, String path,
       {Object? body, bool auth = true}) async {
     final res = await _send(method, path, body: body, auth: auth);
-    final decoded = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body);
+    Object? decoded;
+    try {
+      decoded = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body);
+    } on FormatException {
+      decoded = null; // not JSON (e.g. a proxy's HTML error page)
+    }
     if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (decoded == null) throw ApiException(res.statusCode, 'Unexpected response from the server.');
       return decoded is Map<String, dynamic> ? decoded : {'data': decoded};
     }
+    // Every backend error is `{error, error_code?}` (api/*/app/utils/errors.py).
     final err = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
-    final msg = err['message'] is String
-        ? err['message'] as String
-        : err['error'] is String
-            ? err['error'] as String
-            : 'Request failed (${res.statusCode})';
+    final msg = err['error'] is String ? err['error'] as String : 'Request failed (${res.statusCode})';
     throw ApiException(res.statusCode, msg, err);
   }
 

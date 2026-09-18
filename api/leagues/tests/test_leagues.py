@@ -25,6 +25,7 @@ def test_create_league(client, auth_headers):
     assert d["invite_code"].startswith("L")
     assert d["my_role"] == "commissioner"
     assert len(d["members"]) == 1
+    assert d["member_count"] == 1
     assert [s["sport_league_id"] for s in d["sports"]] == ["NBA"]
 
 

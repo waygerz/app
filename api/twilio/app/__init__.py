@@ -3,6 +3,7 @@ import logging
 from flask import Flask
 
 from app.utils.config import Config
+from app.utils.errors import register_error_handlers
 from app.extensions import init_redis
 
 
@@ -56,6 +57,7 @@ def create_app(config_class=Config):
     init_redis(app)
 
     from app.routes import register_blueprints
+    register_error_handlers(app)
     register_blueprints(app)
 
     return app

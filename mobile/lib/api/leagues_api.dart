@@ -55,18 +55,15 @@ class LeaguesApi {
     return list.map((e) => StandingRow.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<List<League>> invites() async {
+  /// The caller's pending league invites.
+  Future<List<LeagueInvite>> invites() async {
     final res = await _api.get('$_p/invites');
     final list = (res['invites'] as List<dynamic>? ?? []);
-    return list.map((e) => League.fromJson(e as Map<String, dynamic>)).toList();
+    return list.map((e) => LeagueInvite.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Accept a pending invite (the backend requires one; 404 otherwise).
   Future<void> acceptInvite(String leagueId) => _api.post('$_p/$leagueId/join');
 
-  /// Preview a `/c/<code>` invite link (JWT-optional on the backend).
-  Future<Map<String, dynamic>> resolveCode(String code) => _api.get('$_p/c/$code');
-
-  /// Act on a `/c/<code>` link — e.g. `{action: "join"}`.
-  Future<Map<String, dynamic>> actOnCode(String code, String action) =>
-      _api.post('$_p/c/$code/act', body: {'action': action});
+  // Invite links (/c/<code>) go through InvitesApi, which routes by code prefix.
 }

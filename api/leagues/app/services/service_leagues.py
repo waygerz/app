@@ -949,6 +949,7 @@ def _detail(league, me):
         }
         for m in members
     ]
+    d["member_count"] = len(members)  # same field as the league-list cards
     d["sports"] = [{"sport_league_id": s.sport_league_id, "name": s.name} for s in sports]
     d["current_period"] = period.to_dict() if period else None
     d["my_balance_cents"] = my_balance
@@ -1177,7 +1178,8 @@ def resolve_code(me, code):
         return {"type": "league", "code": code, "target_id": None,
                 "state": "invalid", "single_use": False,
                 "viewer": {"authenticated": bool(me), "relationship": "none"},
-                "preview": None, "actions": []}, 404
+                "preview": None, "actions": [],
+                "error": "This invite link isn't valid.", "error_code": "invalid_code"}, 404
     state = _code_state(rec)
     relationship = _league_relationship(league.id, me)
     actions = ["join"] if (state == "ok" and me and relationship != "member") else []
@@ -1384,13 +1386,7 @@ def submit_picks(league_id, period_id, me, data):
             db.session.add(row)
             existing[event_id] = row
     db.session.commit()
-
-    picks = (
-        Pick.query.filter_by(period_id=period_id, user_id=me)
-        .order_by(Pick.created_at.asc())
-        .all()
-    )
-    return {"picks": [p.to_dict() for p in picks]}, 200
+    return {"picks": _my_picks(period_id, me)}, 200
 
 
 def get_picks(league_id, period_id, me):
@@ -1402,6 +1398,12 @@ def get_picks(league_id, period_id, me):
     if not period or period.league_id != league_id:
         return {"error": "period not found"}, 404
 
+    return {"picks": _my_picks(period_id, me)}, 200
+
+
+def _my_picks(period_id, me):
+    """The caller's picks for a period, each with its `event` — the one shape
+    both GET and PUT /picks return."""
     picks = (
         Pick.query.filter_by(period_id=period_id, user_id=me)
         .order_by(Pick.created_at.asc())
@@ -1414,7 +1416,7 @@ def get_picks(league_id, period_id, me):
         d = p.to_dict()
         d["event"] = events.get(p.event_id)
         out.append(d)
-    return {"picks": out}, 200
+    return out
 
 
 def standings(league_id, me):
@@ -1447,6 +1449,7 @@ def standings(league_id, me):
                 "pushes": rec.get("pushes", 0),
             })
         rows.sort(key=lambda r: r["balance_cents"], reverse=True)
+        _rank(rows, lambda r: r["balance_cents"])
         return {"standings": rows, "period_id": period.id if period else None}, 200
 
     picks = Pick.query.filter_by(league_id=league_id).all()
@@ -1477,7 +1480,21 @@ def standings(league_id, me):
     # Rank by wins, then fewest losses, then name — so a tidier record outranks
     # a more-losses one at the same win count (was wins-only, arbitrary ties).
     rows.sort(key=lambda r: (-r["wins"], r["losses"], r["display_name"].lower()))
+    _rank(rows, lambda r: (r["wins"], r["losses"]))
     return {"standings": rows, "period_id": period.id if period else None}, 200
+
+
+def _rank(rows, standing):
+    """Competition rank ("1, 2, 2, 4") over rows already sorted best-first:
+    members with the same `standing` share a rank. Set server-side so web and
+    mobile show the same numbers."""
+    prev = None
+    for i, r in enumerate(rows):
+        key = standing(r)
+        if i == 0 or key != prev:
+            rank = i + 1
+        r["rank"] = rank
+        prev = key
 
 
 def list_periods(league_id, me):

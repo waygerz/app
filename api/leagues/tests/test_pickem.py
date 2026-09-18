@@ -53,6 +53,7 @@ def test_submit_and_get_picks(client, auth_headers):
     assert r.status_code == 200
     picks = r.get_json()["picks"]
     assert {p["event_id"]: p["pick_side"] for p in picks} == {"EVT1": "home", "EVT2": "away"}
+    assert all("event" in p for p in picks)  # PUT returns the same shape as GET
 
     got = client.get(f"/v1/gameplay/leagues/{lid}/periods/{pid}/picks", headers=auth_headers(U1)).get_json()
     assert len(got["picks"]) == 2
@@ -203,6 +204,17 @@ def test_standings_rank_by_wins(client, auth_headers, app, monkeypatch):
     assert rows[0]["wins"] == 2 and rows[0]["losses"] == 0
     by_user = {r["user_id"]: r for r in rows}
     assert by_user[u2]["wins"] == 0 and by_user[u2]["losses"] == 2
+    assert by_user[U1]["rank"] == 1 and by_user[u2]["rank"] == 2
+
+
+def test_standings_rank_is_shared_on_ties(client, auth_headers):
+    # Nobody has a graded pick: everyone is 0-0, so everyone is rank 1.
+    d = _create_pickem(client, auth_headers(U1)).get_json()["league"]
+    for _ in range(2):
+        client.post(f"/v1/gameplay/leagues/c/{d['invite_code']}/act", json={"action": "join"},
+                    headers=auth_headers(str(uuid.uuid4())))
+    rows = client.get(f"/v1/gameplay/leagues/{d['id']}/standings", headers=auth_headers(U1)).get_json()["standings"]
+    assert [r["rank"] for r in rows] == [1, 1, 1]
 
 
 def test_money_league_standings_shape(client, auth_headers, monkeypatch):
@@ -224,6 +236,7 @@ def test_money_league_standings_shape(client, auth_headers, monkeypatch):
     assert row["balance_cents"] == 120000
     assert row["net_cents"] == 20000  # 120000 - 100000 starting
     assert row["wins"] == 3 and row["losses"] == 1
+    assert row["rank"] == 1
 
 
 def test_pick_locked_after_kickoff(client, auth_headers, monkeypatch):

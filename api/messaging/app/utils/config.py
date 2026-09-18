@@ -74,6 +74,13 @@ class Config:
 
     MAX_MESSAGE_BODY = int(os.environ.get("MAX_MESSAGE_BODY", 4000))
     SSE_POLL_SECONDS = int(os.environ.get("SSE_POLL_SECONDS", 15))
+    # Each open stream holds one gunicorn thread (Dockerfile: --threads 64).
+    # Cap streams below the thread count so ordinary requests always get one;
+    # past the cap a stream is refused with a 503 and the client retries.
+    SSE_MAX_STREAMS = int(os.environ.get("SSE_MAX_STREAMS", 48))
+    # Streams end after this long; the client reconnects, which re-checks the
+    # session (auth is only verified when a stream opens).
+    SSE_MAX_SECONDS = int(os.environ.get("SSE_MAX_SECONDS", 600))
 
     @classmethod
     def api_prefix(cls) -> str:
