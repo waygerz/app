@@ -16,17 +16,18 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     DB_SCHEMA = os.environ.get("DB_SCHEMA", "media")
-    # Every service shares one Postgres, so cap each pool (the default 5 + 10
-    # overflow across 12 services outran max_connections). application_name
-    # lets pg_stat_activity show who holds what; pre_ping/recycle drop dead
-    # connections after a DB restart.
+    # Every service shares one Postgres (waygerz-data, max_connections=30), so
+    # keep one idle connection per process and borrow a few under load — the
+    # default 5 + 10 overflow per service outran it. application_name lets
+    # pg_stat_activity (`flask db-stats` on ingestor) show who holds what;
+    # pre_ping/recycle drop dead connections after a DB restart.
     SQLALCHEMY_ENGINE_OPTIONS = {
         "connect_args": {
             "options": f"-csearch_path={DB_SCHEMA}",
             "application_name": SERVICE_NAME,
         },
-        "pool_size": int(os.environ.get("DB_POOL_SIZE", 3)),
-        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", 4)),
+        "pool_size": int(os.environ.get("DB_POOL_SIZE", 1)),
+        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", 3)),
         "pool_timeout": int(os.environ.get("DB_POOL_TIMEOUT", 10)),
         "pool_recycle": 1800,
         "pool_pre_ping": True,
