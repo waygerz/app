@@ -31,6 +31,9 @@ from app.models.event import SCHEDULED, Event
 from app.services.service_events import _parse_dt
 from app.services.service_schedule import LEAGUE_REGISTRY, _mark, _stale
 
+# Keep-alive: one session reuses the TLS connection across calls.
+_session = requests.Session()
+
 # Our (sport, league) -> The Odds API sport_key.
 ODDS_SPORT_KEYS = {
     ("football", "nfl"): "americanfootball_nfl",
@@ -258,7 +261,7 @@ def fetch_odds_events(sport_key, ttl):
     else:
         params["regions"] = cfg["ODDS_API_REGIONS"]
     try:
-        resp = requests.get(
+        resp = _session.get(
             f"{cfg['ODDS_API_BASE']}/sports/{sport_key}/odds",
             params=params,
             timeout=cfg["ODDS_TIMEOUT"],

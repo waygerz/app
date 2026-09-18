@@ -68,8 +68,8 @@ def test_refresh_upcoming_fetches_only_dates_with_games(app, monkeypatch):
                              status=SCHEDULED, start_time=start))
     db.session.commit()
     seen = []
-    monkeypatch.setattr(sched, "_scoreboard",
-                        lambda s, l, p=None: seen.append(p["dates"]) or {"events": []})
+    monkeypatch.setattr(sched, "espn_get_many", lambda s, l, paths: [
+        (p, seen.append(p.split("dates=")[1]) or {"events": []}) for p in paths])
     monkeypatch.setattr(sched, "_mark", lambda key: None)
     sched.refresh_upcoming("football", "nfl", force=True)
     # Two games the same afternoon share one board; the one 10 days out is skipped.
@@ -175,3 +175,76 @@ def test_quota_report_covers_every_provider(app):
     assert "requests_today" in rep["espn"]
     assert "football/nfl" in rep["odds_api"]["leagues"]
     assert rep["odds_api"]["credits_per_call"] == 3
+
+
+def _board(home_score, spread=-2.5):
+    return {"events": [{
+        "id": "g1", "date": "2026-09-20T17:00Z", "name": "A at H",
+        "competitions": [{
+            "status": {"type": {"name": "STATUS_SCHEDULED"}},
+            "competitors": [
+                {"homeAway": "home", "score": str(home_score), "team": {"id": "1", "displayName": "H"}},
+                {"homeAway": "away", "score": "0", "team": {"id": "2", "displayName": "A"}},
+            ],
+            "odds": [{"provider": {"name": "DraftKings"}, "spread": spread}],
+        }],
+    }]}
+
+
+def test_ingest_writes_only_changed_rows_and_skips_team_upserts(app, monkeypatch):
+    team_calls = []
+    monkeypatch.setattr(sched, "_cache_event_teams", lambda ev, s, l: team_calls.append(ev["id"]))
+    monkeypatch.setattr(sched.sports, "acquire_team_write_lock", lambda: None)
+    monkeypatch.setattr(sched.sports, "catalog_id", lambda s, l: None)
+
+    assert sched._ingest_events(_board(0)["events"], "football", "nfl") == 1
+    db.session.commit()
+    assert team_calls == ["g1"]  # new game -> teams upserted once
+    first = Event.query.filter_by(external_id="g1").one()
+    odds_at = first.odds_updated_at
+
+    # Same board again: no field change, no team upsert, odds timestamp kept.
+    sched._ingest_events(_board(0)["events"], "football", "nfl")
+    assert not db.session.dirty
+    db.session.commit()
+    assert team_calls == ["g1"]
+    assert Event.query.filter_by(external_id="g1").one().odds_updated_at == odds_at
+
+    # A new score and a moved line are written.
+    sched._ingest_events(_board(7, spread=-3.5)["events"], "football", "nfl")
+    db.session.commit()
+    got = Event.query.filter_by(external_id="g1").one()
+    assert got.home_score == 7 and got.odds["spread"]["line"] == -3.5
+    # The fixture pass still refreshes teams.
+    sched._ingest_events(_board(7)["events"], "football", "nfl", teams=True)
+    assert team_calls == ["g1", "g1"]
+
+
+def test_start_tick_runs_one_pass_at_a_time(app, monkeypatch):
+    from app.extensions import get_redis
+
+    r = get_redis()
+    r.delete(sched._TICK_LEASE_KEY)
+    started = []
+    monkeypatch.setattr(sched, "_run_tick_bg", lambda a: started.append(a))
+    import threading as _t
+    monkeypatch.setattr(_t.Thread, "start", lambda self: self._target(*self._args))
+    assert sched.start_tick()["state"] == "started"
+    assert sched.start_tick()["state"] == "running"  # lease still held
+    assert len(started) == 1
+    r.delete(sched._TICK_LEASE_KEY)
+
+
+def test_lookup_events_batches_by_external_and_internal_id(app, monkeypatch):
+    from app.services import service_events
+
+    monkeypatch.setattr(service_events, "attach_logos", lambda evs: [e.to_dict() for e in evs])
+    a = Event(external_id="x1", sport="football", league="nfl", name="a",
+              home_team="H", away_team="A", status=SCHEDULED)
+    b = Event(external_id="x2", sport="football", league="nfl", name="b",
+              home_team="H", away_team="A", status=FINAL)
+    db.session.add_all([a, b])
+    db.session.commit()
+    got = service_events.lookup_events(["x1", str(b.id), "nope", "x1"])
+    assert set(got) == {"x1", str(b.id)}
+    assert got["x1"]["external_id"] == "x1" and got[str(b.id)]["external_id"] == "x2"

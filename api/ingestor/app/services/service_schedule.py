@@ -17,6 +17,7 @@ Adding a league is one LEAGUE_REGISTRY line. Slugs match the catalog because RTS
 (which the catalog is built from) is itself an ESPN proxy, so ESPN's
 `(sport, league)` and `catalog_id(sport, league)` line up automatically.
 """
+import json
 import threading
 import time
 from datetime import datetime, timedelta
@@ -28,8 +29,8 @@ from app.extensions import db, get_redis
 from app.models.event import CANCELLED, FINAL, LIVE, SCHEDULED, Event
 from app.models.sport_league import SportLeague
 from app.services import service_sports as sports
-from app.services.service_espn import espn_get
-from app.services.service_events import _parse_dt, upsert_event
+from app.services.service_espn import espn_get, espn_get_many
+from app.services.service_events import _parse_dt
 from app.services.service_logos import cache_logo
 
 # ---------------------------------------------------------------- registry
@@ -240,20 +241,73 @@ def _cache_event_teams(ev, sport, league):
         })
 
 
-def _ingest_events(raw_events, sport, league, week_label=None):
-    if raw_events:
+def _odds_line(odds):
+    """An odds block minus its fetch timestamp — what counts as a changed line."""
+    return {k: v for k, v in (odds or {}).items() if k != "fetched_at"} or None
+
+
+def _apply_changes(row, fields):
+    """Set only the fields that differ, so an unchanged game costs no UPDATE.
+    Returns True when anything changed."""
+    changed = False
+    for key, value in fields.items():
+        if key == "odds_updated_at":
+            continue  # moves with odds below
+        if key == "odds":
+            if _odds_line(value) != _odds_line(row.odds):
+                row.odds = value
+                row.odds_updated_at = fields.get("odds_updated_at")
+                changed = True
+            continue
+        if getattr(row, key) != value:
+            setattr(row, key, value)
+            changed = True
+    return changed
+
+
+def _ingest_events(raw_events, sport, league, week_label=None, teams=False):
+    """Upsert one ESPN board. The live score refresh runs this for every league
+    each tick, so it's built to be cheap: one query loads the board's existing
+    rows, only rows that actually changed are written, last_synced_at is bumped
+    for the whole board in one statement, and team rows (+ logo checks) are only
+    upserted for new games or when ``teams`` (the daily fixture pass)."""
+    parsed = []
+    for ev in raw_events or []:
+        fields = _parse_espn_event(ev, sport, league, week_label)
+        if fields["external_id"] and fields["home_team"] and fields["away_team"]:
+            parsed.append((ev, fields))
+    if not parsed:
+        return 0
+    ids = [f["external_id"] for _, f in parsed]
+    existing = {e.external_id: e for e in Event.query.filter(Event.external_id.in_(ids)).all()}
+    if teams or any(i not in existing for i in ids):
         # Serialize the team upserts below with the background fixtures thread's
         # sync_teams (both write teams.last_synced_at → deadlock otherwise).
         sports.acquire_team_write_lock()
-    count = 0
-    for ev in raw_events or []:
-        fields = _parse_espn_event(ev, sport, league, week_label)
-        if not fields["external_id"] or not fields["home_team"] or not fields["away_team"]:
+    catalog = sports.catalog_id(sport, league)
+    now = datetime.utcnow()
+    for ev, fields in parsed:
+        row = existing.get(fields["external_id"])
+        if row is None:
+            row = Event(external_id=fields["external_id"])
+            db.session.add(row)
+            for key, value in fields.items():
+                setattr(row, key, value)
+            row.sport_league_id = catalog
+            row.last_synced_at = now
+            existing[row.external_id] = row
+            _cache_event_teams(ev, sport, league)
             continue
-        upsert_event(fields)
-        _cache_event_teams(ev, sport, league)
-        count += 1
-    return count
+        _apply_changes(row, fields)
+        if row.sport_league_id != catalog:
+            row.sport_league_id = catalog
+        if teams:
+            _cache_event_teams(ev, sport, league)
+    db.session.flush()
+    Event.query.filter(Event.external_id.in_(ids)).update(
+        {Event.last_synced_at: now}, synchronize_session=False
+    )
+    return len(parsed)
 
 
 # ---------------------------------------------------------------- fetch
@@ -264,6 +318,14 @@ def _scoreboard(sport, league, params=None):
         if qs:
             path += "?" + qs
     return espn_get(sport, league, path)
+
+
+def _scoreboards(sport, league, days):
+    """Boards for several dates of one league, fetched concurrently. Returns
+    [(day, board | Exception)] in date order."""
+    days = sorted(days)
+    paths = [f"/scoreboard?dates={d.strftime('%Y%m%d')}" for d in days]
+    return [(d, res) for d, (_, res) in zip(days, espn_get_many(sport, league, paths))]
 
 
 def _ingest_native(sport, league):
@@ -277,15 +339,13 @@ def _ingest_native(sport, league):
     calendar = leagues0.get("calendar") or []
     season = leagues0.get("season") or sb.get("season") or {}
     year = season.get("year")
-    total = 0
+    weeks = []
     for item in calendar:
         if not isinstance(item, dict):
             continue
         seasontype = item.get("value")
-        entries = item.get("entries") or []
-        for entry in entries:
+        for entry in item.get("entries") or []:
             week = entry.get("value")
-            label = entry.get("label")
             if year is None or seasontype is None or week is None:
                 continue
             # A week that ended over two days ago can't change; refresh_scores
@@ -294,18 +354,22 @@ def _ingest_native(sport, league):
             ended = _parse_dt(entry.get("endDate"))
             if ended is not None and ended < now - timedelta(days=2):
                 continue
-            try:
-                board = _scoreboard(
-                    sport, league,
-                    {"dates": year, "seasontype": seasontype, "week": week},
-                )
-                total += _ingest_events(board.get("events"), sport, league, week_label=label)
-                db.session.commit()
-            except Exception as exc:  # one bad week shouldn't sink the rest
-                db.session.rollback()
-                current_app.logger.warning(
-                    "schedule native %s/%s week %s: %s", sport, league, week, exc
-                )
+            weeks.append((week, entry.get("label"),
+                          f"/scoreboard?dates={year}&seasontype={seasontype}&week={week}"))
+    total = 0
+    fetched = espn_get_many(sport, league, [path for _, _, path in weeks])
+    for (week, label, _), (_, board) in zip(weeks, fetched):
+        try:
+            if isinstance(board, Exception):
+                raise board
+            total += _ingest_events(board.get("events"), sport, league,
+                                    week_label=label, teams=True)
+            db.session.commit()
+        except Exception as exc:  # one bad week shouldn't sink the rest
+            db.session.rollback()
+            current_app.logger.warning(
+                "schedule native %s/%s week %s: %s", sport, league, week, exc
+            )
     return total
 
 
@@ -315,17 +379,18 @@ def _ingest_date_range(sport, league):
     each day committing independently and rolling back on error."""
     weeks_ahead = current_app.config["SCHEDULE_WEEKS_AHEAD"]
     start = datetime.utcnow().date()
+    days = [start + timedelta(days=offset) for offset in range(weeks_ahead * 7)]
     total = 0
-    for offset in range(weeks_ahead * 7):
-        dates = (start + timedelta(days=offset)).strftime("%Y%m%d")
+    for day, board in _scoreboards(sport, league, days):
         try:
-            board = _scoreboard(sport, league, {"dates": dates})
-            total += _ingest_events(board.get("events"), sport, league)
+            if isinstance(board, Exception):
+                raise board
+            total += _ingest_events(board.get("events"), sport, league, teams=True)
             db.session.commit()
         except Exception as exc:
             db.session.rollback()
             current_app.logger.warning(
-                "schedule range %s/%s %s: %s", sport, league, dates, exc
+                "schedule range %s/%s %s: %s", sport, league, day, exc
             )
     return total
 
@@ -431,10 +496,15 @@ def refresh_scores(sport, league, force=False):
         now = datetime.utcnow()
         dates = {now.date(), (now - timedelta(days=1)).date()} | _stuck_dates(sport, league, now)
         n = 0
-        for day in sorted(dates):
-            board = _scoreboard(sport, league, {"dates": day.strftime("%Y%m%d")})
+        failed = None
+        for _, board in _scoreboards(sport, league, dates):
+            if isinstance(board, Exception):
+                failed = failed or board
+                continue
             n += _ingest_events(board.get("events"), sport, league)
         db.session.commit()
+        if failed:
+            raise failed  # keep what landed; leave the gate unmarked to retry
     except Exception:
         db.session.rollback()  # keep the session clean for the next league
         raise
@@ -484,16 +554,21 @@ def refresh_upcoming(sport, league, force=False):
         )
         .all()
     )
-    dates = sorted({(start - timedelta(hours=6)).date() for (start,) in rows})
+    dates = {(start - timedelta(hours=6)).date() for (start,) in rows}
     n = 0
+    failed = None
     try:
-        for day in dates:
-            board = _scoreboard(sport, league, {"dates": day.strftime("%Y%m%d")})
+        for _, board in _scoreboards(sport, league, dates):
+            if isinstance(board, Exception):
+                failed = failed or board
+                continue
             n += _ingest_events(board.get("events"), sport, league)
         db.session.commit()
     except Exception:
         db.session.rollback()
         raise
+    if failed:
+        raise failed
     _mark(_k_upcoming(sport, league))
     return n
 
@@ -508,17 +583,17 @@ def rescore_dates(start, end) -> dict:
     for entry in LEAGUE_REGISTRY:
         sport, league = entry["sport"], entry["league"]
         n = 0
-        day = start
-        while day <= end:
+        days = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+        for day, board in _scoreboards(sport, league, days):
             try:
-                board = _scoreboard(sport, league, {"dates": day.strftime("%Y%m%d")})
+                if isinstance(board, Exception):
+                    raise board
                 n += _ingest_events(board.get("events"), sport, league)
                 db.session.commit()
             except Exception as exc:  # noqa: BLE001 — one bad day shouldn't sink the rest
                 db.session.rollback()
                 current_app.logger.warning("rescore %s/%s %s: %s", sport, league, day, exc)
                 out["failed"].append(f"{sport}/{league} {day}")
-            day += timedelta(days=1)
         out[f"{sport}/{league}"] = n
     return out
 
@@ -596,6 +671,45 @@ def _maybe_start_fixtures():
         target=_run_one_fixture_bg, args=(app, entry["sport"], entry["league"]), daemon=True
     ).start()
     return "started"
+
+
+# /internal/tick used to run every job inside the scheduler's HTTP request: on
+# 0.125 vCPU it outran the proxy timeout (504s) and held request threads the
+# public /events routes need. It now starts the pass in a background thread
+# under a Redis lease (one pass at a time, self-freeing if the worker dies) and
+# answers at once with the previous pass's result.
+_TICK_LEASE_KEY = "sched:tick_lease"
+_TICK_LEASE_TTL = 300
+_LAST_TICK_KEY = "sched:last_tick"
+
+
+def start_tick() -> dict:
+    """Kick off a tick in the background unless one is already running.
+    Returns the last completed pass's counts plus this call's state."""
+    r = get_redis()
+    try:
+        last = json.loads(r.get(_LAST_TICK_KEY) or "{}")
+    except (TypeError, ValueError):
+        last = {}
+    if not r.set(_TICK_LEASE_KEY, "1", nx=True, ex=_TICK_LEASE_TTL):
+        return {**last, "state": "running"}
+    app = current_app._get_current_object()
+    threading.Thread(target=_run_tick_bg, args=(app,), daemon=True).start()
+    return {**last, "state": "started"}
+
+
+def _run_tick_bg(app):
+    with app.app_context():
+        started = time.time()
+        try:
+            result = tick()
+            result["secs"] = round(time.time() - started, 1)
+            get_redis().set(_LAST_TICK_KEY, json.dumps(result))
+        except Exception as exc:  # noqa: BLE001
+            db.session.rollback()
+            app.logger.warning("tick failed: %s", exc)
+        finally:
+            get_redis().delete(_TICK_LEASE_KEY)
 
 
 def tick():

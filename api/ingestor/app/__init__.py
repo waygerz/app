@@ -33,6 +33,19 @@ def create_app(config_class=Config):
         db.session.commit()
         print(f"schema ready: {schema}")
 
+    @app.cli.command("db-stats")
+    def db_stats():
+        """Postgres connection budget: max_connections and who holds what."""
+        limit = db.session.execute(text("SHOW max_connections")).scalar()
+        rows = db.session.execute(text(
+            "SELECT coalesce(nullif(application_name, ''), usename, '?') AS who, "
+            "state, count(*) FROM pg_stat_activity WHERE datname = current_database() "
+            "GROUP BY 1, 2 ORDER BY 3 DESC"
+        )).all()
+        print(f"max_connections={limit} in_use={sum(r[2] for r in rows)}")
+        for who, state, n in rows:
+            print(f"  {who:<16} {state or '-':<22} {n}")
+
     @app.cli.command("quota")
     def quota():
         """Print every data provider's budget, usage and pace."""

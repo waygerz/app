@@ -171,11 +171,12 @@ def test_live_window_survives_a_long_running_game(app):
 def _capture_boards(monkeypatch):
     seen = []
 
-    def fake_scoreboard(sport, league, params=None):
-        seen.append((params or {}).get("dates"))
-        return {"events": []}
+    def fake_many(sport, league, paths):
+        paths = list(paths)
+        seen.extend(p.split("dates=")[1].split("&")[0] for p in paths)
+        return [(p, {"events": []}) for p in paths]
 
-    monkeypatch.setattr(sched, "_scoreboard", fake_scoreboard)
+    monkeypatch.setattr(sched, "espn_get_many", fake_many)
     monkeypatch.setattr(sched, "_mark", lambda key: None)  # no Redis in tests
     return seen
 

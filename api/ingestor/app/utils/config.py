@@ -24,8 +24,20 @@ class Config:
     # This service owns its own Postgres schema. Pin the connection's search_path
     # to it so models + the alembic version table live in this schema cleanly.
     DB_SCHEMA = os.environ.get("DB_SCHEMA", "ingestor")
+    # Every service shares one Postgres, so cap each pool (the default 5 + 10
+    # overflow across 12 services outran max_connections). application_name
+    # lets pg_stat_activity show who holds what; pre_ping/recycle drop dead
+    # connections after a DB restart.
     SQLALCHEMY_ENGINE_OPTIONS = {
-        "connect_args": {"options": f"-csearch_path={DB_SCHEMA}"}
+        "connect_args": {
+            "options": f"-csearch_path={DB_SCHEMA}",
+            "application_name": SERVICE_NAME,
+        },
+        "pool_size": int(os.environ.get("DB_POOL_SIZE", 5)),
+        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", 5)),
+        "pool_timeout": int(os.environ.get("DB_POOL_TIMEOUT", 10)),
+        "pool_recycle": 1800,
+        "pool_pre_ping": True,
     }
 
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-change-me")
@@ -90,6 +102,8 @@ class Config:
     ESPN_ODDS_TTL_SOON = int(os.environ.get("ESPN_ODDS_TTL_SOON", 1800))
     # Pause all ESPN calls this long after a 429 / 5xx.
     ESPN_BACKOFF_SECS = int(os.environ.get("ESPN_BACKOFF_SECS", 300))
+    # Concurrent requests when a pass needs several boards for one league.
+    ESPN_PARALLEL = int(os.environ.get("ESPN_PARALLEL", 4))
     # Team-sport schedule ingest (service_schedule): how far ahead date-based
     # sports pull fixtures, and how often the scheduler tick actually re-hits ESPN
     # for fixtures (weekly) vs live scores (5 min).

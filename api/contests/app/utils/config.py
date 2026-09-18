@@ -17,8 +17,20 @@ class Config:
 
     # This service owns its own Postgres schema (pinned via search_path).
     DB_SCHEMA = os.environ.get("DB_SCHEMA", "contests")
+    # Every service shares one Postgres, so cap each pool (the default 5 + 10
+    # overflow across 12 services outran max_connections). application_name
+    # lets pg_stat_activity show who holds what; pre_ping/recycle drop dead
+    # connections after a DB restart.
     SQLALCHEMY_ENGINE_OPTIONS = {
-        "connect_args": {"options": f"-csearch_path={DB_SCHEMA}"}
+        "connect_args": {
+            "options": f"-csearch_path={DB_SCHEMA}",
+            "application_name": SERVICE_NAME,
+        },
+        "pool_size": int(os.environ.get("DB_POOL_SIZE", 3)),
+        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", 4)),
+        "pool_timeout": int(os.environ.get("DB_POOL_TIMEOUT", 10)),
+        "pool_recycle": 1800,
+        "pool_pre_ping": True,
     }
 
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-change-me")

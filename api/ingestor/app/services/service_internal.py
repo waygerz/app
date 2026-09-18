@@ -40,6 +40,14 @@ def refresh_event(key):
     return {"event": ev.to_dict(), "quota": sports.quota_status()}, 200
 
 
+def lookup_events():
+    body = request.get_json(silent=True) or {}
+    ids = body.get("ids") or []
+    if not isinstance(ids, list):
+        return {"error": "ids must be a list"}, 400
+    return {"events": events.lookup_events(ids)}, 200
+
+
 def catalog_sync():
     body = request.get_json(silent=True) or {}
     ids = [str(i) for i in (body.get("sport_league_ids") or []) if i]

@@ -12,6 +12,9 @@ from app.models.sport_league import SportLeague
 from app.models.team import Team
 from app.services.service_logos import cache_logo
 
+# Keep-alive: one session reuses the TLS connection across calls.
+_session = requests.Session()
+
 CACHE_PREFIX = "sports:cache:"
 REMAINING_KEY = "sports:quota:remaining"
 RESET_KEY = "sports:quota:reset"
@@ -156,7 +159,7 @@ def _fetch_live(path, ttl):
     _check_quota()
     _mark_called()
     base = current_app.config["SPORTS_API_BASE"]
-    resp = requests.get(f"{base}{path}", headers=_headers(), timeout=25)
+    resp = _session.get(f"{base}{path}", headers=_headers(), timeout=25)
     if resp.status_code != 200:
         raise SportsAPIError(f"HTTP {resp.status_code}: {resp.text[:200]}")
 

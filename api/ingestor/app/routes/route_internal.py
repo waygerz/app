@@ -28,3 +28,9 @@ def catalog_sync():
 @internal_only
 def quota():
     return ctrl.quota()
+
+
+@ingestor_internal_bp.post("/events/lookup")
+@internal_only
+def lookup_events():
+    return ctrl.lookup_events()

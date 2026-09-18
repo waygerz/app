@@ -285,6 +285,34 @@ def get_event(key):
     return {"event": attach_logos([ev])[0]}, 200
 
 
+_LOOKUP_MAX = 500
+
+
+def lookup_events(keys):
+    """Batch get_event: {key: event} for up to 500 keys, each matched like
+    _find_event (external_id, else our own id). Missing keys are left out.
+    leagues/contests grade and settle from this in one call per tick instead of
+    one GET per pick or wager."""
+    keys = list(dict.fromkeys(str(k) for k in keys if k))[:_LOOKUP_MAX]
+    if not keys:
+        return {}
+    found = {e.external_id: e for e in Event.query.filter(Event.external_id.in_(keys)).all()}
+    rest = []
+    for k in keys:
+        if k not in found:
+            try:
+                uuid.UUID(k)
+                rest.append(k)
+            except ValueError:
+                pass
+    if rest:
+        for e in Event.query.filter(Event.id.in_(rest)).all():
+            found[str(e.id)] = e
+    rows = attach_logos(list(found.values()))
+    by_obj = dict(zip((id(e) for e in found.values()), rows))
+    return {k: by_obj[id(e)] for k, e in found.items()}
+
+
 def sync():
     body = request.get_json(silent=True) or {}
     sport = body.get("sport", current_app.config["DEFAULT_SPORT"])

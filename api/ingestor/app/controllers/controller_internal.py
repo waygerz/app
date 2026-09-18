@@ -11,7 +11,7 @@ def refresh_event(key):
 
 
 def schedule_tick():
-    return jsonify(service_schedule.tick()), 200
+    return jsonify(service_schedule.start_tick()), 202
 
 
 def catalog_sync():
@@ -21,3 +21,8 @@ def catalog_sync():
 
 def quota():
     return jsonify(service_quota.report()), 200
+
+
+def lookup_events():
+    body, status = service.lookup_events()
+    return jsonify(body), status

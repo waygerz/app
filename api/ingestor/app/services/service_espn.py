@@ -15,6 +15,7 @@ Keys: espn:sched:{sport}:{league}  /  espn:board:{sport}:{external_id}
 """
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import requests
@@ -65,20 +66,69 @@ class ESPNBackoff(Exception):
     """ESPN recently rate-limited or errored; calls are paused."""
 
 
-def espn_get(sport: str, league: str, path: str = ""):
+# One keep-alive session for every ESPN call (no TLS handshake per request),
+# sized for the parallel board fetches below.
+_session = requests.Session()
+_session.headers.update(_UA)
+_session.mount("https://", requests.adapters.HTTPAdapter(pool_connections=4, pool_maxsize=8))
+
+
+def _count(n=1):
     r = get_redis()
-    if r.get(_BACKOFF_KEY):
-        raise ESPNBackoff("ESPN paused after a 429/5xx")
-    base = current_app.config["ESPN_BASE"]
-    timeout = current_app.config["ESPN_TIMEOUT"]
     key = _k_requests()
-    r.incr(key)
+    r.incrby(key, n)
     r.expire(key, 3 * 86400)
-    resp = requests.get(f"{base}/{sport}/{league}{path}", headers=_UA, timeout=timeout)
-    if resp.status_code == 429 or resp.status_code >= 500:
-        r.setex(_BACKOFF_KEY, current_app.config["ESPN_BACKOFF_SECS"], resp.status_code)
+
+
+def _check_backoff():
+    if get_redis().get(_BACKOFF_KEY):
+        raise ESPNBackoff("ESPN paused after a 429/5xx")
+
+
+def _note_status(status_code):
+    if status_code == 429 or status_code >= 500:
+        get_redis().setex(_BACKOFF_KEY, current_app.config["ESPN_BACKOFF_SECS"], status_code)
+
+
+def espn_get(sport: str, league: str, path: str = ""):
+    _check_backoff()
+    base = current_app.config["ESPN_BASE"]
+    _count()
+    resp = _session.get(f"{base}/{sport}/{league}{path}", timeout=current_app.config["ESPN_TIMEOUT"])
+    _note_status(resp.status_code)
     resp.raise_for_status()
     return resp.json()
+
+
+def espn_get_many(sport: str, league: str, paths):
+    """Fetch several paths for one league concurrently (ESPN_PARALLEL threads).
+    Threads only do HTTP — no app context, DB or Redis — so the caller keeps
+    every write on its own thread. Returns [(path, json | Exception)] in order."""
+    _check_backoff()
+    paths = list(paths)
+    if not paths:
+        return []
+    base = current_app.config["ESPN_BASE"]
+    timeout = current_app.config["ESPN_TIMEOUT"]
+    _count(len(paths))
+
+    def one(path):
+        resp = _session.get(f"{base}/{sport}/{league}{path}", timeout=timeout)
+        return resp
+
+    out = []
+    workers = min(current_app.config["ESPN_PARALLEL"], len(paths))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(one, p) for p in paths]
+        for path, fut in zip(paths, futures):
+            try:
+                resp = fut.result()
+                _note_status(resp.status_code)
+                resp.raise_for_status()
+                out.append((path, resp.json()))
+            except Exception as exc:  # noqa: BLE001 — caller decides per path
+                out.append((path, exc))
+    return out
 
 
 def requests_today():
