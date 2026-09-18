@@ -16,7 +16,9 @@ import '../theme/app_theme.dart';
 import '../ui/ui.dart';
 import 'account/account_screen.dart';
 import 'bets_screen.dart';
+import 'friends_screen.dart';
 import 'leagues_screen.dart';
+import 'messages_screen.dart';
 import 'notifications_screen.dart';
 import 'widgets.dart';
 
@@ -44,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final MessagingApi _messaging;
   late final PushService _push;
   late final AppNav _nav;
+  final _messagesKey = GlobalKey<MessagesScreenState>();
 
   @override
   void initState() {
@@ -92,6 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     _nav.selectTab(i);
+    if (i == AppNav.tabMessages) _messagesKey.currentState?.reload();
     _refreshBadges();
   }
 
@@ -119,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
       LeaguesScreen(api: auth.api),
       BetsScreen(api: auth.api),
       NotificationsScreen(api: auth.api, onChanged: _refreshBadges),
-      const _MessagesPlaceholder(),
+      MessagesScreen(key: _messagesKey, api: auth.api, onChanged: _refreshBadges),
     ];
 
     return Scaffold(
@@ -140,22 +144,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-  }
-}
-
-class _MessagesPlaceholder extends StatelessWidget {
-  const _MessagesPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final c = WaygerzColors.of(context);
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
-      CenterCard(children: [
-        Icon(LucideIcons.messageCircle, size: 24, color: c.mutedForeground),
-        Text('Messages are coming to the app soon.\nUse waygerz.com to chat for now.',
-            textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-      ]),
-    ]);
   }
 }
 
@@ -196,6 +184,17 @@ class _ProfileSheet extends StatelessWidget {
               },
               icon: const Icon(LucideIcons.settings, size: 16),
               label: const Text('Account'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () {
+                final nav = Navigator.of(context);
+                final api = context.read<AuthController>().api;
+                nav.pop();
+                nav.push(MaterialPageRoute<void>(builder: (_) => FriendsScreen(api: api)));
+              },
+              icon: const Icon(LucideIcons.users, size: 16),
+              label: const Text('Friends'),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(

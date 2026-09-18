@@ -58,9 +58,42 @@ class ApiClient {
   Future<Map<String, dynamic>> post(String path, {Object? body, bool auth = true}) =>
       _json('POST', path, body: body, auth: auth);
   Future<Map<String, dynamic>> put(String path, {Object? body}) => _json('PUT', path, body: body);
+
   Future<Map<String, dynamic>> patch(String path, {Object? body}) => _json('PATCH', path, body: body);
   Future<Map<String, dynamic>> delete(String path, {Object? body}) =>
       _json('DELETE', path, body: body);
+
+  /// Open a long-lived GET (server-sent events) with the bearer token, refreshing
+  /// the session once on a 401 like every other call. The caller reads and
+  /// closes the stream; non-2xx statuses come back as an [ApiException].
+  Future<http.StreamedResponse> openStream(String path) async {
+    Future<http.StreamedResponse> open() async {
+      final req = http.Request('GET', Uri.parse('${Config.apiBaseUrl}$path'))
+        ..headers.addAll({'Accept': 'text/event-stream', Config.clientTypeHeader: Config.clientType});
+      final token = await _tokens.accessToken;
+      if (token != null) req.headers['Authorization'] = 'Bearer $token';
+      return _http.send(req);
+    }
+
+    var res = await open();
+    if (res.statusCode == 401) {
+      await res.stream.drain<void>();
+      if (!await _refreshOnce()) _expired();
+      res = await open();
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      final body = await res.stream.bytesToString();
+      Object? decoded;
+      try {
+        decoded = jsonDecode(body);
+      } on FormatException {
+        decoded = null;
+      }
+      final err = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
+      throw ApiException(res.statusCode, err['error'] is String ? err['error'] as String : 'Stream failed (${res.statusCode})', err);
+    }
+    return res;
+  }
 
   Future<Map<String, dynamic>> _json(String method, String path,
       {Object? body, bool auth = true}) async {

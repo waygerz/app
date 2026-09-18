@@ -67,3 +67,37 @@ String formatRecord(int wins, int losses, [int pushes = 0]) =>
 
 /// The $0 bragging-rights treat: 🍺 or 🥃 (web components/treat-picker.tsx).
 String treatEmoji(String? treat) => treat == 'shot' ? '🥃' : '🍺';
+
+/// Compact inbox age: "now", "5m", "3h", "2d", else the date (web messages timeAgo).
+String shortAgo(String? iso) {
+  final d = iso == null ? null : DateTime.tryParse(iso)?.toLocal();
+  if (d == null) return '';
+  final s = DateTime.now().difference(d).inSeconds;
+  if (s < 60) return 'now';
+  final m = s ~/ 60;
+  if (m < 60) return '${m}m';
+  final h = m ~/ 60;
+  if (h < 24) return '${h}h';
+  final days = h ~/ 24;
+  if (days < 7) return '${days}d';
+  return '${d.month}/${d.day}/${d.year}';
+}
+
+/// "1:05 PM".
+String clockTime(String? iso) {
+  final d = iso == null ? null : DateTime.tryParse(iso)?.toLocal();
+  if (d == null) return '';
+  final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
+  return '$hour:${d.minute.toString().padLeft(2, '0')} ${d.hour < 12 ? 'AM' : 'PM'}';
+}
+
+/// A chat day divider: "Today", "Yesterday", else "Sep 21".
+String dayLabel(String? iso) {
+  final d = iso == null ? null : DateTime.tryParse(iso)?.toLocal();
+  if (d == null) return '';
+  final now = DateTime.now();
+  bool same(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+  if (same(d, now)) return 'Today';
+  if (same(d, now.subtract(const Duration(days: 1)))) return 'Yesterday';
+  return '${_months[d.month - 1]} ${d.day}';
+}

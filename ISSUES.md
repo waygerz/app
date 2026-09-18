@@ -147,11 +147,12 @@ come from the audit pass and should be double-checked before acting on them.
 - [x] `mobile/README.md` is stale: says OTP is never returned (the app reads
   `dev_otp`), lists only 2 model classes (there are 8).
   **Fixed (1f96ac7).**
-- [ ] Feature gaps vs web (see `.docs/pending/MOBILE_PARITY_PLAN.md`): pick
-  submission, propose bet, friends, messaging, avatars, deep links, unread badges,
-  wallet ledger, notification prefs, push.
-- [ ] Android SDK setup on the dev machine: cmdline-tools missing, licenses not
-  accepted (`flutter doctor`).
+- [x] Feature gaps vs web: pick submission, propose bet, friends, messaging,
+  avatars, deep links, unread badges, wallet ledger, notification prefs, push.
+  **Fixed:** all built (see "Mobile" under the 2026-09-18 re-audit below); push
+  and store-signed App Links still need account setup.
+- [x] Android SDK setup on the dev machine. **Resolved:** the app builds and
+  runs from Android Studio.
 
 ### Docs
 - [x] `CLAUDE.md`: lists 10 services (missing users, twilio); says `webui/` /
@@ -277,5 +278,12 @@ come from the audit pass and should be double-checked before acting on them.
   logout, Create league.
 - [ ] **Push + App Links need account setup** — Firebase project, FCM service
   account in SSM, Play signing SHA-256; see `.docs/pending/MOBILE_PUSH_AND_LINKS.md`.
-- [ ] Still web-only (mobile feature plan): feed, results, members, manage,
-  friends, messages, the Sports tab.
+- [x] **Mobile feature plan groups 3–4:** league Feed (announcements,
+  reactions, threaded comments, leave league), Results (H2H weekly reckoning;
+  pick'em winner card, leaderboard, confirmations, member picks), Members
+  (message, add friend, moderator/transfer/remove/unfriend), Manage (details,
+  logo, sports, rules, period, week update, archive), Sports (search, per-sport
+  weeks), Wallet (balance, sparkline, day-grouped ledger), invite sheet (share
+  link + invite friends), Friends, Messages (inbox + live chat over SSE with
+  reconnect, typing, read receipts, bet scores). The app now covers every web
+  screen.

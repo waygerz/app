@@ -237,6 +237,8 @@ class League {
     this.topMembers = const [],
     this.members = const [],
     this.sports = const [],
+    this.rules = const {},
+    this.timezone,
   });
 
   final String id;
@@ -269,6 +271,12 @@ class League {
   /// The league's sport-leagues: `(id: sport_league_id, name)` (detail only).
   final List<({String id, String name})> sports;
 
+  /// League settings (season_year / week_starts_on / who_can_propose, …).
+  final Map<String, dynamic> rules;
+
+  /// IANA zone the league's weeks roll over in.
+  final String? timezone;
+
   bool get isActive => status == 'active';
 
   bool get isMoney => leagueType == 'head_to_head';
@@ -300,6 +308,8 @@ class League {
         unreadFeedCount: (j['unread_feed_count'] as int?) ?? 0,
         topMembers: _members(j['top_members']),
         members: _members(j['members']),
+        rules: (j['rules'] as Map?)?.cast<String, dynamic>() ?? const {},
+        timezone: j['timezone'] as String?,
         sports: [
           for (final e in (j['sports'] as List<dynamic>?) ?? const [])
             (id: '${(e as Map)['sport_league_id']}', name: (e['name'] ?? e['sport_league_id'] ?? '') as String),
@@ -323,6 +333,52 @@ class LeagueMember {
         displayName: (j['display_name'] ?? '') as String,
         role: (j['role'] ?? 'member') as String,
         avatarKey: j['avatar_key'] as String?,
+      );
+}
+
+/// A league feed post (`GET /leagues/<id>/feed`): an announcement by a
+/// member, or an activity event (joins, weeks opening/final, bet results).
+class FeedItem {
+  FeedItem({
+    required this.id,
+    required this.kind,
+    required this.createdAt,
+    this.eventType,
+    this.authorId,
+    this.authorName,
+    this.title,
+    this.body,
+    this.linkUrl,
+    this.linkLabel,
+    this.meta = const {},
+  });
+
+  final String id;
+  final String kind; // announcement | activity
+  final String? eventType;
+  final String? authorId;
+  final String? authorName;
+  final String? title;
+  final String? body;
+  final String? linkUrl;
+  final String? linkLabel;
+
+  /// Bet-result posts: `away`, `home`, `away_score`, `home_score`, `amount_cents`, `treat`.
+  final Map<String, dynamic> meta;
+  final String createdAt;
+
+  factory FeedItem.fromJson(Map<String, dynamic> j) => FeedItem(
+        id: '${j['id']}',
+        kind: (j['kind'] ?? 'activity') as String,
+        eventType: j['event_type'] as String?,
+        authorId: j['author_id'] == null ? null : '${j['author_id']}',
+        authorName: j['author_name'] as String?,
+        title: j['title'] as String?,
+        body: j['body'] as String?,
+        linkUrl: j['link_url'] as String?,
+        linkLabel: j['link_label'] as String?,
+        meta: (j['meta'] as Map?)?.cast<String, dynamic>() ?? const {},
+        createdAt: (j['created_at'] ?? '') as String,
       );
 }
 
@@ -402,6 +458,8 @@ class Pick {
     this.awayScore,
     this.homeLogo,
     this.awayLogo,
+    this.homeAbbr,
+    this.awayAbbr,
   });
 
   final String eventId;
@@ -418,6 +476,8 @@ class Pick {
   final int? awayScore;
   final String? homeLogo;
   final String? awayLogo;
+  final String? homeAbbr;
+  final String? awayAbbr;
 
   factory Pick.fromJson(Map<String, dynamic> j) {
     final ev = (j['event'] is Map) ? (j['event'] as Map).cast<String, dynamic>() : <String, dynamic>{};
@@ -436,8 +496,65 @@ class Pick {
       awayScore: ev['away_score'] as int?,
       homeLogo: ev['home_logo'] as String?,
       awayLogo: ev['away_logo'] as String?,
+      homeAbbr: ev['home_abbr'] as String?,
+      awayAbbr: ev['away_abbr'] as String?,
     );
   }
+}
+
+/// One member's row on a pick'em week's leaderboard.
+class WeeklyResultRow {
+  WeeklyResultRow({
+    required this.userId,
+    required this.displayName,
+    required this.correct,
+    required this.graded,
+    required this.total,
+    required this.rank,
+    required this.confirmed,
+    this.avatarKey,
+    this.tiebreakerTotal,
+    this.tiebreakerDiff,
+  });
+  final String userId;
+  final String displayName;
+  final String? avatarKey;
+  final int correct;
+  final int graded;
+  final int total;
+
+  /// Competition rank; tied members (same correct + tie-breaker) share it.
+  final int rank;
+
+  /// The commissioner's per-week confirmation.
+  final bool confirmed;
+  final int? tiebreakerTotal;
+  final int? tiebreakerDiff;
+
+  factory WeeklyResultRow.fromJson(Map<String, dynamic> j) => WeeklyResultRow(
+        userId: '${j['user_id']}',
+        displayName: (j['display_name'] ?? '') as String,
+        avatarKey: j['avatar_key'] as String?,
+        correct: (j['correct'] as int?) ?? 0,
+        graded: (j['graded'] as int?) ?? 0,
+        total: (j['total'] as int?) ?? 0,
+        rank: (j['rank'] as int?) ?? 0,
+        confirmed: (j['confirmed'] ?? false) as bool,
+        tiebreakerTotal: j['tiebreaker_total'] as int?,
+        tiebreakerDiff: j['tiebreaker_diff'] as int?,
+      );
+}
+
+/// A pick'em week's results: leaderboard rows + the tie-breaker game's total.
+class PeriodResults {
+  PeriodResults({required this.rows, this.actualTotal});
+  final List<WeeklyResultRow> rows;
+  final int? actualTotal;
+
+  factory PeriodResults.fromJson(Map<String, dynamic> j) => PeriodResults(
+        rows: [for (final r in (j['rows'] as List<dynamic>?) ?? const []) WeeklyResultRow.fromJson(r as Map<String, dynamic>)],
+        actualTotal: (j['last_game'] is Map) ? (j['last_game'] as Map)['actual_total'] as int? : null,
+      );
 }
 
 class StandingRow {
@@ -510,6 +627,7 @@ class Wager {
     this.myTurn,
     this.stakeRound = 0,
     this.leagueName,
+    this.periodId,
   });
 
   final String id;
@@ -554,6 +672,9 @@ class Wager {
   /// The league's name, where the payload carries it (bet links).
   final String? leagueName;
 
+  /// The league week the bet belongs to (null for none).
+  final String? periodId;
+
   bool get isOpen => status == 'open';
   bool get isSettled => status == 'settled';
 
@@ -585,6 +706,7 @@ class Wager {
         myTurn: j['my_turn'] as bool?,
         stakeRound: (j['stake_round'] as int?) ?? 0,
         leagueName: j['league'] as String?,
+        periodId: j['period_id'] as String?,
       );
 }
 

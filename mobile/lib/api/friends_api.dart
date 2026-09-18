@@ -17,6 +17,17 @@ class FriendRequest {
       );
 }
 
+/// A friend (`GET /friends/`).
+class Friend {
+  Friend({required this.userId, required this.displayName, this.avatarKey});
+  final String userId;
+  final String displayName;
+  final String? avatarKey;
+
+  factory Friend.fromJson(Map<String, dynamic> j) =>
+      Friend(userId: '${j['user_id']}', displayName: (j['display_name'] ?? '') as String, avatarKey: j['avatar_key'] as String?);
+}
+
 /// Client for the friends service (`/v1/social/friends`). Mirrors web/lib/friends.ts.
 class FriendsApi {
   FriendsApi(this._api);
@@ -30,6 +41,15 @@ class FriendsApi {
         .toList();
     return (incoming: parse(res['incoming']), outgoing: parse(res['outgoing']));
   }
+
+  Future<List<Friend>> list() async {
+    final res = await _api.get('$_p/');
+    return [for (final f in (res['friends'] as List<dynamic>?) ?? const []) Friend.fromJson(f as Map<String, dynamic>)];
+  }
+
+  Future<void> addByUserId(String userId) => _api.post('$_p/requests', body: {'user_id': userId});
+
+  Future<void> remove(String userId) => _api.delete('$_p/users/$userId');
 
   Future<void> accept(String requestId) => _api.post('$_p/requests/$requestId/accept');
   Future<void> decline(String requestId) => _api.post('$_p/requests/$requestId/decline');

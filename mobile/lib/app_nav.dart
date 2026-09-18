@@ -5,6 +5,10 @@ import 'screens/create_league_screen.dart';
 import 'screens/invite_screen.dart';
 import 'screens/league_detail_screen.dart';
 import 'api/api_client.dart';
+import 'api/leagues_api.dart';
+import 'api/messaging_api.dart';
+import 'screens/chat_screen.dart';
+import 'screens/friends_screen.dart';
 
 /// App-wide navigation: the shell's bottom-nav tab, and routing of Waygerz
 /// links — the same paths the web uses (`/c/<code>`, `/leagues/<id>`,
@@ -64,6 +68,10 @@ class AppNav extends ChangeNotifier {
         // A stub is enough: the detail screen loads the league itself.
         final stub = League(id: seg[1], name: '', leagueType: 'head_to_head', status: 'active');
         nav.push(MaterialPageRoute<void>(builder: (_) => LeagueDetailScreen(api: api, league: stub)));
+      case 'friends':
+        nav.push(MaterialPageRoute<void>(builder: (_) => FriendsScreen(api: api)));
+      case 'messages' when seg.length > 1:
+        _openChat(nav, api, seg[1]);
       case 'bets':
         _home(nav, tabBets);
       case 'notifications':
@@ -72,6 +80,21 @@ class AppNav extends ChangeNotifier {
         _home(nav, tabMessages);
       default:
         _home(nav, tabLeagues);
+    }
+  }
+
+  /// A chat link: find the conversation (the list carries its title data).
+  Future<void> _openChat(NavigatorState nav, ApiClient api, String id) async {
+    try {
+      final convs = await MessagingApi(api).conversations();
+      final conv = convs.where((c) => c.id == id).firstOrNull;
+      if (conv == null) return _home(nav, tabMessages);
+      final names = conv.type == 'league'
+          ? {for (final l in await LeaguesApi(api).myLeagues().catchError((_) => <League>[])) l.id: l.name}
+          : const <String, String>{};
+      nav.push(MaterialPageRoute<void>(builder: (_) => ChatScreen(api: api, conversation: conv, title: conv.title(names))));
+    } catch (_) {
+      _home(nav, tabMessages);
     }
   }
 

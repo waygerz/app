@@ -2,16 +2,15 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../api/api_client.dart';
 import '../api/leagues_api.dart';
 import '../api/users_api.dart';
 import '../format.dart';
-import '../models.dart';
 import '../shell/app_header.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
+import '../widgets/sports_picker.dart';
 import '../widgets/stake_chips.dart';
 import 'league_detail_screen.dart';
 import 'widgets.dart';
@@ -35,9 +34,6 @@ class CreateLeagueScreen extends StatefulWidget {
 }
 
 class _CreateLeagueScreenState extends State<CreateLeagueScreen> {
-  late final CatalogApi _catalog = CatalogApi(widget.api);
-  late final Future<List<CatalogItem>> _sports = _catalog.sports();
-  Future<List<CatalogItem>>? _sportLeagues;
 
   final _name = TextEditingController();
   final _description = TextEditingController();
@@ -47,7 +43,6 @@ class _CreateLeagueScreenState extends State<CreateLeagueScreen> {
   String _type = 'head_to_head';
   String _periodType = 'season';
   String _weekStartsOn = 'tuesday';
-  String _activeSport = '';
   final List<({String id, String name})> _chosen = [];
 
   Uint8List? _logo;
@@ -229,58 +224,7 @@ class _CreateLeagueScreenState extends State<CreateLeagueScreen> {
         ],
         gap,
         label('Sports'),
-        FutureBuilder<List<CatalogItem>>(
-          future: _sports,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return Text('Loading sports…', style: TextStyle(fontSize: 14, color: c.mutedForeground));
-            }
-            if (snap.hasError) {
-              return Text('Couldn’t load sports: ${errorText(snap.error)}', style: TextStyle(fontSize: 14, color: c.destructive));
-            }
-            return Wrap(spacing: 8, runSpacing: 8, children: [
-              for (final s in snap.data ?? const <CatalogItem>[])
-                option(s.name, _activeSport == s.slug, () => setState(() {
-                      _activeSport = s.slug;
-                      _sportLeagues = _catalog.leagues(s.slug);
-                    })),
-            ]);
-          },
-        ),
-        if (_sportLeagues != null) ...[
-          const SizedBox(height: 8),
-          FutureBuilder<List<CatalogItem>>(
-            future: _sportLeagues,
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return Text('Loading leagues…', style: TextStyle(fontSize: 14, color: c.mutedForeground));
-              }
-              return Wrap(spacing: 8, runSpacing: 8, children: [
-                for (final l in snap.data ?? const <CatalogItem>[]) _leagueChip(c, l),
-              ]);
-            },
-          ),
-        ],
-        if (_chosen.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final ch in _chosen)
-              Container(
-                padding: const EdgeInsets.fromLTRB(14, 2, 2, 2),
-                decoration: BoxDecoration(color: c.muted, borderRadius: BorderRadius.circular(999)),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(ch.name, style: TextStyle(fontSize: 14, color: c.foreground)),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(LucideIcons.x, size: 14),
-                    tooltip: 'Remove ${ch.name}',
-                    onPressed: () => _toggle(ch.id, ch.name),
-                  ),
-                ]),
-              ),
-          ]),
-        ],
-        hint('The only games members can bet on.'),
+        SportsPicker(api: widget.api, chosen: _chosen, onToggle: _toggle),
         const SizedBox(height: 32),
         WzButton(
           label: _creating ? 'Creating…' : 'Create league',
@@ -293,32 +237,6 @@ class _CreateLeagueScreenState extends State<CreateLeagueScreen> {
         WzButton(label: 'Cancel', size: ButtonSize.lg, expand: true, variant: ButtonVariant.ghost,
             onPressed: _creating ? null : () => Navigator.of(context).pop()),
       ]),
-    );
-  }
-
-  Widget _leagueChip(WaygerzColors c, CatalogItem l) {
-    final id = (l.sportLeagueId?.isNotEmpty ?? false) ? l.sportLeagueId! : l.id;
-    final label = (l.abbreviation?.isNotEmpty ?? false) ? l.abbreviation! : l.name;
-    final on = _chosen.any((ch) => ch.id == id);
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: () => _toggle(id, label),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: on ? c.primary : Colors.transparent,
-          border: Border.all(color: on ? c.primary : c.input),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (l.logo != null) ...[
-            Image.network(l.logo!, width: 16, height: 16, errorBuilder: (context, error, stack) => const SizedBox.shrink()),
-            const SizedBox(width: 6),
-          ],
-          Text(label, style: TextStyle(fontSize: 14, color: on ? onPrimary : c.mutedForeground)),
-        ]),
-      ),
     );
   }
 }

@@ -156,3 +156,50 @@ int? parseStakeCents(String dollars) {
   if (n == null || n.isNaN || n < 0) return null;
   return (n * 100).round();
 }
+
+/// One opponent's net for a week (web results.tsx OppRecon).
+class OppRecon {
+  OppRecon(this.name);
+  final String name;
+  int netCents = 0, netBeers = 0, netShots = 0, wins = 0, losses = 0;
+}
+
+/// A week's decided bets netted from the viewer's side: dollars, beers and
+/// shots kept apart (different currencies), overall and per opponent. Pushes
+/// and refunds don't move it (web results.tsx reconcile).
+class Recon {
+  int wins = 0, losses = 0, netCents = 0, netBeers = 0, netShots = 0;
+  final Map<String, OppRecon> perOpp = {};
+
+  bool get even => netCents == 0 && netBeers == 0 && netShots == 0;
+}
+
+Recon reconcile(List<Wager> wagers, String me) {
+  final r = Recon();
+  for (final w in wagers) {
+    if (w.status != 'settled' || w.winnerUserId == null) continue;
+    final iWon = w.winnerUserId == me;
+    final iProposed = w.proposerId == me;
+    final o = r.perOpp.putIfAbsent(iProposed ? w.acceptorId : w.proposerId,
+        () => OppRecon(iProposed ? w.acceptorName : w.proposerName));
+    final d = iWon ? 1 : -1;
+    if (iWon) {
+      r.wins++;
+      o.wins++;
+    } else {
+      r.losses++;
+      o.losses++;
+    }
+    if (w.amountCents == 0 && w.treat == 'shot') {
+      r.netShots += d;
+      o.netShots += d;
+    } else if (w.amountCents == 0) {
+      r.netBeers += d;
+      o.netBeers += d;
+    } else {
+      r.netCents += d * w.amountCents;
+      o.netCents += d * w.amountCents;
+    }
+  }
+  return r;
+}

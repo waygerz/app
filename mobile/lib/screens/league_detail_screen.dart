@@ -1,29 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
 import '../api/leagues_api.dart';
 import '../auth/auth_controller.dart';
-import '../config.dart';
 import '../format.dart';
 import '../models.dart';
 import '../shell/app_header.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
+import '../widgets/invite_sheet.dart';
 import 'bets_screen.dart';
+import 'league/feed_tab.dart';
+import 'league/manage_tab.dart';
+import 'league/members_tab.dart';
 import 'league/picks_tab.dart';
+import 'league/results_tab.dart';
+import 'league/sports_tab.dart';
 import 'league/upcoming_tab.dart';
+import 'league/wallet_tab.dart';
 import 'widgets.dart';
 
-enum _Section { upcoming, play, standings }
+enum _Section { feed, upcoming, sports, play, results, standings, wallet, members, manage }
 
 /// League detail (web app/(app)/leagues/[id]/layout.tsx): the header — logo
 /// (tap for details + invite), type/Draft badges, balance, members · period —
-/// then the section pills: Upcoming (H2H: tap a game to bet), My Bets / My
-/// Picks, Standings. Sections not built on mobile yet (feed, results, members,
-/// manage, …) arrive with the mobile feature plan.
+/// then the section pills in the web's order: Feed, Upcoming + Sports (money
+/// leagues: tap a game to bet), My Bets / My Picks, Results, Standings, Wallet
+/// (money), Members, and Manage for the commissioner.
 class LeagueDetailScreen extends StatefulWidget {
   const LeagueDetailScreen({super.key, required this.api, required this.league});
   final ApiClient api;
@@ -36,9 +41,8 @@ class LeagueDetailScreen extends StatefulWidget {
 class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
   late final LeaguesApi _leagues = LeaguesApi(widget.api);
   late Future<League> _future = _leagues.league(widget.league.id);
-  /// Null until chosen: the default depends on the league's type, which a
-  /// link-opened screen only knows once the league has loaded.
-  _Section? _chosen;
+  /// The open section; the league opens on its Feed, like the web.
+  _Section _section = _Section.feed;
   bool _activating = false;
 
   Future<void> _reload() async {
@@ -83,8 +87,11 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
               ]),
             );
           }
-          final section = _chosen ?? (lg.isMoney ? _Section.upcoming : _Section.play);
-          final header = _header(context, lg, section);
+          // A section the league doesn't have (a link opened the wrong type, or
+          // a role changed) falls back to the Feed.
+          final available = _sections(lg);
+          final section = available.any((t) => t.value == _section) ? _section : _Section.feed;
+          final header = _header(context, lg, section, available);
           // Play needs an active league (web LeaguePlay).
           if (section == _Section.play && !lg.isActive) {
             final c = WaygerzColors.of(context);
@@ -95,20 +102,23 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
               ]),
             ]);
           }
+          void toBets() {
+            setState(() => _section = _Section.play);
+            _reload(); // the stake leaves the balance
+          }
           return switch (section) {
-            _Section.upcoming => UpcomingTab(
-                key: ValueKey('upcoming-${lg.id}'),
-                api: widget.api,
-                league: lg,
-                header: header,
-                onBetSent: () {
-                  setState(() => _chosen = _Section.play);
-                  _reload(); // the stake leaves the balance
-                },
-              ),
+            _Section.feed => FeedTab(key: ValueKey('feed-${lg.id}'), api: widget.api, league: lg, header: header,
+                onRefresh: _reload, onLeft: () => Navigator.of(context).pop()),
+            _Section.upcoming => UpcomingTab(key: ValueKey('upcoming-${lg.id}'), api: widget.api, league: lg, header: header, onBetSent: toBets),
+            _Section.sports => SportsTab(key: ValueKey('sports-${lg.id}'), api: widget.api, league: lg, header: header, onBetSent: toBets),
             _Section.play when lg.isMoney => BetsScreen(key: ValueKey('bets-${lg.id}'), api: widget.api, leagueId: lg.id, header: header),
             _Section.play => PicksTab(key: ValueKey('picks-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
+            _Section.results => ResultsTab(key: ValueKey('results-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
             _Section.standings => _StandingsTab(api: widget.api, league: lg, header: header, onRefresh: _reload),
+            _Section.wallet => WalletTab(key: ValueKey('wallet-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
+            _Section.members => MembersTab(key: ValueKey('members-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
+            _Section.manage => ManageTab(key: ValueKey('manage-${lg.id}'), api: widget.api, league: lg, header: header,
+                onRefresh: _reload, onArchived: () => Navigator.of(context).pop()),
           };
         },
       ),
@@ -116,7 +126,20 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
   }
 
   /// Header + section pills, scrolled with each section's list.
-  List<Widget> _header(BuildContext context, League lg, _Section section) {
+  /// The web's section pills for this league and viewer.
+  List<PillTab<_Section>> _sections(League lg) => [
+        const PillTab(_Section.feed, 'Feed'),
+        if (lg.isMoney) const PillTab(_Section.upcoming, 'Upcoming'),
+        if (lg.isMoney) const PillTab(_Section.sports, 'Sports'),
+        PillTab(_Section.play, lg.isPickem ? 'My Picks' : 'My Bets'),
+        const PillTab(_Section.results, 'Results'),
+        const PillTab(_Section.standings, 'Standings'),
+        if (lg.isMoney) const PillTab(_Section.wallet, 'Wallet'),
+        const PillTab(_Section.members, 'Members'),
+        if (lg.myRole == 'commissioner') const PillTab(_Section.manage, 'Manage'),
+      ];
+
+  List<Widget> _header(BuildContext context, League lg, _Section section, List<PillTab<_Section>> sections) {
     final c = WaygerzColors.of(context);
     final isCommish = lg.myRole == 'commissioner';
     final period = lg.currentPeriod;
@@ -159,13 +182,9 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
       ],
       const SizedBox(height: 16),
       PillTabs<_Section>(
-        tabs: [
-          if (lg.isMoney) const PillTab(_Section.upcoming, 'Upcoming'),
-          PillTab(_Section.play, lg.isPickem ? 'My Picks' : 'My Bets'),
-          const PillTab(_Section.standings, 'Standings'),
-        ],
+        tabs: sections,
         value: section,
-        onChanged: (s) => setState(() => _chosen = s),
+        onChanged: (s) => setState(() => _section = s),
       ),
       const SizedBox(height: 24),
     ];
@@ -205,19 +224,16 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
           const SizedBox(height: 16),
           Text(lg.description!, textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.foreground)),
         ],
-        if (lg.inviteCode != null) ...[
-          const SizedBox(height: 16),
-          WzButton(
-            label: 'Copy invite link',
-            icon: LucideIcons.userPlus,
-            expand: true,
-            onPressed: () async {
-              final toast = Toaster.of(ctx);
-              await Clipboard.setData(ClipboardData(text: '${Config.webBaseUrl}/c/${lg.inviteCode}'));
-              toast.success('Invite link copied');
-            },
-          ),
-        ],
+        const SizedBox(height: 16),
+        WzButton(
+          label: 'Invite',
+          icon: LucideIcons.userPlus,
+          expand: true,
+          onPressed: () {
+            Navigator.of(ctx).pop();
+            showInviteSheet(context, api: widget.api, league: lg);
+          },
+        ),
         if (commish != null) ...[
           const SizedBox(height: 16),
           Divider(color: c.border),
