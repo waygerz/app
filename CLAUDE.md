@@ -148,6 +148,21 @@ Prisma instructions; this app has no Prisma).
 - **API base URL:** `NEXT_PUBLIC_API_URL` is baked at build (`/api` behind the
   nginx gateway; `""` for the ALB so the browser hits `/v1/...` directly).
 
+## mobile (Flutter)
+
+Same backend endpoints as the web (bearer tokens via `X-Client-Type: mobile`).
+It should look like the web app:
+
+- `lib/ui/` is the component kit, ported from `web/components/ui` (WzCard,
+  WzBadge, WzButton, PillTabs, Skeleton, Toaster, dialogs, ErrorCard). Build
+  screens from it, not stock Material widgets. Colors come from
+  `WaygerzColors` (`lib/theme/app_theme.dart`).
+- Logic ported from the web lives in plain Dart with unit tests: `lib/format.dart`
+  (credits, dates, labels) and `lib/wagers.dart` (grouping, filters, pick
+  labels, cancel lock). Change the web and mobile copies together.
+- `flutter analyze` + `flutter test` run in CI (`test.yml`); the app ships
+  through the stores, not the deploy workflow.
+
 ## Commands
 
 ### Whole stack (from `api/`)

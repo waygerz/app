@@ -11,6 +11,7 @@ import '../models.dart';
 import '../shell/app_header.dart';
 import '../shell/bottom_nav.dart';
 import '../theme/app_theme.dart';
+import '../ui/ui.dart';
 import 'account/account_screen.dart';
 import 'bets_screen.dart';
 import 'leagues_screen.dart';
@@ -95,7 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final tabs = <Widget>[
       LeaguesScreen(api: auth.api),
       BetsScreen(api: auth.api),
-      NotificationsScreen(api: _notifications),
+      NotificationsScreen(api: auth.api, onChanged: _refreshBadges),
       const _MessagesPlaceholder(),
     ];
 
@@ -125,10 +126,14 @@ class _MessagesPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const EmptyState(
-      icon: LucideIcons.messageCircle,
-      label: 'Messages are coming to the app soon.\nUse waygerz.com to chat for now.',
-    );
+    final c = WaygerzColors.of(context);
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
+      CenterCard(children: [
+        Icon(LucideIcons.messageCircle, size: 24, color: c.mutedForeground),
+        Text('Messages are coming to the app soon.\nUse waygerz.com to chat for now.',
+            textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
+      ]),
+    ]);
   }
 }
 

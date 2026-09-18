@@ -233,6 +233,14 @@ ThemeData buildTheme(Brightness brightness, [Appearance appearance = const Appea
       ),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: c.primary),
+    // The web Switch: primary track when on, the input color when off, white thumb.
+    switchTheme: SwitchThemeData(
+      thumbColor: const WidgetStatePropertyAll(Colors.white),
+      trackColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? c.primary : c.input),
+      trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      thumbIcon: const WidgetStatePropertyAll(Icon(null)),
+    ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: c.card,
       showDragHandle: true,

@@ -7,6 +7,10 @@ class Config {
     defaultValue: 'https://waygerz.com',
   );
 
+  /// Where shareable links (/c/<code> invites) point: the web app, which
+  /// opens them in the browser or hands them to the installed app.
+  static const String webBaseUrl = String.fromEnvironment('WEB_BASE_URL', defaultValue: 'https://waygerz.com');
+
   /// Marks requests as native so `auth` returns tokens in the JSON body
   /// (instead of the web's HttpOnly cookies) — see api/auth service_auth.py.
   static const String clientTypeHeader = 'X-Client-Type';

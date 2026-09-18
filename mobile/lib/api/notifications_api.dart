@@ -6,11 +6,18 @@ class NotificationsApi {
   NotificationsApi(this._api);
   final ApiClient _api;
 
-  Future<List<FeedNotification>> feed({int limit = 50}) async {
+  /// The feed plus the unread total (one call, like the web).
+  Future<({List<FeedNotification> items, int unread})> feed({int limit = 50}) async {
     final res = await _api.get(withQuery('${Config.notifications}/me', {'limit': limit}));
     final list = (res['notifications'] as List<dynamic>? ?? []);
-    return list.map((e) => FeedNotification.fromJson(e as Map<String, dynamic>)).toList();
+    return (
+      items: list.map((e) => FeedNotification.fromJson(e as Map<String, dynamic>)).toList(),
+      unread: (res['unread'] as int?) ?? 0,
+    );
   }
+
+  /// Log a genuine in-app open (engagement tracking). Fire-and-forget.
+  Future<void> recordOpen(String id) => _api.post('${Config.notifications}/me/opened', body: {'id': id});
 
   Future<int> unreadCount() async {
     final res = await _api.get('${Config.notifications}/me/unread-count');

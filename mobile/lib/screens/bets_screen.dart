@@ -2,156 +2,258 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
+import '../api/events_api.dart';
+import '../api/leagues_api.dart';
 import '../api/wagers_api.dart';
 import '../auth/auth_controller.dart';
 import '../models.dart';
-import '../shell/app_header.dart';
-import 'widgets.dart';
+import '../theme/app_theme.dart';
+import '../ui/ui.dart';
+import '../wagers.dart';
+import '../widgets/wager_card.dart';
 
-/// The caller's H2H wagers. Used both as the top-level Bets tab (all leagues)
-/// and, filtered by [leagueId], from a league's detail screen.
+/// My Bets (web app/(app)/bets): filter pills with counts, search + sort, and
+/// one continuous list of grouped bet cards with the viewer's actions. With a
+/// [leagueId] it lists that league's bets only (the league's My Bets tab).
 class BetsScreen extends StatefulWidget {
-  const BetsScreen({super.key, required this.api, this.leagueId, this.title});
+  const BetsScreen({super.key, required this.api, this.leagueId, this.header = const []});
   final ApiClient api;
   final String? leagueId;
-  final String? title;
+
+  /// Widgets scrolled above the filters (the league header when embedded).
+  final List<Widget> header;
 
   @override
   State<BetsScreen> createState() => _BetsScreenState();
 }
 
+class _BetsData {
+  _BetsData(this.wagers, this.leagueNames, this.events);
+  final List<Wager> wagers;
+  final Map<String, String> leagueNames;
+  final Map<String, SportEvent> events;
+}
+
 class _BetsScreenState extends State<BetsScreen> {
   late final WagersApi _wagers = WagersApi(widget.api);
-  late Future<List<Wager>> _future = _wagers.mine(leagueId: widget.leagueId);
+  late final LeaguesApi _leagues = LeaguesApi(widget.api);
+  late final EventsApi _events = EventsApi(widget.api);
+  late Future<_BetsData> _future = _load();
+
+  BetFilter _filter = BetFilter.all;
+  BetSort _sort = BetSort.dateDesc;
+  String _query = '';
+
+  /// Group key → the action in flight, so only that card's buttons disable.
+  final Set<String> _busy = {};
+
+  Future<_BetsData> _load() async {
+    final wagersF = _wagers.mine(leagueId: widget.leagueId);
+    final leaguesF = widget.leagueId == null ? _leagues.myLeagues() : Future.value(<League>[]);
+    final wagers = await wagersF;
+    final events = await _events.events(wagers.map((w) => w.eventId));
+    final leagues = await leaguesF.catchError((_) => <League>[]);
+    return _BetsData(wagers, {for (final l in leagues) l.id: l.name}, events);
+  }
 
   Future<void> _reload() async {
-    final f = _wagers.mine(leagueId: widget.leagueId);
+    final f = _load();
     setState(() => _future = f);
     await f;
   }
 
-  Future<void> _act(Future<void> Function() call, String ok) async {
+  /// Run [call] for every sibling in the group (one card can stand for the same
+  /// bet offered to several people), then toast and refresh.
+  Future<void> _act(WagerGroup g, Future<void> Function(String id) call, String ok) async {
+    final toast = Toaster.of(context);
+    setState(() => _busy.add(g.key));
     try {
-      await call();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok)));
+      await Future.wait(g.ids.map(call));
+      toast.success(ok);
       await _reload();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      toast.failure(e);
+    } finally {
+      if (mounted) setState(() => _busy.remove(g.key));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final me = context.read<AuthController>().user?.id;
-    final body = FutureBuilder<List<Wager>>(
-      future: _future,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snap.hasError) return ErrorState(message: '${snap.error}', onRetry: _reload);
-        final wagers = snap.data ?? const <Wager>[];
-        if (wagers.isEmpty) {
-          return ListView(children: const [
-            SizedBox(height: 120),
-            EmptyState(icon: Icons.sports_mma_outlined, label: 'No bets yet'),
-          ]);
-        }
-        return ListView.separated(
-          itemCount: wagers.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
-          itemBuilder: (context, i) => _WagerTile(wager: wagers[i], me: me, onAct: _act, wagers: _wagers),
-        );
-      },
-    );
+    final me = context.read<AuthController>().user?.id ?? '';
+    return RefreshIndicator(
+      onRefresh: _reload,
+      child: FutureBuilder<_BetsData>(
+        future: _future,
+        builder: (context, snap) {
+          final data = snap.data;
+          final loading = snap.connectionState == ConnectionState.waiting && data == null;
+          final all = data?.wagers ?? const <Wager>[];
+          final counts = {for (final f in BetFilter.values) f: filterWagers(all, f).length};
+          final rows = filterWagers(all, _filter);
 
-    // When pushed from a league (has a title) show its own app bar; as the tab
-    // it inherits the HomeScreen app bar.
-    if (widget.title != null) {
-      return Scaffold(appBar: WaygerzHeader.page('${widget.title} · Bets'), body: RefreshIndicator(onRefresh: _reload, child: body));
-    }
-    return RefreshIndicator(onRefresh: _reload, child: body);
-  }
-}
+          var groups = groupWagers(rows, me);
+          final q = _query.trim().toLowerCase();
+          if (q.isNotEmpty) {
+            groups = groups.where((g) {
+              final hay = [g.rep.homeTeam, g.rep.awayTeam, data?.leagueNames[g.rep.leagueId] ?? '',
+                ...g.opponents.map((o) => o.name)].join(' ').toLowerCase();
+              return hay.contains(q);
+            }).toList();
+          }
+          groups = sortGroups(groups, _sort);
 
-class _WagerTile extends StatelessWidget {
-  const _WagerTile({required this.wager, required this.me, required this.onAct, required this.wagers});
-  final Wager wager;
-  final String? me;
-  final WagersApi wagers;
-  final Future<void> Function(Future<void> Function(), String) onAct;
-
-  @override
-  Widget build(BuildContext context) {
-    final matchup = (wager.awayTeam != null && wager.homeTeam != null)
-        ? '${wager.awayTeam} @ ${wager.homeTeam}'
-        : (wager.eventName ?? 'Game');
-    final iAmAcceptor = me != null && wager.acceptorId == me;
-    final iAmProposer = me != null && wager.proposerId == me;
-    final opponent = iAmProposer ? wager.acceptorName : wager.proposerName;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: Text(matchup, style: Theme.of(context).textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis)),
-          StatusChip(label: _statusLabel(wager.status), color: _statusColor(wager.status)),
-        ]),
-        const SizedBox(height: 4),
-        Text('${_pick(wager)} · ${wager.stakeLabel}${opponent != null ? '  ·  vs $opponent' : ''}',
-            style: Theme.of(context).textTheme.bodyMedium),
-        if (wager.isOpen && (iAmAcceptor || iAmProposer)) ...[
-          const SizedBox(height: 8),
-          Row(children: [
-            if (iAmAcceptor) ...[
-              FilledButton(
-                onPressed: () => onAct(() => wagers.accept(wager.id), 'Bet accepted'),
-                child: const Text('Accept'),
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+            children: [
+              ...widget.header,
+              PillTabs<BetFilter>(
+                tabs: [for (final f in BetFilter.values) PillTab(f, betFilterLabels[f]!, count: counts[f])],
+                value: _filter,
+                onChanged: (f) => setState(() => _filter = f),
               ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: () => onAct(() => wagers.decline(wager.id), 'Bet declined'),
-                child: const Text('Decline'),
-              ),
-            ] else if (iAmProposer) ...[
-              OutlinedButton(
-                onPressed: () => onAct(() => wagers.cancel(wager.id), 'Bet cancelled'),
-                child: const Text('Cancel offer'),
-              ),
+              const SizedBox(height: 24),
+              if (loading)
+                ...List.generate(3, (_) => const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: Skeleton(height: 96, radius: WaygerzRadius.xl),
+                    ))
+              else if (snap.hasError)
+                ErrorCard(title: "Couldn't load your bets", error: snap.error, onRetry: _reload)
+              else ...[
+                if (rows.isNotEmpty || q.isNotEmpty) ...[
+                  Row(children: [
+                    Expanded(
+                      child: SearchField(
+                        hint: 'Search teams, opponents, leagues',
+                        onChanged: (v) => setState(() => _query = v),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OptionMenuButton<BetSort>(
+                      icon: Icons.swap_vert,
+                      tooltip: 'Sort bets',
+                      title: 'Sort by',
+                      options: betSortLabels,
+                      value: _sort,
+                      onChanged: (s) => setState(() => _sort = s),
+                    ),
+                  ]),
+                  const SizedBox(height: 16),
+                ],
+                if (groups.isEmpty)
+                  _empty(context, q)
+                else
+                  for (final g in groups)
+                    WagerBetCard(
+                      key: ValueKey(g.key),
+                      group: g,
+                      me: me,
+                      event: data?.events[g.rep.eventId],
+                      leagueName: widget.leagueId == null ? data?.leagueNames[g.rep.leagueId] : null,
+                      actions: _actionsFor(g, me),
+                    ),
+              ],
             ],
-          ]),
-        ],
-      ]),
+          );
+        },
+      ),
     );
   }
 
-  /// The proposer's pick, e.g. "Braves ML", "Braves -1.5", "Over 8.5".
-  String _pick(Wager w) {
-    String teamFor(String side) => side == 'home' ? (w.homeTeam ?? 'Home') : (w.awayTeam ?? 'Away');
-    switch (w.betType) {
-      case 'spread':
-        final sign = (w.line ?? 0) > 0 ? '+' : '';
-        return '${teamFor(w.proposerSide)} $sign${w.line ?? ''}';
-      case 'total':
-        final ou = w.proposerSide == 'over' ? 'Over' : 'Under';
-        return '$ou ${w.line ?? ''}';
-      default:
-        return '${teamFor(w.proposerSide)} ML';
-    }
+  Widget _empty(BuildContext context, String q) {
+    final c = WaygerzColors.of(context);
+    final label = betFilterLabels[_filter]!.toLowerCase();
+    return CenterCard(children: [
+      Icon(Icons.confirmation_number_outlined, size: 24, color: c.mutedForeground),
+      Text(
+        q.isNotEmpty
+            ? 'No bets match “$q”.'
+            : _filter == BetFilter.all
+                ? 'No bets yet.'
+                : 'No $label bets.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 14, color: c.mutedForeground),
+      ),
+      if (_filter == BetFilter.pending && q.isEmpty)
+        Text('Incoming and outgoing proposals show up here.',
+            textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: c.mutedForeground)),
+    ]);
   }
 
-  String _statusLabel(String s) => s[0].toUpperCase() + s.substring(1);
+  /// The viewer's actions for a card — the same rules as the web bets page.
+  List<Widget>? _actionsFor(WagerGroup g, String me) {
+    final w = g.rep;
+    final busy = _busy.contains(g.key);
+    final involved = w.proposerId == me || w.acceptorId == me;
 
-  Color _statusColor(String s) {
-    switch (s) {
-      case 'open':
-        return Colors.orange;
-      case 'accepted':
-        return Colors.blue;
-      case 'settled':
-        return Colors.green;
-      default:
-        return Colors.grey;
+    WzButton btn(String label, VoidCallback onTap, {ButtonVariant variant = ButtonVariant.primary}) =>
+        WzButton(label: label, size: ButtonSize.sm, dense: true, variant: variant, expand: true,
+            onPressed: busy ? null : onTap);
+
+    if (w.status == 'completed' && involved) {
+      // Only the score-decided winner claims; the badge carries everyone else's result.
+      if (w.winnerUserId == me) {
+        return [btn('Confirm', () => _act(g, _wagers.confirm, 'Result confirmed — you got paid'))];
+      }
+      return null;
     }
+
+    // Accepted bets hold both stakes: one side requests a cancel, the other
+    // approves. Locked 10 minutes before kickoff.
+    if (w.status == 'accepted' && involved) {
+      if (cancelLocked(w)) return null;
+      if (w.cancelRequestedBy == null) {
+        return [
+          btn('Cancel', () async {
+            final ok = await confirmWz(
+              context,
+              title: 'Do you really want to cancel?',
+              description: 'Your opponent has to approve the cancellation — both stakes are refunded only '
+                  'once they do. Until then the bet stands.',
+              confirmLabel: 'Cancel bet',
+              cancelLabel: 'Keep bet',
+            );
+            if (ok) await _act(g, _wagers.requestCancel, 'Cancel requested — waiting on your opponent');
+          }, variant: ButtonVariant.outline),
+        ];
+      }
+      if (w.cancelRequestedBy == me) {
+        final c = WaygerzColors.of(context);
+        return [
+          Text('Cancel Requested', textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: c.mutedForeground)),
+        ];
+      }
+      return [
+        btn('Approve', () => _act(g, _wagers.approveCancel, 'Bet cancelled — both stakes refunded')),
+        btn('Reject', () => _act(g, _wagers.rejectCancel, 'Cancel request declined — the bet stands'),
+            variant: ButtonVariant.ghost),
+      ];
+    }
+
+    // A bet you declined can be reopened until kickoff.
+    if (w.status == 'declined') {
+      final iDeclined = w.pendingId != null ? w.pendingId == me : w.acceptorId == me;
+      final start = DateTime.tryParse(w.startTime ?? '');
+      final started = start != null && !DateTime.now().isBefore(start);
+      if (iDeclined && !started) return [btn('Un-decline', () => _act(g, _wagers.undecline, 'Bet reopened'))];
+      return null;
+    }
+
+    if (w.status != 'open') return null;
+    // Whoever's turn it is responds; the member holding the current offer can withdraw.
+    final respondTurn = w.myTurn ?? (w.pendingId != null ? w.pendingId == me : w.acceptorId == me);
+    final holderIsMe = w.heldId != null ? w.heldId == me : w.proposerId == me;
+    if (respondTurn) {
+      return [
+        btn('Accept', () => _act(g, _wagers.accept, 'Bet accepted')),
+        btn('Decline', () => _act(g, _wagers.decline, 'Bet declined'), variant: ButtonVariant.outline),
+      ];
+    }
+    if (holderIsMe && !cancelLocked(w)) {
+      return [btn('Withdraw', () => _act(g, _wagers.cancel, 'Bet cancelled'), variant: ButtonVariant.outline)];
+    }
+    return null;
   }
 }

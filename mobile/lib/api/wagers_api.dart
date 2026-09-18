@@ -60,7 +60,15 @@ class WagersApi {
 
   Future<void> accept(String id) => _api.post('$_p/wagers/$id/accept');
   Future<void> decline(String id) => _api.post('$_p/wagers/$id/decline');
+
+  /// Reopen a bet you declined, so it can be accepted after all (until kickoff).
+  Future<void> undecline(String id) => _api.post('$_p/wagers/$id/undecline');
+
+  /// Withdraw your own open offer.
   Future<void> cancel(String id) => _api.post('$_p/wagers/$id/cancel');
+
+  /// The score-decided winner confirms a completed bet, which pays them.
+  Future<void> confirm(String id) => _api.post('$_p/wagers/$id/confirm');
   Future<void> requestCancel(String id) => _api.post('$_p/wagers/$id/cancel/request');
   Future<void> approveCancel(String id) => _api.post('$_p/wagers/$id/cancel/approve');
   Future<void> rejectCancel(String id) => _api.post('$_p/wagers/$id/cancel/reject');

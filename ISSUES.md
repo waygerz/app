@@ -248,3 +248,20 @@ come from the audit pass and should be double-checked before acting on them.
   and a 10-minute stream lifetime. Web `openThreadStream` refreshes the session
   and reconnects with backoff when the browser gives up (401/503), and
   refetches the thread after a reconnect.
+
+### Mobile look and feel (step 4, done)
+- [x] **Component kit** `mobile/lib/ui/`: card, center card, badge, count
+  badge, button (primary/secondary/outline/ghost/destructive; 48px touch
+  floor), pill tabs, skeleton, toasts, dialog + confirm, search field, sort
+  menu, error card / notice banner. Switch themed like the web.
+- [x] **Screens rebuilt on the kit to match the web:** My Leagues (invites with
+  Accept, league cards with type chip, avatar stack, Draft/unread), league
+  detail (header, details dialog with invite link, pill sections: My Bets /
+  My Picks, Standings), My Bets (filters with counts, search, sort, grouped
+  bet cards with every action incl. Confirm payout, cancel request/approve,
+  un-decline), Notifications (actor avatars, inline Accept/Reject/Join,
+  resolved outcomes, mark all read).
+- [x] Mobile unit tests + a Flutter CI job (analyze + test).
+- [ ] Still web-only (mobile feature plan): making picks, proposing and
+  countering bets, feed, results, members, manage, create league, friends,
+  messages, deep links, push.

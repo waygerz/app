@@ -156,24 +156,47 @@ class FeedNotification {
     required this.title,
     required this.body,
     required this.read,
+    this.templateKey,
+    this.actorId,
+    this.actorName,
+    this.actorAvatarKey,
+    this.refType,
+    this.refId,
     this.deepLink,
     this.createdAt,
   });
 
   final String id;
   final String category;
+
+  /// The specific event (wager_proposed, friend_request, …) — drives the icon
+  /// and which inline action to offer. Null on legacy rows.
+  final String? templateKey;
   final String title;
   final String body;
   final bool read;
+
+  /// Who it's from, when applicable (a user, or a league for league notices).
+  final String? actorId;
+  final String? actorName;
+  final String? actorAvatarKey;
+  final String? refType; // wager | league | user | …
+  final String? refId;
   final String? deepLink;
   final String? createdAt;
 
   factory FeedNotification.fromJson(Map<String, dynamic> j) => FeedNotification(
-        id: j['id'] as String,
+        id: '${j['id']}',
         category: (j['category'] ?? '') as String,
+        templateKey: j['template_key'] as String?,
         title: (j['title'] ?? '') as String,
         body: (j['body'] ?? '') as String,
         read: (j['read'] ?? false) as bool,
+        actorId: j['actor_id'] == null ? null : '${j['actor_id']}',
+        actorName: j['actor_name'] as String?,
+        actorAvatarKey: j['actor_avatar_key'] as String?,
+        refType: j['ref_type'] as String?,
+        refId: j['ref_id'] == null ? null : '${j['ref_id']}',
         deepLink: j['deep_link'] as String?,
         createdAt: j['created_at'] as String?,
       );
@@ -200,6 +223,11 @@ class League {
     this.maxWagerCents,
     this.currentPeriodId,
     this.inviteCode,
+    this.currentPeriod,
+    this.myBalanceCents,
+    this.unreadFeedCount = 0,
+    this.topMembers = const [],
+    this.members = const [],
   });
 
   final String id;
@@ -217,6 +245,17 @@ class League {
   final int? maxWagerCents;
   final String? currentPeriodId;
   final String? inviteCode;
+  final LeaguePeriod? currentPeriod;
+  final int? myBalanceCents;
+
+  /// Unread feed posts/notices (league list cards).
+  final int unreadFeedCount;
+
+  /// A few members for the list card's avatar stack.
+  final List<LeagueMember> topMembers;
+
+  /// Every active member (league detail only).
+  final List<LeagueMember> members;
 
   bool get isMoney => leagueType == 'head_to_head';
   bool get isPickem => leagueType == 'pickem';
@@ -240,6 +279,32 @@ class League {
             ? (j['current_period']['id'] as String?)
             : j['current_period_id'] as String?,
         inviteCode: j['invite_code'] as String?,
+        currentPeriod: (j['current_period'] is Map)
+            ? LeaguePeriod.fromJson((j['current_period'] as Map).cast<String, dynamic>())
+            : null,
+        myBalanceCents: j['my_balance_cents'] as int?,
+        unreadFeedCount: (j['unread_feed_count'] as int?) ?? 0,
+        topMembers: _members(j['top_members']),
+        members: _members(j['members']),
+      );
+
+  static List<LeagueMember> _members(Object? v) => ((v as List<dynamic>?) ?? const [])
+      .map((e) => LeagueMember.fromJson((e as Map).cast<String, dynamic>()))
+      .toList();
+}
+
+class LeagueMember {
+  LeagueMember({required this.userId, required this.displayName, this.role = 'member', this.avatarKey});
+  final String userId;
+  final String displayName;
+  final String role; // commissioner | moderator | member
+  final String? avatarKey;
+
+  factory LeagueMember.fromJson(Map<String, dynamic> j) => LeagueMember(
+        userId: '${j['user_id']}',
+        displayName: (j['display_name'] ?? '') as String,
+        role: (j['role'] ?? 'member') as String,
+        avatarKey: j['avatar_key'] as String?,
       );
 }
 
@@ -315,6 +380,10 @@ class Pick {
     this.startTime,
     this.status,
     this.tiebreakerTotal,
+    this.homeScore,
+    this.awayScore,
+    this.homeLogo,
+    this.awayLogo,
   });
 
   final String eventId;
@@ -327,6 +396,10 @@ class Pick {
   final String? startTime;
   final String? status; // event status: scheduled | live | final | cancelled
   final int? tiebreakerTotal;
+  final int? homeScore;
+  final int? awayScore;
+  final String? homeLogo;
+  final String? awayLogo;
 
   factory Pick.fromJson(Map<String, dynamic> j) {
     final ev = (j['event'] is Map) ? (j['event'] as Map).cast<String, dynamic>() : <String, dynamic>{};
@@ -341,6 +414,10 @@ class Pick {
       startTime: (j['start_time'] ?? ev['start_time']) as String?,
       status: ev['status'] as String?,
       tiebreakerTotal: j['tiebreaker_total'] as int?,
+      homeScore: ev['home_score'] as int?,
+      awayScore: ev['away_score'] as int?,
+      homeLogo: ev['home_logo'] as String?,
+      awayLogo: ev['away_logo'] as String?,
     );
   }
 }
@@ -354,6 +431,7 @@ class StandingRow {
     this.losses = 0,
     this.pushes = 0,
     this.balanceCents,
+    this.netCents,
     this.rank,
   });
 
@@ -364,6 +442,7 @@ class StandingRow {
   final int losses;
   final int pushes;
   final int? balanceCents;
+  final int? netCents;
   final int? rank;
 
   factory StandingRow.fromJson(Map<String, dynamic> j) => StandingRow(
@@ -374,6 +453,7 @@ class StandingRow {
         losses: (j['losses'] as int?) ?? 0,
         pushes: (j['pushes'] as int?) ?? 0,
         balanceCents: j['balance_cents'] as int?,
+        netCents: j['net_cents'] as int?,
         rank: j['rank'] as int?,
       );
 }
@@ -387,63 +467,151 @@ class Wager {
   Wager({
     required this.id,
     required this.leagueId,
+    required this.eventId,
     required this.status,
     required this.betType,
     required this.proposerSide,
+    required this.acceptorSide,
     required this.amountCents,
+    required this.proposerId,
+    required this.acceptorId,
     this.line,
+    this.treat,
     this.eventName,
-    this.homeTeam,
-    this.awayTeam,
+    this.homeTeam = '',
+    this.awayTeam = '',
     this.startTime,
-    this.proposerId,
-    this.acceptorId,
-    this.proposerName,
-    this.acceptorName,
+    this.proposerName = '',
+    this.acceptorName = '',
+    this.proposerAvatarKey,
+    this.acceptorAvatarKey,
     this.winnerUserId,
+    this.cancelRequestedBy,
+    this.heldId,
+    this.pendingId,
+    this.myTurn,
   });
 
   final String id;
   final String leagueId;
-  final String status; // open|accepted|settled|declined|cancelled|refunded
+  final String eventId;
+  final String status; // open|accepted|completed|settled|declined|cancelled|refunded
   final String betType; // moneyline|spread|total
-  final String proposerSide;
+  final String proposerSide; // home|away|over|under
+  final String acceptorSide;
   final int amountCents;
+  final String proposerId;
+  final String acceptorId;
+
+  /// Stored from the proposer's perspective (see [lineForSide]).
   final double? line;
+
+  /// What the loser owes on a $0 bragging-rights bet: beer | shot.
+  final String? treat;
   final String? eventName;
-  final String? homeTeam;
-  final String? awayTeam;
+  final String homeTeam;
+  final String awayTeam;
   final String? startTime;
-  final String? proposerId;
-  final String? acceptorId;
-  final String? proposerName;
-  final String? acceptorName;
+  final String proposerName;
+  final String acceptorName;
+  final String? proposerAvatarKey;
+  final String? acceptorAvatarKey;
   final String? winnerUserId;
+
+  /// Set while one side waits on the other to approve calling the bet off.
+  final String? cancelRequestedBy;
+
+  /// Negotiation: whose stake is held (the waiting side) / whose turn it is.
+  final String? heldId;
+  final String? pendingId;
+
+  /// Server-derived for the viewer: is it their turn to act?
+  final bool? myTurn;
 
   bool get isOpen => status == 'open';
   bool get isSettled => status == 'settled';
 
-  /// "$5.00" stake, or "Bragging rights" for a $0 wager.
-  String get stakeLabel =>
-      amountCents == 0 ? 'Bragging rights' : '\$${(amountCents / 100).toStringAsFixed(2)}';
-
   factory Wager.fromJson(Map<String, dynamic> j) => Wager(
         id: j['id'] as String,
-        leagueId: (j['league_id'] ?? '') as String,
+        leagueId: '${j['league_id'] ?? ''}',
+        eventId: '${j['event_id'] ?? ''}',
         status: (j['status'] ?? 'open') as String,
         betType: (j['bet_type'] ?? 'moneyline') as String,
         proposerSide: (j['proposer_side'] ?? '') as String,
+        acceptorSide: (j['acceptor_side'] ?? '') as String,
         amountCents: (j['amount_cents'] as int?) ?? 0,
+        proposerId: '${j['proposer_id'] ?? ''}',
+        acceptorId: '${j['acceptor_id'] ?? ''}',
         line: (j['line'] as num?)?.toDouble(),
+        treat: j['treat'] as String?,
         eventName: j['event_name'] as String?,
-        homeTeam: j['home_team'] as String?,
-        awayTeam: j['away_team'] as String?,
+        homeTeam: (j['home_team'] ?? '') as String,
+        awayTeam: (j['away_team'] ?? '') as String,
         startTime: j['start_time'] as String?,
-        proposerId: j['proposer_id'] as String?,
-        acceptorId: j['acceptor_id'] as String?,
-        proposerName: j['proposer_name'] as String?,
-        acceptorName: j['acceptor_name'] as String?,
+        proposerName: (j['proposer_name'] ?? '') as String,
+        acceptorName: (j['acceptor_name'] ?? '') as String,
+        proposerAvatarKey: j['proposer_avatar_key'] as String?,
+        acceptorAvatarKey: j['acceptor_avatar_key'] as String?,
         winnerUserId: j['winner_user_id'] as String?,
+        cancelRequestedBy: j['cancel_requested_by'] as String?,
+        heldId: j['held_id'] as String?,
+        pendingId: j['pending_id'] as String?,
+        myTurn: j['my_turn'] as bool?,
+      );
+}
+
+/// A game from the ingestor (`GET /ingestor/events/<external_id>`), for the
+/// live/final score on a bet card.
+class SportEvent {
+  SportEvent({
+    required this.externalId,
+    required this.sport,
+    required this.status,
+    this.name = '',
+    this.homeTeam = '',
+    this.awayTeam = '',
+    this.homeAbbr,
+    this.awayAbbr,
+    this.homeScore,
+    this.awayScore,
+    this.homeLogo,
+    this.awayLogo,
+    this.startTime,
+  });
+
+  final String externalId;
+  final String sport;
+  final String status; // scheduled | live | final | cancelled
+  final String name;
+  final String homeTeam;
+  final String awayTeam;
+  final String? homeAbbr;
+  final String? awayAbbr;
+  final int? homeScore;
+  final int? awayScore;
+  final String? homeLogo;
+  final String? awayLogo;
+  final String? startTime;
+
+  /// Field sports (golf, racing) have no home/away matchup. Mirrors web
+  /// lib/espn.ts `isFieldSport`, where they're currently switched off (empty).
+  static const fieldSports = <String>{};
+  bool get isFieldSport => fieldSports.contains(sport);
+
+  factory SportEvent.fromJson(Map<String, dynamic> j) => SportEvent(
+        externalId: '${j['external_id'] ?? ''}',
+        sport: (j['sport'] ?? '') as String,
+        status: (j['status'] ?? 'scheduled') as String,
+        name: (j['name'] ?? '') as String,
+        homeTeam: (j['home_team'] ?? '') as String,
+        awayTeam: (j['away_team'] ?? '') as String,
+        homeAbbr: j['home_abbr'] as String?,
+        awayAbbr: j['away_abbr'] as String?,
+        homeScore: j['home_score'] as int?,
+        awayScore: j['away_score'] as int?,
+        homeLogo: j['home_logo'] as String?,
+        awayLogo: j['away_logo'] as String?,
+        startTime: j['start_time'] as String?,
       );
 }
 
