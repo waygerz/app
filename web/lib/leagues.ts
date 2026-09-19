@@ -272,3 +272,11 @@ export function leagueColor(id: string): string {
 export function leagueInitials(name: string): string {
   return name.split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 }
+
+/** 1 → "1st", 2 → "2nd", 11 → "11th", 23 → "23rd". Mirrors the app's
+ * `ordinal` (mobile/lib/format.dart) — change both together. */
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}

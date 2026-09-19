@@ -1,11 +1,14 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { leaguesApi, leagueTypeLabel, type LeagueType } from '@/lib/leagues';
+import { useAuth } from '@/auth/AuthContext';
+import {
+  leaguesApi, leagueTypeLabel, ordinal, type LeagueDetail, type LeagueType, type StandingRow,
+} from '@/lib/leagues';
 import { formatCredits } from '@/lib/wallet';
 import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
@@ -14,10 +17,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
+  Drawer, DrawerContent, DrawerDescription, DrawerTitle,
+} from '@/components/ui/drawer';
 import { cn } from '@/lib/utils';
-import { Swords, Trophy, UserPlus } from 'lucide-react';
+import { ChevronRight, Swords, Trophy, UserPlus } from 'lucide-react';
 import { LeagueProvider } from './league-context';
 import { InviteToLeagueDialog } from './invite-dialog';
 
@@ -27,18 +30,36 @@ const PLAY_TAB: Record<LeagueType, string> = {
 };
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-// The league-type chip: an icon (always) + the label (hidden on mobile when
-// `responsive`, to save room in the header). Swords = head-to-head, Trophy =
-// pick'em — matching the dashboard league cards.
-function LeagueTypeBadge({ type, responsive = false }: { type: LeagueType; responsive?: boolean }) {
+// The league-type chip: Swords = head-to-head, Trophy = pick'em — matching the
+// top bar's type icon and the dashboard league cards.
+function LeagueTypeBadge({ type }: { type: LeagueType }) {
   const Icon = type === 'pickem' ? Trophy : Swords;
   return (
     <Badge size="sm" appearance="light">
       <Icon className="size-3.5" />
-      <span className={responsive ? 'hidden sm:inline' : undefined}>{leagueTypeLabel(type)}</span>
+      {leagueTypeLabel(type)}
     </Badge>
   );
+}
+
+// "Week 3 · Open" (green dot while open), or Draft before the league starts.
+function PeriodBadge({ lg }: { lg: LeagueDetail }) {
+  if (lg.status === 'draft') return <Badge size="sm" variant="warning" appearance="light">Draft</Badge>;
+  const p = lg.current_period;
+  if (!p) return null;
+  return (
+    <Badge size="sm" variant="secondary" className="tabular-nums">
+      {p.status === 'open' && <span className="size-1.5 rounded-full bg-brand" aria-hidden />}
+      {p.label} · {cap(p.status)}
+    </Badge>
+  );
+}
+
+function formatRecord(r?: StandingRow) {
+  if (!r) return '—';
+  return r.pushes ? `${r.wins}–${r.losses}–${r.pushes}` : `${r.wins}–${r.losses}`;
 }
 
 export default function LeagueLayout({ children }: { children: ReactNode }) {
@@ -46,7 +67,15 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const qc = useQueryClient();
+  const { user } = useAuth();
   const league = useQuery({ queryKey: ['league', id], queryFn: () => leaguesApi.get(id) });
+  // My rank + record for the league row and details. Same cache as the
+  // Standings tab's season table, so it's one fetch.
+  const standings = useQuery({
+    queryKey: ['standings', id],
+    queryFn: () => leaguesApi.standings(id),
+    enabled: !!league.data && league.data.status !== 'draft',
+  });
 
   const activate = useMutation({
     mutationFn: () => leaguesApi.activate(id),
@@ -59,6 +88,13 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   });
   const [infoOpen, setInfoOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Keep the active tab in view when the route changes.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    navRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [pathname, league.data]);
 
   if (league.isLoading) {
     return <div className="container min-w-0 w-full py-8"><Skeleton className="h-40 rounded-xl" /></div>;
@@ -79,6 +115,9 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   const isDraft = lg.status === 'draft';
   const isMoney = lg.league_type !== 'pickem';
   const commish = lg.members.find((m) => m.role === 'commissioner');
+  const members = lg.members.length;
+  const rows = standings.data?.standings ?? [];
+  const mine = rows.find((r) => String(r.user_id) === String(user?.id ?? ''));
 
   // Feed (league activity), then Upcoming games + Sports (both money-only), then
   // the play tab (Bets / Picks), then Standings (week results + Overall), Members,
@@ -95,89 +134,109 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
     ...(isCommish ? [{ to: `/leagues/${id}/manage`, label: 'Manage', end: false }] : []),
   ];
 
+  // League row, top line: balance (money), my rank (pick'em) or Draft.
+  const topLine = isDraft ? (
+    <PeriodBadge lg={lg} />
+  ) : isMoney ? (
+    <>
+      <span className="text-lg font-bold leading-tight tabular-nums text-foreground">
+        {formatCredits(lg.my_balance_cents ?? 0)}
+      </span>
+      <span className="text-xs text-muted-foreground">balance</span>
+    </>
+  ) : mine ? (
+    <>
+      <span className="text-lg font-bold leading-tight tabular-nums text-foreground">{ordinal(mine.rank)}</span>
+      <span className="text-xs text-muted-foreground">of {rows.length}</span>
+    </>
+  ) : (
+    <span className="text-lg font-bold leading-tight text-foreground">{plural(members, 'member')}</span>
+  );
+  // Bottom line: the week, or who's in before the league starts.
+  const bottomLine = isDraft ? (
+    <span>{plural(members, 'member')} · not started</span>
+  ) : lg.current_period ? (
+    <PeriodBadge lg={lg} />
+  ) : (
+    <span>{plural(members, 'member')}</span>
+  );
+
+  const openInvite = () => {
+    setInfoOpen(false);
+    setInviteOpen(true);
+  };
+  // A draft league's commissioner needs Activate more than Invite, so the row
+  // shows Activate; Invite is always in the details sheet too.
+  const activateFirst = isDraft && isCommish;
+
+  const stats: [string, string][] = [
+    isMoney
+      ? ['Balance', formatCredits(lg.my_balance_cents ?? 0)]
+      : ['Rank', mine ? `${ordinal(mine.rank)} of ${rows.length}` : '—'],
+    ['Members', String(members)],
+    ['Record', formatRecord(mine)],
+  ];
+
   return (
-    <div className="container min-w-0 w-full py-5 sm:py-8">
-      {/* Header — stacks on mobile (action under the title), row on desktop */}
-      <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
-          <button
-            type="button"
-            onClick={() => setInfoOpen(true)}
-            className="shrink-0 rounded-full transition-opacity hover:opacity-80"
-            aria-label="League details"
-          >
-            <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={80} />
-          </button>
-          <div className="min-w-0 flex-1">
-            {/* Desktop keeps the big name + inline badges (the top bar shows nav
-                links, not the name). */}
-            <div className="hidden flex-wrap items-center gap-2 lg:flex">
-              <h1 className="text-2xl font-bold text-foreground">{lg.name}</h1>
-              <LeagueTypeBadge type={lg.league_type} />
-              {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
-            </div>
-            {/* Mobile: the name rides in the fixed top bar (HeaderLogo), so lead
-                with a labeled type pill (+ Draft) instead of an orphaned icon. */}
-            <div className="flex flex-wrap items-center gap-2 lg:hidden">
-              <LeagueTypeBadge type={lg.league_type} />
-              {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
-            </div>
-            {isMoney && (
-              <p className="mt-1 text-sm">
-                <span className="font-bold tabular-nums text-foreground">
-                  {formatCredits(lg.my_balance_cents ?? 0)}
-                </span>
-                <span className="ml-1.5 text-muted-foreground">balance</span>
-              </p>
-            )}
-            <p className="mt-1 break-words text-xs text-muted-foreground sm:text-sm">
-              {lg.members.length} member{lg.members.length === 1 ? '' : 's'}
-              {lg.current_period ? ` · ${lg.current_period.label} (${lg.current_period.status})` : ''}
-            </p>
-          </div>
-        </div>
-        {isDraft && isCommish && (
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
-            <Button className="w-full sm:w-auto" onClick={() => activate.mutate()} disabled={activate.isPending}>
-              {activate.isPending ? 'Activating…' : 'Activate league'}
-            </Button>
-          </div>
+    <div className="container min-w-0 w-full pb-5 pt-2">
+      {/* League row: balance / rank on top, the week under it — tapping opens
+          league details. Invite (or Activate) on the right. The league's logo,
+          type and name ride in the top bar (HeaderLogo). */}
+      <div className="flex items-center gap-3 py-2">
+        <button
+          type="button"
+          onClick={() => setInfoOpen(true)}
+          aria-haspopup="dialog"
+          aria-label={`${lg.name} details`}
+          className="-ms-2 flex min-w-0 flex-1 flex-col items-start gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/60 active:bg-muted focus-visible:outline-2 focus-visible:outline-primary"
+        >
+          <span className="flex items-baseline gap-1.5">{topLine}</span>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            {bottomLine}
+            <ChevronRight className="size-3.5" aria-hidden />
+          </span>
+        </button>
+        {activateFirst ? (
+          <Button onClick={() => activate.mutate()} disabled={activate.isPending}>
+            {activate.isPending ? 'Activating…' : 'Activate'}
+          </Button>
+        ) : (
+          <Button variant="outline" onClick={openInvite}>
+            <UserPlus />
+            Invite
+          </Button>
         )}
       </div>
 
-      {/* League details dialog — opened by tapping the logo. Holds the big logo,
-          details, commissioner, and the Invite action. */}
-      <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
-        <DialogContent>
-          <DialogHeader className="sr-only">
-            <DialogTitle>{lg.name} details</DialogTitle>
-          </DialogHeader>
-          <DialogBody className="flex flex-col items-center gap-4 py-2">
-            <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={88} />
-            <div className="flex flex-col items-center gap-1.5 text-center">
-              <h2 className="text-lg font-bold text-foreground">{lg.name}</h2>
+      {/* League details — a bottom sheet from the league row. */}
+      <Drawer open={infoOpen} onOpenChange={setInfoOpen} shouldScaleBackground={false}>
+        <DrawerContent className="pb-[env(safe-area-inset-bottom)]">
+          <div className="flex flex-col items-center gap-4 px-4 pb-6 pt-4">
+            <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={64} />
+            <div className="flex flex-col items-center gap-2 text-center">
+              <DrawerTitle className="text-lg font-bold text-foreground">{lg.name}</DrawerTitle>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <LeagueTypeBadge type={lg.league_type} />
-                {isDraft && <Badge size="sm" variant="warning" appearance="light">Draft</Badge>}
+                <PeriodBadge lg={lg} />
               </div>
-              <p className="text-sm text-muted-foreground">
-                {lg.members.length} member{lg.members.length === 1 ? '' : 's'}
-                {lg.current_period ? ` · ${lg.current_period.label} · ${cap(lg.current_period.status)}` : ''}
-              </p>
+              {lg.description ? (
+                <DrawerDescription className="break-words text-foreground">{lg.description}</DrawerDescription>
+              ) : (
+                <DrawerDescription className="sr-only">League details</DrawerDescription>
+              )}
             </div>
 
-            {lg.description && (
-              <p className="w-full break-words text-center text-sm text-foreground">{lg.description}</p>
-            )}
+            <dl className="grid w-full grid-cols-3 divide-x divide-border rounded-xl border border-border bg-muted/30">
+              {stats.map(([label, value]) => (
+                <div key={label} className="flex flex-col gap-0.5 px-3 py-2.5">
+                  <dt className="text-xs text-muted-foreground">{label}</dt>
+                  <dd className="text-base font-bold tabular-nums text-foreground">{value}</dd>
+                </div>
+              ))}
+            </dl>
 
-            <Button
-              className="w-full"
-              onClick={() => {
-                setInfoOpen(false);
-                setInviteOpen(true);
-              }}
-            >
-              <UserPlus className="size-4" />
+            <Button className="w-full" onClick={openInvite}>
+              <UserPlus />
               Invite
             </Button>
 
@@ -190,9 +249,9 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
                 </div>
               </div>
             )}
-          </DialogBody>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </DrawerContent>
+      </Drawer>
 
       <InviteToLeagueDialog
         leagueId={id}
@@ -203,12 +262,14 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
         onOpenChange={setInviteOpen}
       />
 
-      {/* Scrollable pill nav — swipes horizontally when the tabs overflow. */}
-      <div
-        className="mb-6 w-full min-w-0 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        aria-label="League sections"
-      >
-        <nav className="flex w-max min-w-full gap-2">
+      {/* Underline tab bar, pinned under the fixed top bar; swipes sideways
+          when the tabs overflow. Full-bleed so its bottom border spans the column. */}
+      <div className="sticky top-[calc(var(--header-height-mobile)+env(safe-area-inset-top))] z-[5] -mx-4 mb-4 border-b border-border bg-background">
+        <nav
+          ref={navRef}
+          aria-label="League sections"
+          className="flex gap-5 overflow-x-auto overscroll-x-contain px-4 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {tabs.map((t) => {
             const isActive = t.end
               ? pathname === t.to
@@ -217,11 +278,12 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
               <Link
                 key={t.to}
                 href={t.to}
+                aria-current={isActive ? 'page' : undefined}
                 className={cn(
-                  'shrink-0 whitespace-nowrap rounded-full border px-4 py-2.5 text-sm font-medium transition-colors',
+                  '-mb-px flex min-h-11 shrink-0 items-center whitespace-nowrap border-b-2 text-sm font-semibold transition-colors',
                   isActive
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground',
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >
                 {t.label}

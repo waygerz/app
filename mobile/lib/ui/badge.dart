@@ -16,6 +16,7 @@ class WzBadge extends StatelessWidget {
     this.variant = BadgeVariant.primary,
     this.appearance = BadgeAppearance.light,
     this.icon,
+    this.dot,
     this.small = true,
   });
 
@@ -23,6 +24,9 @@ class WzBadge extends StatelessWidget {
   final BadgeVariant variant;
   final BadgeAppearance appearance;
   final IconData? icon;
+
+  /// A small leading status dot in this color (web: the green "open" dot).
+  final Color? dot;
   final bool small;
 
   @override
@@ -62,6 +66,10 @@ class WzBadge extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
         if (icon != null) ...[
           Icon(icon, size: small ? 12 : 14, color: fg),
+          const SizedBox(width: 4),
+        ],
+        if (dot != null) ...[
+          Container(width: 6, height: 6, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
           const SizedBox(width: 4),
         ],
         Text(label, style: TextStyle(fontSize: fontSize, height: 1.1, fontWeight: FontWeight.w500, color: fg)),

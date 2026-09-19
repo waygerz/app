@@ -8,6 +8,7 @@ import { LeagueAvatar } from '@/components/league-avatar';
 import { cn } from '@/lib/utils';
 import { toAbsoluteUrl } from '@/lib/helpers';
 import { isEspnSport } from '@/lib/espn';
+import { Swords, Trophy } from 'lucide-react';
 
 const titleCase = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -61,6 +62,8 @@ export function HeaderLogo() {
   });
 
   const title = leagueId ? (league.data?.name ?? 'League') : pageTitle(pathname);
+  const leagueType = league.data?.league_type;
+  const TypeIcon = leagueType === 'pickem' ? Trophy : Swords;
 
   return (
     <div className="flex min-w-0 shrink items-center gap-2 sm:gap-5 lg:w-[200px]">
@@ -71,7 +74,8 @@ export function HeaderLogo() {
         <span className="hidden text-lg font-extrabold tracking-tight text-white lg:inline">Waygerz</span>
       </Link>
       {leagueId ? (
-        // Mobile only: the league's avatar + name, tapping through to its Feed.
+        // Mobile only: the league's avatar, type icon and name, tapping through
+        // to its Feed.
         <Link href={`/leagues/${leagueId}`} className="flex min-w-0 items-center gap-2 lg:hidden">
           <LeagueAvatar
             name={league.data?.name ?? 'League'}
@@ -79,6 +83,13 @@ export function HeaderLogo() {
             id={leagueId}
             size={32}
           />
+          {leagueType && (
+            <TypeIcon
+              className="size-4 shrink-0 text-primary"
+              role="img"
+              aria-label={leagueType === 'pickem' ? "Pick'em" : 'Head-to-head'}
+            />
+          )}
           <span className="min-w-0 truncate text-lg font-bold text-white">{title}</span>
         </Link>
       ) : (

@@ -11,19 +11,24 @@ import 'profile_menu.dart';
 /// Pushed routes get a back chevron (the web relies on the browser for that).
 /// The account menu (avatar) is always at the top right, as on the web.
 class WaygerzHeader extends StatelessWidget implements PreferredSizeWidget {
-  const WaygerzHeader({super.key, required this.title, this.leagueId, this.leagueLogo, this.actions = const []});
+  const WaygerzHeader({super.key, required this.title, this.leagueId, this.leagueLogo, this.leagueType, this.actions = const []});
 
   /// A plain page header with the logo.
   const WaygerzHeader.page(String title, {Key? key, List<Widget> actions = const []})
       : this(key: key, title: title, actions: actions);
 
-  /// A league page header with the league's avatar.
-  const WaygerzHeader.league({Key? key, required String name, required String id, String? logo, List<Widget> actions = const []})
-      : this(key: key, title: name, leagueId: id, leagueLogo: logo, actions: actions);
+  /// A league page header: the league's avatar, its type icon (swords =
+  /// head-to-head, trophy = pick'em) and name.
+  const WaygerzHeader.league(
+      {Key? key, required String name, required String id, String? logo, String? type, List<Widget> actions = const []})
+      : this(key: key, title: name, leagueId: id, leagueLogo: logo, leagueType: type, actions: actions);
 
   final String title;
   final String? leagueId;
   final String? leagueLogo;
+
+  /// "pickem" or "head_to_head"; null until the league loads.
+  final String? leagueType;
   final List<Widget> actions;
 
   @override
@@ -56,6 +61,14 @@ class WaygerzHeader extends StatelessWidget implements PreferredSizeWidget {
               child: Image.asset('assets/images/logo-64.png', width: 36, height: 36),
             ),
           const SizedBox(width: 8),
+          if (leagueType != null) ...[
+            Semantics(
+              label: leagueType == 'pickem' ? "Pick'em" : 'Head-to-head',
+              child: Icon(leagueType == 'pickem' ? LucideIcons.trophy : LucideIcons.swords,
+                  size: 16, color: WaygerzColors.of(context).primary),
+            ),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: Text(
               title,

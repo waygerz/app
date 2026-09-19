@@ -28,22 +28,30 @@ with no clear hierarchy.
 | Two-way toggles (Today/This week) | Segmented control |
 
 **Work:**
-- [ ] Web: `leagues/[id]/layout.tsx` tab nav → underline tab bar (sticky); sport filters in `_sections/upcoming.tsx` and `_sections/sports.tsx` → chips; Today/This week → segmented.
-- [ ] Mobile: `ui/pill_tabs.dart` → `WzTabBar` (underline, sticky via the league header); `WzSegmented` kept for toggles; sport filters → chip style.
+- [x] Web: `leagues/[id]/layout.tsx` tab nav → underline tab bar (sticky). Sport filters in `_sections/upcoming.tsx` and `_sections/sports.tsx` → chips; Today/This week → segmented.
+- [x] Mobile: league sections → `WzTabBar` (`ui/tab_bar.dart`, underline, fixed above the section).
+- [ ] Sport filters → chip style (web + mobile); `WzSegmented` kept for toggles.
 - [ ] Remove the pill style from anything that isn't a filter.
 
-## 2. Compact league header
-**Today:** the 80px logo, badges, balance and member line sit above every tab,
-and repeat the league name and logo already in the top bar. On a phone the
-content starts about halfway down the screen.
+## 2. Compact league header — done
+**Was:** an 80px logo, type badge, balance and member line above every tab,
+repeating the name and logo already in the top bar; content started about
+halfway down the phone.
 
-**Change:** the full header shows on **Feed** only. On other tabs (and on Feed
-once scrolled) it collapses to a slim row (small logo, type badge, balance).
-The tab bar stays pinned under the top bar.
-
-**Work:**
-- [ ] Web: `leagues/[id]/layout.tsx` header → full on Feed, slim elsewhere; sticky tab bar under the fixed header.
-- [ ] Mobile: `league_detail_screen.dart` → `NestedScrollView`/`SliverAppBar`-style collapsing header with a pinned tab bar (replaces passing `header` widgets into each tab's list).
+**Now (web + mobile):**
+- Top bar: league logo, type icon (swords / trophy), name.
+- League row on every tab: **balance** (money) or **my rank** "3rd of 18"
+  (pick'em) on top, **Week 3 · Open** under it, a › — tapping it opens the
+  **league details sheet**. **Invite** on the right; a draft league's
+  commissioner gets **Activate** there instead.
+- Details sheet (web vaul `Drawer`, mobile bottom sheet): logo, name, type +
+  week, description, stats (Balance or Rank · Members · Record), Invite,
+  commissioner. Rank and record come from the season standings (same query as
+  Standings › Overall) — no backend change.
+- Tabs: underline tab bar. Web: the row scrolls away and the tabs pin under the
+  top bar (`main` uses `overflow-x-clip` so sticky works). Mobile: the row and
+  tabs sit fixed above the section's list (each section still owns its own
+  scroll view; a `NestedScrollView` would let the row scroll away too).
 
 ## 3. Bottom sheets instead of centred dialogs
 **Today:** web bet details, confirmations, counter offers, member picks and
@@ -153,6 +161,6 @@ Each numbered item ships on its own: commit → CI → deploy **webui** when
 approved; mobile goes with the next APK/TestFlight build.
 
 ## Open decisions
-1. League tabs: underline tab bar (recommended) or keep pills but make filters visually distinct.
-2. Collapsing header: full header on Feed only (recommended) or on every tab until scrolled.
+1. ~~League tabs~~ — underline tab bar (done).
+2. ~~Collapsing header~~ — one league row on every tab (done).
 3. Web sheets: all non-confirm dialogs (recommended) or only the bet flows.

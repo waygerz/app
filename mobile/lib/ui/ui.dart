@@ -13,6 +13,7 @@ export 'search_field.dart';
 export 'section_title.dart';
 export 'select.dart';
 export 'skeleton.dart';
+export 'tab_bar.dart';
 export 'toast.dart';
 export 'tokens.dart';
 export 'week_chips.dart';

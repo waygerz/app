@@ -89,7 +89,7 @@ export function LayoutProvider({
     >
       <div
         data-slot="layout-wrapper"
-        className="flex min-w-0 w-full max-w-full grow overflow-x-hidden"
+        className="flex min-w-0 w-full max-w-full grow overflow-x-clip"
         data-sidebar-open={isSidebarOpen}
         style={style}
       >

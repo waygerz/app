@@ -106,6 +106,13 @@ String dayLabel(String? iso) {
 /// → P2, "Week 3" → W3, playoff rounds → WC / DIV / CONF / PB / SB, "Week of
 /// Sep 14" → 9/14, "Season 2026" → 2026, else up to 3 initials. Mirrors web
 /// lib/leagues.ts `shortPeriodLabel` — change both together.
+/// 1 → "1st", 2 → "2nd", 11 → "11th", 23 → "23rd" (web lib/leagues.ts ordinal).
+String ordinal(int n) {
+  final tens = n % 100;
+  final suffix = tens >= 11 && tens <= 13 ? 'th' : const {1: 'st', 2: 'nd', 3: 'rd'}[n % 10] ?? 'th';
+  return '$n$suffix';
+}
+
 String shortPeriodLabel(String label) {
   final l = label.trim();
   final low = l.toLowerCase();

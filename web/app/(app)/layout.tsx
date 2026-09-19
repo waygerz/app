@@ -44,8 +44,10 @@ export default function Layout({ children }: { children: ReactNode }) {
     >
       <ProfileDialogProvider me={user.id}>
         <Header />
+        {/* overflow-x-clip, not hidden: hidden makes main a scroll container,
+            which breaks position: sticky (the pinned league tabs). */}
         <main
-          className="app-column app-frame flex min-w-0 grow flex-col overflow-x-hidden pt-[calc(var(--header-height-mobile)_+_env(safe-area-inset-top))] pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pt-(--header-height) lg:pb-0"
+          className="app-column app-frame flex min-w-0 grow flex-col overflow-x-clip pt-[calc(var(--header-height-mobile)_+_env(safe-area-inset-top))] pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pt-(--header-height) lg:pb-0"
           role="main"
         >
           {children}

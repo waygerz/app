@@ -12,6 +12,18 @@ void main() {
     expect(formatCredits(0), r'$0');
   });
 
+  test('ordinal', () {
+    expect(ordinal(1), '1st');
+    expect(ordinal(2), '2nd');
+    expect(ordinal(3), '3rd');
+    expect(ordinal(4), '4th');
+    expect(ordinal(11), '11th');
+    expect(ordinal(12), '12th');
+    expect(ordinal(13), '13th');
+    expect(ordinal(21), '21st');
+    expect(ordinal(112), '112th');
+  });
+
   test('formatStart', () {
     expect(formatStart(null), 'TBD');
     expect(formatStart('nope'), 'TBD');
