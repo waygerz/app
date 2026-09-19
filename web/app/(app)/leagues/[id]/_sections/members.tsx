@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { leaguesApi, type LeagueMember } from '@/lib/leagues';
 import { useAuth } from '@/auth/AuthContext';
 import { CenterCard } from '@/components/ui/center-card';
+import { SectionTitle } from '@/components/section-title';
 import { UserMiniCard } from '@/components/user-mini-card';
 import { ListSearch } from '@/components/list-search';
 import { Badge } from '@/components/ui/badge';
@@ -194,7 +195,7 @@ export function LeagueMembers() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold text-foreground">Members ({lg.members.length})</h2>
+      <SectionTitle title={`Members (${lg.members.length})`} />
       {showSearch && <ListSearch value={q} onChange={setQ} placeholder="Search members" />}
       {members.length === 0 ? (
         <CenterCard>

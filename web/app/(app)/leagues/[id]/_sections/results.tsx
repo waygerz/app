@@ -7,17 +7,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   leaguesApi,
+  shortPeriodLabel,
   type LeagueDetail,
   type LeaguePeriod,
   type PeriodResults,
   type WeeklyResultRow,
 } from '@/lib/leagues';
 import { groupWagers, wagersApi, type Wager } from '@/lib/wagers';
-import { fetchEvent, type SportEvent } from '@/lib/ingestor';
+import { fetchEvent, fetchPeriodEvents, type SportEvent } from '@/lib/ingestor';
 import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
 import { TeamLogo, formatStart } from '@/components/event-card';
-import { Combobox } from '@/components/ui/combobox';
+import { WeekChips } from '@/components/week-chips';
+import { SectionTitle } from '@/components/section-title';
 import { Card } from '@/components/ui/card';
 import { CenterCard } from '@/components/ui/center-card';
 import { UserAvatar } from '@/components/user-avatar';
@@ -195,8 +197,8 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
   const periodsDesc = [...(periodsQ.data ?? [])].sort((a, b) => b.index - a.index);
   const options = periodsDesc
     .filter((p) => (byPeriod.get(p.id)?.length ?? 0) > 0)
-    .map((p) => ({ value: p.id, label: weekEndingLabel(p) }));
-  if ((byPeriod.get('_none')?.length ?? 0) > 0) options.push({ value: '_none', label: 'Other' });
+    .map((p) => ({ value: p.id, label: shortPeriodLabel(p.label), title: weekEndingLabel(p) }));
+  if ((byPeriod.get('_none')?.length ?? 0) > 0) options.push({ value: '_none', label: 'Other', title: 'Other' });
 
   if (options.length === 0) return <NoResults text="No results yet — settled bets show up here by week." />;
 
@@ -206,20 +208,22 @@ function HeadToHeadResults({ lg }: { lg: LeagueDetail }) {
   const weekWagers = byPeriod.get(selectedId) ?? [];
   const recon = reconcile(weekWagers, me);
   const decided = recon.wins + recon.losses;
+  const selected = options.find((o) => o.value === selectedId);
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold text-foreground sm:text-lg">Results</h2>
-      <Combobox
-        ariaLabel="Select week"
-        className="w-full max-w-[220px]"
+      {/* Oldest → newest, like the week chips on My Picks. */}
+      <WeekChips
+        weeks={[...options].reverse()}
         value={selectedId}
         onChange={(id) => {
           const p = periodsDesc.find((x) => x.id === id);
           if (p) setWeek(p.index);
         }}
-        options={options}
-        searchPlaceholder="Search week…"
+      />
+      <SectionTitle
+        title={`Results · ${selected?.title ?? ''}`}
+        subtitle={`${weekWagers.length} settled bet${weekWagers.length === 1 ? '' : 's'}`}
       />
 
       {/* Weekly reconciliation — net dollars + beers, overall then per opponent. */}
@@ -418,6 +422,17 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
   // Only crown a winner once the week is final — never mid-week.
   const weekFinal = periods.find((p) => p.id === selectedId)?.status === 'final';
 
+  const selectedPeriod = periods.find((p) => p.id === selectedId) ?? null;
+  // The week's games, for the "finished / left" line (same query as My Picks).
+  const sportLeagueIds = lg.sports.map((s) => s.sport_league_id);
+  const gamesQ = useQuery({
+    queryKey: ['period-events', lg.id, selectedId],
+    queryFn: () => fetchPeriodEvents(sportLeagueIds, selectedPeriod?.starts_at, selectedPeriod?.ends_at),
+    enabled: !!selectedPeriod && sportLeagueIds.length > 0,
+  });
+  const games = (gamesQ.data ?? []).filter((e) => e.status !== 'cancelled');
+  const finished = games.filter((e) => e.status === 'final').length;
+
   const resultsQ = useQuery({
     queryKey: ['period-results', lg.id, selectedId],
     queryFn: () => leaguesApi.periodResults(lg.id, selectedId),
@@ -449,20 +464,26 @@ function PickemResults({ lg }: { lg: LeagueDetail }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold text-foreground sm:text-lg">Results</h2>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Combobox
-          ariaLabel="Select week"
-          className="w-full max-w-[220px]"
-          value={selectedId}
-          onChange={(id) => {
-            const p = periods.find((x) => x.id === id);
-            if (p) setWeek(p.index);
-          }}
-          options={periods.map((p) => ({ value: p.id, label: p.label }))}
-          searchPlaceholder="Search week…"
-        />
-      </div>
+      <WeekChips
+        weeks={periods.map((p) => ({ value: p.id, label: shortPeriodLabel(p.label), title: p.label }))}
+        value={selectedId}
+        onChange={(id) => {
+          const p = periods.find((x) => x.id === id);
+          if (p) setWeek(p.index);
+        }}
+      />
+      <SectionTitle
+        title={`Results · ${selectedPeriod?.label ?? ''}`}
+        subtitle={
+          gamesQ.isLoading
+            ? undefined
+            : games.length === 0
+              ? 'No games this week.'
+              : finished === games.length
+                ? `All ${games.length} games final.`
+                : `${finished} of ${games.length} games final · ${games.length - finished} left`
+        }
+      />
 
       {resultsQ.isLoading && <Skeleton className="h-40 rounded-xl" />}
       {!resultsQ.isLoading && rows.length === 0 && <NoResults text="No picks for this week yet." />}

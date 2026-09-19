@@ -101,3 +101,32 @@ String dayLabel(String? iso) {
   if (same(d, now.subtract(const Duration(days: 1)))) return 'Yesterday';
   return '${_months[d.month - 1]} ${d.day}';
 }
+
+/// A week's short chip label: "Hall of Fame Weekend" → HF, "Preseason Week 2"
+/// → P2, "Week 3" → W3, playoff rounds → WC / DIV / CONF / PB / SB, "Week of
+/// Sep 14" → 9/14, "Season 2026" → 2026, else up to 3 initials. Mirrors web
+/// lib/leagues.ts `shortPeriodLabel` — change both together.
+String shortPeriodLabel(String label) {
+  final l = label.trim();
+  final low = l.toLowerCase();
+  if (low.startsWith('hall of fame')) return 'HF';
+  var m = RegExp(r'^preseason(?: week)? (\d+)').firstMatch(low);
+  if (m != null) return 'P${m.group(1)}';
+  m = RegExp(r'^week (\d+)$').firstMatch(low);
+  if (m != null) return 'W${m.group(1)}';
+  if (low.startsWith('wild card')) return 'WC';
+  if (low.startsWith('divisional')) return 'DIV';
+  if (low.startsWith('conference')) return 'CONF';
+  if (low.startsWith('pro bowl')) return 'PB';
+  if (low.startsWith('super bowl')) return 'SB';
+  m = RegExp(r'^week of ([a-z]{3}) (\d{1,2})$').firstMatch(low);
+  if (m != null) {
+    final month = [for (final x in _months) x.toLowerCase()].indexOf(m.group(1)!) + 1;
+    if (month > 0) return '$month/${int.parse(m.group(2)!)}';
+  }
+  m = RegExp(r'^season (\d{4})$').firstMatch(low);
+  if (m != null) return m.group(1)!;
+  final initials = l.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).map((w) => w[0].toUpperCase()).join();
+  if (initials.isNotEmpty) return initials.length > 3 ? initials.substring(0, 3) : initials;
+  return l.length > 3 ? l.substring(0, 3) : l;
+}

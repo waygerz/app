@@ -217,29 +217,27 @@ class _PicksTabState extends State<PicksTab> {
       ]));
     } else {
       body.addAll([
-        Align(
-          alignment: Alignment.centerLeft,
-          child: WzSelect<String>(
-            width: 220,
-            title: 'Select week',
-            value: _periodId,
-            options: [for (final p in _periods!) (value: p.id, label: p.label)],
-            onChanged: (id) {
-              setState(() => _periodId = id);
-              _loadWeek();
-            },
-          ),
+        WeekChips<String>(
+          weeks: [for (final p in _periods!) WeekChip(p.id, shortPeriodLabel(p.label), p.label)],
+          value: _periodId,
+          onChanged: (id) {
+            setState(() => _periodId = id);
+            _loadWeek();
+          },
         ),
         const SizedBox(height: 16),
-        Text('${editable ? 'Make your Picks' : 'Picks'} · ${period?.label ?? ''}',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.foreground)),
-        const SizedBox(height: 4),
-        if (editable && lockAt != null)
-          Text(locked ? 'Picks are locked — the first game is about to start.' : 'Picks lock ${formatStart(lockAt.toIso8601String())}.',
-              style: TextStyle(fontSize: 12, color: c.mutedForeground))
-        else if (!editable)
-          Text(period?.status == 'upcoming' ? 'This week hasn’t opened yet — preview only.' : 'This week is closed.',
-              style: TextStyle(fontSize: 12, color: c.mutedForeground)),
+        SectionTitle(
+          '${editable ? 'Make your Picks' : 'Picks'} · ${period?.label ?? ''}',
+          subtitle: editable
+              ? (lockAt == null
+                  ? null
+                  : locked
+                      ? 'Picks are locked — the first game is about to start.'
+                      : 'Picks lock ${formatStart(lockAt.toIso8601String())}.')
+              : period?.status == 'upcoming'
+                  ? 'This week hasn’t opened yet — preview only.'
+                  : 'This week is closed.',
+        ),
         const SizedBox(height: 16),
         if (_weekError != null)
           ErrorCard(title: "Couldn't load this week", error: _weekError, onRetry: _loadWeek)

@@ -37,4 +37,18 @@ void main() {
     expect(timeAgo(now.subtract(const Duration(hours: 3)).toIso8601String()), '3h ago');
     expect(timeAgo(now.subtract(const Duration(days: 2)).toIso8601String()), '2d ago');
   });
+
+  test('shortPeriodLabel (same rules as web)', () {
+    expect(shortPeriodLabel('Hall of Fame Weekend'), 'HF');
+    expect(shortPeriodLabel('Preseason Week 1'), 'P1');
+    expect(shortPeriodLabel('Week 2'), 'W2');
+    expect(shortPeriodLabel('Wild Card'), 'WC');
+    expect(shortPeriodLabel('Divisional Round'), 'DIV');
+    expect(shortPeriodLabel('Conference Championship'), 'CONF');
+    expect(shortPeriodLabel('Pro Bowl'), 'PB');
+    expect(shortPeriodLabel('Super Bowl'), 'SB');
+    expect(shortPeriodLabel('Week of Sep 14'), '9/14');
+    expect(shortPeriodLabel('Season 2026'), '2026');
+    expect(shortPeriodLabel('Other'), 'O');
+  });
 }

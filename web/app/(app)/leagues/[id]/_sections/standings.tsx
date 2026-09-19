@@ -6,6 +6,7 @@ import { leaguesApi } from '@/lib/leagues';
 import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
 import { Card } from '@/components/ui/card';
+import { SectionTitle } from '@/components/section-title';
 import { CenterCard } from '@/components/ui/center-card';
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
@@ -39,7 +40,7 @@ export function LeagueStandings() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold text-foreground sm:text-lg">Standings ({rows.length})</h2>
+      <SectionTitle title={`Standings (${rows.length})`} />
       <div className="flex flex-col gap-3">
         {rows.map((r) => {
           const rank = r.rank;

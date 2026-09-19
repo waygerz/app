@@ -231,6 +231,37 @@ const TYPE_LABELS: Record<LeagueType, string> = {
 };
 export const leagueTypeLabel = (t: LeagueType) => TYPE_LABELS[t] ?? t;
 
+/**
+ * A week's short chip label, from its full label: "Hall of Fame Weekend" → HF,
+ * "Preseason Week 2" → P2, "Week 3" → W3, playoff rounds → WC / DIV / CONF /
+ * PB / SB, "Week of Sep 14" → 9/14, "Season 2026" → 2026. Mirrored by the
+ * app's `shortPeriodLabel` (mobile/lib/format.dart) — change both together.
+ */
+export function shortPeriodLabel(label: string): string {
+  const l = label.trim();
+  const low = l.toLowerCase();
+  if (low.startsWith('hall of fame')) return 'HF';
+  let m = low.match(/^preseason(?: week)? (\d+)/);
+  if (m) return `P${m[1]}`;
+  m = low.match(/^week (\d+)$/);
+  if (m) return `W${m[1]}`;
+  if (low.startsWith('wild card')) return 'WC';
+  if (low.startsWith('divisional')) return 'DIV';
+  if (low.startsWith('conference')) return 'CONF';
+  if (low.startsWith('pro bowl')) return 'PB';
+  if (low.startsWith('super bowl')) return 'SB';
+  m = low.match(/^week of ([a-z]{3}) (\d{1,2})$/);
+  if (m) {
+    const month = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].indexOf(m[1]) + 1;
+    if (month > 0) return `${month}/${Number(m[2])}`;
+  }
+  m = low.match(/^season (\d{4})$/);
+  if (m) return m[1];
+  // Anything else: initials, at most 3.
+  const initials = l.split(/\s+/).filter(Boolean).map((w) => w[0]!.toUpperCase()).join('');
+  return initials.slice(0, 3) || l.slice(0, 3);
+}
+
 // Deterministic avatar background color from the league id (fallback when no logo).
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6', '#14b8a6'];
 export function leagueColor(id: string): string {

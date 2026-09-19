@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useLeague } from '../league-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { leaguesApi, type LeagueDetail, type LeaguePeriod, type PickRow } from '@/lib/leagues';
+import { leaguesApi, shortPeriodLabel, type LeagueDetail, type LeaguePeriod, type PickRow } from '@/lib/leagues';
 import { cancelLocked, groupWagers, wagersApi, type WagerGroup } from '@/lib/wagers';
 import { FILTERS, filterWagers, type BetFilter } from '@/app/(app)/bets/bets-common';
 import { BetSortMenu, sortGroups, type SortKey } from '@/components/bet-sort-menu';
@@ -14,7 +14,8 @@ import { fetchPeriodEvents, fetchEvent, type SportEvent } from '@/lib/ingestor';
 import { useAuth } from '@/auth/AuthContext';
 import { useNow } from '@/hooks/use-now';
 import { TeamLogo, formatStart } from '@/components/event-card';
-import { Combobox } from '@/components/ui/combobox';
+import { WeekChips } from '@/components/week-chips';
+import { SectionTitle } from '@/components/section-title';
 import { CenterCard } from '@/components/ui/center-card';
 import { ListSearch } from '@/components/list-search';
 import { cn } from '@/lib/utils';
@@ -175,37 +176,26 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
 
   return (
     <div className="flex flex-col gap-4 pb-24">
-      <div className="flex flex-wrap items-center gap-2">
-        <Combobox
-          ariaLabel="Select week"
-          className="max-w-[220px] flex-1 sm:flex-none sm:w-[220px]"
-          value={selectedId}
-          onChange={setPeriodId}
-          options={periods.map((p) => ({ value: p.id, label: p.label }))}
-          searchPlaceholder="Search week…"
-        />
-      </div>
+      <WeekChips
+        weeks={periods.map((p) => ({ value: p.id, label: shortPeriodLabel(p.label), title: p.label }))}
+        value={selectedId}
+        onChange={setPeriodId}
+      />
 
-      <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold text-foreground sm:text-lg">
-          {editable ? 'Make your Picks' : 'Picks'} · {period?.label}
-        </h2>
-        {editable ? (
-          lockAt !== null && (
-            <p className="text-xs text-muted-foreground">
-              {picksLocked
+      <SectionTitle
+        title={`${editable ? 'Make your Picks' : 'Picks'} · ${period?.label ?? ''}`}
+        subtitle={
+          editable
+            ? lockAt !== null
+              ? picksLocked
                 ? 'Picks are locked — the first game is about to start.'
-                : `Picks lock ${formatStart(new Date(lockAt).toISOString())}.`}
-            </p>
-          )
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            {period?.status === 'upcoming'
+                : `Picks lock ${formatStart(new Date(lockAt).toISOString())}.`
+              : undefined
+            : period?.status === 'upcoming'
               ? 'This week hasn’t opened yet — preview only.'
-              : 'This week is closed.'}
-          </p>
-        )}
-      </div>
+              : 'This week is closed.'
+        }
+      />
 
       {events.isLoading && <Skeleton className="h-24 rounded-xl" />}
       {!events.isLoading && evs.length === 0 && (

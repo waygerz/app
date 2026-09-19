@@ -304,7 +304,7 @@ class _StandingsTabState extends State<_StandingsTab> {
                 Text('No standings yet.', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
               ])
             else ...[
-              Text('Standings (${rows.length})', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.foreground)),
+              SectionTitle('Standings (${rows.length})'),
               const SizedBox(height: 16),
               for (final r in rows)
                 Padding(

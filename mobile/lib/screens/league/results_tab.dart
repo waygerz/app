@@ -40,11 +40,6 @@ Widget _noResults(BuildContext context, String text) {
   ]);
 }
 
-Widget _title(BuildContext context) => Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Text('Results', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: WaygerzColors.of(context).foreground)),
-    );
-
 /// "Week ending MM/DD" from the period's end, else its own label.
 String _weekEnding(LeaguePeriod p) {
   final d = DateTime.tryParse(p.endsAt ?? '')?.toLocal();
@@ -113,24 +108,24 @@ class _H2hResultsState extends State<_H2hResults> {
               byPeriod.putIfAbsent(w.periodId ?? '_none', () => []).add(w);
             }
             final periods = [...d.periods]..sort((a, b) => b.index.compareTo(a.index));
+            // Newest first (the default), shown oldest → newest like My Picks.
             final options = [
               for (final p in periods)
-                if (byPeriod[p.id]?.isNotEmpty ?? false) (value: p.id, label: _weekEnding(p)),
-              if (byPeriod['_none']?.isNotEmpty ?? false) (value: '_none', label: 'Other'),
+                if (byPeriod[p.id]?.isNotEmpty ?? false) WeekChip(p.id, shortPeriodLabel(p.label), _weekEnding(p)),
+              if (byPeriod['_none']?.isNotEmpty ?? false) const WeekChip('_none', 'Other', 'Other'),
             ];
             if (options.isEmpty) {
               body.add(_noResults(context, 'No results yet — settled bets show up here by week.'));
             } else {
               final selected = options.any((o) => o.value == _selected) ? _selected! : options.first.value;
+              final chip = options.firstWhere((o) => o.value == selected);
               final week = byPeriod[selected] ?? const <Wager>[];
               final recon = reconcile(week, me);
               body.addAll([
-                _title(context),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: WzSelect<String>(width: 220, title: 'Select week', value: selected, options: options,
-                      onChanged: (v) => setState(() => _selected = v)),
-                ),
+                WeekChips<String>(weeks: options.reversed.toList(), value: selected,
+                    onChanged: (v) => setState(() => _selected = v)),
+                const SizedBox(height: 16),
+                SectionTitle('Results · ${chip.title}', subtitle: '${week.length} settled bet${week.length == 1 ? '' : 's'}'),
                 const SizedBox(height: 16),
                 if (recon.wins + recon.losses > 0) ...[_reconCard(context, recon), const SizedBox(height: 16)],
                 for (final g in groupWagers(week, me)) WagerBetCard(group: g, me: me, event: d.events[g.rep.eventId]),
@@ -218,6 +213,7 @@ class _PickemResultsState extends State<_PickemResults> {
   Object? _periodsError;
   String _periodId = '';
   Future<PeriodResults>? _results;
+  List<SportEvent>? _games;
   bool _confirming = false;
 
   @override
@@ -237,6 +233,7 @@ class _PickemResultsState extends State<_PickemResults> {
         if (ps.every((p) => p.id != _periodId)) _periodId = open?.id ?? (ps.isEmpty ? '' : ps.last.id);
         _results = _periodId.isEmpty ? null : _leagues.periodResults(widget.league.id, _periodId);
       });
+      _loadGames();
     } catch (e) {
       if (mounted) setState(() => _periodsError = e);
     }
@@ -244,10 +241,35 @@ class _PickemResultsState extends State<_PickemResults> {
 
   Future<void> _reload() => Future.wait([_loadPeriods(), widget.onRefresh()]);
 
-  void _select(String id) => setState(() {
-        _periodId = id;
-        _results = _leagues.periodResults(widget.league.id, id);
-      });
+  void _select(String id) {
+    setState(() {
+      _periodId = id;
+      _results = _leagues.periodResults(widget.league.id, id);
+    });
+    _loadGames();
+  }
+
+  /// The week's games, for the "finished / left" line (same query as My Picks).
+  Future<void> _loadGames() async {
+    final period = _periods?.where((p) => p.id == _periodId).firstOrNull;
+    final ids = [for (final s in widget.league.sports) s.id];
+    setState(() => _games = null);
+    if (period == null || ids.isEmpty) return;
+    try {
+      final games = await EventsApi(widget.api).inWindow(ids, period.startsAt, period.endsAt);
+      if (mounted && period.id == _periodId) setState(() => _games = games.where((e) => e.status != 'cancelled').toList());
+    } catch (_) {/* the subtitle is optional */}
+  }
+
+  String? get _gamesLine {
+    final games = _games;
+    if (games == null) return null;
+    if (games.isEmpty) return 'No games this week.';
+    final done = games.where((e) => e.status == 'final').length;
+    return done == games.length
+        ? 'All ${games.length} games final.'
+        : '$done of ${games.length} games final · ${games.length - done} left';
+  }
 
   Future<void> _confirm(WeeklyResultRow r) async {
     final next = !r.confirmed;
@@ -284,17 +306,13 @@ class _PickemResultsState extends State<_PickemResults> {
     } else {
       final period = _periods!.where((p) => p.id == _periodId).firstOrNull;
       body.addAll([
-        _title(context),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: WzSelect<String>(
-            width: 220,
-            title: 'Select week',
-            value: _periodId,
-            options: [for (final p in _periods!) (value: p.id, label: p.label)],
-            onChanged: _select,
-          ),
+        WeekChips<String>(
+          weeks: [for (final p in _periods!) WeekChip(p.id, shortPeriodLabel(p.label), p.label)],
+          value: _periodId,
+          onChanged: _select,
         ),
+        const SizedBox(height: 16),
+        SectionTitle('Results · ${period?.label ?? ''}', subtitle: _gamesLine),
         const SizedBox(height: 16),
         FutureBuilder<PeriodResults>(
           future: _results,

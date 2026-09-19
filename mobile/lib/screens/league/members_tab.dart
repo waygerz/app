@@ -96,7 +96,7 @@ class _MembersTabState extends State<MembersTab> {
       onRefresh: () => Future.wait([_loadFriends(), widget.onRefresh()]),
       child: ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
         ...widget.header,
-        Text('Members (${lg.members.length})', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: c.foreground)),
+        SectionTitle('Members (${lg.members.length})'),
         const SizedBox(height: 16),
         if (lg.members.length > 8) ...[
           SearchField(hint: 'Search members', onChanged: (v) => setState(() => _q = v)),
