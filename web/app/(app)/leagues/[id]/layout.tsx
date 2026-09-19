@@ -81,8 +81,8 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   const commish = lg.members.find((m) => m.role === 'commissioner');
 
   // Feed (league activity), then Upcoming games + Sports (both money-only), then
-  // the play tab (Bets / Picks), then Standings (week results + Overall), Wallet
-  // (money-only), Members and admin. Pick'em drops Upcoming/Sports/Wallet, so
+  // the play tab (Bets / Picks), then Standings (week results + Overall), Members,
+  // Wallet (money-only) and admin. Pick'em drops Upcoming/Sports/Wallet, so
   // its play tab sits right after Feed.
   const tabs = [
     { to: `/leagues/${id}`, label: 'Feed', end: true },
@@ -90,8 +90,8 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
     ...(isMoney ? [{ to: `/leagues/${id}/sports`, label: 'Sports', end: false }] : []),
     { to: `/leagues/${id}/play`, label: PLAY_TAB[lg.league_type], end: false },
     { to: `/leagues/${id}/standings`, label: 'Standings', end: false },
-    ...(isMoney ? [{ to: `/leagues/${id}/activity`, label: 'Wallet', end: false }] : []),
     { to: `/leagues/${id}/members`, label: 'Members', end: false },
+    ...(isMoney ? [{ to: `/leagues/${id}/activity`, label: 'Wallet', end: false }] : []),
     ...(isCommish ? [{ to: `/leagues/${id}/manage`, label: 'Manage', end: false }] : []),
   ];
 

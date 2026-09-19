@@ -10,7 +10,7 @@ chips plus an **Overall** chip. Shorten the play tab names.
 | League type   | Before                                                                      | After                                                        |
 |---------------|-----------------------------------------------------------------------------|--------------------------------------------------------------|
 | Pick'em       | Feed · My Picks · Results · Standings · Members (· Manage)                  | Feed · **Picks** · **Standings** · Members (· Manage)        |
-| Head-to-head  | Feed · Upcoming · Sports · My Bets · Results · Standings · Wallet · Members (· Manage) | Feed · Upcoming · Sports · **Bets** · **Standings** · Wallet · Members (· Manage) |
+| Head-to-head  | Feed · Upcoming · Sports · My Bets · Results · Standings · Wallet · Members (· Manage) | Feed · Upcoming · Sports · **Bets** · **Standings** · Members · Wallet (· Manage) |
 
 ## Standings tab
 **Chip row:** `HF · P1 · P2 · W1 · W2 … · Overall`

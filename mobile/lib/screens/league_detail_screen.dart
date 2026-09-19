@@ -21,13 +21,13 @@ import 'league/wallet_tab.dart';
 import 'widgets.dart';
 
 /// League sections, in the web's tab order. Public so links can open one.
-enum LeagueSection { feed, upcoming, sports, play, standings, wallet, members, manage }
+enum LeagueSection { feed, upcoming, sports, play, standings, members, wallet, manage }
 
 /// League detail (web app/(app)/leagues/[id]/layout.tsx): the header — logo
 /// (tap for details + invite), type/Draft badges, balance, members · period —
 /// then the section pills in the web's order: Feed, Upcoming + Sports (money
-/// leagues: tap a game to bet), Bets / Picks, Standings (weeks + Overall), Wallet
-/// (money), Members, and Manage for the commissioner.
+/// leagues: tap a game to bet), Bets / Picks, Standings (weeks + Overall), Members, Wallet
+/// (money), and Manage for the commissioner.
 class LeagueDetailScreen extends StatefulWidget {
   const LeagueDetailScreen({super.key, required this.api, required this.league, this.initialSection = LeagueSection.feed});
   final ApiClient api;
@@ -134,8 +134,8 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
         if (lg.isMoney) const PillTab(LeagueSection.sports, 'Sports'),
         PillTab(LeagueSection.play, lg.isPickem ? 'Picks' : 'Bets'),
         const PillTab(LeagueSection.standings, 'Standings'),
-        if (lg.isMoney) const PillTab(LeagueSection.wallet, 'Wallet'),
         const PillTab(LeagueSection.members, 'Members'),
+        if (lg.isMoney) const PillTab(LeagueSection.wallet, 'Wallet'),
         if (lg.myRole == 'commissioner') const PillTab(LeagueSection.manage, 'Manage'),
       ];
 
