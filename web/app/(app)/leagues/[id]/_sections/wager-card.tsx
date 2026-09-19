@@ -6,6 +6,7 @@ import { type SportEvent } from '@/lib/ingestor';
 import { isFieldSport } from '@/lib/espn';
 import { TeamLogo, formatStart } from '@/components/event-card';
 import { UserAvatar } from '@/components/user-avatar';
+import { BetCard } from '@/components/bet-card';
 import { useProfileDialog } from '@/components/profile-dialog-context';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -51,9 +52,10 @@ export function StatusIcon({ icon: Icon, label }: { icon: typeof Lock; label: st
   );
 }
 
-// Read-only detail view of an existing wager — matchup + scores, the viewer's
-// pick, stake, opponent and outcome. Opened from a ledger row's pick chip or
-// settled result. No editing: bets are placed from the Schedule tab.
+// Read-only detail view of an existing wager: the stacked bet card (players,
+// picks, live score / cover line, stake or result). Field sports (golf,
+// racing) have no two-team game, so they keep the opponent row + pick box.
+// Opened from a ledger row's pick chip or settled result.
 function BetDetailsDialog({
   group,
   me,
@@ -70,57 +72,16 @@ function BetDetailsDialog({
   const w = group.rep;
   const side = group.viewerSide;
   const field = !!ev && isFieldSport(ev.sport);
-  const isTotal = w.bet_type === 'total';
-  const settled = w.status === 'settled';
-  const decided = settled || w.status === 'completed';
+  const decided = w.status === 'settled' || w.status === 'completed';
   const iWon = decided && !!w.winner_user_id && w.winner_user_id === me;
   const iLost = decided && !!w.winner_user_id && w.winner_user_id !== me;
-  const started = !!ev && ev.status !== 'scheduled' && ev.status !== 'cancelled';
-  const final = ev?.status === 'final';
-  const hs = ev?.home_score ?? null;
-  const as = ev?.away_score ?? null;
-  const awayLost = final && hs != null && as != null && hs > as;
-  const homeLost = final && hs != null && as != null && as > hs;
   const betTypeLabel = w.bet_type === 'moneyline' ? 'Straight up' : w.bet_type === 'spread' ? 'Spread' : 'Total';
   const opp = group.opponents[0];
   const names = group.opponents.map((o) => o.name);
 
-  // Board grid, same rules as WagerBetCard but at dialog size. (Kept inline
-  // rather than shared — the card and the modal are separate surfaces.)
-  const spreadLn = w.line != null ? (side === w.proposer_side ? w.line : -w.line) : null;
-  const pickForRow = (rowKey: 'home' | 'away'): { label: string; mine: boolean } => {
-    if (isTotal) {
-      const mine = (rowKey === 'away' && side === 'over') || (rowKey === 'home' && side === 'under');
-      return { label: `${rowKey === 'away' ? 'O' : 'U'} ${w.line ?? ''}`.trim(), mine };
-    }
-    if (w.bet_type === 'spread' && spreadLn != null) {
-      const mine = rowKey === side;
-      const ln = mine ? spreadLn : -spreadLn;
-      return { label: `${ln > 0 ? '+' : ''}${ln}`, mine };
-    }
-    const mine = rowKey === side;
-    return { label: mine ? 'ML' : '', mine };
-  };
-  const awayPk = pickForRow('away');
-  const homePk = pickForRow('home');
-  const voided = w.status === 'cancelled' || w.status === 'declined' || w.status === 'refunded';
-  const toneBg = iWon ? 'bg-brand/20' : iLost ? 'bg-destructive/20'
-    : decided || voided ? 'bg-muted/60' : 'bg-blue-500/20';
-  const toneText = iWon ? 'text-brand' : iLost ? 'text-destructive'
-    : decided || voided ? 'text-muted-foreground' : 'text-blue-500';
-  const resultTone = iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-muted-foreground';
-  const teamBacked = (rowKey: 'home' | 'away') => !isTotal && rowKey === side;
-  const rows = [
-    { name: ev?.away_team ?? w.away_team, logo: ev?.away_logo ?? null, abbr: ev?.away_abbr ?? w.away_team, score: as, lost: awayLost, pk: awayPk },
-    { name: ev?.home_team ?? w.home_team, logo: ev?.home_logo ?? null, abbr: ev?.home_abbr ?? w.home_team, score: hs, lost: homeLost, pk: homePk },
-  ];
-  const cellBase = 'flex h-12 flex-col items-center justify-center rounded-md text-sm font-semibold leading-tight tabular-nums';
-  const teamCls = (backed: boolean) => backed ? toneBg : 'bg-muted/60';
-  const pickCls = (mine: boolean) => mine ? cn(toneBg, toneText) : 'bg-muted/60 text-muted-foreground';
-
   return (
-    // The opponent + outcome row is the visible heading; the matchup title is
-    // kept for screen readers.
+    // The card's own header is the visible heading; the matchup title is kept
+    // for screen readers.
     <AppSheet
       open={open}
       onOpenChange={onOpenChange}
@@ -129,62 +90,46 @@ function BetDetailsDialog({
       description="Bet details"
       bodyClassName="pt-2"
     >
-
-        {/* opponent + outcome header */}
-        <div className="flex items-center gap-3">
-          {opp && (
-            <UserAvatar userId={opp.id} name={opp.name} imageUrl={opp.avatar_key} className="size-11 shrink-0" />
-          )}
-          <div className="min-w-0">
-            <div className="truncate text-base font-semibold text-foreground">{opponentsLabel(names)}</div>
-            <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {group.iAmProposer ? 'You challenged' : 'Challenged you'}
-            </div>
-          </div>
-          <div className="ml-auto shrink-0">
-            {decided ? (
-              <Badge size="sm" appearance="light" variant={iWon ? 'success' : iLost ? 'destructive' : 'secondary'}>
-                {iWon ? 'Won ' : iLost ? 'Lost ' : 'Push'}
-                {(iWon || iLost) && <StakeText cents={w.amount_cents} treat={w.treat} sign={iWon ? '+' : '−'} />}
-              </Badge>
-            ) : (
-              wagerStatusBadge(w, me)
+      {!field ? (
+        <BetCard
+          wager={w}
+          event={ev ?? null}
+          me={me ?? ''}
+          closeInset
+          // A bet offered to several friends at once names them all.
+          headline={names.length > 1 ? `vs ${opponentsLabel(names)}` : undefined}
+        />
+      ) : (
+        <>
+          <div className="flex items-center gap-3">
+            {opp && (
+              <UserAvatar userId={opp.id} name={opp.name} imageUrl={opp.avatar_key} className="size-11 shrink-0" />
             )}
+            <div className="min-w-0">
+              <div className="truncate text-base font-semibold text-foreground">{opponentsLabel(names)}</div>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                {group.iAmProposer ? 'You challenged' : 'Challenged you'}
+              </div>
+            </div>
+            <div className="ml-auto shrink-0">
+              {decided ? (
+                <Badge size="sm" appearance="light" variant={iWon ? 'success' : iLost ? 'destructive' : 'secondary'}>
+                  {iWon ? 'Won ' : iLost ? 'Lost ' : 'Push'}
+                  {(iWon || iLost) && <StakeText cents={w.amount_cents} treat={w.treat} sign={iWon ? '+' : '−'} />}
+                </Badge>
+              ) : (
+                wagerStatusBadge(w, me)
+              )}
+            </div>
           </div>
-        </div>
-
-        <div className="mt-4 flex flex-col">
-          {field ? (
-            <div className={cn('rounded-md bg-muted/60 px-3 py-3 text-center text-base font-semibold', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-foreground')}>
-              {wagerPick(w, side)}
-            </div>
-          ) : (
-            <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_5.5rem] gap-1.5">
-              <div className={cn('flex h-12 items-center gap-2.5 rounded-md px-2.5', teamCls(teamBacked('away')))}>
-                <TeamLogo src={rows[0].logo} name={rows[0].abbr} size="sm" />
-                <span className={cn('min-w-0 flex-1 truncate text-sm', rows[0].lost ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{rows[0].name}</span>
-                {started && rows[0].score != null && <span className={cn('text-base font-bold tabular-nums', rows[0].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[0].score}</span>}
-              </div>
-              <div className={cn(cellBase, pickCls(awayPk.mine))}>{awayPk.label || '—'}</div>
-              <div className="row-span-2 flex flex-col items-center justify-center gap-1 self-stretch rounded-md bg-muted/60 px-1">
-                {decided ? (
-                  <span className={cn('text-xl font-extrabold tabular-nums', resultTone)}><StakeText cents={w.amount_cents} treat={w.treat} sign={iWon ? '+' : iLost ? '−' : ''} /></span>
-                ) : (
-                  wagerStatusBadge(w, me)
-                )}
-              </div>
-              <div className={cn('flex h-12 items-center gap-2.5 rounded-md px-2.5', teamCls(teamBacked('home')))}>
-                <TeamLogo src={rows[1].logo} name={rows[1].abbr} size="sm" />
-                <span className={cn('min-w-0 flex-1 truncate text-sm', rows[1].lost ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{rows[1].name}</span>
-                {started && rows[1].score != null && <span className={cn('text-base font-bold tabular-nums', rows[1].lost ? 'text-muted-foreground' : 'text-foreground')}>{rows[1].score}</span>}
-              </div>
-              <div className={cn(cellBase, pickCls(homePk.mine))}>{homePk.label || '—'}</div>
-            </div>
-          )}
+          <div className={cn('mt-4 rounded-md bg-muted/60 px-3 py-3 text-center text-base font-semibold', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-foreground')}>
+            {wagerPick(w, side)}
+          </div>
           <div className="mt-3 text-center text-xs text-muted-foreground">
-            {betTypeLabel} · <StakeText cents={w.amount_cents} treat={w.treat} /> stake · {field && w.event_name ? w.event_name : `${w.away_team} @ ${w.home_team}`}
+            {betTypeLabel} · <StakeText cents={w.amount_cents} treat={w.treat} /> stake · {w.event_name}
           </div>
-        </div>
+        </>
+      )}
     </AppSheet>
   );
 }

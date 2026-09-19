@@ -731,6 +731,8 @@ class SportEvent {
     this.awayScore,
     this.homeLogo,
     this.awayLogo,
+    this.homeColor,
+    this.awayColor,
     this.startTime,
     this.league = '',
     this.sportLeagueId,
@@ -758,6 +760,10 @@ class SportEvent {
   final int? awayScore;
   final String? homeLogo;
   final String? awayLogo;
+
+  /// Team colors ("#rrggbb", null when unknown) for the bet card's bands.
+  final String? homeColor;
+  final String? awayColor;
   final String? startTime;
 
   /// Field sports (golf, racing) have no home/away matchup. Mirrors web
@@ -778,6 +784,8 @@ class SportEvent {
         awayScore: j['away_score'] as int?,
         homeLogo: j['home_logo'] as String?,
         awayLogo: j['away_logo'] as String?,
+        homeColor: j['home_color'] as String?,
+        awayColor: j['away_color'] as String?,
         startTime: j['start_time'] as String?,
         league: (j['league'] ?? '') as String,
         sportLeagueId: j['sport_league_id'] as String?,

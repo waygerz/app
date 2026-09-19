@@ -7,19 +7,20 @@ import '../api/events_api.dart';
 import '../api/invites_api.dart';
 import '../app_nav.dart';
 import '../auth/auth_controller.dart';
-import '../format.dart';
 import '../models.dart';
 import '../shell/app_header.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
-import '../wagers.dart';
+import '../widgets/bet_card.dart';
 import '../widgets/counter_sheet.dart';
+import '../widgets/league_invite_card.dart';
 import 'league_detail_screen.dart';
 import 'widgets.dart';
 
 /// A shared `/c/<code>` link (web app/(public)/c/[code]/page.tsx): a league
-/// invite (Join), a friend link (Add / Accept), or a bet challenge (Accept /
-/// Counter / Reject, or its outcome) — one card, same copy as the web.
+/// invite (LeagueInviteCard + Join), a friend link (Add / Accept), or a bet
+/// challenge (the stacked BetCard + Accept / Counter / Reject, or its
+/// outcome) — same copy as the web.
 class InviteScreen extends StatefulWidget {
   const InviteScreen({super.key, required this.api, required this.code});
   final ApiClient api;
@@ -157,63 +158,14 @@ class _InviteScreenState extends State<InviteScreen> {
         for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(height: 8), buttons[i]],
       ]);
 
-  Widget _row(String label, String value) {
-    final c = WaygerzColors.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.border))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-        const SizedBox(height: 2),
-        Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.foreground)),
-      ]),
-    );
-  }
-
   // ---------------------------------------------------------------- league
   Widget _league(BuildContext context, ResolvedCode r, Map<String, dynamic> lg) {
-    final c = WaygerzColors.of(context);
     final rel = r.viewer['relationship'] as String? ?? 'none';
     final name = (lg['name'] ?? '') as String;
     final type = (lg['league_type'] ?? '') as String;
-    final members = (lg['member_count'] as int?) ?? 0;
-    final rules = (lg['rules'] as Map?) ?? const {};
-    final period = lg['period_type'] == 'season'
-        ? 'Season${rules['season_year'] != null ? ' ${rules['season_year']}' : ''}'
-        : 'Weekly${rules['week_starts_on'] != null ? ' · resets ${rules['week_starts_on']}' : ''}';
-    final sports = [for (final s in (lg['sports'] as List<dynamic>?) ?? const []) ((s as Map)['name'] ?? s['sport_league_id']).toString()];
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Center(child: LeagueAvatar(name: name, id: '${lg['id']}', logo: lg['logo_url'] as String?, size: 88)),
-      const SizedBox(height: 12),
-      _title(name),
-      const SizedBox(height: 4),
-      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        WzBadge(leagueTypeLabel(type)),
-        const SizedBox(width: 8),
-        Text('$members member${members == 1 ? '' : 's'}', style: TextStyle(fontSize: 12, color: c.mutedForeground)),
-      ]),
-      if (lg['commissioner_name'] != null) ...[
-        const SizedBox(height: 8),
-        Text.rich(TextSpan(children: [
-          const TextSpan(text: 'Invited by '),
-          TextSpan(text: '${lg['commissioner_name']}', style: TextStyle(fontWeight: FontWeight.w500, color: c.foreground)),
-        ]), textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-      ],
-      if ((lg['description'] ?? '').toString().isNotEmpty) ...[
-        const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(WaygerzRadius.lg)),
-          child: Text('${lg['description']}', style: TextStyle(fontSize: 14, color: c.foreground)),
-        ),
-      ],
-      const SizedBox(height: 12),
-      _row('Period', period),
-      if (type != 'pickem') _row('Starting balance', formatCredits((lg['starting_balance_cents'] as int?) ?? 0)),
-      if (lg['min_wager_cents'] != null) _row('Min wager', formatCredits(lg['min_wager_cents'] as int)),
-      if (lg['max_wager_cents'] != null) _row('Max wager', formatCredits(lg['max_wager_cents'] as int)),
-      if (sports.isNotEmpty) _row('Sports', sports.join(', ')),
+      LeagueInviteCard(league: lg),
       const SizedBox(height: 20),
       if (rel == 'member') ...[
         _muted('You are already in this league.'),
@@ -291,87 +243,22 @@ class _InviteScreenState extends State<InviteScreen> {
 
   // ------------------------------------------------------------------- bet
   Widget _bet(BuildContext context, ResolvedCode r, Wager w) {
-    final c = WaygerzColors.of(context);
     final me = context.read<AuthController>().user?.id ?? '';
     final rel = r.viewer['relationship'] as String? ?? 'none';
-    final iAmProposer = rel == 'proposer';
     final involved = rel == 'proposer' || rel == 'acceptor';
-    final mySide = iAmProposer ? w.proposerSide : w.acceptorSide;
-    final otherName = iAmProposer ? w.acceptorName : w.proposerName;
-    final otherId = iAmProposer ? w.acceptorId : w.proposerId;
-    final otherAvatar = iAmProposer ? w.acceptorAvatarKey : w.proposerAvatarKey;
+    final otherName = rel == 'proposer' ? w.acceptorName : w.proposerName;
     // Drive off my_turn — after a counter it may be the proposer's turn.
     final myTurn = (r.viewer['my_turn'] as bool?) ?? rel == 'acceptor';
     final countered = w.stakeRound > 0;
     final canAct = myTurn && r.actions.contains('accept');
     final canUndecline = myTurn && r.actions.contains('undecline');
-
-    final ev = _event;
-    final started = ev != null && ev.status != 'scheduled' && ev.status != 'cancelled';
-    final isFinal = ev?.status == 'final';
-    final hs = ev?.homeScore;
-    final as_ = ev?.awayScore;
     final decided = w.status == 'completed' || w.status == 'settled';
-    final myId = iAmProposer ? w.proposerId : w.acceptorId;
-    final iWon = involved && decided && w.winnerUserId != null && w.winnerUserId == myId;
-    final iLost = involved && decided && w.winnerUserId != null && w.winnerUserId != myId;
-    final stakeText = w.amountCents > 0 ? formatCredits(w.amountCents) : '';
-    final stakeLabel = w.amountCents > 0 ? formatCredits(w.amountCents) : treatEmoji(w.treat);
     final terminal = const {'declined', 'cancelled', 'refunded'}.contains(w.status);
-    final headline = decided
-        ? (iWon ? 'You beat $otherName' : iLost ? '$otherName beat you' : 'Push')
-        : terminal
-            ? (w.status == 'declined'
-                ? (canUndecline ? 'You declined this bet' : '$otherName declined')
-                : w.status == 'cancelled'
-                    ? 'Bet cancelled'
-                    : 'Bet refunded')
-            : myTurn
-                ? '$otherName ${countered ? 'countered your bet' : 'sent you a bet'}'
-                : w.status == 'accepted'
-                    ? 'You’re on with $otherName'
-                    : involved
-                        ? 'Waiting on $otherName'
-                        : "${w.proposerName}'s bet";
-
-    Widget teamRow(String rk) {
-      final isAway = rk == 'away';
-      final name = (isAway ? ev?.awayTeam : ev?.homeTeam)?.isNotEmpty == true
-          ? (isAway ? ev!.awayTeam : ev!.homeTeam)
-          : (isAway ? w.awayTeam : w.homeTeam);
-      final logo = isAway ? ev?.awayLogo : ev?.homeLogo;
-      final score = isAway ? as_ : hs;
-      final lost = isFinal && hs != null && as_ != null && (isAway ? hs > as_ : as_ > hs);
-      final backed = involved && mySide == rk;
-      return Container(
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: backed ? Tw.blue500.withValues(alpha: 0.2) : c.muted.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(WaygerzRadius.md),
-        ),
-        child: Row(children: [
-          TeamLogo(name: name, abbreviation: '', logo: logo, size: 32),
-          const SizedBox(width: 10),
-          Expanded(child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, fontWeight: lost ? FontWeight.w400 : FontWeight.w600,
-                  color: lost ? c.mutedForeground : c.foreground))),
-          if (started && score != null)
-            Text('$score', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: lost ? c.mutedForeground : c.foreground))
-          else if (backed)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: Tw.blue500.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(999)),
-              child: const Text('Your pick', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Tw.blue500)),
-            ),
-        ]),
-      );
-    }
 
     final List<Widget> actions;
     if (canAct) {
       actions = [
-        WzButton(label: _busy ? 'Working…' : 'Accept — $stakeLabel', expand: true, busy: _busy,
+        WzButton(label: _busy ? 'Working…' : 'Accept', expand: true, busy: _busy,
             onPressed: _busy ? null : () => _act('accept')),
         WzButton(label: 'Counter', expand: true, variant: ButtonVariant.outline, onPressed: _busy ? null : () async {
           final sent = await showCounterSheet(context, api: widget.api, wager: w, me: me);
@@ -400,53 +287,8 @@ class _InviteScreenState extends State<InviteScreen> {
     }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Center(
-        child: UserAvatar(
-          userId: involved ? otherId : w.proposerId,
-          name: involved ? otherName : w.proposerName,
-          avatarKey: involved ? otherAvatar : w.proposerAvatarKey,
-          size: 80,
-        ),
-      ),
-      const SizedBox(height: 12),
-      _title(headline),
-      const SizedBox(height: 4),
-      _muted(w.leagueName?.isNotEmpty == true ? w.leagueName! : 'Head-to-head'),
-      if (decided && involved && w.winnerUserId != null) ...[
-        const SizedBox(height: 8),
-        Center(
-          child: WzBadge(
-            iWon ? 'Won${stakeText.isNotEmpty ? ' +$stakeText' : ''}' : 'Lost${stakeText.isNotEmpty ? ' −$stakeText' : ''}',
-            variant: iWon ? BadgeVariant.success : BadgeVariant.destructive,
-          ),
-        ),
-      ],
-      const SizedBox(height: 20),
-      if (w.awayTeam.isNotEmpty && w.homeTeam.isNotEmpty) ...[
-        teamRow('away'),
-        const SizedBox(height: 6),
-        teamRow('home'),
-      ] else
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
-          child: Text(w.eventName ?? 'Matchup', textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
-        ),
-      const SizedBox(height: 12),
-      Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, runSpacing: 4, children: [
-        if (involved) ...[
-          Text('Your pick', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-          Text(wagerPick(w, mySide), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
-          Text('·', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-        ],
-        Text('Stake', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-          decoration: BoxDecoration(color: c.secondary, borderRadius: BorderRadius.circular(999)),
-          child: Text(stakeLabel, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
-        ),
-      ]),
+      // A declined bet reads "You declined" only to whoever can reopen it.
+      BetCard(wager: w, event: _event, me: me, myTurn: w.status == 'declined' ? canUndecline : myTurn),
       const SizedBox(height: 20),
       _buttons(actions),
       const SizedBox(height: 8),

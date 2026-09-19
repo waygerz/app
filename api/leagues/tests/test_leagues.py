@@ -140,6 +140,19 @@ def test_invite_and_accept(client, auth_headers):
     assert client.get("/v1/gameplay/leagues/invites", headers=auth_headers(u2)).get_json()["invites"] == []
 
 
+def test_invite_notification_links_to_the_league_code(client, auth_headers, monkeypatch):
+    from app.services import service_leagues as svc
+
+    sent = []
+    monkeypatch.setattr(svc, "_notify_league", lambda uid, key, title, ctx, **kw: sent.append((key, ctx, kw)))
+    created = _create(client, auth_headers(U1)).get_json()["league"]
+    u2 = str(uuid.uuid4())
+    client.post(f"/v1/gameplay/leagues/{created['id']}/invites", json={"invitee_ids": [u2]}, headers=auth_headers(U1))
+    key, ctx, kw = next(s for s in sent if s[0] == "league_invite")
+    assert kw["deep_link"] == f"/c/{created['invite_code']}"
+    assert ctx["link"].endswith(f"/c/{created['invite_code']}")
+
+
 def test_join_requires_a_pending_invite(client, auth_headers):
     # Without an invite, POST /{id}/join must not add anyone (it used to join any
     # signed-in user to any league by id).

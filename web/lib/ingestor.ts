@@ -59,6 +59,9 @@ export interface SportEvent {
   winner_side: 'home' | 'away' | 'draw' | null;
   home_logo?: string | null;
   away_logo?: string | null;
+  /** Team colors ("#0076b6") for the bet card's team bands; null when unknown. */
+  home_color?: string | null;
+  away_color?: string | null;
   // Last-known odds persisted by the ingestor; present on list responses so the
   // UI can render lines without a per-event API call.
   odds?: EventOdds | null;

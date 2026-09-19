@@ -149,6 +149,57 @@ export function lineForSide(w: Pick<Wager, 'bet_type' | 'line' | 'proposer_side'
   return w.line; // total — same both sides
 }
 
+/** How a side is doing against the line once the game has a score. */
+export interface CoverStatus {
+  /** The side is ahead of the line (covering / leading / over). */
+  ok: boolean;
+  /** "Covering by 2.5", "Missed by 4", "Leading by 3", "Push"… */
+  text: string;
+}
+
+const fmtPts = (n: number) => String(Math.abs(Math.round(n * 10) / 10));
+
+/**
+ * `side`'s margin against the bet once the game has scores (live or final):
+ *   spread    → my score + my line − their score
+ *   total     → over: points − line, under: line − points
+ *   moneyline → my score − their score
+ * null before the game has a score, or for a declined / cancelled / refunded
+ * bet. Mirrors the app's `coverStatus` (mobile/lib/wagers.dart) — change both
+ * together.
+ */
+export function coverStatus(
+  w: Pick<Wager, 'bet_type' | 'line' | 'proposer_side' | 'status'>,
+  side: WagerSide,
+  ev: { status: string; home_score: number | null; away_score: number | null } | null,
+): CoverStatus | null {
+  if (!ev || (ev.status !== 'live' && ev.status !== 'final')) return null;
+  if (w.status === 'declined' || w.status === 'cancelled' || w.status === 'refunded') return null;
+  const hs = ev.home_score;
+  const as = ev.away_score;
+  if (hs == null || as == null) return null;
+  const final = ev.status === 'final';
+  let m: number;
+  if (w.bet_type === 'total') {
+    if (w.line == null) return null;
+    m = side === 'over' ? hs + as - w.line : w.line - (hs + as);
+  } else {
+    const mine = side === 'home' ? hs : as;
+    const theirs = side === 'home' ? as : hs;
+    m = mine - theirs + (w.bet_type === 'spread' ? lineForSide(w, side) ?? 0 : 0);
+  }
+  const x = fmtPts(m);
+  let text: string;
+  if (w.bet_type === 'moneyline') {
+    text = m === 0 ? 'Tied' : final ? (m > 0 ? `Won by ${x}` : `Lost by ${x}`) : m > 0 ? `Leading by ${x}` : `Trailing by ${x}`;
+  } else if (final) {
+    text = m === 0 ? 'Push' : m > 0 ? `Covered by ${x}` : `Missed by ${x}`;
+  } else {
+    text = m === 0 ? 'Even' : m > 0 ? `Covering by ${x}` : `Behind by ${x}`;
+  }
+  return { ok: m > 0, text };
+}
+
 // Two siblings only merge when they'd render an identical card AND offer the
 // identical action — so a batch button is always valid for every member. That
 // means same game/pick/stake/status/role plus the same cancel and outcome

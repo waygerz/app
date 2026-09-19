@@ -36,13 +36,22 @@ export function CounterButton({
   me,
   onDone,
   className,
+  open: openProp,
+  onOpenChange,
 }: {
   wager: Wager;
   me: string;
   onDone?: () => void;
   className?: string;
+  /** Controlled mode (e.g. opened from a ⋯ menu): no trigger button renders.
+   * Mount it fresh for each opening so the editor starts from the offer. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : innerOpen;
+  const setOpen = (o: boolean) => (controlled ? onOpenChange?.(o) : setInnerOpen(o));
   const mySide = viewerSide(wager, me);
   const hasLine = wager.bet_type === 'spread' || wager.bet_type === 'total';
   const isTotal = wager.bet_type === 'total';
@@ -102,18 +111,20 @@ export function CounterButton({
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
-        className={cn('w-full', className)}
-        onClick={(e) => {
-          e.stopPropagation();
-          reset();
-          setOpen(true);
-        }}
-      >
-        Counter
-      </Button>
+      {!controlled && (
+        <Button
+          size="sm"
+          variant="outline"
+          className={cn('w-full', className)}
+          onClick={(e) => {
+            e.stopPropagation();
+            reset();
+            setOpen(true);
+          }}
+        >
+          Counter
+        </Button>
+      )}
 
       {/* The sheet renders in a portal, but React events still bubble to the
           card behind it — stop them here so a tap doesn't open the card. */}

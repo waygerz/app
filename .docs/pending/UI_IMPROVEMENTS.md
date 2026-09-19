@@ -77,6 +77,37 @@ Each league card is two rows, every line one line (no wrapping):
 - Open: hearts on comments; a full post page for notification deep links;
   whether members (not just commissioner/moderators) can post.
 
+## 2d. Bet card + notifications — web
+- **Stacked bet card** (`components/bet-card.tsx`): your pick as a band in your
+  team's color (faded logo, score), the other player's pick as a slimmer band
+  in theirs, a bar with kickoff / LIVE + "Covering by 2.5" (`coverStatus` in
+  `lib/wagers.ts`) / result, and the stake. Used on `/c` bet links (plain
+  **Accept**), bet details in My Bets and the notifications sheet. Team colors
+  come from the ingestor (`home_color` / `away_color`).
+- **League invite card** (`components/league-invite-card.tsx`) shared by `/c`
+  and the notifications sheet.
+- **Notifications, option A (compact):** filter chips (All · Bets · Leagues ·
+  Friends · Social, unread counts), **Needs you** (Accept / Join + ⋯ Counter ·
+  Reject or ✕; the left side opens the bet card, league card or person in a
+  sheet), then Today / This week / Earlier one-line rows with same-day
+  reactions to a post folded together.
+
+## 2e. Bet card + notifications — app
+- **Stacked bet card** (`widgets/bet_card.dart`, web `components/bet-card.tsx`):
+  the other player + headline, then an always-dark card — the viewer's side as
+  a hero band in their team's color (faded logo, "YOUR PICK · LIVE", big pick,
+  score), the other side as a slimmer band, and a bar with kickoff / LIVE +
+  `coverStatus` ("Covering by 2.5") / result and the stake. Used by the /c
+  screen, bet details (My Bets) and the notifications sheet. Team colors come
+  from the ingestor (`home_color` / `away_color`); totals use neutral colors.
+- **League invite card** (`widgets/league_invite_card.dart`) pulled out of the
+  /c screen; the notifications sheet reuses it.
+- **Notifications**: filter chips (All · Bets · Leagues · Friends · Social with
+  unread counts), NEEDS YOU (Accept / Join + ⋯ or ✕; the left side opens the
+  bet card, league card or person in a sheet with the same buttons), then
+  TODAY / THIS WEEK / EARLIER one-line rows; reactions to one post on one day
+  fold into "… +N".
+
 ## 3. Bottom sheets instead of centred dialogs
 **Today:** web bet details, confirmations, counter offers, member picks and
 league details open as centred dialogs. On phones, sheets that slide up from

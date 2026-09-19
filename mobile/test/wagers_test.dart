@@ -97,4 +97,37 @@ void main() {
     expect(parseStakeCents(''), isNull);
     expect(parseStakeCents('-1'), isNull);
   });
+
+  group('coverStatus', () {
+    SportEvent ev(int? away, int? home, {String status = 'live'}) =>
+        SportEvent(externalId: 'e1', sport: 'football', status: status, awayScore: away, homeScore: home);
+
+    // w(): the proposer ("me") has Bills (home) -3.5; the acceptor has Jets +3.5.
+    test('null before scores, or once the bet is off', () {
+      expect(coverStatus(w(), 'home', null), isNull);
+      expect(coverStatus(w(), 'home', ev(null, null, status: 'scheduled')), isNull);
+      expect(coverStatus(w(status: 'declined'), 'home', ev(10, 20)), isNull);
+    });
+
+    test('spread from each side, live and final', () {
+      expect(coverStatus(w(), 'home', ev(17, 24)), (ok: true, text: 'Covering by 3.5'));
+      expect(coverStatus(w(), 'away', ev(17, 24)), (ok: false, text: 'Behind by 3.5'));
+      expect(coverStatus(w(), 'home', ev(21, 24, status: 'final')), (ok: false, text: 'Missed by 0.5'));
+      expect(coverStatus(w(line: -3.0), 'home', ev(21, 24, status: 'final')), (ok: false, text: 'Push'));
+      expect(coverStatus(w(line: -3.0), 'home', ev(21, 24)), (ok: false, text: 'Even'));
+    });
+
+    test('totals', () {
+      final t = w(betType: 'total', line: 47.5, proposerSide: 'over', acceptorSide: 'under');
+      expect(coverStatus(t, 'over', ev(24, 27)), (ok: true, text: 'Covering by 3.5'));
+      expect(coverStatus(t, 'under', ev(24, 27, status: 'final')), (ok: false, text: 'Missed by 3.5'));
+    });
+
+    test('moneyline', () {
+      final m = w(betType: 'moneyline', line: null);
+      expect(coverStatus(m, 'away', ev(10, 7)), (ok: true, text: 'Leading by 3'));
+      expect(coverStatus(m, 'home', ev(10, 7, status: 'final')), (ok: false, text: 'Lost by 3'));
+      expect(coverStatus(m, 'home', ev(7, 7)), (ok: false, text: 'Tied'));
+    });
+  });
 }

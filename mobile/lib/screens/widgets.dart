@@ -213,13 +213,13 @@ class TeamLogo extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: _hex(color) ?? c.muted, shape: BoxShape.circle),
+      decoration: BoxDecoration(color: parseHex(color) ?? c.muted, shape: BoxShape.circle),
       child: Text(
         abbreviation.isEmpty ? initialsOf(name) : abbreviation,
         style: TextStyle(
           fontSize: size * 0.34,
           fontWeight: FontWeight.w700,
-          color: _hex(color) == null ? c.mutedForeground : Colors.white,
+          color: parseHex(color) == null ? c.mutedForeground : Colors.white,
         ),
       ),
     );
@@ -228,7 +228,8 @@ class TeamLogo extends StatelessWidget {
     return Image.network(url, width: size, height: size, errorBuilder: (context, error, stack) => fallback);
   }
 
-  static Color? _hex(String? v) {
+  /// "#rrggbb" (or bare hex) → a color; null when missing or malformed.
+  static Color? parseHex(String? v) {
     if (v == null) return null;
     final h = v.replaceFirst('#', '');
     if (h.length != 6) return null;

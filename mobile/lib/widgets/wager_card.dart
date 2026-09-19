@@ -6,6 +6,7 @@ import '../screens/widgets.dart';
 import '../theme/app_theme.dart';
 import '../ui/ui.dart';
 import '../wagers.dart';
+import 'bet_card.dart';
 
 /// The web's `WagerBetCard` (leagues/[id]/_sections/wager-card.tsx): a caption
 /// (state dot, kickoff, "vs / beat / lost to" opponent), then a two-row board —
@@ -286,8 +287,8 @@ Widget _pickCell(WaygerzColors c, _BetView v, ({String label, bool mine}) p, {re
   );
 }
 
-/// Read-only bet details (web BetDetailsDialog): opponent + outcome, the board
-/// at sheet size, and a summary line; the body of a `showWzSheet`.
+/// Read-only bet details (web BetDetailsDialog): the stacked BetCard, anyone
+/// else the same bet went to, and a summary line; the body of a `showWzSheet`.
 class _BetDetails extends StatelessWidget {
   const _BetDetails({required this.view});
   final _BetView view;
@@ -298,36 +299,12 @@ class _BetDetails extends StatelessWidget {
     final v = view;
     final g = v.group;
     final w = g.rep;
-    final opp = g.opponents.isEmpty ? null : g.opponents.first;
     final betType = switch (w.betType) { 'moneyline' => 'Straight up', 'spread' => 'Spread', _ => 'Total' };
     final matchup = v.field && (w.eventName ?? '').isNotEmpty ? w.eventName! : '${w.awayTeam} @ ${w.homeTeam}';
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-      Padding(
-        padding: EdgeInsets.zero,
-        child: Row(children: [
-          if (opp != null) ...[
-            UserAvatar(userId: opp.id, name: opp.name, avatarKey: opp.avatarKey, size: 44),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(opponentsLabel([for (final o in g.opponents) o.name]), maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.foreground)),
-              Text(g.iAmProposer ? 'YOU CHALLENGED' : 'CHALLENGED YOU',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.5, color: c.mutedForeground)),
-            ]),
-          ),
-          if (v.decided)
-            WzBadge(v.iWon ? 'Won ${v.sign}${w.amountCents == 0 ? treatEmoji(w.treat) : formatCredits(w.amountCents)}'
-                : v.iLost ? 'Lost ${v.sign}${w.amountCents == 0 ? treatEmoji(w.treat) : formatCredits(w.amountCents)}' : 'Push',
-                variant: v.iWon ? BadgeVariant.success : v.iLost ? BadgeVariant.destructive : BadgeVariant.secondary)
-          else
-            wagerStatusBadge(w, v.me),
-        ]),
-      ),
-      const SizedBox(height: 16),
       if (v.field)
+        // A field event (golf, racing) has no two teams to stack.
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
@@ -335,36 +312,12 @@ class _BetDetails extends StatelessWidget {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: v.iWon ? c.brand : v.iLost ? c.destructive : c.foreground)),
         )
       else
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(
-            child: Column(children: [
-              _teamCell(c, v, v.rows[0], height: 48, fontSize: 14),
-              const SizedBox(height: 6),
-              _teamCell(c, v, v.rows[1], height: 48, fontSize: 14),
-            ]),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 56,
-            child: Column(children: [
-              _pickCell(c, v, v.rows[0].pick, height: 48, fontSize: 14),
-              const SizedBox(height: 6),
-              _pickCell(c, v, v.rows[1].pick, height: 48, fontSize: 14),
-            ]),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            width: 88,
-            height: 102,
-            decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
-            child: Center(
-              child: v.decided
-                  ? StakeText(cents: w.amountCents, treat: w.treat, sign: v.sign,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: v.resultTone))
-                  : wagerStatusBadge(w, v.me),
-            ),
-          ),
-        ]),
+        BetCard(wager: w, me: v.me, event: v.event),
+      if (g.opponents.length > 1) ...[
+        const SizedBox(height: 8),
+        Text('Also offered to ${opponentsLabel([for (final o in g.opponents.skip(1)) o.name])}',
+            textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: c.mutedForeground)),
+      ],
       const SizedBox(height: 12),
       Text.rich(
         TextSpan(children: [

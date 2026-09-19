@@ -87,7 +87,20 @@ class WzSheet extends StatelessWidget {
     if (footer == null) body = SafeArea(top: false, child: body);
     final column = Column(mainAxisSize: tall ? MainAxisSize.max : MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (hideHeader)
-        Semantics(header: true, label: title, child: const SizedBox.shrink())
+        // The body has its own heading; keep the title for screen readers and
+        // a visible close in the corner (web AppSheet does the same).
+        Row(children: [
+          Expanded(child: Semantics(header: true, label: title, child: const SizedBox.shrink())),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              tooltip: 'Close',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => Navigator.of(context).maybePop(),
+              icon: Icon(LucideIcons.x, size: 20, color: c.mutedForeground),
+            ),
+          ),
+        ])
       else
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 8, 12),

@@ -14,39 +14,18 @@ import {
   type FriendCodePreview,
   type BetCodePreview,
 } from '@/lib/invites';
-import { leagueTypeLabel } from '@/lib/leagues';
-import { wagerPick } from '@/lib/wagers';
-import { formatCredits } from '@/lib/wallet';
 import { fetchEvent } from '@/lib/ingestor';
 import { clearPendingLink } from '@/lib/pending-link';
 import { AuthRedirectIfGuest } from '@/auth/AuthRedirectIfGuest';
 import { useAuth } from '@/auth/AuthContext';
 import { Home } from 'lucide-react';
 import { CounterButton } from '@/components/counter-dialog';
-import { treatEmoji } from '@/components/treat-picker';
-import { LeagueAvatar } from '@/components/league-avatar';
 import { UserAvatar } from '@/components/user-avatar';
-import { TeamLogo } from '@/components/event-card';
-import { cn } from '@/lib/utils';
+import { BetCard } from '@/components/bet-card';
+import { LeagueInviteCard } from '@/components/league-invite-card';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-
-function periodLabel(p: LeagueCodePreview): string {
-  const r = (p.rules || {}) as { season_year?: number | string; week_starts_on?: string };
-  if (p.period_type === 'season') return `Season${r.season_year ? ` ${r.season_year}` : ''}`;
-  return `Weekly${r.week_starts_on ? ` · resets ${r.week_starts_on}` : ''}`;
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-0.5 border-b border-border py-2 last:border-0 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-      <span className="shrink-0 text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium text-foreground sm:text-right">{value}</span>
-    </div>
-  );
-}
 
 function Dead({ message }: { message: string }) {
   return (
@@ -179,39 +158,7 @@ function CodeContent({ code }: { code: string }) {
     const rel = data.viewer.relationship;
     return (
       <>
-        <div className="flex flex-col items-center gap-3 text-center">
-          <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={88} />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{lg.name}</h1>
-            <div className="mt-1 flex items-center justify-center gap-2">
-              <Badge size="sm" appearance="light">{leagueTypeLabel(lg.league_type)}</Badge>
-              <span className="text-xs text-muted-foreground">
-                {lg.member_count} member{lg.member_count === 1 ? '' : 's'}
-              </span>
-            </div>
-            {lg.commissioner_name && (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Invited by <span className="font-medium text-foreground">{lg.commissioner_name}</span>
-              </p>
-            )}
-          </div>
-        </div>
-
-        {lg.description && (
-          <p className="rounded-lg bg-muted/50 p-3 text-sm text-foreground">{lg.description}</p>
-        )}
-
-        <div className="flex flex-col">
-          <Row label="Period" value={periodLabel(lg)} />
-          {lg.league_type !== 'pickem' && (
-            <Row label="Starting balance" value={formatCredits(lg.starting_balance_cents ?? 0)} />
-          )}
-          {lg.min_wager_cents != null && <Row label="Min wager" value={formatCredits(lg.min_wager_cents)} />}
-          {lg.max_wager_cents != null && <Row label="Max wager" value={formatCredits(lg.max_wager_cents)} />}
-          {lg.sports.length > 0 && (
-            <Row label="Sports" value={lg.sports.map((s) => s.name || s.sport_league_id).join(', ')} />
-          )}
-        </div>
+        <LeagueInviteCard league={lg} />
 
         {rel === 'member' ? (
           <div className="flex flex-col gap-2">
@@ -310,10 +257,7 @@ function CodeContent({ code }: { code: string }) {
     // whoever last acted.
     const iAmProposer = rel === 'proposer';
     const involved = rel === 'proposer' || rel === 'acceptor';
-    const mySide = iAmProposer ? w.proposer_side : w.acceptor_side;
     const otherName = iAmProposer ? w.acceptor_name : w.proposer_name;
-    const otherId = iAmProposer ? w.acceptor_id : w.proposer_id;
-    const otherAvatar = iAmProposer ? w.acceptor_avatar_key : w.proposer_avatar_key;
     // Fall back to the acceptor check if my_turn is absent (an old backend during a
     // deploy window) so the acceptor never loses their Accept button.
     const myTurn = data.viewer.my_turn ?? rel === 'acceptor';
@@ -321,125 +265,23 @@ function CodeContent({ code }: { code: string }) {
     const canAct = myTurn && data.actions.includes('accept');
     // A declined bet the viewer turned down can be reopened (until kickoff).
     const canUndecline = myTurn && data.actions.includes('undecline');
-
-    // Live/final game scores (from the ingestor event behind the bet), rendered
-    // the same way the in-app bet card does so the shared link shows the game.
-    const ev = eventQ.data ?? null;
-    const started = !!ev && ev.status !== 'scheduled' && ev.status !== 'cancelled';
-    const final = ev?.status === 'final';
-    const hs = ev?.home_score ?? null;
-    const as = ev?.away_score ?? null;
-    const awayLost = final && hs != null && as != null && hs > as;
-    const homeLost = final && hs != null && as != null && as > hs;
-    // Outcome, from the viewer's side. Known once the game is final (completed)
-    // or the payout has settled.
     const decided = w.status === 'completed' || w.status === 'settled';
-    const myId = iAmProposer ? w.proposer_id : w.acceptor_id;
-    const iWon = involved && decided && !!w.winner_user_id && w.winner_user_id === myId;
-    const iLost = involved && decided && !!w.winner_user_id && w.winner_user_id !== myId;
-    const stakeText = w.amount_cents ? formatCredits(w.amount_cents) : '';
-    // A beer/shot treat bet has no money — show the emoji, not "$0" (matches the
-    // feed + bet-slip convention).
-    const stakeLabel = w.amount_cents ? formatCredits(w.amount_cents) : treatEmoji(w.treat);
     const terminal = w.status === 'declined' || w.status === 'cancelled' || w.status === 'refunded';
-    const headline = decided
-      ? iWon
-        ? `You beat ${otherName}`
-        : iLost
-          ? `${otherName} beat you`
-          : 'Push'
-      : terminal
-        ? w.status === 'declined'
-          ? canUndecline ? 'You declined this bet' : `${otherName} declined`
-          : w.status === 'cancelled'
-            ? 'Bet cancelled'
-            : 'Bet refunded'
-        : myTurn
-          ? `${otherName} ${countered ? 'countered your bet' : 'sent you a bet'}`
-          : w.status === 'accepted'
-            ? `You’re on with ${otherName}`
-            : involved
-              ? `Waiting on ${otherName}`
-              : `${w.proposer_name}'s bet`;
 
     return (
       <>
-        <div className="flex flex-col items-center gap-3 text-center">
-          <UserAvatar
-            userId={involved ? otherId : w.proposer_id}
-            name={involved ? otherName : w.proposer_name}
-            imageUrl={involved ? otherAvatar : w.proposer_avatar_key}
-            className="size-20"
-            fallbackClassName="text-xl"
-          />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">{headline}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{w.league || 'Head-to-head'}</p>
-            {decided && involved && !!w.winner_user_id && (
-              <div className="mt-2 flex justify-center">
-                <Badge size="sm" appearance="light" variant={iWon ? 'success' : 'destructive'}>
-                  {iWon ? `Won${stakeText ? ` +${stakeText}` : ''}` : `Lost${stakeText ? ` −${stakeText}` : ''}`}
-                </Badge>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          {w.away_team && w.home_team ? (
-            <div className="flex flex-col gap-1.5">
-              {(['away', 'home'] as const).map((rk) => {
-                const isAway = rk === 'away';
-                const name = (isAway ? ev?.away_team : ev?.home_team) ?? (isAway ? w.away_team : w.home_team);
-                const logo = (isAway ? ev?.away_logo : ev?.home_logo) ?? null;
-                const score = isAway ? as : hs;
-                const lost = isAway ? awayLost : homeLost;
-                // Highlight the viewer's own team (spread / moneyline). Totals are
-                // over/under, so mySide never matches a team row.
-                const backed = involved && mySide === rk;
-                return (
-                  <div
-                    key={rk}
-                    className={cn(
-                      'flex h-12 items-center gap-2.5 rounded-md px-2.5',
-                      backed ? 'bg-blue-500/20' : 'bg-muted/60',
-                    )}
-                  >
-                    <TeamLogo src={logo} name={name} size="sm" />
-                    <span className={cn('min-w-0 flex-1 truncate text-sm', lost ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{name}</span>
-                    {started && score != null ? (
-                      <span className={cn('shrink-0 text-base font-bold tabular-nums', lost ? 'text-muted-foreground' : 'text-foreground')}>{score}</span>
-                    ) : (
-                      backed && (
-                        <span className="shrink-0 rounded-full bg-blue-500/20 px-2 py-0.5 text-[11px] font-semibold text-blue-500">Your pick</span>
-                      )
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-md bg-muted/60 px-3 py-3 text-center text-sm font-semibold text-foreground">
-              {w.event_name || 'Matchup'}
-            </div>
-          )}
-          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
-            {involved && (
-              <>
-                <span className="text-muted-foreground">Your pick</span>
-                <span className="font-semibold text-foreground">{wagerPick(w, mySide)}</span>
-                <span className="text-muted-foreground">·</span>
-              </>
-            )}
-            <span className="text-muted-foreground">Stake</span>
-            <span className="rounded-full bg-secondary px-2.5 py-0.5 font-semibold text-secondary-foreground">{stakeLabel}</span>
-          </div>
-        </div>
+        {/* The code's viewer state is the source of truth for whose turn it is. */}
+        <BetCard
+          wager={{ ...w, my_turn: myTurn }}
+          event={eventQ.data ?? null}
+          me={me}
+          headline={canUndecline ? 'You declined this bet' : undefined}
+        />
 
         {canAct ? (
           <div className="flex flex-col gap-2">
             <Button onClick={() => act.mutate('accept')} disabled={busy}>
-              {act.isPending ? 'Working…' : `Accept — ${stakeLabel}`}
+              {act.isPending ? 'Working…' : 'Accept'}
             </Button>
             {/* Renegotiate stake/line before the bet goes live — same dialog as the
                 in-app bets page. The counter endpoint gates on my_turn server-side,

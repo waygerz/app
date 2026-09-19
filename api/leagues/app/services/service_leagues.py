@@ -1898,6 +1898,10 @@ def invite_friends(league_id, me, data):
 
     if invited:
         inviter_name = resolve_users([me]).get(str(me)) or "A friend"
+        # The invite links to the league's /c/<code> card (clients show it as
+        # the invite's preview; Join accepts this invite, not the shared code).
+        rec = _default_league_code(league_id)
+        path = f"/c/{rec.code}" if rec else "/leagues"
         for uid in invited:
             _notify_league(
                 uid,
@@ -1906,12 +1910,12 @@ def invite_friends(league_id, me, data):
                 {
                     "inviter_name": inviter_name,
                     "league": league.name,
-                    "link": "https://waygerz.com/leagues",
+                    "link": f"https://waygerz.com{path}",
                 },
                 # A league invite's "face" is the league itself (its logo).
                 actor={"id": str(league_id), "name": league.name, "avatar_key": league.logo_url},
                 ref_id=league_id,
-                deep_link="/leagues",
+                deep_link=path,
                 dedup_key=f"league_invite:{league_id}:{uid}",
             )
     return {"invited": invited}, 201

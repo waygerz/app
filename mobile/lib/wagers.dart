@@ -140,6 +140,38 @@ double? lineForSide(Wager w, String side) {
   return w.line; // total — same both sides
 }
 
+/// How a started bet stands for [side] (web lib/wagers.ts coverStatus): null
+/// until the game has a score (live or final) or once the bet is off; else
+/// `ok` (winning) and the words — spread/total "Covering by 2.5" / "Behind by
+/// 4.5" / "Even" live, "Covered by" / "Missed by" / "Push" final; moneyline
+/// "Leading" / "Trailing" / "Tied" live, "Won by" / "Lost by" / "Tied" final.
+({bool ok, String text})? coverStatus(Wager w, String side, SportEvent? ev) {
+  if (ev == null || ev.homeScore == null || ev.awayScore == null) return null;
+  if (ev.status != 'live' && ev.status != 'final') return null;
+  if (const {'declined', 'cancelled', 'refunded'}.contains(w.status)) return null;
+  final hs = ev.homeScore!;
+  final as_ = ev.awayScore!;
+  final fin = ev.status == 'final';
+  final double m;
+  if (w.betType == 'total') {
+    if (w.line == null) return null;
+    final total = hs + as_;
+    m = side == 'over' ? total - w.line! : w.line! - total;
+  } else {
+    final mine = side == 'home' ? hs : as_;
+    final opp = side == 'home' ? as_ : hs;
+    m = mine - opp + (w.betType == 'spread' ? (lineForSide(w, side) ?? 0) : 0);
+  }
+  final x = formatLine(m.abs());
+  final ok = m > 0;
+  if (w.betType == 'moneyline') {
+    if (m == 0) return (ok: false, text: 'Tied');
+    return (ok: ok, text: fin ? (ok ? 'Won by $x' : 'Lost by $x') : (ok ? 'Leading by $x' : 'Trailing by $x'));
+  }
+  if (m == 0) return (ok: false, text: fin ? 'Push' : 'Even');
+  return (ok: ok, text: fin ? (ok ? 'Covered by $x' : 'Missed by $x') : (ok ? 'Covering by $x' : 'Behind by $x'));
+}
+
 /// A line as read on the viewer's side: signed spread ("+3.5"), bare total ("47").
 String lineStr(String betType, double? line) {
   if (line == null) return '';

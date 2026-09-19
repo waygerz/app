@@ -144,18 +144,28 @@ def upsert_event(fields):
 def attach_logos(events):
     leagues = list({e.league for e in events})
     rows = Team.query.filter(Team.league.in_(leagues)).all() if leagues else []
-    by_abbr = {(t.league, (t.abbreviation or "").upper()): t.logo for t in rows}
-    by_name = {(t.league, t.name): t.logo for t in rows}
+    by_abbr = {(t.league, (t.abbreviation or "").upper()): t for t in rows}
+    by_name = {(t.league, t.name): t for t in rows}
 
-    def logo_for(league, abbr, name):
+    def team_for(league, abbr, name):
         return by_abbr.get((league, (abbr or "").upper())) or by_name.get((league, name))
+
+    def color(team):
+        # ESPN colors are bare hex ("0076b6"); clients get "#0076b6" or None.
+        c = (team.color or "").strip().lstrip("#") if team else ""
+        return f"#{c}" if c else None
 
     off = availability.disabled_sports()
     out = []
     for e in events:
         d = e.to_dict()
-        d["home_logo"] = logo_for(e.league, e.home_abbr, e.home_team)
-        d["away_logo"] = logo_for(e.league, e.away_abbr, e.away_team)
+        home = team_for(e.league, e.home_abbr, e.home_team)
+        away = team_for(e.league, e.away_abbr, e.away_team)
+        d["home_logo"] = home.logo if home else None
+        d["away_logo"] = away.logo if away else None
+        # Team colors for the bet card's team bands (null when unknown).
+        d["home_color"] = color(home)
+        d["away_color"] = color(away)
         # False once the sport is switched off: still readable (bets on it
         # settle) but not bettable.
         d["available"] = e.sport not in off
