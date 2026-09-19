@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface WeekChip {
@@ -9,12 +10,15 @@ export interface WeekChip {
   label: string;
   /** Full name, for the tooltip / screen readers ("Preseason Week 1"). */
   title: string;
+  /** The season-wide chip (Standings' "Overall"): trophy + a primary outline, so
+   *  it doesn't read as another week. */
+  overall?: boolean;
 }
 
 /**
  * The week picker: a row of small pill buttons (HF, P1, W1, …) that scrolls
  * sideways, with the selected week scrolled into view. Replaces the week
- * dropdowns on My Picks and Results.
+ * dropdowns on Picks and Standings.
  */
 export function WeekChips({
   weeks,
@@ -50,12 +54,15 @@ export function WeekChips({
               title={w.title}
               onClick={() => onChange(w.value)}
               className={cn(
-                'h-8 min-w-10 shrink-0 rounded-full border px-2.5 text-xs font-semibold tabular-nums transition-colors',
+                'inline-flex h-8 min-w-10 shrink-0 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-semibold tabular-nums transition-colors',
                 on
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground',
+                  : w.overall
+                    ? 'border-primary/60 text-primary hover:bg-primary/10'
+                    : 'border-input text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
+              {w.overall && <Trophy className="size-3.5" aria-hidden />}
               {w.label}
             </button>
           );

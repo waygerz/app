@@ -22,8 +22,8 @@ import { LeagueProvider } from './league-context';
 import { InviteToLeagueDialog } from './invite-dialog';
 
 const PLAY_TAB: Record<LeagueType, string> = {
-  head_to_head: 'My Bets',
-  pickem: 'My Picks',
+  head_to_head: 'Bets',
+  pickem: 'Picks',
 };
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -81,7 +81,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   const commish = lg.members.find((m) => m.role === 'commissioner');
 
   // Feed (league activity), then Upcoming games + Sports (both money-only), then
-  // the play tab (My Bets / My Picks), followed by Results → Standings, Wallet
+  // the play tab (Bets / Picks), then Standings (week results + Overall), Wallet
   // (money-only), Members and admin. Pick'em drops Upcoming/Sports/Wallet, so
   // its play tab sits right after Feed.
   const tabs = [
@@ -89,7 +89,6 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
     ...(isMoney ? [{ to: `/leagues/${id}/upcoming`, label: 'Upcoming', end: false }] : []),
     ...(isMoney ? [{ to: `/leagues/${id}/sports`, label: 'Sports', end: false }] : []),
     { to: `/leagues/${id}/play`, label: PLAY_TAB[lg.league_type], end: false },
-    { to: `/leagues/${id}/results`, label: 'Results', end: false },
     { to: `/leagues/${id}/standings`, label: 'Standings', end: false },
     ...(isMoney ? [{ to: `/leagues/${id}/activity`, label: 'Wallet', end: false }] : []),
     { to: `/leagues/${id}/members`, label: 'Members', end: false },

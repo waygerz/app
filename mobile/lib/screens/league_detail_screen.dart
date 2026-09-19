@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
 import '../api/leagues_api.dart';
-import '../auth/auth_controller.dart';
 import '../format.dart';
 import '../models.dart';
 import '../shell/app_header.dart';
@@ -16,23 +14,27 @@ import 'league/feed_tab.dart';
 import 'league/manage_tab.dart';
 import 'league/members_tab.dart';
 import 'league/picks_tab.dart';
-import 'league/results_tab.dart';
 import 'league/sports_tab.dart';
+import 'league/standings_tab.dart';
 import 'league/upcoming_tab.dart';
 import 'league/wallet_tab.dart';
 import 'widgets.dart';
 
-enum _Section { feed, upcoming, sports, play, results, standings, wallet, members, manage }
+/// League sections, in the web's tab order. Public so links can open one.
+enum LeagueSection { feed, upcoming, sports, play, standings, wallet, members, manage }
 
 /// League detail (web app/(app)/leagues/[id]/layout.tsx): the header — logo
 /// (tap for details + invite), type/Draft badges, balance, members · period —
 /// then the section pills in the web's order: Feed, Upcoming + Sports (money
-/// leagues: tap a game to bet), My Bets / My Picks, Results, Standings, Wallet
+/// leagues: tap a game to bet), Bets / Picks, Standings (weeks + Overall), Wallet
 /// (money), Members, and Manage for the commissioner.
 class LeagueDetailScreen extends StatefulWidget {
-  const LeagueDetailScreen({super.key, required this.api, required this.league});
+  const LeagueDetailScreen({super.key, required this.api, required this.league, this.initialSection = LeagueSection.feed});
   final ApiClient api;
   final League league;
+
+  /// The section to open on (links like /leagues/<id>/standings); Feed by default.
+  final LeagueSection initialSection;
 
   @override
   State<LeagueDetailScreen> createState() => _LeagueDetailScreenState();
@@ -42,7 +44,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
   late final LeaguesApi _leagues = LeaguesApi(widget.api);
   late Future<League> _future = _leagues.league(widget.league.id);
   /// The open section; the league opens on its Feed, like the web.
-  _Section _section = _Section.feed;
+  late LeagueSection _section = widget.initialSection;
   bool _activating = false;
 
   Future<void> _reload() async {
@@ -90,10 +92,10 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
           // A section the league doesn't have (a link opened the wrong type, or
           // a role changed) falls back to the Feed.
           final available = _sections(lg);
-          final section = available.any((t) => t.value == _section) ? _section : _Section.feed;
+          final section = available.any((t) => t.value == _section) ? _section : LeagueSection.feed;
           final header = _header(context, lg, section, available);
           // Play needs an active league (web LeaguePlay).
-          if (section == _Section.play && !lg.isActive) {
+          if (section == LeagueSection.play && !lg.isActive) {
             final c = WaygerzColors.of(context);
             return ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
               ...header,
@@ -103,21 +105,20 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
             ]);
           }
           void toBets() {
-            setState(() => _section = _Section.play);
+            setState(() => _section = LeagueSection.play);
             _reload(); // the stake leaves the balance
           }
           return switch (section) {
-            _Section.feed => FeedTab(key: ValueKey('feed-${lg.id}'), api: widget.api, league: lg, header: header,
+            LeagueSection.feed => FeedTab(key: ValueKey('feed-${lg.id}'), api: widget.api, league: lg, header: header,
                 onRefresh: _reload, onLeft: () => Navigator.of(context).pop()),
-            _Section.upcoming => UpcomingTab(key: ValueKey('upcoming-${lg.id}'), api: widget.api, league: lg, header: header, onBetSent: toBets),
-            _Section.sports => SportsTab(key: ValueKey('sports-${lg.id}'), api: widget.api, league: lg, header: header, onBetSent: toBets),
-            _Section.play when lg.isMoney => BetsScreen(key: ValueKey('bets-${lg.id}'), api: widget.api, leagueId: lg.id, header: header),
-            _Section.play => PicksTab(key: ValueKey('picks-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
-            _Section.results => ResultsTab(key: ValueKey('results-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
-            _Section.standings => _StandingsTab(api: widget.api, league: lg, header: header, onRefresh: _reload),
-            _Section.wallet => WalletTab(key: ValueKey('wallet-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
-            _Section.members => MembersTab(key: ValueKey('members-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
-            _Section.manage => ManageTab(key: ValueKey('manage-${lg.id}'), api: widget.api, league: lg, header: header,
+            LeagueSection.upcoming => UpcomingTab(key: ValueKey('upcoming-${lg.id}'), api: widget.api, league: lg, header: header, onBetSent: toBets),
+            LeagueSection.sports => SportsTab(key: ValueKey('sports-${lg.id}'), api: widget.api, league: lg, header: header, onBetSent: toBets),
+            LeagueSection.play when lg.isMoney => BetsScreen(key: ValueKey('bets-${lg.id}'), api: widget.api, leagueId: lg.id, header: header),
+            LeagueSection.play => PicksTab(key: ValueKey('picks-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
+            LeagueSection.standings => StandingsTab(key: ValueKey('standings-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
+            LeagueSection.wallet => WalletTab(key: ValueKey('wallet-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
+            LeagueSection.members => MembersTab(key: ValueKey('members-${lg.id}'), api: widget.api, league: lg, header: header, onRefresh: _reload),
+            LeagueSection.manage => ManageTab(key: ValueKey('manage-${lg.id}'), api: widget.api, league: lg, header: header,
                 onRefresh: _reload, onArchived: () => Navigator.of(context).pop()),
           };
         },
@@ -127,19 +128,18 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
 
   /// Header + section pills, scrolled with each section's list.
   /// The web's section pills for this league and viewer.
-  List<PillTab<_Section>> _sections(League lg) => [
-        const PillTab(_Section.feed, 'Feed'),
-        if (lg.isMoney) const PillTab(_Section.upcoming, 'Upcoming'),
-        if (lg.isMoney) const PillTab(_Section.sports, 'Sports'),
-        PillTab(_Section.play, lg.isPickem ? 'My Picks' : 'My Bets'),
-        const PillTab(_Section.results, 'Results'),
-        const PillTab(_Section.standings, 'Standings'),
-        if (lg.isMoney) const PillTab(_Section.wallet, 'Wallet'),
-        const PillTab(_Section.members, 'Members'),
-        if (lg.myRole == 'commissioner') const PillTab(_Section.manage, 'Manage'),
+  List<PillTab<LeagueSection>> _sections(League lg) => [
+        const PillTab(LeagueSection.feed, 'Feed'),
+        if (lg.isMoney) const PillTab(LeagueSection.upcoming, 'Upcoming'),
+        if (lg.isMoney) const PillTab(LeagueSection.sports, 'Sports'),
+        PillTab(LeagueSection.play, lg.isPickem ? 'Picks' : 'Bets'),
+        const PillTab(LeagueSection.standings, 'Standings'),
+        if (lg.isMoney) const PillTab(LeagueSection.wallet, 'Wallet'),
+        const PillTab(LeagueSection.members, 'Members'),
+        if (lg.myRole == 'commissioner') const PillTab(LeagueSection.manage, 'Manage'),
       ];
 
-  List<Widget> _header(BuildContext context, League lg, _Section section, List<PillTab<_Section>> sections) {
+  List<Widget> _header(BuildContext context, League lg, LeagueSection section, List<PillTab<LeagueSection>> sections) {
     final c = WaygerzColors.of(context);
     final isCommish = lg.myRole == 'commissioner';
     final period = lg.currentPeriod;
@@ -181,7 +181,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
             onPressed: _activate),
       ],
       const SizedBox(height: 16),
-      PillTabs<_Section>(
+      PillTabs<LeagueSection>(
         tabs: sections,
         value: section,
         onChanged: (s) => setState(() => _section = s),
@@ -252,117 +252,5 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
         ],
       ]);
     });
-  }
-}
-
-// ----------------------------------------------------------------- standings
-
-class _StandingsTab extends StatefulWidget {
-  const _StandingsTab({required this.api, required this.league, required this.header, required this.onRefresh});
-  final ApiClient api;
-  final League league;
-  final List<Widget> header;
-  final Future<void> Function() onRefresh;
-
-  @override
-  State<_StandingsTab> createState() => _StandingsTabState();
-}
-
-class _StandingsTabState extends State<_StandingsTab> {
-  late final LeaguesApi _leagues = LeaguesApi(widget.api);
-  late Future<List<StandingRow>> _future = _leagues.standings(widget.league.id);
-
-  Future<void> _reload() async {
-    final f = _leagues.standings(widget.league.id);
-    setState(() => _future = f);
-    await Future.wait([f, widget.onRefresh()]);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = WaygerzColors.of(context);
-    final me = context.read<AuthController>().user?.id;
-    final roles = {for (final m in widget.league.members) m.userId: m.role};
-    return RefreshIndicator(
-      onRefresh: _reload,
-      child: FutureBuilder<List<StandingRow>>(
-        future: _future,
-        builder: (context, snap) {
-          final rows = snap.data;
-          return ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
-            ...widget.header,
-            if (rows == null && snap.connectionState == ConnectionState.waiting)
-              ...List.generate(4, (_) => const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Skeleton(height: 80, radius: WaygerzRadius.xl),
-                  ))
-            else if (snap.hasError)
-              ErrorCard(title: "Couldn't load the standings", error: snap.error, onRetry: _reload)
-            else if (rows!.isEmpty)
-              CenterCard(children: [
-                Icon(LucideIcons.trophy, size: 24, color: c.mutedForeground),
-                Text('No standings yet.', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-              ])
-            else ...[
-              SectionTitle('Standings (${rows.length})'),
-              const SizedBox(height: 16),
-              for (final r in rows)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _standingCard(c, r, isMe: r.userId == me, role: roles[r.userId] ?? 'member'),
-                ),
-            ],
-          ]);
-        },
-      ),
-    );
-  }
-
-  Widget _standingCard(WaygerzColors c, StandingRow r, {required bool isMe, required String role}) {
-    final money = r.balanceCents != null;
-    final net = r.netCents ?? 0;
-    return WzCard(
-      padding: const EdgeInsets.all(12),
-      child: Row(children: [
-        Container(
-          width: 20,
-          height: 20,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: c.muted, shape: BoxShape.circle),
-          child: Text('${r.rank ?? ''}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.mutedForeground)),
-        ),
-        const SizedBox(width: 8),
-        UserAvatar(userId: r.userId, name: r.displayName, avatarKey: r.avatarKey, size: 56),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text.rich(
-              TextSpan(children: [
-                TextSpan(text: r.displayName),
-                if (isMe) TextSpan(text: ' (you)', style: TextStyle(fontWeight: FontWeight.w400, color: c.mutedForeground)),
-              ]),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground),
-            ),
-            const SizedBox(height: 2),
-            Text(memberRoleLabel(role), style: TextStyle(fontSize: 12, color: c.mutedForeground)),
-          ]),
-        ),
-        if (money)
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(formatCredits(r.balanceCents!), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
-            Text('${net >= 0 ? '+' : ''}${formatCredits(net)} net',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: net >= 0 ? c.brand : c.destructive)),
-          ])
-        else
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(formatRecord(r.wins, r.losses, r.pushes),
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.foreground,
-                    fontFeatures: const [FontFeature.tabularFigures()])),
-            Text('W–L', style: TextStyle(fontSize: 12, color: c.mutedForeground)),
-          ]),
-      ]),
-    );
   }
 }

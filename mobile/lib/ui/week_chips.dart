@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
 
 class WeekChip<T> {
-  const WeekChip(this.value, this.label, this.title);
+  const WeekChip(this.value, this.label, this.title, {this.overall = false});
   final T value;
 
   /// Short label on the chip (HF, P1, W2, …).
@@ -11,6 +12,10 @@ class WeekChip<T> {
 
   /// The full name, for screen readers ("Preseason Week 1").
   final String title;
+
+  /// The season-wide chip (Standings' "Overall"): trophy + a primary outline,
+  /// so it doesn't read as another week.
+  final bool overall;
 }
 
 /// The week picker (web components/week-chips.tsx): small pill buttons that
@@ -69,7 +74,8 @@ class _WeekChipsState<T> extends State<WeekChips<T>> {
       child: Material(
         key: on ? _selected : null,
         color: on ? c.primary : Colors.transparent,
-        shape: StadiumBorder(side: BorderSide(color: on ? c.primary : c.input)),
+        shape: StadiumBorder(side: BorderSide(
+            color: on ? c.primary : w.overall ? c.primary.withValues(alpha: 0.6) : c.input)),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => widget.onChanged(w.value),
@@ -79,8 +85,14 @@ class _WeekChipsState<T> extends State<WeekChips<T>> {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             alignment: Alignment.center,
             child: ExcludeSemantics(
-              child: Text(w.label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                  color: on ? onPrimary : c.mutedForeground)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (w.overall) ...[
+                  Icon(LucideIcons.trophy, size: 14, color: on ? onPrimary : c.primary),
+                  const SizedBox(width: 4),
+                ],
+                Text(w.label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                    color: on ? onPrimary : w.overall ? c.primary : c.mutedForeground)),
+              ]),
             ),
           ),
         ),

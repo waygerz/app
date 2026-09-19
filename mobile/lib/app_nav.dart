@@ -65,9 +65,21 @@ class AppNav extends ChangeNotifier {
       case 'leagues' when seg.length > 1 && seg[1] == 'new':
         nav.push(MaterialPageRoute<void>(builder: (_) => CreateLeagueScreen(api: api)));
       case 'leagues' when seg.length > 1:
-        // A stub is enough: the detail screen loads the league itself.
+        // A stub is enough: the detail screen loads the league itself. A
+        // sub-path opens that tab (web routes; /results merged into Standings).
         final stub = League(id: seg[1], name: '', leagueType: 'head_to_head', status: 'active');
-        nav.push(MaterialPageRoute<void>(builder: (_) => LeagueDetailScreen(api: api, league: stub)));
+        final section = switch (seg.length > 2 ? seg[2] : '') {
+          'upcoming' => LeagueSection.upcoming,
+          'sports' => LeagueSection.sports,
+          'play' => LeagueSection.play,
+          'results' || 'standings' => LeagueSection.standings,
+          'activity' => LeagueSection.wallet,
+          'members' => LeagueSection.members,
+          'manage' => LeagueSection.manage,
+          _ => LeagueSection.feed,
+        };
+        nav.push(MaterialPageRoute<void>(
+            builder: (_) => LeagueDetailScreen(api: api, league: stub, initialSection: section)));
       case 'friends':
         nav.push(MaterialPageRoute<void>(builder: (_) => FriendsScreen(api: api)));
       case 'messages' when seg.length > 1:

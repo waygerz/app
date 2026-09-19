@@ -14,13 +14,15 @@ import '../../ui/ui.dart';
 import '../../wagers.dart';
 import '../../widgets/wager_card.dart';
 import '../widgets.dart';
+import 'season_table.dart';
 
-/// League Results by week (web _sections/results.tsx): head-to-head shows the
-/// week's settled bets with a reckoning (net $ / 🍺 / 🥃, overall and per
-/// opponent); pick'em shows the week's winner(s) and leaderboard, with
-/// commissioner confirmations and each member's picks.
-class ResultsTab extends StatelessWidget {
-  const ResultsTab({super.key, required this.api, required this.league, required this.header, required this.onRefresh});
+/// League Standings (web _sections/standings.tsx): a chip per week plus an
+/// Overall chip. A week shows its results — head-to-head: settled bets with a
+/// reckoning (net $ / 🍺 / 🥃, overall and per opponent); pick'em: the
+/// winner(s) and leaderboard, with confirmations and each member's picks.
+/// Overall shows the season table. See .docs/pending/STANDINGS_MERGE.md.
+class StandingsTab extends StatelessWidget {
+  const StandingsTab({super.key, required this.api, required this.league, required this.header, required this.onRefresh});
   final ApiClient api;
   final League league;
   final List<Widget> header;
@@ -38,6 +40,24 @@ Widget _noResults(BuildContext context, String text) {
     Icon(LucideIcons.trophy, size: 24, color: c.mutedForeground),
     Text(text, textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
   ]);
+}
+
+/// The chip value that selects the season table.
+const _overall = 'overall';
+
+/// The Overall chip, last in the row and styled apart from the weeks.
+const _overallChip = WeekChip(_overall, 'Overall', 'Overall season standings', overall: true);
+
+/// The Overall view: the season table under its title.
+List<Widget> _overallView(ApiClient api, League lg, int reload) {
+  final members = lg.members.length;
+  final after = lg.currentPeriod?.label;
+  return [
+    SectionTitle('Standings · Overall',
+        subtitle: '$members member${members == 1 ? '' : 's'}${after != null ? ' · after $after' : ''}'),
+    const SizedBox(height: 16),
+    SeasonTable(key: ValueKey('season-$reload'), api: api, league: lg),
+  ];
 }
 
 /// "Week ending MM/DD" from the period's end, else its own label.
@@ -70,6 +90,7 @@ class _H2hResults extends StatefulWidget {
 class _H2hResultsState extends State<_H2hResults> {
   late Future<_H2hData> _future = _load();
   String? _selected;
+  int _reloads = 0;
 
   Future<_H2hData> _load() async {
     final results = await Future.wait([
@@ -83,7 +104,10 @@ class _H2hResultsState extends State<_H2hResults> {
 
   Future<void> _reload() async {
     final f = _load();
-    setState(() => _future = f);
+    setState(() {
+      _future = f;
+      _reloads++;
+    });
     await Future.wait([f, widget.onRefresh()]);
   }
 
@@ -114,18 +138,34 @@ class _H2hResultsState extends State<_H2hResults> {
                 if (byPeriod[p.id]?.isNotEmpty ?? false) WeekChip(p.id, shortPeriodLabel(p.label), _weekEnding(p)),
               if (byPeriod['_none']?.isNotEmpty ?? false) const WeekChip('_none', 'Other', 'Other'),
             ];
-            if (options.isEmpty) {
-              body.add(_noResults(context, 'No results yet — settled bets show up here by week.'));
+            // Chosen chip; else the current week if it has results; else the
+            // newest week with results; else Overall.
+            final current = widget.league.currentPeriod?.id;
+            final selected = _selected == _overall || options.any((o) => o.value == _selected)
+                ? _selected!
+                : options.any((o) => o.value == current)
+                    ? current!
+                    : options.isEmpty
+                        ? _overall
+                        : options.first.value;
+            body.addAll([
+              // Weeks oldest → newest (like Picks), then Overall.
+              WeekChips<String>(weeks: [...options.reversed, _overallChip], value: selected,
+                  onChanged: (v) => setState(() => _selected = v)),
+              const SizedBox(height: 16),
+            ]);
+            if (selected == _overall) {
+              body.addAll(_overallView(widget.api, widget.league, _reloads));
+              if (options.isEmpty) {
+                body.add(Text('Weekly results show up here once bets settle.',
+                    style: TextStyle(fontSize: 12, color: WaygerzColors.of(context).mutedForeground)));
+              }
             } else {
-              final selected = options.any((o) => o.value == _selected) ? _selected! : options.first.value;
               final chip = options.firstWhere((o) => o.value == selected);
               final week = byPeriod[selected] ?? const <Wager>[];
               final recon = reconcile(week, me);
               body.addAll([
-                WeekChips<String>(weeks: options.reversed.toList(), value: selected,
-                    onChanged: (v) => setState(() => _selected = v)),
-                const SizedBox(height: 16),
-                SectionTitle('Results · ${chip.title}', subtitle: '${week.length} settled bet${week.length == 1 ? '' : 's'}'),
+                SectionTitle('Standings · ${chip.title}', subtitle: '${week.length} settled bet${week.length == 1 ? '' : 's'}'),
                 const SizedBox(height: 16),
                 if (recon.wins + recon.losses > 0) ...[_reconCard(context, recon), const SizedBox(height: 16)],
                 for (final g in groupWagers(week, me)) WagerBetCard(group: g, me: me, event: d.events[g.rep.eventId]),
@@ -216,6 +256,10 @@ class _PickemResultsState extends State<_PickemResults> {
   List<SportEvent>? _games;
   bool _confirming = false;
 
+  /// The Overall chip is selected (or there are no weeks yet).
+  bool _overallOn = false;
+  int _reloads = 0;
+
   @override
   void initState() {
     super.initState();
@@ -239,10 +283,15 @@ class _PickemResultsState extends State<_PickemResults> {
     }
   }
 
-  Future<void> _reload() => Future.wait([_loadPeriods(), widget.onRefresh()]);
+  Future<void> _reload() {
+    setState(() => _reloads++);
+    return Future.wait([_loadPeriods(), widget.onRefresh()]);
+  }
 
   void _select(String id) {
+    if (id == _overall) return setState(() => _overallOn = true);
     setState(() {
+      _overallOn = false;
       _periodId = id;
       _results = _leagues.periodResults(widget.league.id, id);
     });
@@ -301,18 +350,26 @@ class _PickemResultsState extends State<_PickemResults> {
       body.add(const Skeleton(height: 160, radius: WaygerzRadius.xl));
     } else if (_periodsError != null) {
       body.add(ErrorCard(title: "Couldn't load the weeks", error: _periodsError, onRetry: _loadPeriods));
-    } else if (_periods!.isEmpty) {
-      body.add(_noResults(context, 'No weeks yet.'));
+    } else if (_overallOn || _periods!.isEmpty) {
+      body.addAll([
+        WeekChips<String>(
+          weeks: [for (final p in _periods!) WeekChip(p.id, shortPeriodLabel(p.label), p.label), _overallChip],
+          value: _overall,
+          onChanged: _select,
+        ),
+        const SizedBox(height: 16),
+        ..._overallView(widget.api, widget.league, _reloads),
+      ]);
     } else {
       final period = _periods!.where((p) => p.id == _periodId).firstOrNull;
       body.addAll([
         WeekChips<String>(
-          weeks: [for (final p in _periods!) WeekChip(p.id, shortPeriodLabel(p.label), p.label)],
+          weeks: [for (final p in _periods!) WeekChip(p.id, shortPeriodLabel(p.label), p.label), _overallChip],
           value: _periodId,
           onChanged: _select,
         ),
         const SizedBox(height: 16),
-        SectionTitle('Results · ${period?.label ?? ''}', subtitle: _gamesLine),
+        SectionTitle('Standings · ${period?.label ?? ''}', subtitle: _gamesLine),
         const SizedBox(height: 16),
         FutureBuilder<PeriodResults>(
           future: _results,

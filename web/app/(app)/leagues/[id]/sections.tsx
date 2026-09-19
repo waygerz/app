@@ -6,7 +6,6 @@ export { StatusIcon, WagerBetCard } from './_sections/wager-card';
 export { LeagueSports, LeagueSportSchedule } from './_sections/sports';
 export { LeagueUpcomingGames } from './_sections/upcoming';
 export { LeagueStandings } from './_sections/standings';
-export { LeagueResults } from './_sections/results';
 export { LeagueActivity } from './_sections/activity';
 export { LeagueMembers } from './_sections/members';
 export { LeagueManage } from './_sections/manage';
