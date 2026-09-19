@@ -34,3 +34,9 @@ def quota():
 @internal_only
 def lookup_events():
     return ctrl.lookup_events()
+
+
+@ingestor_internal_bp.get("/sport-leagues/disabled")
+@internal_only
+def disabled_sport_leagues():
+    return ctrl.disabled_sport_leagues()

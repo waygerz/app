@@ -1,5 +1,6 @@
 """Leagues business logic: CRUD, membership, picks, standings, grading, rollover."""
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -270,6 +271,45 @@ def ingestor_warm_cache(sport_league_ids) -> dict:
     )
     r.raise_for_status()
     return r.json()
+
+
+# Switched-off sports (the ingestor owns the switch) — cached briefly so league
+# pages don't ask on every read.
+_DISABLED_TTL_SEC = 60
+_disabled_cache: tuple[float, frozenset] = (0.0, frozenset())
+
+
+def disabled_sport_league_ids() -> frozenset:
+    """Catalog ids of sport-leagues whose sport is switched off (e.g. golf).
+    Leagues keep them stored — they come back when the sport is switched on —
+    but they're hidden from what the web and app show. Fails open (hides
+    nothing) if the ingestor can't be reached."""
+    global _disabled_cache
+    now = time.monotonic()
+    if now - _disabled_cache[0] < _DISABLED_TTL_SEC:
+        return _disabled_cache[1]
+    try:
+        r = requests.get(
+            f"{current_app.config['INGESTOR_URL']}/internal/sport-leagues/disabled",
+            headers=_headers(), timeout=5,
+        )
+        r.raise_for_status()
+        ids = frozenset(str(i) for i in r.json().get("ids") or [])
+    except Exception:  # noqa: BLE001
+        current_app.logger.warning("disabled sport-leagues lookup failed; showing all")
+        return _disabled_cache[1]
+    _disabled_cache = (now, ids)
+    return ids
+
+
+def _visible_sports(league_id) -> list[dict]:
+    """The league's sports as the web and app show them (switched-off ones hidden)."""
+    hidden = disabled_sport_league_ids()
+    return [
+        {"sport_league_id": s.sport_league_id, "name": s.name}
+        for s in LeagueSport.query.filter_by(league_id=league_id).all()
+        if s.sport_league_id not in hidden
+    ]
 
 
 def get_event(external_id):
@@ -932,7 +972,6 @@ def _parse_dt(value):
 def _detail(league, me):
     members = LeagueMember.query.filter_by(league_id=league.id, status=ACTIVE).all()
     users = resolve_users_full([m.user_id for m in members])
-    sports = LeagueSport.query.filter_by(league_id=league.id).all()
     period = current_period(league.id)
 
     my_balance = None
@@ -950,7 +989,7 @@ def _detail(league, me):
         for m in members
     ]
     d["member_count"] = len(members)  # same field as the league-list cards
-    d["sports"] = [{"sport_league_id": s.sport_league_id, "name": s.name} for s in sports]
+    d["sports"] = _visible_sports(league.id)
     d["current_period"] = period.to_dict() if period else None
     d["my_balance_cents"] = my_balance
     d["my_role"] = next((m.role for m in members if m.user_id == me), MEMBER)
@@ -1135,10 +1174,7 @@ def my_leagues(me):
 def _league_preview_dict(league) -> dict:
     commissioner = resolve_users([league.commissioner_id]).get(league.commissioner_id)
     member_count = LeagueMember.query.filter_by(league_id=league.id, status=ACTIVE).count()
-    sports = [
-        {"sport_league_id": s.sport_league_id, "name": s.name}
-        for s in LeagueSport.query.filter_by(league_id=league.id).all()
-    ]
+    sports = _visible_sports(league.id)
     return {
         "id": league.id,
         "name": league.name,
@@ -1249,8 +1285,18 @@ def edit_league(league_id, me, data):
         sports = data.get("sports") or []
         if not sports:
             return {"error": "select at least one sport"}, 400
+        # The editor never sees switched-off sports, so keep them rather than
+        # dropping them: they reappear when the sport is switched back on.
+        hidden = disabled_sport_league_ids()
+        kept = [
+            (s.sport_league_id, s.name)
+            for s in LeagueSport.query.filter_by(league_id=league_id).all()
+            if s.sport_league_id in hidden
+        ]
         LeagueSport.query.filter_by(league_id=league_id).delete()
-        seen = set()
+        for sid, nm in kept:
+            db.session.add(LeagueSport(league_id=league_id, sport_league_id=sid, name=nm))
+        seen = {sid for sid, _ in kept}
         for item in sports:
             if isinstance(item, dict):
                 sid, nm = str(item.get("sport_league_id") or ""), item.get("name")

@@ -10,6 +10,7 @@ from sqlalchemy import text
 from app.extensions import db, get_redis
 from app.models.sport_league import SportLeague
 from app.models.team import Team
+from app.services import service_availability as availability
 from app.services.service_logos import cache_logo
 
 # Keep-alive: one session reuses the TLS connection across calls.
@@ -31,11 +32,9 @@ _ESPN_LEAGUE_SLUG = {
 # service_combat (MMA fights -> home/away). `slug` matches the (sport, league)
 # used at ingest time so catalog_id() lines up. Keep in sync with
 # service_combat.COMBAT_SPORTS and the *_TOURS config.
-# TEMPORARILY DISABLED: golf/racing/MMA are hidden from list_sports/list_leagues
-# (the league-create picker and the /sports browse) for now. Re-enable by setting
-# EXTRA_SPORTS = _EXTRA_SPORTS_DISABLED below. Keep in sync with the *_TOURS
-# config allowlists (also emptied) so ingestion and surfacing toggle together.
-_EXTRA_SPORTS_DISABLED = [
+# Each is listed only while its switch is on (service_availability: the *_TOURS
+# allowlist), so ingestion and the catalog toggle together.
+_EXTRA_SPORTS = [
     {
         "slug": "mma",
         "name": "MMA",
@@ -61,17 +60,18 @@ _EXTRA_SPORTS_DISABLED = [
         ],
     },
 ]
-EXTRA_SPORTS = []
+def _extra_sports():
+    return [s for s in _EXTRA_SPORTS if availability.is_enabled(s["slug"])]
 
 
 def _extra_sport(sport):
-    return next((s for s in EXTRA_SPORTS if s["slug"] == sport), None)
+    return next((s for s in _extra_sports() if s["slug"] == sport), None)
 
 
 def _extra_sports_payload():
     return [
         {"id": s["slug"], "slug": s["slug"], "name": s["name"], "displayName": s["name"]}
-        for s in EXTRA_SPORTS
+        for s in _extra_sports()
     ]
 
 
@@ -365,6 +365,8 @@ def list_sports():
     except Exception:
         data = _sports_from_db()  # durable floor if the cached snapshot is gone too
     data.extend(_extra_sports_payload())
+    # A switched-off sport never reaches a picker, wherever it came from.
+    data = [s for s in data if availability.is_enabled(s.get("slug") or s.get("id"))]
     if not data:
         return {"error": "sports catalog unavailable"}, 502
     allow = _allowed_sport_slugs()
@@ -396,6 +398,8 @@ def _list_extra_leagues(extra):
 
 
 def list_leagues(sport):
+    if not availability.is_enabled(sport):
+        return {"leagues": [], "quota": quota_status()}, 200
     extra = _extra_sport(sport)
     if extra is not None:
         return _list_extra_leagues(extra)

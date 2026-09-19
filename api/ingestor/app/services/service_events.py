@@ -9,6 +9,7 @@ from sqlalchemy import nullslast
 from app.extensions import db
 from app.models.event import CANCELLED, FINAL, LIVE, SCHEDULED, Event
 from app.models.team import Team
+from app.services import service_availability as availability
 from app.services import service_sports as sports
 
 _NBA_EVENTS = [
@@ -149,11 +150,15 @@ def attach_logos(events):
     def logo_for(league, abbr, name):
         return by_abbr.get((league, (abbr or "").upper())) or by_name.get((league, name))
 
+    off = availability.disabled_sports()
     out = []
     for e in events:
         d = e.to_dict()
         d["home_logo"] = logo_for(e.league, e.home_abbr, e.home_team)
         d["away_logo"] = logo_for(e.league, e.away_abbr, e.away_team)
+        # False once the sport is switched off: still readable (bets on it
+        # settle) but not bettable.
+        d["available"] = e.sport not in off
         out.append(d)
     return out
 
@@ -198,6 +203,10 @@ def _find_event(key):
 
 def list_events():
     q = Event.query
+    # A switched-off sport's games are hidden from every list and board.
+    off = availability.disabled_sports()
+    if off:
+        q = q.filter(Event.sport.notin_(off))
     league = request.args.get("league")
     status = request.args.get("status")
     if league:
@@ -233,6 +242,8 @@ def list_events():
 
 
 def league_events(sport, league):
+    if not availability.is_enabled(sport):
+        return {"events": [], "sync_error": None, "quota": sports.quota_status()}, 200
     sync_error = None
     try:
         sync_league(sport, league)

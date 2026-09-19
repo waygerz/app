@@ -181,3 +181,24 @@ def test_member_can_leave_commish_cannot(client, auth_headers):
     assert client.post(f"/v1/gameplay/leagues/{lid}/leave", headers=auth_headers(u2)).status_code == 200
     assert client.get(f"/v1/gameplay/leagues/{lid}", headers=auth_headers(u2)).status_code == 404
     assert client.post(f"/v1/gameplay/leagues/{lid}/leave", headers=auth_headers(U1)).status_code == 400
+
+
+def test_switched_off_sport_is_hidden_but_kept(client, auth_headers, monkeypatch):
+    # Golf switched off: the league still stores PGA, but the web and app don't
+    # see it — and saving the league's sports doesn't drop it, so it comes back
+    # when golf is switched on.
+    from app.services import service_leagues as svc
+
+    lid = _create(client, auth_headers(U1), sports=["NBA", "PGA"]).get_json()["league"]["id"]
+    monkeypatch.setattr(svc, "disabled_sport_league_ids", lambda: frozenset({"PGA"}))
+
+    shown = client.get(f"/v1/gameplay/leagues/{lid}", headers=auth_headers(U1)).get_json()["league"]["sports"]
+    assert [s["sport_league_id"] for s in shown] == ["NBA"]
+
+    r = client.patch(f"/v1/gameplay/leagues/{lid}", json={"sports": [{"sport_league_id": "NFL", "name": "NFL"}]},
+                     headers=auth_headers(U1))
+    assert [s["sport_league_id"] for s in r.get_json()["league"]["sports"]] == ["NFL"]
+
+    monkeypatch.setattr(svc, "disabled_sport_league_ids", lambda: frozenset())
+    back = client.get(f"/v1/gameplay/leagues/{lid}", headers=auth_headers(U1)).get_json()["league"]["sports"]
+    assert sorted(s["sport_league_id"] for s in back) == ["NFL", "PGA"]

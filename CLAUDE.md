@@ -84,6 +84,11 @@ Conventions that matter across all services:
   drift-checked copy): errors are JSON `{error: <text to show>, error_code?:
   <slug>}` and every auth failure is a 401. Return `{"error": ...}` (plus
   `error_code` when a client must branch on it) — never `message` for errors.
+- **Sport switches.** Golf, racing, MMA and cricket are on only while their
+  ingestor allowlist (`GOLF_TOURS`, `RACING_TOURS`, `MMA_TOURS`,
+  `CRICKET_LEAGUES`) is non-empty (`service_availability.py`). Off = hidden from
+  what web and app show (catalog, event lists, schedules, league sport lists);
+  data is kept, single-event reads still work so old bets settle.
 - **Prod refuses dev secrets.** With `APP_ENV=production`, `create_app()` raises
   if `JWT_SECRET_KEY` or `INTERNAL_TOKEN` is unset or a dev default
   (`guards.py::require_prod_secrets`). Every task def must set both.

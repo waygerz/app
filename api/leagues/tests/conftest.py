@@ -59,6 +59,7 @@ def mock_clients(monkeypatch):
                                      for i in ids})
     monkeypatch.setattr(svc, "warm_event_cache", lambda *a, **k: None)
     monkeypatch.setattr(svc, "ingestor_warm_cache", lambda *a, **k: {"ok": True})
+    monkeypatch.setattr(svc, "disabled_sport_league_ids", lambda: frozenset())
     monkeypatch.setattr(svc, "wallet_balances",
                         lambda uid, accts: {a: 0 for a in accts})
     monkeypatch.setattr(svc, "wallet_grant", lambda *a, **k: {"ok": True})

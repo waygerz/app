@@ -28,6 +28,7 @@ from sqlalchemy import and_, or_
 from app.extensions import db, get_redis
 from app.models.event import CANCELLED, FINAL, LIVE, SCHEDULED, Event
 from app.models.sport_league import SportLeague
+from app.services import service_availability as availability
 from app.services import service_sports as sports
 from app.services.service_espn import espn_get, espn_get_many
 from app.services.service_events import _parse_dt
@@ -843,6 +844,8 @@ def weeks(sport, league, season=None):
     """The week list for a league, derived from stored events: native weeks by
     week_number, date-based by Mon–Sun calendar buckets. Feeds Phase 2 period
     prebuild."""
+    if not availability.is_enabled(sport):
+        return {"weeks": []}, 200
     entry = _registry_entry(sport, league)
     q = Event.query.filter_by(sport=sport, league=league)
     if season:
