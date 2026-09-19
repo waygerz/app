@@ -20,6 +20,17 @@ void main() {
     expect(inviteCodeFrom('not a code'), '');
   });
 
+  test('groupByKickoff', () {
+    final sun1 = DateTime(2026, 9, 20, 13).toIso8601String();
+    final sun4 = DateTime(2026, 9, 20, 16, 25).toIso8601String();
+    final thu = DateTime(2026, 9, 17, 20, 15).toIso8601String();
+    final games = [('b', sun1), ('tbd', null), ('d', sun4), ('a', thu), ('c', sun1)];
+    final g = groupByKickoff(games, (e) => e.$2);
+    expect(g.map((x) => x.day).toList(), ['Thursday', 'Sunday', 'Sunday', 'TBD']);
+    expect(g.map((x) => x.time).toList(), ['8:15 PM', '1:00 PM', '4:25 PM', '']);
+    expect(g[1].items.map((e) => e.$1).toList(), ['b', 'c']);
+  });
+
   test('ordinal', () {
     expect(ordinal(1), '1st');
     expect(ordinal(2), '2nd');

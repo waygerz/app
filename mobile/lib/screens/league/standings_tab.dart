@@ -680,27 +680,53 @@ class _MemberPicksState extends State<_MemberPicks> {
             }
             final picks = snap.data!;
             if (picks.isEmpty) return Text('No picks for this week.', style: TextStyle(fontSize: 14, color: c.mutedForeground));
+            // Their record so far: graded right / wrong, games on now, to play.
+            final right = picks.where((p) => p.correct == true).length;
+            final wrong = picks.where((p) => p.correct == false).length;
+            final live = picks.where((p) => p.correct == null && p.status == 'live').length;
+            final toPlay = picks.length - right - wrong - live;
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              for (final p in picks) _pick(c, p),
-              if (m.tiebreakerTotal != null)
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: c.muted.withValues(alpha: 0.3),
-                    border: Border.all(color: c.border),
-                    borderRadius: BorderRadius.circular(WaygerzRadius.lg),
-                  ),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                WzBadge('✓ $right right', variant: BadgeVariant.success),
+                WzBadge('✗ $wrong wrong', variant: BadgeVariant.destructive),
+                if (live > 0 || toPlay > 0)
+                  WzBadge([if (live > 0) '$live live', if (toPlay > 0) '$toPlay to play'].join(' · '),
+                      variant: BadgeVariant.secondary),
+              ]),
+              const SizedBox(height: 12),
+              // Games under kickoff headers, two team rows each — like the pick sheet.
+              for (final grp in groupByKickoff(picks, (p) => p.startTime ?? _events[p.eventId]?.startTime)) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
                   child: Row(children: [
                     Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('TIE-BREAKER · TOTAL POINTS',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.5, color: c.foreground)),
-                        if (m.tiebreakerDiff != null)
-                          Text('off by ${m.tiebreakerDiff}', style: TextStyle(fontSize: 12, color: c.mutedForeground)),
+                      child: Text(grp.day.toUpperCase(),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1, color: c.mutedForeground)),
+                    ),
+                    Text(grp.time, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.mutedForeground)),
+                  ]),
+                ),
+                for (final p in grp.items) _pick(c, p),
+              ],
+              // Tie-breaker: their total-points guess and how far off once
+              // final — the same row as on the pick sheet.
+              if (m.tiebreakerTotal != null)
+                Container(
+                  height: 52,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
+                  child: Row(children: [
+                    const ExcludeSemantics(child: Text('🎯', style: TextStyle(fontSize: 16))),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Tie-breaker', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
+                        Text('Total points${m.tiebreakerDiff != null ? ' · off by ${m.tiebreakerDiff}' : ''}',
+                            style: TextStyle(fontSize: 12, color: c.mutedForeground)),
                       ]),
                     ),
-                    Text('${m.tiebreakerTotal}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.foreground)),
+                    Text('${m.tiebreakerTotal}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.foreground,
+                        fontFeatures: const [FontFeature.tabularFigures()])),
                   ]),
                 ),
             ]);
@@ -713,7 +739,9 @@ class _MemberPicksState extends State<_MemberPicks> {
     final tone = p.correct == null
         ? Tw.blue500.withValues(alpha: 0.2)
         : (p.correct! ? c.brand : c.destructive).withValues(alpha: 0.2);
-    final start = _events[p.eventId]?.startTime;
+    // Scores only once the game is on — unplayed games report 0–0.
+    final started = p.status == 'live' || p.status == 'final';
+    final live = p.status == 'live';
     Widget side(String? logo, String label, int? score, bool picked) => Container(
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -726,17 +754,28 @@ class _MemberPicksState extends State<_MemberPicks> {
             const SizedBox(width: 10),
             Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground))),
-            if (score != null) Text('$score', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.foreground)),
+            // The picked side's mark sits left of the score: LIVE while on,
+            // then ✓ (right or not graded yet) or ✗ (wrong).
+            if (picked && live) ...[
+              Text('LIVE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: c.destructive)),
+              const SizedBox(width: 6),
+            ],
+            if (picked)
+              p.correct == false
+                  ? Icon(LucideIcons.x, size: 16, color: c.destructive, semanticLabel: 'Wrong pick')
+                  : Icon(LucideIcons.check, size: 16, color: c.foreground.withValues(alpha: 0.7), semanticLabel: 'Their pick'),
+            if (started && score != null)
+              SizedBox(
+                width: 28,
+                child: Text('$score', textAlign: TextAlign.right,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.foreground,
+                        fontFeatures: const [FontFeature.tabularFigures()])),
+              ),
           ]),
         );
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (start != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 2, bottom: 6),
-            child: Text(formatStart(start), style: TextStyle(fontSize: 12, color: c.mutedForeground)),
-          ),
         side(p.awayLogo, p.awayAbbr ?? p.awayTeam ?? '?', p.awayScore, p.pickSide == 'away'),
         const SizedBox(height: 6),
         side(p.homeLogo, p.homeAbbr ?? p.homeTeam ?? '?', p.homeScore, p.pickSide == 'home'),

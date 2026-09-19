@@ -84,6 +84,33 @@ String shortAgo(String? iso) {
 }
 
 /// "1:05 PM".
+const _weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/// Items grouped by kickoff (same start time), in start order, for the pick
+/// sheets' "SUNDAY · 1:00 PM" headers; unknown times sort last under "TBD"
+/// (web lib/leagues.ts groupByKickoff).
+List<({String day, String time, List<T> items})> groupByKickoff<T>(List<T> items, String? Function(T) startOf) {
+  DateTime? at(T item) => DateTime.tryParse(startOf(item) ?? '')?.toLocal();
+  final sorted = [...items]..sort((a, b) {
+      final ta = at(a), tb = at(b);
+      if (ta == null || tb == null) return ta == null ? (tb == null ? 0 : 1) : -1;
+      return ta.compareTo(tb);
+    });
+  final out = <({String day, String time, List<T> items})>[];
+  String? lastKey;
+  for (final item in sorted) {
+    final key = startOf(item) ?? 'tbd';
+    if (key == lastKey) {
+      out.last.items.add(item);
+      continue;
+    }
+    lastKey = key;
+    final d = at(item);
+    out.add((day: d == null ? 'TBD' : _weekdayNames[d.weekday - 1], time: clockTime(startOf(item)), items: [item]));
+  }
+  return out;
+}
+
 String clockTime(String? iso) {
   final d = iso == null ? null : DateTime.tryParse(iso)?.toLocal();
   if (d == null) return '';

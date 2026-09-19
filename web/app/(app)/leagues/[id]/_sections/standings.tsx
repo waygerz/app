@@ -6,6 +6,7 @@ import { useLeague } from '../league-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
+  groupByKickoff,
   leaguesApi,
   shortPeriodLabel,
   type LeagueDetail,
@@ -17,7 +18,7 @@ import { groupWagers, wagersApi, type Wager } from '@/lib/wagers';
 import { fetchEvent, fetchPeriodEvents, type SportEvent } from '@/lib/ingestor';
 import { formatCredits } from '@/lib/wallet';
 import { useAuth } from '@/auth/AuthContext';
-import { TeamLogo, formatStart } from '@/components/event-card';
+import { TeamLogo } from '@/components/event-card';
 import { WeekChips, type WeekChip } from '@/components/week-chips';
 import { SeasonTable } from './season-table';
 import { SectionTitle } from '@/components/section-title';
@@ -27,6 +28,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AppSheet } from '@/components/ui/app-sheet';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +40,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, Medal, CircleCheckBig, ChevronRight } from 'lucide-react';
+import { Trophy, Medal, CircleCheckBig, ChevronRight, Check, X } from 'lucide-react';
 import { STATE, memberRoleLabel } from './shared';
 import { WagerBetCard } from './wager-card';
 
@@ -726,6 +728,12 @@ function MemberPicksDialog({
   });
   const starts = startsQ.data ?? {};
 
+  // Their record so far: graded right / wrong, games on now, games to play.
+  const right = picks.filter((p) => p.correct === true).length;
+  const wrong = picks.filter((p) => p.correct === false).length;
+  const live = picks.filter((p) => p.correct == null && p.event?.status === 'live').length;
+  const toPlay = picks.length - right - wrong - live;
+
   return (
     <AppSheet
       open={open}
@@ -733,70 +741,96 @@ function MemberPicksDialog({
       tall
       title={<>{member?.display_name}&rsquo;s picks</>}
       description={periodLabel || 'Selected week'}
-      bodyClassName="flex flex-col gap-4"
+      bodyClassName="flex flex-col gap-3"
     >
-          {q.isLoading && <Skeleton className="h-24 rounded-xl" />}
-          {q.isError && (
-            <p className="text-sm text-muted-foreground">Picks are hidden until an hour before the first game.</p>
+      {q.isLoading && <Skeleton className="h-24 rounded-xl" />}
+      {q.isError && (
+        <p className="text-sm text-muted-foreground">Picks are hidden until an hour before the first game.</p>
+      )}
+      {!q.isLoading && !q.isError && picks.length === 0 && (
+        <p className="text-sm text-muted-foreground">No picks for this week.</p>
+      )}
+
+      {picks.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <Badge size="sm" variant="success" appearance="light">✓ {right} right</Badge>
+          <Badge size="sm" variant="destructive" appearance="light">✗ {wrong} wrong</Badge>
+          {(live > 0 || toPlay > 0) && (
+            <Badge size="sm" variant="secondary">
+              {[live > 0 && `${live} live`, toPlay > 0 && `${toPlay} to play`].filter(Boolean).join(' · ')}
+            </Badge>
           )}
-          {!q.isLoading && !q.isError && picks.length === 0 && (
-            <p className="text-sm text-muted-foreground">No picks for this week.</p>
-          )}
-          {picks.map((p) => {
+        </div>
+      )}
+
+      {/* Games under kickoff headers, two team rows each — like the pick sheet. */}
+      {groupByKickoff(picks, (p) => starts[p.event_id]).map((grp) => (
+        <section key={grp.key} className="flex flex-col gap-3">
+          <h3 className="flex items-baseline justify-between px-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <span>{grp.day}</span>
+            <span className="normal-case tracking-normal">{grp.time}</span>
+          </h3>
+          {grp.items.map((p) => {
             const ev = p.event;
+            // Scores only once the game is on — unplayed games report 0–0.
+            const started = ev?.status === 'live' || ev?.status === 'final';
+            const isLive = ev?.status === 'live';
             // Picked side tinted by result: blue while ungraded, green correct,
-            // red wrong — matching the bet board and Pick'em play list.
+            // red wrong — matching the bet board and the pick sheet.
             const tone = p.correct === null ? 'bg-blue-500/20'
               : p.correct ? 'bg-brand/20' : 'bg-destructive/20';
+            const mark = p.correct === false ? 'wrong' : 'right';
             return (
               <div key={p.id ?? p.event_id} className="flex flex-col gap-1.5">
-                {starts[p.event_id] && (
-                  <span className="px-0.5 text-xs text-muted-foreground">{formatStart(starts[p.event_id])}</span>
-                )}
-                <PickTeam
-                  logo={ev?.away_logo}
-                  label={ev?.away_abbr || ev?.away_team || '?'}
-                  score={ev?.away_score}
-                  picked={p.pick_side === 'away'}
-                  tone={tone}
-                />
-                <PickTeam
-                  logo={ev?.home_logo}
-                  label={ev?.home_abbr || ev?.home_team || '?'}
-                  score={ev?.home_score}
-                  picked={p.pick_side === 'home'}
-                  tone={tone}
-                />
+                {(['away', 'home'] as const).map((side) => (
+                  <PickTeam
+                    key={side}
+                    logo={side === 'away' ? ev?.away_logo : ev?.home_logo}
+                    label={(side === 'away' ? ev?.away_abbr || ev?.away_team : ev?.home_abbr || ev?.home_team) || '?'}
+                    score={started ? (side === 'away' ? ev?.away_score : ev?.home_score) : null}
+                    picked={p.pick_side === side}
+                    mark={mark}
+                    live={isLive}
+                    tone={tone}
+                  />
+                ))}
               </div>
             );
           })}
+        </section>
+      ))}
 
-          {/* Tie-breaker: their total-points guess for the week's last game,
-              plus how far off once it's final. */}
-          {!q.isError && member?.tiebreaker_total != null && (
-            <div className="mt-1 flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
-              <div className="flex flex-col">
-                <span className="text-[11px] font-medium uppercase tracking-wide text-foreground">Tie-breaker · total points</span>
-                {member.tiebreaker_diff != null && (
-                  <span className="text-xs text-muted-foreground">off by {member.tiebreaker_diff}</span>
-                )}
-              </div>
-              <span className="text-lg font-bold tabular-nums text-foreground">{member.tiebreaker_total}</span>
-            </div>
-          )}
+      {/* Tie-breaker: their total-points guess for the week's last game, and
+          how far off once it's final — the same row as on the pick sheet. */}
+      {!q.isError && member?.tiebreaker_total != null && (
+        <div className="flex h-13 items-center gap-2.5 rounded-md bg-muted/60 px-2.5">
+          <span className="text-base" aria-hidden>🎯</span>
+          <span className="flex min-w-0 flex-1 flex-col leading-tight">
+            <span className="text-sm font-semibold text-foreground">Tie-breaker</span>
+            <span className="text-xs text-muted-foreground">
+              Total points{member.tiebreaker_diff != null ? ` · off by ${member.tiebreaker_diff}` : ''}
+            </span>
+          </span>
+          <span className="text-lg font-bold tabular-nums text-foreground">{member.tiebreaker_total}</span>
+        </div>
+      )}
     </AppSheet>
   );
 }
 
-// One team side inside a member's pick row: logo + abbreviation + score, with
-// the member's picked side wrapped in a highlighted (primary) box.
+// One team side inside a member's pick row: logo + abbreviation, then on the
+// picked side its mark (✓ / ✗, LIVE while on) left of the score. Scores only
+// show once the game has started.
 function PickTeam({
-  logo, label, score, picked, tone,
+  logo, label, score, picked, mark, live, tone,
 }: {
   logo?: string | null;
   label: string;
   score?: number | null;
   picked: boolean;
+  /** ✓ for a pick that's right or not graded yet, ✗ for a wrong one. */
+  mark: 'right' | 'wrong';
+  live: boolean;
   /** Highlight classes for the picked side (live / correct / wrong). */
   tone: string;
 }) {
@@ -809,8 +843,12 @@ function PickTeam({
     >
       <TeamLogo src={logo} name={label} size="sm" />
       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{label}</span>
-      {score !== null && score !== undefined && (
-        <span className="text-sm font-bold tabular-nums text-foreground">{score}</span>
+      {picked && live && <span className="text-[10px] font-extrabold tracking-wider text-destructive">LIVE</span>}
+      {picked && (mark === 'wrong'
+        ? <X className="size-4 shrink-0 text-destructive" aria-label="Wrong pick" />
+        : <Check className="size-4 shrink-0 text-foreground/70" aria-label="Their pick" />)}
+      {score != null && (
+        <span className="w-6 text-right text-sm font-bold tabular-nums text-foreground">{score}</span>
       )}
     </div>
   );

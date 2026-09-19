@@ -185,32 +185,6 @@ class _PicksTabState extends State<PicksTab> {
     }
   }
 
-  static const _weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-  /// The week's games grouped by kickoff (same start time), in start order, for
-  /// the "SUNDAY · 1:00 PM" headers (web play.tsx kickoffGroups).
-  static List<({String day, String time, List<SportEvent> games})> _kickoffGroups(List<SportEvent> games) {
-    DateTime? at(SportEvent e) => DateTime.tryParse(e.startTime ?? '')?.toLocal();
-    final sorted = [...games]..sort((a, b) {
-        final ta = at(a), tb = at(b);
-        if (ta == null || tb == null) return ta == null ? (tb == null ? 0 : 1) : -1;
-        return ta.compareTo(tb);
-      });
-    final out = <({String day, String time, List<SportEvent> games})>[];
-    String? lastKey;
-    for (final e in sorted) {
-      final key = e.startTime ?? 'tbd';
-      if (key == lastKey) {
-        out.last.games.add(e);
-        continue;
-      }
-      lastKey = key;
-      final d = at(e);
-      out.add((day: d == null ? 'TBD' : _weekdays[d.weekday - 1], time: clockTime(e.startTime), games: [e]));
-    }
-    return out;
-  }
-
   void _jumpToTiebreaker() {
     final ctx = _tbKey.currentContext;
     if (ctx == null) return;
@@ -288,7 +262,7 @@ class _PicksTabState extends State<PicksTab> {
           Text('No games scheduled for this week.', style: TextStyle(fontSize: 14, color: c.mutedForeground))
         else
           // Games under kickoff headers; each game is its two team rows + spread.
-          for (final grp in _kickoffGroups(games)) ...[
+          for (final grp in groupByKickoff(games, (e) => e.startTime)) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
               child: Row(children: [
@@ -299,7 +273,7 @@ class _PicksTabState extends State<PicksTab> {
                 Text(grp.time, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.mutedForeground)),
               ]),
             ),
-            for (final ev in grp.games)
+            for (final ev in grp.items)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _game(c, ev, canEdit: canEdit, isLast: ev.externalId == last?.externalId),

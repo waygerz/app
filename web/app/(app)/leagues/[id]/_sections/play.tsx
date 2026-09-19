@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useLeague } from '../league-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { leaguesApi, shortPeriodLabel, type LeagueDetail, type LeaguePeriod, type PickRow } from '@/lib/leagues';
+import { groupByKickoff, leaguesApi, shortPeriodLabel, type LeagueDetail, type LeaguePeriod, type PickRow } from '@/lib/leagues';
 import { cancelLocked, groupWagers, wagersApi, type WagerGroup } from '@/lib/wagers';
 import { FILTERS, filterWagers, type BetFilter } from '@/app/(app)/bets/bets-common';
 import { BetSortMenu, sortGroups, type SortKey } from '@/components/bet-sort-menu';
@@ -57,32 +57,6 @@ function sideSpread(ev: SportEvent, side: 'home' | 'away'): string | null {
   const line = side === 'home' ? sp.line : -sp.line;
   if (line === 0) return 'EVEN';
   return line > 0 ? `+${line}` : `${line}`;
-}
-
-// A week's games grouped by kickoff (same start time), in start order, for the
-// pick sheet's "SUNDAY · 1:00 PM" headers. Mirrors the app's picks_tab.dart.
-function kickoffGroups(evs: SportEvent[]) {
-  const at = (e: SportEvent) => {
-    const t = Date.parse(e.start_time ?? '');
-    return isNaN(t) ? Infinity : t;
-  };
-  const groups: { key: string; day: string; time: string; games: SportEvent[] }[] = [];
-  for (const e of [...evs].sort((a, b) => at(a) - at(b))) {
-    const key = e.start_time ?? 'tbd';
-    const last = groups[groups.length - 1];
-    if (last?.key === key) {
-      last.games.push(e);
-      continue;
-    }
-    const d = at(e) === Infinity ? null : new Date(at(e));
-    groups.push({
-      key,
-      day: d ? d.toLocaleDateString(undefined, { weekday: 'long' }) : 'TBD',
-      time: d ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '',
-      games: [e],
-    });
-  }
-  return groups;
 }
 
 function PickemPlay({ lg }: { lg: LeagueDetail }) {
@@ -239,13 +213,13 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
 
       {/* Games under kickoff headers; each game is its two team rows + spread. */}
       <div className="flex flex-col gap-4">
-        {kickoffGroups(evs).map((grp) => (
+        {groupByKickoff(evs, (e) => e.start_time).map((grp) => (
           <section key={grp.key} className="flex flex-col gap-3">
             <h3 className="flex items-baseline justify-between px-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <span>{grp.day}</span>
               <span className="normal-case tracking-normal">{grp.time}</span>
             </h3>
-            {grp.games.map((ev) => {
+            {grp.items.map((ev) => {
               const g = graded.get(ev.external_id);
               const gradedLock = !!(g && g.correct !== null);
               const disabled = gradedLock || !canEdit;

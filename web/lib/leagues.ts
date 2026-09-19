@@ -292,3 +292,30 @@ export function inviteCodeFrom(input: string): string {
   const code = fromLink ? fromLink[1] : text;
   return /^[A-Za-z0-9-]+$/.test(code) ? code.toUpperCase() : '';
 }
+
+/** Items grouped by kickoff (same start time), in start order, for the pick
+ * sheets' "SUNDAY · 1:00 PM" headers. Unknown times sort last under "TBD".
+ * Mirrors the app's `groupByKickoff` (mobile/lib/format.dart). */
+export function groupByKickoff<T>(items: T[], startOf: (item: T) => string | null | undefined) {
+  const at = (item: T) => {
+    const t = Date.parse(startOf(item) ?? '');
+    return isNaN(t) ? Infinity : t;
+  };
+  const groups: { key: string; day: string; time: string; items: T[] }[] = [];
+  for (const item of [...items].sort((a, b) => at(a) - at(b))) {
+    const key = startOf(item) ?? 'tbd';
+    const last = groups[groups.length - 1];
+    if (last?.key === key) {
+      last.items.push(item);
+      continue;
+    }
+    const d = at(item) === Infinity ? null : new Date(at(item));
+    groups.push({
+      key,
+      day: d ? d.toLocaleDateString(undefined, { weekday: 'long' }) : 'TBD',
+      time: d ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '',
+      items: [item],
+    });
+  }
+  return groups;
+}
