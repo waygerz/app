@@ -69,6 +69,18 @@ def test_toggle_like_and_engagement(client, auth_headers):
         headers=auth_headers(U1),
     ).get_json()["posts"][POST_ID]
     assert eng["comment_count"] == 1
+    assert eng["latest_comment"]["body"] == "hi"
+    assert eng["latest_comment"]["author_id"] == U1
+
+
+def test_engagement_latest_comment_is_newest(client, auth_headers):
+    for body in ("first", "second"):
+        client.post(f"{API_PREFIX}/posts/{POST_ID}/comments", json={"body": body}, headers=auth_headers(U1))
+    eng = client.post(
+        f"{API_PREFIX}/posts/engagement", json={"post_ids": [POST_ID]}, headers=auth_headers(U1),
+    ).get_json()["posts"][POST_ID]
+    assert eng["comment_count"] == 2
+    assert eng["latest_comment"]["body"] == "second"
 
 
 def test_reject_empty_body(client, auth_headers):

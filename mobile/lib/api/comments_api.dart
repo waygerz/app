@@ -13,13 +13,16 @@ const reactions = <String, (String, String)>{
   'rekt': ('😭', 'Rekt'),
 };
 
-/// Reactions + comment count for one feed post.
+/// Reactions + comment count (+ the newest comment) for one feed post.
 class PostEngagement {
-  const PostEngagement({this.reactions = const {}, this.total = 0, this.mine, this.commentCount = 0});
+  const PostEngagement({this.reactions = const {}, this.total = 0, this.mine, this.commentCount = 0, this.latestComment});
   final Map<String, int> reactions;
   final int total;
   final String? mine;
   final int commentCount;
+
+  /// The newest comment, shown inline on the feed row (no replies).
+  final PostComment? latestComment;
 
   static const empty = PostEngagement();
 
@@ -28,6 +31,9 @@ class PostEngagement {
         total: (j['total_reactions'] as int?) ?? 0,
         mine: j['my_reaction'] as String?,
         commentCount: (j['comment_count'] as int?) ?? 0,
+        latestComment: j['latest_comment'] is Map
+            ? PostComment.fromJson((j['latest_comment'] as Map).cast<String, dynamic>())
+            : null,
       );
 
   /// Up to three most-used reaction emoji (web topEmojis).

@@ -14,7 +14,7 @@ import { commentsApi, type PostEngagement } from '@/lib/comments';
 import { REACTIONS, REACTION_EMOJI, REACTION_LABEL, type ReactionKey } from '@/lib/reactions';
 import { cn } from '@/lib/utils';
 
-function topEmojis(reactions: Partial<Record<ReactionKey, number>>, n = 3) {
+export function topEmojis(reactions: Partial<Record<ReactionKey, number>>, n = 3) {
   return (Object.entries(reactions) as [ReactionKey, number][])
     .filter(([, c]) => c > 0)
     .sort((a, b) => b[1] - a[1])
@@ -27,10 +27,13 @@ export function ReactionControl({
   postId,
   engagement,
   engagementKey,
+  compact = false,
 }: {
   postId: string;
   engagement: PostEngagement;
   engagementKey: string;
+  /** Icon-only trigger (the feed's action row); the label becomes aria-label. */
+  compact?: boolean;
 }) {
   const qc = useQueryClient();
   const [barOpen, setBarOpen] = useState(false);
@@ -70,13 +73,14 @@ export function ReactionControl({
               mine && 'text-primary',
             )}
             disabled={set.isPending || remove.isPending}
+            aria-label={compact ? (mine ? `Your reaction: ${REACTION_LABEL[mine]}` : 'React') : undefined}
           >
             {mine ? (
               <span className="text-base leading-none">{REACTION_EMOJI[mine]}</span>
             ) : (
               <SmilePlus className="size-4" />
             )}
-            {mine ? REACTION_LABEL[mine] : 'React'}
+            {!compact && (mine ? REACTION_LABEL[mine] : 'React')}
           </Button>
         </PopoverTrigger>
         <PopoverContent

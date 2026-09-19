@@ -17,11 +17,21 @@ export type Comment = {
   replies?: Comment[];
 };
 
+export type LatestComment = {
+  id: string;
+  author_id: string;
+  author_name: string | null;
+  body: string;
+  created_at: string;
+};
+
 export type PostEngagement = {
   reactions: Partial<Record<ReactionKey, number>>;
   total_reactions: number;
   my_reaction: ReactionKey | null;
   comment_count: number;
+  /** The newest comment on the post, shown inline on the feed row. */
+  latest_comment?: LatestComment | null;
   // Back-compat fields the API still returns; unused by the reactions UI.
   like_count?: number;
   liked_by_me?: boolean;

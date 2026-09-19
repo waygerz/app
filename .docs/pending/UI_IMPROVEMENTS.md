@@ -65,6 +65,18 @@ Each league card is two rows, every line one line (no wrapping):
 - Next: a per-league status line ("2 bets pending", "9 of 16 picks") needs
   per-league counts from the backend.
 
+## 2c. League feed + comments — done
+- **Timeline** (Threads-style): people's posts / announcements are rows —
+  avatar, name · time, text, an icon action row (react, 💬 count) and the
+  **newest comment inline** ("View all N comments"). Joins, bets and weekly
+  results are **one-line activity rows** (icon, text, game line, counts).
+- **Comments sheet** (Instagram-style, web vaul `Drawer` / app bottom sheet):
+  post summary + reactions, threads with replies behind "View N replies",
+  "Replying to" chip, quick-emoji row, pill composer. Post composer is a sheet.
+- `latest_comment` comes with the batched engagement call (comments service).
+- Open: hearts on comments; a full post page for notification deep links;
+  whether members (not just commissioner/moderators) can post.
+
 ## 3. Bottom sheets instead of centred dialogs
 **Today:** web bet details, confirmations, counter offers, member picks and
 league details open as centred dialogs. On phones, sheets that slide up from

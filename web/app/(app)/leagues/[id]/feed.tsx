@@ -11,15 +11,7 @@ import { leaguesApi } from '@/lib/leagues';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -94,62 +86,56 @@ export function LeagueFeed() {
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {lg.description && (
-        <Card className="gap-2 p-4">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Description</span>
-          <p className="break-words text-sm text-foreground">{lg.description}</p>
-        </Card>
-      )}
-
-      <section>
+      {/* The timeline runs edge to edge; rows carry their own padding and
+          dividers. The league description lives in the league details sheet. */}
+      <section className="-mx-4 -mt-4">
           {canModerate && (
-            <Card className="mb-3 min-w-0 flex-row items-center gap-3 p-3">
+            <div className="flex min-w-0 items-center gap-3 border-b border-border px-4 py-3">
               {user && (
                 <UserAvatar
                   userId={String(user.id)}
                   name={user.display_name}
                   imageUrl={user.avatar_key}
-                  className="size-10 shrink-0"
+                  className="size-8 shrink-0"
                 />
               )}
               <button
                 type="button"
                 onClick={() => setComposerOpen(true)}
-                className="min-w-0 flex-1 truncate rounded-full border border-input bg-muted/50 px-4 py-2 text-left text-sm text-muted-foreground hover:bg-muted"
+                className="flex h-10 min-w-0 flex-1 items-center truncate rounded-full bg-muted px-4 text-left text-sm text-muted-foreground hover:bg-muted/70"
               >
-                Post an update to your league…
+                Post to your league…
               </button>
-            </Card>
+            </div>
           )}
 
-          <Dialog open={composerOpen} onOpenChange={setComposerOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Post to {lg.name}</DialogTitle>
-                <DialogDescription className="sr-only">Share an update with your league.</DialogDescription>
-              </DialogHeader>
-              <DialogBody className="py-2">
+          <Drawer open={composerOpen} onOpenChange={setComposerOpen} shouldScaleBackground={false}>
+            <DrawerContent className="pb-[env(safe-area-inset-bottom)]">
+              <div className="flex flex-col gap-3 px-4 pb-4 pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <DrawerTitle className="text-base font-bold">Post to {lg.name}</DrawerTitle>
+                  <Button
+                    size="sm"
+                    className="rounded-full px-4"
+                    disabled={post.isPending || !announcement.trim()}
+                    onClick={() => post.mutate()}
+                  >
+                    {post.isPending ? 'Posting…' : 'Post'}
+                  </Button>
+                </div>
+                <DrawerDescription className="sr-only">Share an update with your league.</DrawerDescription>
                 <Textarea
                   autoFocus
                   value={announcement}
                   onChange={(e) => setAnnouncement(e.target.value)}
                   placeholder="What's on your mind?"
                   rows={5}
-                  className="min-h-32 resize-none"
+                  className="min-h-32 resize-none border-0 bg-transparent px-0 text-[15px] shadow-none focus-visible:ring-0"
                 />
-              </DialogBody>
-              <DialogFooter>
-                <Button
-                  className="w-full sm:w-auto"
-                  disabled={post.isPending || !announcement.trim()}
-                  onClick={() => post.mutate()}
-                >
-                  {post.isPending ? 'Posting…' : 'Post'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <div className="flex flex-col gap-4">
+              </div>
+            </DrawerContent>
+          </Drawer>
+          <div className="flex flex-col">
             {(feed.data ?? []).map((item) => (
               <FeedPostCard
                 key={item.id}
@@ -162,7 +148,7 @@ export function LeagueFeed() {
               />
             ))}
             {(feed.data ?? []).length === 0 && (
-              <Card className="items-center gap-3 p-8 text-center">
+              <Card className="m-4 items-center gap-3 p-8 text-center">
                 <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-brand/15 text-primary">
                   <Rss className="size-6" />
                 </div>
@@ -180,7 +166,7 @@ export function LeagueFeed() {
         {!isCommish && (
           <AlertDialog open={leaveOpen} onOpenChange={setLeaveOpen}>
             <AlertDialogTrigger asChild>
-              <Button variant="outline">Leave league</Button>
+              <Button variant="ghost" className="self-center text-muted-foreground">Leave league</Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>

@@ -104,24 +104,18 @@ class _FeedTabState extends State<FeedTab> {
         future: _feed,
         builder: (context, snap) {
           final items = snap.data;
-          return ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
+          // The timeline runs edge to edge; rows carry their own padding and
+          // dividers. The league description lives in the league details sheet.
+          const inset = EdgeInsets.symmetric(horizontal: 16);
+          return ListView(padding: const EdgeInsets.only(bottom: 32), children: [
             ...widget.header,
-            if ((lg.description ?? '').isNotEmpty) ...[
-              WzCard(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('DESCRIPTION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 0.5, color: c.mutedForeground)),
-                  const SizedBox(height: 8),
-                  Text(lg.description!, style: TextStyle(fontSize: 14, color: c.foreground)),
-                ]),
-              ),
-              const SizedBox(height: 24),
-            ],
-            if (canModerate) ...[
-              WzCard(
-                padding: const EdgeInsets.all(12),
+            if (canModerate)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.border))),
                 child: Row(children: [
                   if (user != null) ...[
-                    UserAvatar(userId: user.id, name: user.displayName, avatarKey: user.avatarKey, size: 40),
+                    UserAvatar(userId: user.id, name: user.displayName, avatarKey: user.avatarKey, size: 32),
                     const SizedBox(width: 12),
                   ],
                   Expanded(
@@ -129,30 +123,27 @@ class _FeedTabState extends State<FeedTab> {
                       borderRadius: BorderRadius.circular(999),
                       onTap: _compose,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: c.muted.withValues(alpha: 0.5),
-                          border: Border.all(color: c.input),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text('Post an update to your league…', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        height: 40,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(color: c.muted, borderRadius: BorderRadius.circular(999)),
+                        child: Text('Post to your league…', maxLines: 1, overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 14, color: c.mutedForeground)),
                       ),
                     ),
                   ),
                 ]),
               ),
-              const SizedBox(height: 12),
-            ],
             if (items == null && snap.connectionState == ConnectionState.waiting)
               ...List.generate(3, (_) => const Padding(
-                    padding: EdgeInsets.only(bottom: 16),
-                    child: Skeleton(height: 120, radius: WaygerzRadius.xl),
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Skeleton(height: 96, radius: WaygerzRadius.xl),
                   ))
             else if (snap.hasError)
-              ErrorCard(title: "Couldn't load the feed", error: snap.error, onRetry: _reload)
+              Padding(padding: const EdgeInsets.all(16),
+                  child: ErrorCard(title: "Couldn't load the feed", error: snap.error, onRetry: _reload))
             else if (items!.isEmpty)
-              CenterCard(padding: const EdgeInsets.all(32), children: [
+              Padding(padding: const EdgeInsets.all(16), child: CenterCard(padding: const EdgeInsets.all(32), children: [
                 Container(
                   width: 48,
                   height: 48,
@@ -166,27 +157,22 @@ class _FeedTabState extends State<FeedTab> {
                 Text('No activity yet', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
                 Text('League updates, results, and announcements will show up here.',
                     textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: c.mutedForeground)),
-              ])
+              ]))
             else
               for (final item in items)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: FeedPostCard(
-                    api: widget.api,
-                    item: item,
-                    engagement: _engagement[item.id] ?? PostEngagement.empty,
-                    me: me,
-                    avatarFor: avatarFor,
-                    onChanged: _refreshEngagement,
-                  ),
+                FeedPostCard(
+                  api: widget.api,
+                  item: item,
+                  engagement: _engagement[item.id] ?? PostEngagement.empty,
+                  me: me,
+                  avatarFor: avatarFor,
+                  onChanged: _refreshEngagement,
                 ),
-            if (!isCommish) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: WzButton(label: 'Leave league', variant: ButtonVariant.outline, onPressed: _leave),
+            if (!isCommish)
+              Padding(
+                padding: inset.copyWith(top: 16),
+                child: Center(child: WzButton(label: 'Leave league', variant: ButtonVariant.ghost, onPressed: _leave)),
               ),
-            ],
           ]);
         },
       ),

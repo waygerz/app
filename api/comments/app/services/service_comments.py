@@ -283,6 +283,34 @@ def list_reactions(post_id, me):
     return {"post_id": str(post_id), "reactors": reactors}, 200
 
 
+def _latest_comments(post_ids) -> dict:
+    """{post_id: {id, author_id, author_name, body, created_at}} — the newest
+    comment on each post, in one query (Postgres DISTINCT ON). Names degrade to
+    None if the users service is down; the feed must still load."""
+    rows = (
+        Comment.query.filter(Comment.post_id.in_(post_ids))
+        .distinct(Comment.post_id)
+        .order_by(Comment.post_id, Comment.created_at.desc())
+        .all()
+    )
+    if not rows:
+        return {}
+    try:
+        names = resolve_users([c.author_id for c in rows])
+    except Exception:  # noqa: BLE001
+        names = {}
+    return {
+        c.post_id: {
+            "id": c.id,
+            "author_id": c.author_id,
+            "author_name": names.get(c.author_id),
+            "body": c.body,
+            "created_at": c.created_at.isoformat() + "Z",
+        }
+        for c in rows
+    }
+
+
 def posts_engagement(me, data):
     post_ids = list({str(p) for p in (data.get("post_ids") or []) if p})[:100]
     if not post_ids:
@@ -316,6 +344,8 @@ def posts_engagement(me, data):
         .all()
     )
 
+    latest = _latest_comments(allowed_ids)
+
     posts = {}
     for pid in allowed_ids:
         reactions = breakdown.get(pid, {})
@@ -326,6 +356,8 @@ def posts_engagement(me, data):
             "total_reactions": total,
             "my_reaction": my,
             "comment_count": int(comment_counts.get(pid, 0)),
+            # The newest comment (reply or not), shown inline on the feed card.
+            "latest_comment": latest.get(pid),
             # Back-compat so an un-rolled webui still works mid-deploy.
             "like_count": total,
             "liked_by_me": my is not None,
