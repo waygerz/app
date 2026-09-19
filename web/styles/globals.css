@@ -183,9 +183,19 @@
   body {
     background-color: var(--muted);
   }
-  .app-frame {
+  /* Painted by a viewport-fixed layer, not main's own background: body is
+     h-full (the chat pins its composer to it), so main stops at one viewport
+     height and the page's overflow scrolls over the muted body colour. */
+  .app-frame::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    margin-inline: auto;
+    width: min(100%, var(--app-max-width));
     background-color: var(--background);
     box-shadow: 1px 0 0 var(--border), -1px 0 0 var(--border);
+    pointer-events: none;
   }
 }
 

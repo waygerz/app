@@ -96,7 +96,7 @@ class _InviteScreenState extends State<InviteScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const WaygerzHeader.page('Invite'),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
+      body: SafeArea(top: false, child: ListView(padding: const EdgeInsets.all(16), children: [
         WzCard(
           padding: const EdgeInsets.all(24),
           child: FutureBuilder<ResolvedCode>(
@@ -133,7 +133,7 @@ class _InviteScreenState extends State<InviteScreen> {
             },
           ),
         ),
-      ]),
+      ])),
     );
   }
 

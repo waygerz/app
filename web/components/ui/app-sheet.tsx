@@ -21,10 +21,11 @@ function CloseButton({ className }: { className?: string }) {
 
 /**
  * The app's one sheet: slides up from the bottom inside the phone column, with
- * a drag handle (swipe down to close), a header — bold title, optional
- * description, and a close button or `action` — a scrolling body, and an
- * optional pinned `footer` (buttons, a composer). Use it for anything people
- * read or fill in. Short yes/no confirms stay an `AlertDialog`.
+ * a drag handle (drag it down, or tap outside, to close — no ✕ in the header),
+ * a header — bold title, optional description, and an optional `action` (e.g.
+ * "Post") — a scrolling body, and an optional pinned `footer` (buttons, a
+ * composer). Use it for anything people read or fill in. Short yes/no
+ * confirms stay an `AlertDialog`.
  *
  * Mirrors the app's `showWzSheet` (mobile/lib/ui/sheet.dart) — change both
  * together.
@@ -47,7 +48,7 @@ export function AppSheet({
   description?: ReactNode;
   /** Keep the title for screen readers only (the body has its own heading). */
   hideHeader?: boolean;
-  /** Replaces the close button on the right of the header (e.g. "Post"). */
+  /** An optional header action on the right, e.g. "Post". */
   action?: ReactNode;
   /** Pinned under the scrolling body. */
   footer?: ReactNode;
@@ -78,7 +79,7 @@ export function AppSheet({
                 <DrawerPrimitive.Description className="sr-only">{title}</DrawerPrimitive.Description>
               )}
             </div>
-            {!hideHeader && (action ?? <CloseButton className="-me-2 -mt-1" />)}
+            {!hideHeader && action}
           </div>
           {/* A hidden header still needs a visible way out for mouse users. */}
           {hideHeader && <CloseButton className="absolute end-2 top-3 z-10" />}

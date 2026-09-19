@@ -137,7 +137,7 @@ class _CreateLeagueScreenState extends State<CreateLeagueScreen> {
 
     return Scaffold(
       appBar: const WaygerzHeader.page('Create a league'),
-      body: ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
+      body: SafeArea(top: false, child: ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
         label('League type'),
         for (final t in _types)
           Padding(
@@ -236,7 +236,7 @@ class _CreateLeagueScreenState extends State<CreateLeagueScreen> {
         const SizedBox(height: 8),
         WzButton(label: 'Cancel', size: ButtonSize.lg, expand: true, variant: ButtonVariant.ghost,
             onPressed: _creating ? null : () => Navigator.of(context).pop()),
-      ]),
+      ])),
     );
   }
 }

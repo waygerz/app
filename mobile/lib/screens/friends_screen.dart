@@ -96,7 +96,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         );
     return Scaffold(
       appBar: const WaygerzHeader.page('Friends'),
-      body: RefreshIndicator(
+      body: SafeArea(top: false, child: RefreshIndicator(
         onRefresh: _reload,
         child: FutureBuilder<_FriendsData>(
           future: _future,
@@ -182,7 +182,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
             return ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: body);
           },
         ),
-      ),
+      )),
     );
   }
 }

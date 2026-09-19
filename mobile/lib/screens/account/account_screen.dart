@@ -24,7 +24,7 @@ class AccountScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const WaygerzHeader.page('Account'),
-      body: NotificationPrefsScope(
+      body: SafeArea(top: false, child: NotificationPrefsScope(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
           children: const [
@@ -47,7 +47,7 @@ class AccountScreen extends StatelessWidget {
             _DeleteAccountCard(),
           ],
         ),
-      ),
+      )),
     );
   }
 }

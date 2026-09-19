@@ -45,9 +45,12 @@ export default function Layout({ children }: { children: ReactNode }) {
       <ProfileDialogProvider me={user.id}>
         <Header />
         {/* overflow-x-clip, not hidden: hidden makes main a scroll container,
-            which breaks position: sticky (the pinned league tabs). */}
+            which breaks position: sticky (the pinned league tabs).
+            Bottom padding: the fixed BottomNav is ~4rem tall (plus its own
+            safe-area inset) — add 1.5rem more so the last card has a real gap
+            above it, not just technical non-overlap. */}
         <main
-          className="app-column app-frame flex min-w-0 grow flex-col overflow-x-clip pt-[calc(var(--header-height-mobile)_+_env(safe-area-inset-top))] pb-[calc(4rem_+_env(safe-area-inset-bottom))] lg:pt-(--header-height) lg:pb-0"
+          className="app-column app-frame flex min-w-0 grow flex-col overflow-x-clip pt-[calc(var(--header-height-mobile)_+_env(safe-area-inset-top))] pb-[calc(5.5rem_+_env(safe-area-inset-bottom))] lg:pt-(--header-height) lg:pb-0"
           role="main"
         >
           {children}
