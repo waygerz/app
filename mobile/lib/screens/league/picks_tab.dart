@@ -8,6 +8,7 @@ import '../../format.dart';
 import '../../models.dart';
 import '../../theme/app_theme.dart';
 import '../../ui/ui.dart';
+import '../../wagers.dart' show formatLine;
 import '../widgets.dart';
 
 /// Pick'em "My Picks" (web _sections/play.tsx PickemPlay): pick a week, tap a
@@ -40,6 +41,10 @@ class _PicksTabState extends State<PicksTab> {
   /// Unsaved selections: event id → home | away.
   final Map<String, String> _sel = {};
   final _tiebreaker = TextEditingController();
+
+  /// The save bar's "no tie-breaker" scrolls here and focuses the field.
+  final _tbKey = GlobalKey();
+  final _tbFocus = FocusNode();
   bool _saving = false;
   bool _syncing = false;
 
@@ -53,6 +58,7 @@ class _PicksTabState extends State<PicksTab> {
   @override
   void dispose() {
     _tiebreaker.dispose();
+    _tbFocus.dispose();
     super.dispose();
   }
 
@@ -179,6 +185,39 @@ class _PicksTabState extends State<PicksTab> {
     }
   }
 
+  static const _weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  /// The week's games grouped by kickoff (same start time), in start order, for
+  /// the "SUNDAY · 1:00 PM" headers (web play.tsx kickoffGroups).
+  static List<({String day, String time, List<SportEvent> games})> _kickoffGroups(List<SportEvent> games) {
+    DateTime? at(SportEvent e) => DateTime.tryParse(e.startTime ?? '')?.toLocal();
+    final sorted = [...games]..sort((a, b) {
+        final ta = at(a), tb = at(b);
+        if (ta == null || tb == null) return ta == null ? (tb == null ? 0 : 1) : -1;
+        return ta.compareTo(tb);
+      });
+    final out = <({String day, String time, List<SportEvent> games})>[];
+    String? lastKey;
+    for (final e in sorted) {
+      final key = e.startTime ?? 'tbd';
+      if (key == lastKey) {
+        out.last.games.add(e);
+        continue;
+      }
+      lastKey = key;
+      final d = at(e);
+      out.add((day: d == null ? 'TBD' : _weekdays[d.weekday - 1], time: clockTime(e.startTime), games: [e]));
+    }
+    return out;
+  }
+
+  void _jumpToTiebreaker() {
+    final ctx = _tbKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(ctx, alignment: 0.5, duration: const Duration(milliseconds: 300))
+        .then((_) => _tbFocus.requestFocus());
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = WaygerzColors.of(context);
@@ -201,6 +240,8 @@ class _PicksTabState extends State<PicksTab> {
     final tbDirty = tbText.isNotEmpty && (savedTb == null || double.tryParse(tbText)?.round() != savedTb);
     final unsaved = _sel.length;
     final hasChanges = unsaved > 0 || tbDirty;
+    final pickedCount = games.where((e) => (_sel[e.externalId] ?? _saved[e.externalId]?.pickSide) != null).length;
+    final tbMissing = last != null && tbText.isEmpty;
     final showBar = games.isNotEmpty && editable;
 
     final body = <Widget>[];
@@ -233,7 +274,7 @@ class _PicksTabState extends State<PicksTab> {
                   ? null
                   : locked
                       ? 'Picks are locked — the first game is about to start.'
-                      : 'Picks lock ${formatStart(lockAt.toIso8601String())}.')
+                      : '$pickedCount/${games.length} picked · locks ${formatStart(lockAt.toIso8601String())}')
               : period?.status == 'upcoming'
                   ? 'This week hasn’t opened yet — preview only.'
                   : 'This week is closed.',
@@ -246,11 +287,25 @@ class _PicksTabState extends State<PicksTab> {
         else if (games.isEmpty)
           Text('No games scheduled for this week.', style: TextStyle(fontSize: 14, color: c.mutedForeground))
         else
-          for (final ev in games)
+          // Games under kickoff headers; each game is its two team rows + spread.
+          for (final grp in _kickoffGroups(games)) ...[
             Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _game(c, ev, canEdit: canEdit, isLast: ev.externalId == last?.externalId),
+              padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
+              child: Row(children: [
+                Expanded(
+                  child: Text(grp.day.toUpperCase(),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1, color: c.mutedForeground)),
+                ),
+                Text(grp.time, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.mutedForeground)),
+              ]),
             ),
+            for (final ev in grp.games)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _game(c, ev, canEdit: canEdit, isLast: ev.externalId == last?.externalId),
+              ),
+            const SizedBox(height: 4),
+          ],
       ]);
     }
 
@@ -278,14 +333,31 @@ class _PicksTabState extends State<PicksTab> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(children: [
                   Expanded(
-                    child: Text(
-                      locked
-                          ? 'Picks are locked for this week.'
-                          : hasChanges
-                              ? '$unsaved unsaved pick${unsaved == 1 ? '' : 's'}${tbDirty ? ' + tie-breaker' : ''}'
-                              : 'Tap a team to make a pick.',
-                      style: TextStyle(fontSize: 12, color: c.mutedForeground),
-                    ),
+                    child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
+                      Text(
+                        locked
+                            ? 'Picks are locked for this week.'
+                            : hasChanges
+                                ? '$unsaved unsaved pick${unsaved == 1 ? '' : 's'}${tbDirty ? ' + tie-breaker' : ''}'
+                                : 'Tap a team to make a pick.',
+                        style: TextStyle(fontSize: 12, color: c.mutedForeground),
+                      ),
+                      if (!locked && tbMissing)
+                        Semantics(
+                          button: true,
+                          label: 'No tie-breaker yet. Go to the tie-breaker.',
+                          excludeSemantics: true,
+                          child: InkWell(
+                            onTap: _jumpToTiebreaker,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Text(' · 🎯 no tie-breaker ↓',
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).brightness == Brightness.dark ? Tw.amber400 : Tw.amber600)),
+                            ),
+                          ),
+                        ),
+                    ]),
                   ),
                   const SizedBox(width: 12),
                   WzButton(
@@ -361,36 +433,55 @@ class _PicksTabState extends State<PicksTab> {
     }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Row(children: [
-          Expanded(child: Text(formatStart(ev.startTime), style: TextStyle(fontSize: 12, color: c.mutedForeground))),
-          if (graded)
-            WzBadge(g.correct! ? '✓ correct' : '✗ wrong',
-                variant: g.correct! ? BadgeVariant.success : BadgeVariant.destructive),
-        ]),
-      ),
-      const SizedBox(height: 6),
+      // The kickoff is in the group header; a graded game shows its result.
+      if (graded) ...[
+        Align(
+          alignment: Alignment.centerRight,
+          child: WzBadge(g.correct! ? '✓ correct' : '✗ wrong',
+              variant: g.correct! ? BadgeVariant.success : BadgeVariant.destructive),
+        ),
+        const SizedBox(height: 6),
+      ],
       side('away'),
       const SizedBox(height: 6),
       side('home'),
+      // The tie-breaker: a row in the same shading as the teams, so it reads as
+      // part of the pick; the 🎯 and number box set it apart (web play.tsx).
       if (isLast) ...[
-        const SizedBox(height: 8),
-        Row(children: [
-          Text('Tie-breaker · total points', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.foreground)),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 96,
-            height: 44,
-            child: TextField(
-              controller: _tiebreaker,
-              enabled: !disabled,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(fontSize: 16),
-              decoration: const InputDecoration(hintText: 'e.g. 48', isDense: true),
+        const SizedBox(height: 6),
+        Container(
+          key: _tbKey,
+          height: 52,
+          padding: const EdgeInsets.only(left: 10, right: 6),
+          decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
+          child: Row(children: [
+            const ExcludeSemantics(child: Text('🎯', style: TextStyle(fontSize: 16))),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Tie-breaker', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
+                Text('Total points', style: TextStyle(fontSize: 12, color: c.mutedForeground)),
+              ]),
             ),
-          ),
-        ]),
+            SizedBox(
+              width: 80,
+              height: 40,
+              child: TextField(
+                controller: _tiebreaker,
+                focusNode: _tbFocus,
+                enabled: !disabled,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]),
+                decoration: InputDecoration(
+                  hintText: ev.odds?.total != null ? formatLine(ev.odds!.total!) : '48',
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 9),
+                ),
+              ),
+            ),
+          ]),
+        ),
       ],
     ]);
   }

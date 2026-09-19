@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLeague } from '../league-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -59,6 +59,32 @@ function sideSpread(ev: SportEvent, side: 'home' | 'away'): string | null {
   return line > 0 ? `+${line}` : `${line}`;
 }
 
+// A week's games grouped by kickoff (same start time), in start order, for the
+// pick sheet's "SUNDAY · 1:00 PM" headers. Mirrors the app's picks_tab.dart.
+function kickoffGroups(evs: SportEvent[]) {
+  const at = (e: SportEvent) => {
+    const t = Date.parse(e.start_time ?? '');
+    return isNaN(t) ? Infinity : t;
+  };
+  const groups: { key: string; day: string; time: string; games: SportEvent[] }[] = [];
+  for (const e of [...evs].sort((a, b) => at(a) - at(b))) {
+    const key = e.start_time ?? 'tbd';
+    const last = groups[groups.length - 1];
+    if (last?.key === key) {
+      last.games.push(e);
+      continue;
+    }
+    const d = at(e) === Infinity ? null : new Date(at(e));
+    groups.push({
+      key,
+      day: d ? d.toLocaleDateString(undefined, { weekday: 'long' }) : 'TBD',
+      time: d ? d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '',
+      games: [e],
+    });
+  }
+  return groups;
+}
+
 function PickemPlay({ lg }: { lg: LeagueDetail }) {
   const qc = useQueryClient();
   const isCommish = lg.my_role === 'commissioner';
@@ -87,6 +113,8 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
 
   const [sel, setSel] = useState<Record<string, 'home' | 'away'>>({});
   const [tiebreaker, setTiebreaker] = useState('');
+  // The save bar's "no tie-breaker" jumps here.
+  const tbRef = useRef<HTMLInputElement>(null);
   // Drop local edits when switching weeks.
   const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
   if (selectedId !== prevSelectedId) {
@@ -173,6 +201,13 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
   const unsaved = Object.keys(sel).length;
   const tbDirty = tiebreaker !== '' && (existingTb === null || Number(tiebreaker) !== existingTb);
   const hasChanges = unsaved > 0 || tbDirty;
+  const pickedCount = evs.filter((e) => pick(e.external_id)).length;
+  const tbMissing = !!lastGameId && tiebreaker === '';
+  const tbHint = lastGame?.odds?.overUnder?.total;
+  const jumpToTiebreaker = () => {
+    tbRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => tbRef.current?.focus({ preventScroll: true }), 300);
+  };
 
   return (
     <div className="flex flex-col gap-4 pb-24">
@@ -189,7 +224,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
             ? lockAt !== null
               ? picksLocked
                 ? 'Picks are locked — the first game is about to start.'
-                : `Picks lock ${formatStart(new Date(lockAt).toISOString())}.`
+                : `${pickedCount}/${evs.length} picked · locks ${formatStart(new Date(lockAt).toISOString())}`
               : undefined
             : period?.status === 'upcoming'
               ? 'This week hasn’t opened yet — preview only.'
@@ -202,79 +237,93 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
         <p className="text-sm text-muted-foreground">No games scheduled for this week.</p>
       )}
 
+      {/* Games under kickoff headers; each game is its two team rows + spread. */}
       <div className="flex flex-col gap-4">
-        {evs.map((ev) => {
-          const g = graded.get(ev.external_id);
-          const gradedLock = !!(g && g.correct !== null);
-          const disabled = gradedLock || !canEdit;
-          const cur = pick(ev.external_id);
-          return (
-            <div key={ev.external_id} className="flex flex-col gap-1.5">
-              {/* caption: kickoff + graded result, matching the bet board */}
-              <div className="flex items-center justify-between gap-2 px-0.5 text-xs">
-                <span className="text-muted-foreground">{formatStart(ev.start_time)}</span>
-                {gradedLock && (
-                  <Badge size="sm" appearance="light" variant={g!.correct ? 'success' : 'destructive'}>
-                    {g!.correct ? '✓ correct' : '✗ wrong'}
-                  </Badge>
-                )}
-              </div>
-              {(['away', 'home'] as const).map((side) => {
-                const isHome = side === 'home';
-                const teamName = isHome ? ev.home_team : ev.away_team;
-                const teamAbbr = isHome ? ev.home_abbr : ev.away_abbr;
-                const teamLogo = isHome ? ev.home_logo : ev.away_logo;
-                const active = cur === side;
-                const isMyPick = gradedLock && g!.pick_side === side;
-                const picked = active || isMyPick;
-                const spread = sideSpread(ev, side);
-                // Tinted fill by state: green correct / red wrong once graded, blue
-                // for the current selection, neutral otherwise (like the bet board).
-                const tone = isMyPick
-                  ? (g!.correct ? 'bg-brand/20' : 'bg-destructive/20')
-                  : active ? 'bg-blue-500/20' : 'bg-muted/60';
-                return (
-                  <div key={side} className="grid grid-cols-[minmax(0,1fr)_3.75rem] gap-1.5">
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => setSel((s) => ({ ...s, [ev.external_id]: side }))}
-                      className={cn(
-                        'flex h-12 items-center gap-2.5 rounded-md px-2.5 text-left text-foreground transition',
-                        tone,
-                        disabled ? 'cursor-not-allowed' : 'hover:brightness-110',
-                        disabled && !picked && 'opacity-60',
-                      )}
-                    >
-                      <TeamLogo src={teamLogo} name={teamAbbr || teamName} size="sm" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{teamName}</span>
-                      {picked && <Check className="size-4 shrink-0 text-foreground/70" />}
-                    </button>
-                    <div className="flex h-12 items-center justify-center rounded-md bg-muted/60 text-xs font-semibold tabular-nums text-muted-foreground">
-                      {spread || '—'}
+        {kickoffGroups(evs).map((grp) => (
+          <section key={grp.key} className="flex flex-col gap-3">
+            <h3 className="flex items-baseline justify-between px-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <span>{grp.day}</span>
+              <span className="normal-case tracking-normal">{grp.time}</span>
+            </h3>
+            {grp.games.map((ev) => {
+              const g = graded.get(ev.external_id);
+              const gradedLock = !!(g && g.correct !== null);
+              const disabled = gradedLock || !canEdit;
+              const cur = pick(ev.external_id);
+              return (
+                <div key={ev.external_id} className="flex flex-col gap-1.5">
+                  {gradedLock && (
+                    <div className="flex justify-end px-0.5">
+                      <Badge size="sm" appearance="light" variant={g!.correct ? 'success' : 'destructive'}>
+                        {g!.correct ? '✓ correct' : '✗ wrong'}
+                      </Badge>
                     </div>
-                  </div>
-                );
-              })}
-              {ev.external_id === lastGameId && (
-                <div className="mt-1 flex flex-wrap items-center gap-2 px-0.5">
-                  <span className="text-sm font-bold text-foreground">Tie-breaker · total points</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    variant="lg"
-                    value={tiebreaker}
-                    onChange={(e) => setTiebreaker(e.target.value)}
-                    disabled={disabled}
-                    placeholder="e.g. 48"
-                    className="h-11 w-24 text-base"
-                  />
+                  )}
+                  {(['away', 'home'] as const).map((side) => {
+                    const isHome = side === 'home';
+                    const teamName = isHome ? ev.home_team : ev.away_team;
+                    const teamAbbr = isHome ? ev.home_abbr : ev.away_abbr;
+                    const teamLogo = isHome ? ev.home_logo : ev.away_logo;
+                    const active = cur === side;
+                    const isMyPick = gradedLock && g!.pick_side === side;
+                    const picked = active || isMyPick;
+                    const spread = sideSpread(ev, side);
+                    // Tinted fill by state: green correct / red wrong once graded, blue
+                    // for the current selection, neutral otherwise (like the bet board).
+                    const tone = isMyPick
+                      ? (g!.correct ? 'bg-brand/20' : 'bg-destructive/20')
+                      : active ? 'bg-blue-500/20' : 'bg-muted/60';
+                    return (
+                      <div key={side} className="grid grid-cols-[minmax(0,1fr)_3.75rem] gap-1.5">
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => setSel((s) => ({ ...s, [ev.external_id]: side }))}
+                          className={cn(
+                            'flex h-12 items-center gap-2.5 rounded-md px-2.5 text-left text-foreground transition',
+                            tone,
+                            disabled ? 'cursor-not-allowed' : 'hover:brightness-110',
+                            disabled && !picked && 'opacity-60',
+                          )}
+                        >
+                          <TeamLogo src={teamLogo} name={teamAbbr || teamName} size="sm" />
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{teamName}</span>
+                          {picked && <Check className="size-4 shrink-0 text-foreground/70" />}
+                        </button>
+                        <div className="flex h-12 items-center justify-center rounded-md bg-muted/60 text-xs font-semibold tabular-nums text-muted-foreground">
+                          {spread || '—'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* The tie-breaker: a row in the same shading as the teams, so it
+                      reads as part of the pick; the 🎯 and number box set it apart. */}
+                  {ev.external_id === lastGameId && (
+                    <label className="flex h-13 items-center gap-2.5 rounded-md bg-muted/60 ps-2.5 pe-1.5">
+                      <span className="text-base" aria-hidden>🎯</span>
+                      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                        <span className="text-sm font-semibold text-foreground">Tie-breaker</span>
+                        <span className="text-xs text-muted-foreground">Total points</span>
+                      </span>
+                      <Input
+                        ref={tbRef}
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        value={tiebreaker}
+                        onChange={(e) => setTiebreaker(e.target.value)}
+                        disabled={disabled}
+                        placeholder={tbHint != null ? String(tbHint) : '48'}
+                        aria-label="Tie-breaker: total points"
+                        className="h-10 w-20 text-center text-lg font-bold tabular-nums"
+                      />
+                    </label>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
+          </section>
+        ))}
       </div>
 
       {/* Save bar pinned to the bottom of the page (open week only) */}
@@ -287,6 +336,14 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                 : hasChanges
                   ? `${unsaved} unsaved pick${unsaved === 1 ? '' : 's'}${tbDirty ? ' + tie-breaker' : ''}`
                   : 'Tap a team to make a pick.'}
+              {!picksLocked && tbMissing && (
+                <>
+                  {' · '}
+                  <button type="button" onClick={jumpToTiebreaker} className="font-semibold text-amber-600 dark:text-amber-400">
+                    🎯 no tie-breaker ↓
+                  </button>
+                </>
+              )}
             </span>
             <Button size="lg" className="h-11 shrink-0" disabled={save.isPending || picksLocked || !hasChanges} onClick={() => save.mutate()}>
               {save.isPending ? 'Saving…' : 'Save picks'}
