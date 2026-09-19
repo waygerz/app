@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { fetchEventOdds, type EventOdds, type SportEvent } from '@/lib/ingestor';
 import { isFieldSport } from '@/lib/espn';
 import { cn } from '@/lib/utils';
-import { Trophy } from 'lucide-react';
+import { ChevronRight, Trophy } from 'lucide-react';
 
 function StatusBadge({ status }: { status: SportEvent['status'] }) {
   if (status === 'live') return <Badge variant="destructive" size="sm">LIVE</Badge>;
@@ -267,100 +267,49 @@ export function EventCard({ event: ev, onSelect }: { event: SportEvent; onSelect
   );
 }
 
-// ---- Sportsbook-style schedule board ---------------------------------------
-// A dense odds table (Spread / Total / Winner) with away/home rows per game,
-// modelled on a real sportsbook. Team sports only; field sports keep the card.
+// ---- Schedule board: one matchup card per game ------------------------------
+// The whole card is the button (it opens the bet sheet, where you pick a side),
+// so the lines are plain muted text — not boxes that look like separate picks.
+// Team sports only; field sports keep EventCard.
 
-function BookCell({ main, price }: { main?: string; price?: string }) {
-  const empty = main === undefined && price === undefined;
+function GameTeamLine({ name, abbr, logo, line }: { name: string; abbr?: string; logo?: string | null; line?: string }) {
   return (
-    <div
-      className={cn(
-        // Mobile stacks the line over the price so three columns fit without
-        // scrolling; from sm up it's the wide line-left / price-right cell.
-        'flex h-11 w-full flex-col items-center justify-center gap-0 rounded-md bg-muted/60 px-1.5 tabular-nums leading-tight sm:h-10 sm:flex-row sm:items-center sm:justify-between sm:gap-1 sm:px-3',
-        empty && 'opacity-40',
-      )}
-    >
-      {empty ? (
-        <span className="text-muted-foreground">—</span>
-      ) : (
-        <>
-          {main !== undefined && (
-            <span className="text-xs font-medium text-foreground sm:text-sm">{main}</span>
-          )}
-          {price !== undefined && (
-            <span
-              className={cn(
-                'text-[11px] text-muted-foreground sm:text-sm',
-                main === undefined && 'text-sm text-foreground',
-              )}
-            >
-              {price}
-            </span>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function BookTeamLine({ name, abbr, logo }: { name: string; abbr?: string; logo?: string | null }) {
-  // Styled like a pick cell — the team line IS the "Winner" (straight-up) pick.
-  return (
-    <div className="flex h-11 min-w-0 items-center gap-2 rounded-md bg-muted/60 px-2.5 sm:h-10 sm:gap-2.5">
+    <span className="flex min-w-0 items-center gap-2.5">
       <TeamLogo src={logo} name={abbr || name} size="xs" />
-      {/* Abbreviation on a phone, full name from sm up. */}
-      <span className="truncate text-sm font-semibold text-foreground">
-        <span className="sm:hidden">{abbr || name}</span>
-        <span className="hidden sm:inline">{name}</span>
-      </span>
-    </div>
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{name}</span>
+      {line && <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{line}</span>}
+    </span>
   );
 }
 
-function ScheduleGameRow({ ev, onSelect }: { ev: SportEvent; onSelect?: () => void }) {
-  const o = ev.odds;
-  const sp = o?.spread;
-  const ou = o?.overUnder;
-  // Each column is a pair of [main, price] cells (away then home); a missing
-  // market falls back to the placeholder "—" cell.
-  const cols: { away: [string?, string?]; home: [string?, string?] }[] = [
-    { // Spread — line only; Waygerz is straight-up, so no juice/price is shown.
-      away: sp ? [fmtSigned(-sp.line), undefined] : [undefined, undefined],
-      home: sp ? [fmtSigned(sp.line), undefined] : [undefined, undefined],
-    },
-    { // Total — line only (no over/under juice).
-      away: ou ? [`O ${ou.total}`, undefined] : [undefined, undefined],
-      home: ou ? [`U ${ou.total}`, undefined] : [undefined, undefined],
-    },
-  ];
-
+function GameCard({ ev, onSelect }: { ev: SportEvent; onSelect?: () => void }) {
+  const sp = ev.odds?.spread;
+  const ou = ev.odds?.overUnder;
   const Wrapper = onSelect ? 'button' : 'div';
   return (
     <Wrapper
       type={onSelect ? 'button' : undefined}
       onClick={onSelect}
+      aria-label={onSelect ? `Bet on ${ev.away_team} at ${ev.home_team}` : undefined}
       className={cn(
-        'block w-full border-b border-border py-3 text-left last:border-0',
-        onSelect && 'group -mx-2 rounded-lg px-2 transition-colors hover:bg-muted/40',
+        'flex w-full flex-col gap-2 rounded-xl border border-border bg-card p-3 text-left',
+        onSelect &&
+          'cursor-pointer transition-colors hover:border-primary/60 active:bg-muted/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
       )}
     >
-      <div className="flex items-stretch gap-2 sm:gap-3">
-        <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-          <BookTeamLine name={ev.away_team} abbr={ev.away_abbr} logo={ev.away_logo} />
-          <BookTeamLine name={ev.home_team} abbr={ev.home_abbr} logo={ev.home_logo} />
-        </div>
-        {cols.map((c, i) => (
-          <div key={i} className="flex w-[4.5rem] shrink-0 flex-col gap-2 sm:w-28">
-            <BookCell main={c.away[0]} price={c.away[1]} />
-            <BookCell main={c.home[0]} price={c.home[1]} />
-          </div>
-        ))}
-      </div>
-      <div className="mt-2">
-        <span className="text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
-      </div>
+      <span className="text-xs text-muted-foreground">{formatStart(ev.start_time)}</span>
+      <GameTeamLine name={ev.away_team} abbr={ev.away_abbr} logo={ev.away_logo} line={sp ? fmtSigned(-sp.line) : undefined} />
+      <GameTeamLine name={ev.home_team} abbr={ev.home_abbr} logo={ev.home_logo} line={sp ? fmtSigned(sp.line) : undefined} />
+      <span className="mt-0.5 flex items-center justify-between border-t border-border pt-2">
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {ou ? `O/U ${ou.total}` : sp ? '' : 'Lines not posted'}
+        </span>
+        {onSelect && (
+          <span className="flex items-center gap-0.5 text-sm font-semibold text-primary">
+            Bet <ChevronRight className="size-4" aria-hidden />
+          </span>
+        )}
+      </span>
     </Wrapper>
   );
 }
@@ -372,21 +321,10 @@ export function ScheduleBoard({
   events: SportEvent[];
   onSelect?: (ev: SportEvent) => void;
 }) {
-  const head = 'w-[4.5rem] shrink-0 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:w-28';
   return (
-    // Defensive h-scroll guard (§1.9): the row shrinks/truncates today, but keep
-    // the board in an overflow-x-auto wrapper so it never breaks the page width
-    // on narrow phones if a market/label ever grows. Covers both sports pages.
-    <div className="overflow-x-auto">
-      {/* "Winner" labels the team column (the team line is the straight-up pick);
-          Spread/Total head the two fixed columns. Gaps match ScheduleGameRow's. */}
-      <div className="flex items-center gap-2 pb-2 sm:gap-3">
-        <span className="min-w-0 flex-1 pl-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Winner</span>
-        <span className={head}>Spread</span>
-        <span className={head}>Total</span>
-      </div>
+    <div className="flex flex-col gap-3">
       {events.map((ev) => (
-        <ScheduleGameRow key={ev.external_id} ev={ev} onSelect={onSelect ? () => onSelect(ev) : undefined} />
+        <GameCard key={ev.external_id} ev={ev} onSelect={onSelect ? () => onSelect(ev) : undefined} />
       ))}
     </div>
   );

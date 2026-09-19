@@ -362,7 +362,7 @@ export function LeagueSportSchedule() {
                 ))}
               </div>
             ) : (
-              // Team sports: the sportsbook-style Spread / Total / Winner board.
+              // Team sports: one matchup card per game.
               <ScheduleBoard events={ready} onSelect={canBet ? (ev) => setSelected(ev) : undefined} />
             )
           )}

@@ -94,8 +94,14 @@ grow the hit area with padding.
 - Scores and money don't use fixed-width digits everywhere, so numbers shift.
 - "Week 10 (open)" shows the raw status.
 
+**Done (game list):** the Spread/Total/Winner board of boxes read as separate
+picks, but tapping anywhere opened the bet sheet with nothing chosen. Upcoming
+and Sports now show one **matchup card** per game: time, each team with its
+spread as muted text, "O/U 47.5" (or "Lines not posted") and a "Bet ›" label;
+the whole card opens the unchanged bet sheet (web `ScheduleBoard` in
+`event-card.tsx`, mobile `ScheduleBoard` in `league/upcoming_tab.dart`).
+
 **Change:**
-- No lines → hide the Spread/Total columns for that row and show "Lines not posted" in muted text.
 - `tabular-nums` / `FontFeature.tabularFigures()` on every score, record, stake and balance.
 - Period status as a small badge: `Week 10 · Open`.
 

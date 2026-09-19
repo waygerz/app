@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../../api/api_client.dart';
@@ -16,7 +17,7 @@ enum _Range { today, week }
 
 /// Head-to-head "Upcoming" (web _sections/upcoming.tsx): not-yet-started games
 /// across the league's sports — Today or the next 7 days, filterable by sport —
-/// as a Winner / Spread / Total board. Tap a game to bet on it.
+/// as matchup cards. Tap a game to bet on it.
 class UpcomingTab extends StatefulWidget {
   const UpcomingTab({super.key, required this.api, required this.league, required this.header, required this.onBetSent});
   final ApiClient api;
@@ -135,106 +136,84 @@ class _UpcomingTabState extends State<UpcomingTab> {
   }
 }
 
-/// The sportsbook board (web components/event-card.tsx ScheduleBoard): a
-/// Winner / Spread / Total header, then a row per game — team lines (the
-/// straight-up pick), spread and total cells (lines only; Waygerz bets straight
-/// up, so no prices), and the kickoff time.
+/// The schedule (web components/event-card.tsx ScheduleBoard): one matchup
+/// card per game. The whole card opens the bet sheet, where you pick a side, so
+/// the lines are plain muted text — not boxes that look like separate picks.
 class ScheduleBoard extends StatelessWidget {
   const ScheduleBoard({super.key, required this.events, this.onSelect});
   final List<SportEvent> events;
   final ValueChanged<SportEvent>? onSelect;
 
-  static const _col = 72.0;
-
   @override
   Widget build(BuildContext context) {
     final c = WaygerzColors.of(context);
-    Widget head(String t, {bool fixed = true}) => SizedBox(
-          width: fixed ? _col : null,
-          child: Text(t,
-              textAlign: fixed ? TextAlign.center : TextAlign.left,
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1, color: c.mutedForeground)),
-        );
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(children: [
-          const SizedBox(width: 4),
-          Expanded(child: head('WINNER', fixed: false)),
-          const SizedBox(width: 8),
-          head('SPREAD'),
-          const SizedBox(width: 8),
-          head('TOTAL'),
-        ]),
-      ),
-      for (final ev in events) _row(c, ev),
+      for (final (i, ev) in events.indexed) ...[
+        if (i > 0) const SizedBox(height: 12),
+        _card(c, ev),
+      ],
     ]);
   }
 
-  Widget _row(WaygerzColors c, SportEvent ev) {
+  Widget _card(WaygerzColors c, SportEvent ev) {
     final sp = ev.odds?.spreadLine;
     final ou = ev.odds?.total;
     String signed(double v) => '${v > 0 ? '+' : ''}${formatLine(v)}';
+    const tabular = [FontFeature.tabularFigures()];
 
-    Widget cell(String? text) => Container(
-          width: _col,
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
-          child: Opacity(
-            opacity: text == null ? 0.4 : 1,
-            child: Text(text ?? '—',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: text == null ? c.mutedForeground : c.foreground)),
-          ),
-        );
-
-    Widget team(String name, String? abbr, String? logo) => Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
-          child: Row(children: [
-            TeamLogo(name: name, abbreviation: abbr ?? '', logo: logo, size: 24),
-            const SizedBox(width: 8),
-            // Abbreviation on a phone, as the web shows below `sm`.
-            Expanded(
-              child: Text((abbr ?? '').isNotEmpty ? abbr! : name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
-            ),
-          ]),
-        );
-
-    final content = Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.border))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
+    Widget team(String name, String? abbr, String? logo, String? line) => Row(children: [
+          TeamLogo(name: name, abbreviation: abbr ?? '', logo: logo, size: 24),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(children: [
-              team(ev.awayTeam, ev.awayAbbr, ev.awayLogo),
-              const SizedBox(height: 8),
-              team(ev.homeTeam, ev.homeAbbr, ev.homeLogo),
-            ]),
+            child: Text(name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
           ),
-          const SizedBox(width: 8),
-          Column(children: [
-            cell(sp == null ? null : signed(-sp)),
-            const SizedBox(height: 8),
-            cell(sp == null ? null : signed(sp)),
-          ]),
-          const SizedBox(width: 8),
-          Column(children: [
-            cell(ou == null ? null : 'O ${formatLine(ou)}'),
-            const SizedBox(height: 8),
-            cell(ou == null ? null : 'U ${formatLine(ou)}'),
-          ]),
-        ]),
-        const SizedBox(height: 8),
+          if (line != null)
+            Text(line, style: TextStyle(fontSize: 14, color: c.mutedForeground, fontFeatures: tabular)),
+        ]);
+
+    final footer = ou != null ? 'O/U ${formatLine(ou)}' : sp != null ? '' : 'Lines not posted';
+    final radius = BorderRadius.circular(WaygerzRadius.xl);
+    final content = Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(formatStart(ev.startTime), style: TextStyle(fontSize: 12, color: c.mutedForeground)),
+        const SizedBox(height: 8),
+        team(ev.awayTeam, ev.awayAbbr, ev.awayLogo, sp == null ? null : signed(-sp)),
+        const SizedBox(height: 8),
+        team(ev.homeTeam, ev.homeAbbr, ev.homeLogo, sp == null ? null : signed(sp)),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.only(top: 8),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.border))),
+          child: Row(children: [
+            Expanded(
+              child: Text(footer, style: TextStyle(fontSize: 12, color: c.mutedForeground, fontFeatures: tabular)),
+            ),
+            if (onSelect != null)
+              ExcludeSemantics(
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text('Bet', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.primary)),
+                  Icon(LucideIcons.chevronRight, size: 16, color: c.primary),
+                ]),
+              ),
+          ]),
+        ),
       ]),
     );
-    if (onSelect == null) return content;
-    return InkWell(borderRadius: BorderRadius.circular(WaygerzRadius.lg), onTap: () => onSelect!(ev), child: content);
+    return Material(
+      color: c.card,
+      shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: c.border)),
+      clipBehavior: Clip.antiAlias,
+      child: onSelect == null
+          ? content
+          : Semantics(
+              button: true,
+              label: 'Bet on ${ev.awayTeam} at ${ev.homeTeam}',
+              child: InkWell(onTap: () => onSelect!(ev), child: content),
+            ),
+    );
   }
 }
