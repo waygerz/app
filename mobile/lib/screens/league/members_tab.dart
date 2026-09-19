@@ -11,8 +11,9 @@ import '../../format.dart';
 import '../../models.dart';
 import '../../theme/app_theme.dart';
 import '../../ui/ui.dart';
-import '../../widgets/user_mini_card.dart';
+import '../../widgets/user_mini_card.dart' show IconAction;
 import '../chat_screen.dart';
+import '../widgets.dart';
 
 /// League Members (web _sections/members.tsx): each member with Message and
 /// Add friend / Friends / Pending, plus a per-member menu — commissioners
@@ -110,32 +111,97 @@ class _MembersTabState extends State<MembersTab> {
         else
           for (final m in shown)
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: UserMiniCard(
-                userId: m.userId,
-                name: m.displayName,
-                avatarKey: m.avatarKey,
-                subtitle: memberRoleLabel(m.role),
-                badge: m.userId == me ? const WzBadge('You') : null,
-                actions: m.userId == me
-                    ? const []
-                    : [
-                        IconAction(icon: LucideIcons.messageCircle, tooltip: 'Message', onPressed: () => _message(m.userId)),
-                        if (_friendIds.contains(m.userId))
-                          IconAction(icon: LucideIcons.userCheck, tooltip: 'Friends', color: c.brand, onPressed: null)
-                        else if (_pendingIds.contains(m.userId))
-                          IconAction(icon: LucideIcons.clock, tooltip: 'Pending', color: c.mutedForeground, onPressed: null)
-                        else
-                          IconAction(
-                            icon: LucideIcons.userPlus,
-                            tooltip: 'Add friend',
-                            color: c.primary,
-                            onPressed: _busy ? null : () => _run(() => _friends.addByUserId(m.userId), 'Friend request sent'),
-                          ),
-                        if (_menu(c, m, isCommish: isCommish, canModerate: canModerate) case final menu?) menu,
-                      ],
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _memberRow(context, c, m, isMe: m.userId == me, isCommish: isCommish, canModerate: canModerate),
+            ),
+      ]),
+    );
+  }
+
+  /// A member row at the Standings row's size (40px avatar, same card
+  /// padding): friend status badges the avatar's corner, name + role, then
+  /// Message and the ⋮ menu as two small icon buttons.
+  Widget _memberRow(BuildContext context, WaygerzColors c, LeagueMember m, {required bool isMe, required bool isCommish, required bool canModerate}) {
+    return WzCard(
+      padding: const EdgeInsets.all(10),
+      child: Row(children: [
+        _avatarWithFriendBadge(c, m, isMe: isMe),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Flexible(child: Text(m.displayName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground))),
+              if (isMe) ...[const SizedBox(width: 6), const WzBadge('You')],
+            ]),
+            const SizedBox(height: 2),
+            Text(memberRoleLabel(m.role), style: TextStyle(fontSize: 12, color: c.mutedForeground)),
+          ]),
+        ),
+        if (!isMe) ...[
+          const SizedBox(width: 4),
+          IconAction(icon: LucideIcons.messageCircle, tooltip: 'Message', onPressed: () => _message(m.userId)),
+          if (_menu(c, m, isCommish: isCommish, canModerate: canModerate) case final menu?) ...[
+            const SizedBox(width: 6),
+            menu,
+          ],
+        ],
+      ]),
+    );
+  }
+
+  /// 40px avatar with the friend status badged on its corner (blue check /
+  /// grey clock), matching the confirm badge on the Standings row. "Add" is
+  /// the only tappable state — unfriending stays behind the ⋮ menu's confirm
+  /// dialog, since it's the more consequential direction.
+  Widget _avatarWithFriendBadge(WaygerzColors c, LeagueMember m, {required bool isMe}) {
+    final avatar = UserAvatar(userId: m.userId, name: m.displayName, avatarKey: m.avatarKey, size: 40);
+    if (isMe) return avatar;
+
+    final Widget badge;
+    final String label;
+    VoidCallback? onTap;
+    if (_friendIds.contains(m.userId)) {
+      badge = const Icon(LucideIcons.check, size: 10, color: Colors.white);
+      label = 'Friends';
+    } else if (_pendingIds.contains(m.userId)) {
+      badge = Icon(LucideIcons.clock, size: 10, color: c.mutedForeground);
+      label = 'Friend request pending';
+    } else {
+      badge = const Icon(LucideIcons.userPlus, size: 10, color: Colors.white);
+      label = 'Add friend';
+      onTap = _busy ? null : () => _run(() => _friends.addByUserId(m.userId), 'Friend request sent');
+    }
+    final bg = _friendIds.contains(m.userId)
+        ? Tw.blue500
+        : _pendingIds.contains(m.userId)
+            ? c.muted
+            : c.primary;
+
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: Stack(clipBehavior: Clip.none, children: [
+        Positioned(left: 2, top: 2, child: avatar),
+        Positioned(
+          right: -2,
+          bottom: -2,
+          child: Semantics(
+            button: onTap != null,
+            label: label,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Container(
+                width: 17,
+                height: 17,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: bg, shape: BoxShape.circle, border: Border.all(color: c.card, width: 2)),
+                child: badge,
               ),
             ),
+          ),
+        ),
       ]),
     );
   }

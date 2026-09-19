@@ -39,7 +39,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Settings, X, ImagePlus, Trash2, Lock } from 'lucide-react';
+import { AppSheet } from '@/components/ui/app-sheet';
+import { formatCredits } from '@/lib/wallet';
+import { Settings, X, ImagePlus, Trash2, Lock, Tag, CalendarClock, ChevronRight } from 'lucide-react';
 
 // ===================== MANAGE =====================
 // Edit the league's name, description, and which sport-leagues members can bet
@@ -115,9 +117,7 @@ function EditLeagueDetails({ lg }: { lg: LeagueDetail }) {
   };
 
   return (
-    <Card className="gap-5 p-6">
-      <h2 className="text-base font-semibold text-foreground sm:text-lg">League details</h2>
-
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <Label>Logo</Label>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickLogo} />
@@ -196,10 +196,10 @@ function EditLeagueDetails({ lg }: { lg: LeagueDetail }) {
         <span className="text-xs text-muted-foreground">The only games members can bet on.</span>
       </div>
 
-      <Button className="self-start" disabled={!canSave || save.isPending} onClick={() => save.mutate()}>
+      <Button size="lg" className="mt-1 w-full" disabled={!canSave || save.isPending} onClick={() => save.mutate()}>
         {save.isPending ? 'Saving…' : 'Save details'}
       </Button>
-    </Card>
+    </div>
   );
 }
 
@@ -289,11 +289,7 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
   });
 
   return (
-    <Card className="gap-5 p-6">
-      <div className="flex items-center gap-2">
-        <Settings className="size-5 text-muted-foreground" />
-        <h2 className="text-base font-semibold text-foreground sm:text-lg">Rules</h2>
-      </div>
+    <div className="flex flex-col gap-6">
       <Form {...form}>
         <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="flex flex-col gap-6">
           <div className="grid grid-cols-1 gap-5">
@@ -364,12 +360,12 @@ function RulesForm({ lg }: { lg: LeagueDetail }) {
               </FormItem>
             )}
           />
-          <Button type="submit" className="self-start" disabled={save.isPending}>
+          <Button type="submit" size="lg" className="mt-1 w-full" disabled={save.isPending}>
             {save.isPending ? 'Saving…' : 'Save rules'}
           </Button>
         </form>
       </Form>
-    </Card>
+    </div>
   );
 }
 
@@ -381,6 +377,7 @@ function LeagueManageInner() {
   const onErr = (e: Error) => toast.error(e.message);
 
   const isMoney = lg.league_type !== 'pickem';
+  const showPeriod = lg.status === 'active' && lg.period_type === 'weekly';
 
   const advance = useMutation({
     mutationFn: () => leaguesApi.advancePeriod(lg.id),
@@ -392,131 +389,143 @@ function LeagueManageInner() {
     onSuccess: () => { toast.success('League archived'); qc.invalidateQueries({ queryKey: ['leagues'] }); router.push('/'); },
     onError: onErr,
   });
-  const notifyWeek = useMutation({
-    mutationFn: () => leaguesApi.notifyWeek(lg.id),
-    onSuccess: (r) =>
-      toast.success(`Sent to ${r.members} member${r.members === 1 ? '' : 's'} — ${r.finalized} results`),
-    onError: onErr,  // e.g. 409 "the finished week isn't fully graded yet"
-  });
+
+  const [openSheet, setOpenSheet] = useState<'details' | 'rules' | 'period' | null>(null);
+
+  const sportsSummary = lg.sports.length
+    ? lg.sports.slice(0, 2).map((s) => s.name || s.sport_league_id).join(', ') + (lg.sports.length > 2 ? ` +${lg.sports.length - 2}` : '')
+    : 'No sports yet';
+  const whoCanPropose = ((lg.rules || {}) as Record<string, unknown>).who_can_propose === 'commissioner' ? 'Commissioner only' : 'Any member';
+  const rulesSummary = isMoney
+    ? `${lg.min_wager_cents ? `${formatCredits(lg.min_wager_cents)} min` : 'No min'} · ${lg.max_wager_cents ? `${formatCredits(lg.max_wager_cents)} max` : 'No max'} · ${whoCanPropose}`
+    : '';
+  const periodSummary = lg.current_period ? `${lg.current_period.label} · ${cap(lg.current_period.status)}` : '—';
 
   return (
-    <div className="flex flex-col gap-6">
-        <div id="manage-details" className="scroll-mt-6">
-          <EditLeagueDetails lg={lg} />
+    <div className="flex flex-col gap-7">
+      <SettingsGroup label="League">
+        <SettingsRow icon={Tag} title="League Details" summary={`${lg.name} · ${sportsSummary}`} onClick={() => setOpenSheet('details')} />
+        {isMoney && <SettingsRow icon={Settings} title="Rules & Limits" summary={rulesSummary} onClick={() => setOpenSheet('rules')} />}
+      </SettingsGroup>
+
+      {showPeriod && (
+        <SettingsGroup label="Season">
+          <SettingsRow icon={CalendarClock} title="Weekly Period" summary={periodSummary} onClick={() => setOpenSheet('period')} />
+        </SettingsGroup>
+      )}
+
+      {/* Danger zone — a red-tinted card outside the settings list, always
+          visible (not one more row to tap through to). */}
+      <SettingsGroup label="Danger zone" rows={false}>
+        <Card className="gap-4 border-destructive/30 bg-destructive/5 p-6">
+          <h2 className="text-base font-semibold text-destructive sm:text-lg">Archive league</h2>
+          <p className="text-sm text-muted-foreground">Removes it from everyone’s dashboard. Balances and history are preserved.</p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="lg" variant="outline" className="mt-1 w-full border-destructive/40 text-destructive hover:bg-destructive/10" disabled={archive.isPending}>
+                {archive.isPending ? 'Archiving…' : 'Archive league'}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Archive “{lg.name}”?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  It disappears from everyone’s dashboard. Balances and history are preserved.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={archive.isPending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={archive.isPending}
+                  onClick={() => archive.mutate()}
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                >
+                  Archive league
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </Card>
+      </SettingsGroup>
+
+      <AppSheet open={openSheet === 'details'} onOpenChange={(o) => !o && setOpenSheet(null)} title="League Details" tall bodyClassName="pt-1">
+        <EditLeagueDetails lg={lg} />
+      </AppSheet>
+
+      <AppSheet open={openSheet === 'rules'} onOpenChange={(o) => !o && setOpenSheet(null)} title="Rules & Limits" bodyClassName="pt-1">
+        <RulesForm lg={lg} />
+      </AppSheet>
+
+      <AppSheet open={openSheet === 'period'} onOpenChange={(o) => !o && setOpenSheet(null)} title="Weekly Period" bodyClassName="pt-1">
+        <div className="flex flex-col gap-5">
+          <p className="text-sm text-muted-foreground">Current: {periodSummary}</p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="lg" variant="outline" className="w-full" disabled={advance.isPending}>
+                {advance.isPending ? 'Advancing…' : 'Advance period'}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Advance to the next period?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This closes the current week now and opens the next one. Open bets settle as usual.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={advance.isPending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction disabled={advance.isPending} onClick={() => advance.mutate()}>
+                  Advance period
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
-
-        <div id="manage-rules" className="scroll-mt-6">
-          {isMoney ? (
-            <RulesForm lg={lg} />
-          ) : (
-            <Card className="gap-5 p-6">
-              <div className="flex items-center gap-2"><Settings className="size-5 text-muted-foreground" /><h2 className="text-base font-semibold text-foreground sm:text-lg">Rules</h2></div>
-              <p className="text-sm text-muted-foreground">Pick’em leagues have no wager rules.</p>
-            </Card>
-          )}
-        </div>
-
-        {/* Period control — only weekly leagues advance periods (opens the next
-            week). Season/H2H leagues bet all season, so advancing just closed
-            betting with nothing to reopen; hide it for them. */}
-        {lg.status === 'active' && lg.period_type === 'weekly' && (
-          <div id="manage-period" className="scroll-mt-6">
-            <Card className="gap-3 p-6">
-              <h2 className="text-base font-semibold text-foreground sm:text-lg">Period</h2>
-              <p className="text-sm text-muted-foreground">
-                Current: {lg.current_period ? `${lg.current_period.label} (${lg.current_period.status})` : '—'}
-              </p>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" className="mt-1 self-start" disabled={advance.isPending}>
-                    {advance.isPending ? 'Advancing…' : 'Advance period'}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Advance to the next period?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This closes the current week now and opens the next one. Open bets settle as usual.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={advance.isPending}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction disabled={advance.isPending} onClick={() => advance.mutate()}>
-                      Advance period
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </Card>
-          </div>
-        )}
-
-        {/* Pick'em: manually (re)send the week notification — last finished
-            week's result + the current open week — to every active member. */}
-        {lg.league_type === 'pickem' && lg.status === 'active' && (
-          <div id="manage-notify" className="scroll-mt-6">
-            <Card className="gap-3 p-6">
-              <h2 className="text-base font-semibold text-foreground sm:text-lg">Notify members</h2>
-              <p className="text-sm text-muted-foreground">
-                Send the week update — last week’s result and the open week — to all members (in-app + push; SMS for those who opted in). Only sends once the finished week is fully graded.
-              </p>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" className="mt-1 self-start" disabled={notifyWeek.isPending}>
-                    {notifyWeek.isPending ? 'Sending…' : 'Send week update'}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Send the week update to everyone?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This notifies every active member now. It can’t be unsent.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel disabled={notifyWeek.isPending}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction disabled={notifyWeek.isPending} onClick={() => notifyWeek.mutate()}>
-                      Send
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </Card>
-          </div>
-        )}
-
-        {/* Danger zone */}
-        <div id="manage-danger" className="scroll-mt-6">
-          <Card className="gap-3 p-6">
-            <h2 className="text-base font-semibold text-foreground sm:text-lg">Danger zone</h2>
-            <p className="text-sm text-muted-foreground">Archiving removes the league from everyone’s dashboard. Balances and history are preserved.</p>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="mt-1 self-start text-destructive" disabled={archive.isPending}>
-                  {archive.isPending ? 'Archiving…' : 'Archive league'}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Archive “{lg.name}”?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    It disappears from everyone’s dashboard. Balances and history are preserved.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={archive.isPending}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    disabled={archive.isPending}
-                    onClick={() => archive.mutate()}
-                    className="bg-destructive text-white hover:bg-destructive/90"
-                  >
-                    Archive league
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </Card>
-        </div>
+      </AppSheet>
     </div>
+  );
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** A labeled group. `rows`: wraps children (SettingsRows) in one bordered,
+ * divided container, so a multi-row group reads as a single card, not one
+ * border per row. Danger zone passes `rows={false}` — it holds its own Card. */
+function SettingsGroup({ label, rows = true, children }: { label: string; rows?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <h3 className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</h3>
+      {rows ? <div className="overflow-hidden rounded-2xl border border-border bg-card divide-y divide-border">{children}</div> : children}
+    </div>
+  );
+}
+
+/** One row in a settings group: an icon chip, a title + one-line summary, and
+ * a chevron — tapping opens that setting's sheet. Generous padding (16px) and
+ * a 60px min-height keep it a comfortable tap target. The group container
+ * supplies the border/rounding, so the row itself is flush. */
+function SettingsRow({
+  icon: Icon, title, summary, onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  summary: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-[60px] w-full items-center gap-3.5 px-4 py-4 text-left transition-colors hover:bg-muted/40 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
+        <Icon className="size-[18px]" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-foreground">{title}</span>
+        <span className="block truncate text-xs text-muted-foreground">{summary}</span>
+      </span>
+      <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
+    </button>
   );
 }

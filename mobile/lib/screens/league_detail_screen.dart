@@ -135,7 +135,9 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
           return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             _leagueRow(context, lg),
             WzTabBar<LeagueSection>(tabs: available, value: section, onChanged: (s) => setState(() => _section = s)),
-            Expanded(child: _body(context, lg, section)),
+            // A pushed page has no bottom nav, so keep each section's list (and
+            // the picks save bar) clear of the phone's navigation bar.
+            Expanded(child: SafeArea(top: false, child: _body(context, lg, section))),
           ]);
         },
       ),

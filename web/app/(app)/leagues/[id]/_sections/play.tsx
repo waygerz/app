@@ -273,8 +273,9 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                   {/* The tie-breaker: a row in the same shading as the teams, so it
                       reads as part of the pick; the 🎯 and number box set it apart. */}
                   {ev.external_id === lastGameId && (
-                    <label className="flex h-13 items-center gap-2.5 rounded-md bg-muted/60 ps-2.5 pe-1.5">
-                      <span className="text-base" aria-hidden>🎯</span>
+                    <label className="flex h-15 items-center gap-2.5 rounded-md bg-muted/60 ps-2.5 pe-2">
+                      {/* Sized and placed like the team logos above it. */}
+                      <span className="flex size-8 shrink-0 items-center justify-center text-[26px] leading-none" aria-hidden>🎯</span>
                       <span className="flex min-w-0 flex-1 flex-col leading-tight">
                         <span className="text-sm font-semibold text-foreground">Tie-breaker</span>
                         <span className="text-xs text-muted-foreground">Total points</span>
@@ -289,7 +290,7 @@ function PickemPlay({ lg }: { lg: LeagueDetail }) {
                         disabled={disabled}
                         placeholder={tbHint != null ? String(tbHint) : '48'}
                         aria-label="Tie-breaker: total points"
-                        className="h-10 w-20 text-center text-lg font-bold tabular-nums"
+                        className="h-11 w-20 text-center text-lg font-bold tabular-nums"
                       />
                     </label>
                   )}

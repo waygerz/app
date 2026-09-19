@@ -16,6 +16,9 @@ class Tw {
   static const rose500 = Color(0xFFF43F5E);
   static const blue500 = Color(0xFF3B82F6);
   static const red500 = Color(0xFFEF4444);
+  static const gold = Color(0xFFF0B429);
+  static const silver = Color(0xFFB6C0CC);
+  static const bronze = Color(0xFFC9834A);
 }
 
 extension Tint on Color {

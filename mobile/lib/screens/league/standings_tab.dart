@@ -417,65 +417,97 @@ class _PickemResultsState extends State<_PickemResults> {
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: WzCard(
-            padding: const EdgeInsets.all(12),
-            child: Row(children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () => _showPicks(r, label),
-                  child: Row(children: [
-                    Container(
-                      width: 20,
-                      height: 20,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: c.muted, shape: BoxShape.circle),
-                      child: Text((rankCounts[r.rank] ?? 0) > 1 ? 'T${r.rank}' : '${r.rank}',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: c.mutedForeground)),
-                    ),
-                    const SizedBox(width: 12),
-                    UserAvatar(userId: r.userId, name: r.displayName, avatarKey: r.avatarKey, size: 56),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text.rich(TextSpan(children: [
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(WaygerzRadius.lg),
+              onTap: () => _showPicks(r, label),
+              child: Row(children: [
+                _avatarWithConfirm(c, r, canModerate: canModerate),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                      Flexible(
+                        child: Text.rich(TextSpan(children: [
                           TextSpan(text: r.displayName),
                           if (r.userId == me) TextSpan(text: ' (you)', style: TextStyle(fontWeight: FontWeight.w400, color: c.mutedForeground)),
                         ]), maxLines: 1, overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
-                        const SizedBox(height: 2),
-                        Text(memberRoleLabel(roles[r.userId] ?? 'member'), style: TextStyle(fontSize: 12, color: c.mutedForeground)),
-                      ]),
-                    ),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text.rich(TextSpan(children: [
-                        TextSpan(text: '${r.correct}'),
-                        TextSpan(text: '/${r.graded > 0 ? r.graded : r.total}',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: c.mutedForeground)),
-                      ]), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.foreground)),
-                      Text('correct', style: TextStyle(fontSize: 12, color: c.mutedForeground)),
-                      if (r.tiebreakerTotal != null)
-                        Text.rich(TextSpan(children: [
-                          TextSpan(text: '${r.tiebreakerTotal}'),
-                          TextSpan(text: '/${res.actualTotal ?? '—'}',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w400, color: c.mutedForeground)),
-                        ]), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.foreground)),
+                      ),
+                      const SizedBox(width: 6),
+                      // The place, as plain text next to the name (medal colors
+                      // for 1st–3rd) — instead of a badge on the avatar or a
+                      // leading rank circle.
+                      Text((rankCounts[r.rank] ?? 0) > 1 ? 'T${ordinal(r.rank)}' : ordinal(r.rank),
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: _rankColor(c, r.rank))),
                     ]),
+                    const SizedBox(height: 2),
+                    Text(memberRoleLabel(roles[r.userId] ?? 'member'), style: TextStyle(fontSize: 12, color: c.mutedForeground)),
                   ]),
                 ),
-              ),
-              const SizedBox(width: 4),
-              // The weekly confirmation: a toggle for moderators, a status icon for everyone else.
-              IconButton(
-                tooltip: canModerate
-                    ? (r.confirmed ? 'Confirmed — tap to unconfirm' : 'Not confirmed — tap to confirm')
-                    : (r.confirmed ? 'Confirmed' : 'Not confirmed'),
-                onPressed: canModerate && !_confirming ? () => _confirm(r) : null,
-                icon: Icon(LucideIcons.circleCheckBig, size: 24,
-                    color: r.confirmed ? c.brand : c.mutedForeground.withValues(alpha: 0.4)),
-              ),
-            ]),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text.rich(TextSpan(children: [
+                    TextSpan(text: '${r.correct}'),
+                    TextSpan(text: '/${r.graded > 0 ? r.graded : r.total}',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: c.mutedForeground)),
+                  ]), style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.foreground)),
+                  if (r.tiebreakerTotal != null)
+                    Text.rich(TextSpan(children: [
+                      TextSpan(text: '${r.tiebreakerTotal}'),
+                      TextSpan(text: '/${res.actualTotal ?? '—'}',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w400, color: c.mutedForeground)),
+                    ]), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.foreground)),
+                ]),
+              ]),
+            ),
           ),
         ),
     ]);
+  }
+
+  /// Gold/silver/bronze for 1st–3rd, muted for everyone else.
+  Color _rankColor(WaygerzColors c, int rank) => switch (rank) {
+        1 => Tw.gold,
+        2 => Tw.silver,
+        3 => Tw.bronze,
+        _ => c.mutedForeground,
+      };
+
+  /// A 40px avatar with the weekly confirmation badged on its corner — a
+  /// status everyone can read (filled green check / dim outline), tappable
+  /// only for the commissioner/moderator (same confirm dialog as before). The
+  /// tap target reaches past the visual badge to stay a real 44px hit area.
+  Widget _avatarWithConfirm(WaygerzColors c, WeeklyResultRow r, {required bool canModerate}) {
+    final badge = Container(
+      width: 17,
+      height: 17,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: r.confirmed ? c.brand : c.muted,
+        shape: BoxShape.circle,
+        border: Border.all(color: c.card, width: 2),
+      ),
+      child: Icon(LucideIcons.check, size: 10, color: r.confirmed ? Colors.white : c.mutedForeground),
+    );
+    final stack = SizedBox(
+      width: 44,
+      height: 44,
+      child: Stack(clipBehavior: Clip.none, children: [
+        Positioned(left: 2, top: 2, child: UserAvatar(userId: r.userId, name: r.displayName, avatarKey: r.avatarKey, size: 40)),
+        Positioned(right: -2, bottom: -2, child: badge),
+      ]),
+    );
+    return Semantics(
+      button: canModerate,
+      label: canModerate
+          ? (r.confirmed ? 'Confirmed — tap to unconfirm' : 'Not confirmed — tap to confirm')
+          : (r.confirmed ? 'Confirmed' : 'Not confirmed'),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: canModerate && !_confirming ? () => _confirm(r) : null,
+        child: stack,
+      ),
+    );
   }
 
   void _showPicks(WeeklyResultRow member, String weekLabel) {
@@ -583,12 +615,11 @@ class _WinnerCard extends StatelessWidget {
                 Text.rich(TextSpan(children: [
                   TextSpan(text: '${top.correct}/${top.graded > 0 ? top.graded : top.total}',
                       style: TextStyle(fontWeight: FontWeight.w700, color: c.brand)),
-                  TextSpan(text: ' correct${solo ? '' : ' · tied'}'),
+                  if (!solo) const TextSpan(text: ' · tied'),
                   if (solo && top.tiebreakerTotal != null) ...[
                     const TextSpan(text: '   '),
                     TextSpan(text: '${top.tiebreakerTotal}/${actualTotal ?? '—'}',
                         style: TextStyle(fontWeight: FontWeight.w700, color: c.foreground)),
-                    const TextSpan(text: ' tiebreaker'),
                   ],
                 ]), style: TextStyle(fontSize: 12, color: c.mutedForeground)),
               ]),
@@ -712,11 +743,14 @@ class _MemberPicksState extends State<_MemberPicks> {
               // final — the same row as on the pick sheet.
               if (m.tiebreakerTotal != null)
                 Container(
-                  height: 52,
+                  height: 60,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
                   child: Row(children: [
-                    const ExcludeSemantics(child: Text('🎯', style: TextStyle(fontSize: 16))),
+                    // Sized and placed like the team logos above it.
+                    const ExcludeSemantics(
+                      child: SizedBox(width: 32, height: 32, child: Center(child: Text('🎯', style: TextStyle(fontSize: 26, height: 1)))),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [

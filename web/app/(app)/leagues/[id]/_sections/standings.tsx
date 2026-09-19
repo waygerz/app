@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import {
   groupByKickoff,
   leaguesApi,
+  ordinal,
   shortPeriodLabel,
   type LeagueDetail,
   type LeaguePeriod,
@@ -40,7 +41,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Trophy, Medal, CircleCheckBig, ChevronRight, Check, X } from 'lucide-react';
+import { Trophy, Medal, ChevronRight, Check, X } from 'lucide-react';
 import { STATE, memberRoleLabel } from './shared';
 import { WagerBetCard } from './wager-card';
 
@@ -397,11 +398,11 @@ function WeekWinnerCard({
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>
-              <b className="font-bold tabular-nums text-brand">{correct}</b> correct{solo ? '' : ' · tied'}
+              <b className="font-bold tabular-nums text-brand">{correct}</b>{!solo && ' · tied'}
             </span>
             {solo && top.tiebreaker_total != null && (
               <span>
-                <b className="font-bold tabular-nums text-foreground">{top.tiebreaker_total}/{actualTotal ?? '—'}</b> tiebreaker
+                <b className="font-bold tabular-nums text-foreground">{top.tiebreaker_total}/{actualTotal ?? '—'}</b>
               </span>
             )}
           </div>
@@ -565,26 +566,35 @@ function PickemStandings({ lg }: { lg: LeagueDetail }) {
           return (
             <Card
               key={r.user_id}
-              className={cn('flex-row items-center gap-2 p-3', isWinner && STATE.win)}
+              className={cn('flex-row items-center gap-2.5 p-2.5', isWinner && STATE.win)}
             >
+              {/* The weekly confirmation badges the avatar's corner — a status
+                  everyone can read, tappable only for the commissioner/moderator
+                  (same confirm dialog as before). */}
+              <ConfirmBadge
+                row={r}
+                canModerate={canModerate}
+                pending={confirmM.isPending}
+                onConfirm={(confirmed) => confirmM.mutate({ userId: r.user_id, confirmed })}
+              />
               <button
                 type="button"
                 onClick={() => setOpenMember(r)}
-                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
               >
-                <div
-                  className={cn(
-                    'flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold',
-                    isWinner ? 'bg-brand/20 text-brand' : 'bg-muted text-muted-foreground',
-                  )}
-                >
-                  {isWinner ? <Trophy className="size-3" /> : tied ? `T${r.rank}` : r.rank}
-                </div>
-                <UserAvatar userId={r.user_id} name={r.display_name} imageUrl={r.avatar_key} className="size-14 shrink-0" clickable={false} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {r.display_name}
-                    {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
+                  <p className="flex items-baseline gap-1.5 truncate text-sm font-semibold text-foreground">
+                    <span className="truncate">
+                      {r.display_name}
+                      {isMe && <span className="font-normal text-muted-foreground"> (you)</span>}
+                    </span>
+                    {/* The place, as plain text next to the name (medal colors
+                        for 1st–3rd) — instead of a badge on the avatar or a
+                        leading rank circle. */}
+                    <span className={cn('shrink-0 text-[11px] font-extrabold', rankColor(r.rank))}>
+                      {isWinner && <Trophy className="me-0.5 inline size-2.5 align-baseline" />}
+                      {tied ? `T${ordinal(r.rank)}` : ordinal(r.rank)}
+                    </span>
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {memberRoleLabel(roleById.get(String(r.user_id)) ?? 'member')}
@@ -595,21 +605,14 @@ function PickemStandings({ lg }: { lg: LeagueDetail }) {
                     {r.correct}
                     <span className="text-xs font-normal text-muted-foreground">/{r.graded || r.total}</span>
                   </p>
-                  <p className="text-xs text-muted-foreground">correct</p>
                   {r.tiebreaker_total != null && (
-                    <p className="mt-1 text-xs font-semibold tabular-nums text-foreground">
+                    <p className="text-xs font-semibold tabular-nums text-foreground">
                       {r.tiebreaker_total}
                       <span className="text-[10px] font-normal text-muted-foreground">/{last?.actual_total ?? '—'}</span>
                     </p>
                   )}
                 </div>
               </button>
-              <ConfirmMemberButton
-                row={r}
-                canModerate={canModerate}
-                pending={confirmM.isPending}
-                onConfirm={(confirmed) => confirmM.mutate({ userId: r.user_id, confirmed })}
-              />
             </Card>
           );
         })}
@@ -630,7 +633,18 @@ function PickemStandings({ lg }: { lg: LeagueDetail }) {
 // The weekly confirmation toggle. Members without moderation rights see a
 // static indicator; commissioners and moderators get a confirmation dialog
 // before (un)confirming a member.
-function ConfirmMemberButton({
+/** Gold/silver/bronze for 1st–3rd, muted for everyone else. */
+function rankColor(rank: number) {
+  if (rank === 1) return 'text-[#f0b429]';
+  if (rank === 2) return 'text-[#b6c0cc]';
+  if (rank === 3) return 'text-[#c9834a]';
+  return 'text-muted-foreground';
+}
+
+/** A 40px avatar with the weekly confirmation badged on its corner — a status
+ * everyone can read (filled green check / dim outline), tappable only for the
+ * commissioner/moderator. Same confirm dialog as before. */
+function ConfirmBadge({
   row, canModerate, pending, onConfirm,
 }: {
   row: WeeklyResultRow;
@@ -638,19 +652,20 @@ function ConfirmMemberButton({
   pending: boolean;
   onConfirm: (confirmed: boolean) => void;
 }) {
-  const icon = (
-    <CircleCheckBig className={cn('size-6', row.confirmed ? 'text-brand' : 'text-muted-foreground/40')} />
+  const avatar = <UserAvatar userId={row.user_id} name={row.display_name} imageUrl={row.avatar_key} className="size-10" clickable={false} />;
+  const badgeClass = cn(
+    'absolute -end-1 -bottom-1 flex size-[17px] items-center justify-center rounded-full ring-2 ring-card',
+    row.confirmed ? 'bg-brand text-white' : 'bg-muted text-muted-foreground',
   );
 
   if (!canModerate) {
     return (
-      <span
-        className="shrink-0 rounded-full p-1"
-        aria-label={row.confirmed ? 'Confirmed' : 'Not confirmed'}
-        title={row.confirmed ? 'Confirmed' : 'Not confirmed'}
-      >
-        {icon}
-      </span>
+      <div className="relative shrink-0" aria-label={row.confirmed ? 'Confirmed' : 'Not confirmed'} title={row.confirmed ? 'Confirmed' : 'Not confirmed'}>
+        {avatar}
+        <span className={badgeClass}>
+          <Check className="size-2.5" />
+        </span>
+      </div>
     );
   }
 
@@ -663,9 +678,12 @@ function ConfirmMemberButton({
           disabled={pending}
           aria-label={row.confirmed ? 'Confirmed — tap to unconfirm' : 'Not confirmed — tap to confirm'}
           title={row.confirmed ? 'Confirmed — click to unconfirm' : 'Not confirmed — click to confirm'}
-          className="shrink-0 rounded-full p-1 hover:bg-muted"
+          className="relative shrink-0 rounded-full"
         >
-          {icon}
+          {avatar}
+          <span className={badgeClass}>
+            <Check className="size-2.5" />
+          </span>
         </button>
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -803,8 +821,8 @@ function MemberPicksDialog({
       {/* Tie-breaker: their total-points guess for the week's last game, and
           how far off once it's final — the same row as on the pick sheet. */}
       {!q.isError && member?.tiebreaker_total != null && (
-        <div className="flex h-13 items-center gap-2.5 rounded-md bg-muted/60 px-2.5">
-          <span className="text-base" aria-hidden>🎯</span>
+        <div className="flex h-15 items-center gap-2.5 rounded-md bg-muted/60 px-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center text-[26px] leading-none" aria-hidden>🎯</span>
           <span className="flex min-w-0 flex-1 flex-col leading-tight">
             <span className="text-sm font-semibold text-foreground">Tie-breaker</span>
             <span className="text-xs text-muted-foreground">

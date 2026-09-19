@@ -25,9 +25,10 @@ const _timezones = [
   ('Europe/London', 'London'),
 ];
 
-/// The commissioner's Manage tab (web _sections/manage.tsx): details + logo +
-/// sports, wager rules (money leagues), advancing a weekly period, resending
-/// the pick'em week update, and archiving.
+/// The commissioner's Manage tab (web _sections/manage.tsx): a grouped
+/// settings list — League Details (logo/name/description/sports), Rules &
+/// Limits (money leagues), and Weekly Period — each row opening a sheet to
+/// edit it, plus an always-visible Danger zone (archive) below the list.
 class ManageTab extends StatelessWidget {
   const ManageTab({super.key, required this.api, required this.league, required this.header, required this.onRefresh, required this.onArchived});
   final ApiClient api;
@@ -49,82 +50,200 @@ class ManageTab extends StatelessWidget {
         ]),
       ]);
     }
+    final showPeriod = league.isActive && league.periodType == 'weekly';
+    final sportsSummary = league.sports.isEmpty
+        ? 'No sports yet'
+        : league.sports.take(2).map((s) => s.name.isEmpty ? s.id : s.name).join(', ') +
+            (league.sports.length > 2 ? ' +${league.sports.length - 2}' : '');
+    final whoCanPropose = league.rules['who_can_propose'] == 'commissioner' ? 'Commissioner only' : 'Any member';
+    final rulesSummary = league.isMoney
+        ? '${_dollarsLabel(league.minWagerCents, "min")} · ${_dollarsLabel(league.maxWagerCents, "max")} · $whoCanPropose'
+        : '';
+    final period = league.currentPeriod;
+    final periodSummary = period == null ? '—' : '${period.label} · ${_cap(period.status)}';
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(padding: const EdgeInsets.fromLTRB(16, 20, 16, 32), children: [
         ...header,
-        _Details(key: ValueKey('details-${league.id}'), api: api, league: league, onSaved: onRefresh),
-        const SizedBox(height: 24),
-        if (league.isMoney)
-          _Rules(key: ValueKey('rules-${league.id}'), api: api, league: league, onSaved: onRefresh)
-        else
-          SectionCard(title: 'Rules', children: [
-            Text('Pick’em leagues have no wager rules.', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-          ]),
-        if (league.isActive && league.periodType == 'weekly') ...[
-          const SizedBox(height: 24),
-          SectionCard(title: 'Period', children: [
-            Text('Current: ${league.currentPeriod != null ? '${league.currentPeriod!.label} (${league.currentPeriod!.status})' : '—'}',
-                style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _ConfirmedAction(
-                label: 'Advance period',
-                busyLabel: 'Advancing…',
-                title: 'Advance to the next period?',
-                description: 'This closes the current week now and opens the next one. Open bets settle as usual.',
-                run: () async {
-                  await LeaguesApi(api).advancePeriod(league.id);
-                  await onRefresh();
-                  return 'Period advanced';
-                },
-              ),
-            ),
-          ]),
-        ],
-        if (league.isPickem && league.isActive) ...[
-          const SizedBox(height: 24),
-          SectionCard(title: 'Week update', children: [
-            Text('Send everyone last week’s result and the open week now.', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _ConfirmedAction(
-                label: 'Send week update',
-                busyLabel: 'Sending…',
-                title: 'Send the week update to everyone?',
-                description: 'This notifies every active member now. It can’t be unsent.',
-                confirmLabel: 'Send',
-                run: () async {
-                  final n = await LeaguesApi(api).notifyWeek(league.id);
-                  return 'Sent to $n member${n == 1 ? '' : 's'}';
-                },
-              ),
-            ),
-          ]),
-        ],
-        const SizedBox(height: 24),
-        SectionCard(title: 'Danger zone', children: [
-          Text('Archiving removes the league from everyone’s dashboard. Balances and history are preserved.',
-              style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _ConfirmedAction(
-              label: 'Archive league',
-              busyLabel: 'Archiving…',
-              title: 'Archive “${league.name}”?',
-              description: 'It disappears from everyone’s dashboard. Balances and history are preserved.',
-              destructive: true,
-              run: () async {
-                await LeaguesApi(api).archive(league.id);
-                onArchived();
-                return 'League archived';
-              },
-            ),
+        _SettingsGroup(label: 'League', children: [
+          _SettingsRow(
+            icon: LucideIcons.tag,
+            title: 'League Details',
+            summary: '${league.name} · $sportsSummary',
+            onTap: () => showWzSheet<void>(context, title: 'League Details', tall: true, scroll: true,
+                builder: (_) => _Details(key: ValueKey('details-${league.id}'), api: api, league: league, onSaved: onRefresh)),
           ),
+          if (league.isMoney)
+            _SettingsRow(
+              icon: LucideIcons.settings,
+              title: 'Rules & Limits',
+              summary: rulesSummary,
+              onTap: () => showWzSheet<void>(context, title: 'Rules & Limits',
+                  builder: (_) => _Rules(key: ValueKey('rules-${league.id}'), api: api, league: league, onSaved: onRefresh)),
+            ),
         ]),
+        if (showPeriod) ...[
+          const SizedBox(height: 20),
+          _SettingsGroup(label: 'Season', children: [
+            _SettingsRow(
+              icon: LucideIcons.calendarClock,
+              title: 'Weekly Period',
+              summary: periodSummary,
+              onTap: () => showWzSheet<void>(context, title: 'Weekly Period', builder: (_) => Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Text('Current: $periodSummary', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
+                      const SizedBox(height: 20),
+                      _ConfirmedAction(
+                        label: 'Advance period',
+                        busyLabel: 'Advancing…',
+                        title: 'Advance to the next period?',
+                        description: 'This closes the current week now and opens the next one. Open bets settle as usual.',
+                        expand: true,
+                        run: () async {
+                          await LeaguesApi(api).advancePeriod(league.id);
+                          await onRefresh();
+                          return 'Period advanced';
+                        },
+                      ),
+                    ]),
+                  )),
+            ),
+          ]),
+        ],
+        const SizedBox(height: 20),
+        Text('DANGER ZONE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1, color: c.mutedForeground)),
+        const SizedBox(height: 10),
+        _DangerCard(
+          title: 'Archive league',
+          description: 'Removes it from everyone’s dashboard. Balances and history are preserved.',
+          action: _ConfirmedAction(
+            label: 'Archive league',
+            busyLabel: 'Archiving…',
+            title: 'Archive “${league.name}”?',
+            description: 'It disappears from everyone’s dashboard. Balances and history are preserved.',
+            destructive: true,
+            expand: true,
+            run: () async {
+              await LeaguesApi(api).archive(league.id);
+              onArchived();
+              return 'League archived';
+            },
+          ),
+        ),
+      ]),
+    );
+  }
+
+  static String _dollarsLabel(int? cents, String which) => cents == null || cents == 0 ? 'No $which' : '\$${cents / 100 == (cents ~/ 100) ? cents ~/ 100 : cents / 100} $which';
+
+  static String _cap(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+}
+
+/// A labeled group of settings rows: a small uppercase label, then a single
+/// bordered, divided list (so a multi-row group reads as one card, not one
+/// border per row) — the app's grouped-list pattern, as on My Leagues.
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.label, required this.children});
+  final String label;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = WaygerzColors.of(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Padding(
+        padding: const EdgeInsets.only(left: 2, bottom: 10),
+        child: Text(label.toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1, color: c.mutedForeground)),
+      ),
+      Container(
+        decoration: BoxDecoration(
+          color: c.card,
+          borderRadius: BorderRadius.circular(WaygerzRadius.xl),
+          border: Border.all(color: c.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) Divider(height: 1, thickness: 1, color: c.border),
+            children[i],
+          ],
+        ]),
+      ),
+    ]);
+  }
+}
+
+/// One row in a settings group: an icon chip, a title + one-line summary, and
+/// a chevron — tapping opens that setting's sheet. Generous padding (16px)
+/// and a 60px min-height keep it a comfortable tap target.
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({required this.icon, required this.title, required this.summary, required this.onTap});
+  final IconData icon;
+  final String title;
+  final String summary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = WaygerzColors.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 60),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: c.muted, borderRadius: BorderRadius.circular(WaygerzRadius.lg)),
+              child: Icon(icon, size: 18, color: c.foreground),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground)),
+                Text(summary, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: c.mutedForeground)),
+              ]),
+            ),
+            const SizedBox(width: 8),
+            Icon(LucideIcons.chevronRight, size: 20, color: c.mutedForeground),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// The red-tinted card for a destructive, always-visible action — outside the
+/// settings list, not one more row to tap through to.
+class _DangerCard extends StatelessWidget {
+  const _DangerCard({required this.title, required this.description, required this.action});
+  final String title;
+  final String description;
+  final Widget action;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = WaygerzColors.of(context);
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: c.destructive.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(WaygerzRadius.xl),
+        border: Border.all(color: c.destructive.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.destructive)),
+        const SizedBox(height: 6),
+        Text(description, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
+        const SizedBox(height: 16),
+        action,
       ]),
     );
   }
@@ -138,15 +257,15 @@ class _ConfirmedAction extends StatefulWidget {
     required this.title,
     required this.description,
     required this.run,
-    this.confirmLabel,
     this.destructive = false,
+    this.expand = false,
   });
   final String label;
   final String busyLabel;
   final String title;
   final String description;
-  final String? confirmLabel;
   final bool destructive;
+  final bool expand;
   final Future<String> Function() run;
 
   @override
@@ -162,9 +281,11 @@ class _ConfirmedActionState extends State<_ConfirmedAction> {
       label: _busy ? widget.busyLabel : widget.label,
       variant: widget.destructive ? ButtonVariant.destructive : ButtonVariant.outline,
       busy: _busy,
+      expand: widget.expand,
+      size: ButtonSize.lg,
       onPressed: () async {
         final ok = await confirmWz(context, title: widget.title, description: widget.description,
-            confirmLabel: widget.confirmLabel ?? widget.label, destructive: widget.destructive);
+            confirmLabel: widget.label, destructive: widget.destructive);
         if (!ok || !context.mounted) return;
         final toast = Toaster.of(context);
         setState(() => _busy = true);
@@ -269,7 +390,7 @@ class _DetailsState extends State<_Details> {
           child: Text(t, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: c.foreground)),
         );
     final hasLogo = (lg.logoUrl ?? '').isNotEmpty;
-    return SectionCard(title: 'League details', children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       label('Logo'),
       Row(children: [
         LeagueAvatar(name: _name.text, id: lg.id, logo: lg.logoUrl, size: 96),
@@ -306,14 +427,13 @@ class _DetailsState extends State<_Details> {
           i >= 0 ? _chosen.removeAt(i) : _chosen.add((id: id, name: name));
         }),
       ),
-      const SizedBox(height: 20),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: WzButton(
-          label: _saving ? 'Saving…' : 'Save details',
-          busy: _saving,
-          onPressed: _name.text.trim().isNotEmpty && _chosen.isNotEmpty && !_saving ? _save : null,
-        ),
+      const SizedBox(height: 24),
+      WzButton(
+        label: _saving ? 'Saving…' : 'Save details',
+        busy: _saving,
+        expand: true,
+        size: ButtonSize.lg,
+        onPressed: _name.text.trim().isNotEmpty && _chosen.isNotEmpty && !_saving ? _save : null,
       ),
     ]);
   }
@@ -399,7 +519,7 @@ class _RulesState extends State<_Rules> {
           padding: const EdgeInsets.only(top: 6),
           child: Text(t, style: TextStyle(fontSize: 12, color: c.mutedForeground)),
         );
-    return SectionCard(title: 'Rules', children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       label(r'Min wager ($)'),
       TextField(controller: _min, keyboardType: TextInputType.number,
           decoration: InputDecoration(hintText: 'none', errorText: minErr)),
@@ -430,14 +550,13 @@ class _RulesState extends State<_Rules> {
         onChanged: (v) => setState(() => _tz = v),
       ),
       hint('Weeks roll over at 4:00 AM in this timezone, so late night games finish before a period closes.'),
-      const SizedBox(height: 20),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: WzButton(
-          label: _saving ? 'Saving…' : 'Save rules',
-          busy: _saving,
-          onPressed: minErr == null && maxErr == null && !_saving ? _save : null,
-        ),
+      const SizedBox(height: 24),
+      WzButton(
+        label: _saving ? 'Saving…' : 'Save rules',
+        busy: _saving,
+        expand: true,
+        size: ButtonSize.lg,
+        onPressed: minErr == null && maxErr == null && !_saving ? _save : null,
       ),
     ]);
   }

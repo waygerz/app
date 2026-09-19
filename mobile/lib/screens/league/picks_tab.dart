@@ -425,11 +425,14 @@ class _PicksTabState extends State<PicksTab> {
         const SizedBox(height: 6),
         Container(
           key: _tbKey,
-          height: 52,
-          padding: const EdgeInsets.only(left: 10, right: 6),
+          height: 60,
+          padding: const EdgeInsets.only(left: 10, right: 8),
           decoration: BoxDecoration(color: c.muted.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(WaygerzRadius.md)),
           child: Row(children: [
-            const ExcludeSemantics(child: Text('🎯', style: TextStyle(fontSize: 16))),
+            // Sized and placed like the team logos above it.
+            const ExcludeSemantics(
+              child: SizedBox(width: 32, height: 32, child: Center(child: Text('🎯', style: TextStyle(fontSize: 26, height: 1)))),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -439,7 +442,7 @@ class _PicksTabState extends State<PicksTab> {
             ),
             SizedBox(
               width: 80,
-              height: 40,
+              height: 44,
               child: TextField(
                 controller: _tiebreaker,
                 focusNode: _tbFocus,
