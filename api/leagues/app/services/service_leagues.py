@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 from flask import current_app, request
+from sqlalchemy import func
 
 from app.extensions import db
 from app.models.league import (
@@ -1144,10 +1145,17 @@ def my_leagues(me):
     except Exception:  # noqa: BLE001
         users = {}
 
+    # My rank in each started pick'em league (money leagues show the balance).
+    pickem_ids = [lg.id for lg, _ in rows if lg.league_type == PICKEM and lg.status != DRAFT]
+    records = _pickem_records(pickem_ids)
+
     cards = []
     for lg, mem in rows:
         ms = members_by_league.get(str(lg.id), [])
         period = current_period(lg.id)
+        my_rank = None
+        if lg.id in pickem_ids:
+            my_rank = _rank_of(me, [m.user_id for m in ms], records.get(str(lg.id), {}))
         top_members = [
             {
                 "user_id": m.user_id,
@@ -1167,6 +1175,9 @@ def my_leagues(me):
             "my_balance_cents": balances.get(lg.account, 0) if lg.is_money else None,
             "current_period": period.to_dict() if period else None,
             "unread_feed_count": _unread_feed_count(lg.id, me, mem.joined_at),
+            # Pick'em only (null for money and draft leagues): my season rank,
+            # the same number as my row in /standings.
+            "my_rank": my_rank,
         })
     return {"leagues": cards}, 200
 
@@ -1498,18 +1509,9 @@ def standings(league_id, me):
         _rank(rows, lambda r: r["balance_cents"])
         return {"standings": rows, "period_id": period.id if period else None}, 200
 
-    picks = Pick.query.filter_by(league_id=league_id).all()
-    wins = {m.user_id: 0 for m in members}
-    losses = {m.user_id: 0 for m in members}
-    for p in picks:
-        if p.user_id not in wins:
-            continue
-        if p.voided:
-            continue  # no contest — never a win or a loss
-        if p.correct is True:
-            wins[p.user_id] += 1
-        elif p.correct is False:
-            losses[p.user_id] += 1
+    records = _pickem_records([league_id]).get(league_id, {})
+    wins = {m.user_id: records.get(m.user_id, (0, 0))[0] for m in members}
+    losses = {m.user_id: records.get(m.user_id, (0, 0))[1] for m in members}
 
     users = resolve_users_full([m.user_id for m in members])
     rows = [
@@ -1528,6 +1530,39 @@ def standings(league_id, me):
     rows.sort(key=lambda r: (-r["wins"], r["losses"], r["display_name"].lower()))
     _rank(rows, lambda r: (r["wins"], r["losses"]))
     return {"standings": rows, "period_id": period.id if period else None}, 200
+
+
+def _pickem_records(league_ids) -> dict:
+    """{league_id: {user_id: (wins, losses)}} from graded picks, in one query.
+    Voided picks (no contest) are never a win or a loss."""
+    out: dict[str, dict[str, list]] = {}
+    if not league_ids:
+        return {}
+    counts = (
+        db.session.query(Pick.league_id, Pick.user_id, Pick.correct, func.count())
+        .filter(Pick.league_id.in_([str(i) for i in league_ids]),
+                Pick.correct.isnot(None), Pick.voided.is_(False))
+        .group_by(Pick.league_id, Pick.user_id, Pick.correct)
+        .all()
+    )
+    for league_id, user_id, correct, n in counts:
+        rec = out.setdefault(str(league_id), {}).setdefault(user_id, [0, 0])
+        rec[0 if correct else 1] += n
+    return {lid: {uid: (w, l) for uid, (w, l) in recs.items()} for lid, recs in out.items()}
+
+
+def _rank_of(me, member_ids, records) -> int | None:
+    """My competition rank among `member_ids` by (wins, fewest losses) — the
+    same order and ties as the pick'em standings."""
+    if me not in member_ids:
+        return None
+    mw, ml = records.get(me, (0, 0))
+    better = 0
+    for uid in member_ids:
+        w, l = records.get(uid, (0, 0))
+        if w > mw or (w == mw and l < ml):
+            better += 1
+    return better + 1
 
 
 def _rank(rows, standing):

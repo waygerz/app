@@ -106,6 +106,16 @@ String dayLabel(String? iso) {
 /// → P2, "Week 3" → W3, playoff rounds → WC / DIV / CONF / PB / SB, "Week of
 /// Sep 14" → 9/14, "Season 2026" → 2026, else up to 3 initials. Mirrors web
 /// lib/leagues.ts `shortPeriodLabel` — change both together.
+/// The invite code from what someone typed or pasted: a bare code ("L7K2PQX")
+/// or a share link (".../c/L7K2PQX"). Uppercased; "" if nothing usable
+/// (web lib/leagues.ts inviteCodeFrom).
+String inviteCodeFrom(String input) {
+  final text = input.trim();
+  final fromLink = RegExp(r'/c/([A-Za-z0-9-]+)').firstMatch(text);
+  final code = fromLink != null ? fromLink.group(1)! : text;
+  return RegExp(r'^[A-Za-z0-9-]+$').hasMatch(code) ? code.toUpperCase() : '';
+}
+
 /// 1 → "1st", 2 → "2nd", 11 → "11th", 23 → "23rd" (web lib/leagues.ts ordinal).
 String ordinal(int n) {
   final tens = n % 100;

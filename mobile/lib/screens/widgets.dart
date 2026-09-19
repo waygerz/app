@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../api/users_api.dart';
 import '../auth/auth_controller.dart';
+import '../models.dart';
 import '../theme/app_theme.dart';
+import '../ui/ui.dart';
 
 /// Small shared UI bits used across screens.
 
@@ -182,6 +184,16 @@ class SectionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A league's current period — "Week 3 · Open" (green dot while open) — or
+/// Draft before the league starts; null when there's no period (web
+/// components/period-badge.tsx). The league row and My Leagues cards use it.
+Widget? periodBadge(WaygerzColors c, {required String status, LeaguePeriod? period}) {
+  if (status == 'draft') return const WzBadge('Draft', variant: BadgeVariant.warning);
+  if (period == null) return null;
+  final s = period.status.isEmpty ? '' : '${period.status[0].toUpperCase()}${period.status.substring(1)}';
+  return WzBadge('${period.label} · $s', variant: BadgeVariant.secondary, dot: period.status == 'open' ? c.brand : null);
 }
 
 /// Team logo (network) with the web's fallback: a colored circle with the

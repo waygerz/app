@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../api/messaging_api.dart';
@@ -30,6 +31,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   static const _titles = ['My Leagues', 'My Bets', 'Notifications', 'Messages'];
 
+  final _leaguesKey = GlobalKey<LeaguesScreenState>();
   int _alerts = 0;
   int _messages = 0;
   Timer? _poll;
@@ -99,14 +101,21 @@ class _HomeScreenState extends State<HomeScreen> {
     final tab = context.watch<AppNav>().tab;
 
     final tabs = <Widget>[
-      LeaguesScreen(api: auth.api),
+      LeaguesScreen(key: _leaguesKey, api: auth.api),
       BetsScreen(api: auth.api),
       NotificationsScreen(api: auth.api, onChanged: _refreshBadges),
       MessagesScreen(key: _messagesKey, api: auth.api, onChanged: _refreshBadges),
     ];
 
     return Scaffold(
-      appBar: WaygerzHeader.page(_titles[tab]),
+      appBar: WaygerzHeader.page(_titles[tab], actions: [
+        if (tab == AppNav.tabLeagues)
+          IconButton(
+            tooltip: 'Create league',
+            onPressed: () => _leaguesKey.currentState?.createLeague(),
+            icon: const Icon(LucideIcons.plus, color: Colors.white),
+          ),
+      ]),
       body: IndexedStack(index: tab, children: tabs),
       bottomNavigationBar: WaygerzBottomNav(
         index: tab,

@@ -26,6 +26,8 @@ export interface LeagueCard {
   my_balance_cents: number | null;
   current_period: LeaguePeriod | null;
   unread_feed_count?: number;
+  /** Pick'em only (null for money and draft leagues): my season rank. */
+  my_rank?: number | null;
 }
 
 export type LeagueRole = 'commissioner' | 'moderator' | 'member';
@@ -279,4 +281,14 @@ export function ordinal(n: number): string {
   const tens = n % 100;
   const suffix = tens >= 11 && tens <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
   return `${n}${suffix}`;
+}
+
+/** The invite code from what someone typed or pasted: a bare code ("L7K2PQX")
+ * or a share link (".../c/L7K2PQX"). Uppercased; "" if nothing usable. Mirrors
+ * the app's `inviteCodeFrom` (mobile/lib/format.dart) — change both together. */
+export function inviteCodeFrom(input: string): string {
+  const text = input.trim();
+  const fromLink = text.match(/\/c\/([A-Za-z0-9-]+)/);
+  const code = fromLink ? fromLink[1] : text;
+  return /^[A-Za-z0-9-]+$/.test(code) ? code.toUpperCase() : '';
 }

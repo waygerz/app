@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../api/api_client.dart';
 import '../api/leagues_api.dart';
+import '../app_nav.dart';
 import '../auth/auth_controller.dart';
 import '../format.dart';
 import '../models.dart';
@@ -14,17 +15,19 @@ import 'league_detail_screen.dart';
 import 'widgets.dart';
 
 /// My Leagues (web app/(app)/page.tsx): pending invites with Accept, then a
-/// card per league — logo, name, type chip, member avatar stack, Draft /
-/// unread count. Loading, error and empty states match the web.
+/// card per league — logo, type icon + name over the member faces, my balance
+/// or rank; then the week and new posts — and Join with code / Create league.
+/// Loading, error and empty states match the web.
 class LeaguesScreen extends StatefulWidget {
   const LeaguesScreen({super.key, required this.api});
   final ApiClient api;
 
   @override
-  State<LeaguesScreen> createState() => _LeaguesScreenState();
+  State<LeaguesScreen> createState() => LeaguesScreenState();
 }
 
-class _LeaguesScreenState extends State<LeaguesScreen> {
+/// Public so the top bar's + can start a league and refresh the list.
+class LeaguesScreenState extends State<LeaguesScreen> {
   late final LeaguesApi _leagues = LeaguesApi(widget.api);
   late Future<List<League>> _list = _leagues.myLeagues();
   late Future<List<LeagueInvite>> _invites = _leagues.invites();
@@ -96,9 +99,18 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _LeagueCard(api: widget.api, league: l, onReturn: _reload),
                   ),
-                const SizedBox(height: 12),
-                WzButton(label: 'Create league', icon: LucideIcons.plus, variant: ButtonVariant.outline,
-                    size: ButtonSize.lg, onPressed: _createLeague),
+                const SizedBox(height: 4),
+                Row(children: [
+                  Expanded(
+                    child: WzButton(label: 'Join with code', icon: LucideIcons.keyRound, variant: ButtonVariant.outline,
+                        onPressed: _joinWithCode),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: WzButton(label: 'Create league', icon: LucideIcons.plus, variant: ButtonVariant.outline,
+                        onPressed: createLeague),
+                  ),
+                ]),
               ]);
             },
           ),
@@ -107,9 +119,23 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
     );
   }
 
-  Future<void> _createLeague() async {
+  Future<void> createLeague() async {
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => CreateLeagueScreen(api: widget.api)));
     await _reload();
+  }
+
+  /// Type or paste an invite code / link, then open it like a shared link
+  /// (web components/join-code-sheet.tsx).
+  Future<void> _joinWithCode() async {
+    final code = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => const _JoinCodeSheet(),
+    );
+    if (code == null || code.isEmpty || !mounted) return;
+    context.read<AppNav>().open('/c/$code');
   }
 
   Widget _invitesSection(BuildContext context, List<LeagueInvite> invites) {
@@ -195,7 +221,8 @@ class _LeaguesScreenState extends State<LeaguesScreen> {
       Text('Create a league or join one with a code to start playing.',
           textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
       const SizedBox(height: 8),
-      _GradientButton(label: 'Create your first league', onPressed: _createLeague),
+      _GradientButton(label: 'Create your first league', onPressed: createLeague),
+      WzButton(label: 'Join with code', icon: LucideIcons.keyRound, variant: ButtonVariant.outline, onPressed: _joinWithCode),
     ]);
   }
 }
@@ -219,59 +246,103 @@ class _LeagueCard extends StatelessWidget {
     final c = WaygerzColors.of(context);
     final me = context.read<AuthController>().user?.id;
     final a = leagueTypeAccent(context, league.leagueType);
-    // Never the viewer's own avatar — the stack is for seeing who else is in.
+    // Never the viewer's own avatar — the faces are for seeing who else is in.
     final others = league.topMembers.where((m) => m.userId != me).toList();
     final shown = others.take(3).toList();
     final extra = (league.memberCount - 1 - shown.length).clamp(0, 1 << 30);
+    final unread = league.unreadFeedCount;
+    final muted = TextStyle(fontSize: 12, color: c.mutedForeground);
+    const tabular = [FontFeature.tabularFigures()];
+
+    // The number on the right: my balance (money), my rank (pick'em), or
+    // "not started" for a draft.
+    final (String, String)? stat = league.isDraft
+        ? ('—', 'not started')
+        : league.myBalanceCents != null
+            ? (formatCredits(league.myBalanceCents!), 'balance')
+            : league.myRank != null
+                ? (ordinal(league.myRank!), 'of ${league.memberCount}')
+                : null;
+    final members = '${league.memberCount} member${league.memberCount == 1 ? '' : 's'}';
 
     return WzCard(
+      padding: const EdgeInsets.all(12),
       onTap: () async {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(builder: (_) => LeagueDetailScreen(api: api, league: league)),
         );
         await onReturn(); // unread counts / status may have changed
       },
-      child: Row(children: [
-        LeagueAvatar(name: league.name, id: league.id, logo: league.logoUrl, size: 72),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(league.name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.foreground)),
-            const SizedBox(height: 8),
-            Row(children: [
-              Tooltip(
-                message: leagueTypeLabel(league.leagueType),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  decoration: BoxDecoration(color: a.bg, borderRadius: BorderRadius.circular(WaygerzRadius.md)),
-                  child: Icon(a.icon, size: 14, color: a.fg),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // Row 1: logo, type icon + name over the member faces, my number.
+        Row(children: [
+          LeagueAvatar(name: league.name, id: league.id, logo: league.logoUrl, size: 44),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Semantics(label: leagueTypeLabel(league.leagueType), child: Icon(a.icon, size: 14, color: a.fg)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(league.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.foreground)),
                 ),
+              ]),
+              const SizedBox(height: 4),
+              Semantics(
+                label: members,
+                excludeSemantics: true,
+                child: shown.isEmpty
+                    ? Text('Just you', style: muted)
+                    : Row(children: [
+                        AvatarStack(members: shown, size: 24, overlap: 6),
+                        if (extra > 0) ...[
+                          const SizedBox(width: 6),
+                          Text('+$extra', style: muted.copyWith(fontFeatures: tabular)),
+                        ],
+                      ]),
               ),
-              if (shown.isNotEmpty) ...[
-                const SizedBox(width: 10),
-                AvatarStack(members: shown, extra: extra),
-              ],
             ]),
+          ),
+          if (stat != null) ...[
+            const SizedBox(width: 8),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(stat.$1, style: TextStyle(fontSize: 18, height: 1.2, fontWeight: FontWeight.w700,
+                  color: c.foreground, fontFeatures: tabular)),
+              Text(stat.$2, style: muted),
+            ]),
+          ],
+        ]),
+        const SizedBox(height: 10),
+        // Row 2: the week (or Draft), then new posts, then the chevron.
+        Container(
+          padding: const EdgeInsets.only(top: 10),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: c.border))),
+          child: Row(children: [
+            if (periodBadge(c, status: league.status, period: league.currentPeriod) case final b?) b,
+            const Spacer(),
+            if (unread > 0) ...[
+              Container(width: 6, height: 6, decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle)),
+              const SizedBox(width: 6),
+              Text('${unread > 99 ? '99+' : unread} new post${unread == 1 ? '' : 's'}',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.primary)),
+              const SizedBox(width: 4),
+            ],
+            Icon(LucideIcons.chevronRight, size: 16, color: c.mutedForeground),
           ]),
         ),
-        const SizedBox(width: 8),
-        if (league.isDraft) const WzBadge('Draft', variant: BadgeVariant.warning),
-        if (league.unreadFeedCount > 0) ...[
-          const SizedBox(width: 8),
-          CountBadge(league.unreadFeedCount),
-        ],
       ]),
     );
   }
 }
 
-/// Overlapping 36px member avatars ringed in the card color, plus "+n".
+/// Overlapping member avatars ringed in the card color, plus an optional "+n".
 class AvatarStack extends StatelessWidget {
-  const AvatarStack({super.key, required this.members, this.extra = 0, this.size = 36});
+  const AvatarStack({super.key, required this.members, this.extra = 0, this.size = 36, this.overlap = 10});
   final List<LeagueMember> members;
   final int extra;
   final double size;
+  final double overlap;
 
   @override
   Widget build(BuildContext context) {
@@ -287,7 +358,6 @@ class AvatarStack extends StatelessWidget {
           child: Text('+$extra', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.mutedForeground)),
         ),
     ];
-    const overlap = 10.0;
     return SizedBox(
       height: size,
       width: size + (items.length - 1) * (size - overlap),
@@ -306,6 +376,57 @@ class AvatarStack extends StatelessWidget {
   }
 }
 
+/// Join with code: returns the parsed code (see `inviteCodeFrom`).
+class _JoinCodeSheet extends StatefulWidget {
+  const _JoinCodeSheet();
+
+  @override
+  State<_JoinCodeSheet> createState() => _JoinCodeSheetState();
+}
+
+class _JoinCodeSheetState extends State<_JoinCodeSheet> {
+  final _text = TextEditingController();
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = WaygerzColors.of(context);
+    final code = inviteCodeFrom(_text.text);
+    void submit() {
+      if (code.isNotEmpty) Navigator.of(context).pop(code);
+    }
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 24 + MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('Join with code', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.foreground)),
+        const SizedBox(height: 4),
+        Text('Enter the code or paste the invite link a friend sent you.',
+            style: TextStyle(fontSize: 14, color: c.mutedForeground)),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _text,
+          autofocus: true,
+          autocorrect: false,
+          textCapitalization: TextCapitalization.characters,
+          textInputAction: TextInputAction.go,
+          style: const TextStyle(fontSize: 16),
+          decoration: const InputDecoration(hintText: 'Code or invite link'),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => submit(),
+        ),
+        const SizedBox(height: 16),
+        WzButton(label: 'Continue', expand: true, onPressed: code.isEmpty ? null : submit),
+      ]),
+    );
+  }
+}
+
 class _LeagueCardSkeleton extends StatelessWidget {
   const _LeagueCardSkeleton();
 
@@ -314,20 +435,23 @@ class _LeagueCardSkeleton extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.only(bottom: 12),
       child: WzCard(
-        child: Row(children: [
-          Skeleton(width: 72, height: 72, radius: WaygerzRadius.xl),
-          SizedBox(width: 16),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SkeletonLine(widthFactor: 0.66, height: 24),
-              SizedBox(height: 10),
-              Row(children: [
-                Skeleton(width: 96, height: 24),
-                SizedBox(width: 10),
-                Skeleton(width: 96, height: 36, radius: 18),
+        padding: EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Skeleton(width: 44, height: 44, radius: WaygerzRadius.xl),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                SkeletonLine(widthFactor: 0.66, height: 20),
+                SizedBox(height: 6),
+                Skeleton(width: 80, height: 24, radius: 12),
               ]),
-            ]),
-          ),
+            ),
+            SizedBox(width: 8),
+            Skeleton(width: 64, height: 36),
+          ]),
+          SizedBox(height: 12),
+          Skeleton(width: 110, height: 20),
         ]),
       ),
     );

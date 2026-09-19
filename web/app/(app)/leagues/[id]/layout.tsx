@@ -7,10 +7,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext';
 import {
-  leaguesApi, leagueTypeLabel, ordinal, type LeagueDetail, type LeagueType, type StandingRow,
+  leaguesApi, leagueTypeLabel, ordinal, type LeagueType, type StandingRow,
 } from '@/lib/leagues';
 import { formatCredits } from '@/lib/wallet';
 import { LeagueAvatar } from '@/components/league-avatar';
+import { PeriodBadge } from '@/components/period-badge';
 import { UserAvatar } from '@/components/user-avatar';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -29,7 +30,6 @@ const PLAY_TAB: Record<LeagueType, string> = {
   pickem: 'Picks',
 };
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 // The league-type chip: Swords = head-to-head, Trophy = pick'em — matching the
@@ -40,19 +40,6 @@ function LeagueTypeBadge({ type }: { type: LeagueType }) {
     <Badge size="sm" appearance="light">
       <Icon className="size-3.5" />
       {leagueTypeLabel(type)}
-    </Badge>
-  );
-}
-
-// "Week 3 · Open" (green dot while open), or Draft before the league starts.
-function PeriodBadge({ lg }: { lg: LeagueDetail }) {
-  if (lg.status === 'draft') return <Badge size="sm" variant="warning" appearance="light">Draft</Badge>;
-  const p = lg.current_period;
-  if (!p) return null;
-  return (
-    <Badge size="sm" variant="secondary" className="tabular-nums">
-      {p.status === 'open' && <span className="size-1.5 rounded-full bg-brand" aria-hidden />}
-      {p.label} · {cap(p.status)}
     </Badge>
   );
 }
@@ -136,7 +123,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
 
   // League row, top line: balance (money), my rank (pick'em) or Draft.
   const topLine = isDraft ? (
-    <PeriodBadge lg={lg} />
+    <PeriodBadge status={lg.status} period={lg.current_period} />
   ) : isMoney ? (
     <>
       <span className="text-lg font-bold leading-tight tabular-nums text-foreground">
@@ -156,7 +143,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
   const bottomLine = isDraft ? (
     <span>{plural(members, 'member')} · not started</span>
   ) : lg.current_period ? (
-    <PeriodBadge lg={lg} />
+    <PeriodBadge status={lg.status} period={lg.current_period} />
   ) : (
     <span>{plural(members, 'member')}</span>
   );
@@ -217,7 +204,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
               <DrawerTitle className="text-lg font-bold text-foreground">{lg.name}</DrawerTitle>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <LeagueTypeBadge type={lg.league_type} />
-                <PeriodBadge lg={lg} />
+                <PeriodBadge status={lg.status} period={lg.current_period} />
               </div>
               {lg.description ? (
                 <DrawerDescription className="break-words text-foreground">{lg.description}</DrawerDescription>

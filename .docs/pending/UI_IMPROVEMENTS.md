@@ -53,6 +53,18 @@ halfway down the phone.
   tabs sit fixed above the section's list (each section still owns its own
   scroll view; a `NestedScrollView` would let the row scroll away too).
 
+## 2b. My Leagues cards — done
+Each league card is two rows, every line one line (no wrapping):
+- Row 1: 44px logo; type icon + name over the member faces (3 + "+N", or
+  "Just you"); on the right my **balance** (money), **rank** "3rd of 11"
+  (pick'em — `my_rank` on the league list, same number as /standings), or
+  "not started" (draft).
+- Row 2: the week badge (or Draft), then "N new posts", then ›.
+- **Join with code** (sheet: paste a code or link → `/c/<code>`) and **Create
+  league** under the list; **+** in the top bar also creates a league.
+- Next: a per-league status line ("2 bets pending", "9 of 16 picks") needs
+  per-league counts from the backend.
+
 ## 3. Bottom sheets instead of centred dialogs
 **Today:** web bet details, confirmations, counter offers, member picks and
 league details open as centred dialogs. On phones, sheets that slide up from

@@ -206,6 +206,13 @@ def test_standings_rank_by_wins(client, auth_headers, app, monkeypatch):
     assert by_user[u2]["wins"] == 0 and by_user[u2]["losses"] == 2
     assert by_user[U1]["rank"] == 1 and by_user[u2]["rank"] == 2
 
+    # The league list carries the same rank for each member's card.
+    def my_rank(user):
+        cards = client.get(f"{API_PREFIX}/", headers=auth_headers(user)).get_json()["leagues"]
+        return next(c for c in cards if c["id"] == lid)["my_rank"]
+    assert my_rank(U1) == 1
+    assert my_rank(u2) == 2
+
 
 def test_standings_rank_is_shared_on_ties(client, auth_headers):
     # Nobody has a graded pick: everyone is 0-0, so everyone is rank 1.
@@ -215,6 +222,17 @@ def test_standings_rank_is_shared_on_ties(client, auth_headers):
                     headers=auth_headers(str(uuid.uuid4())))
     rows = client.get(f"/v1/gameplay/leagues/{d['id']}/standings", headers=auth_headers(U1)).get_json()["standings"]
     assert [r["rank"] for r in rows] == [1, 1, 1]
+
+
+def test_my_rank_is_null_for_draft_and_money_leagues(client, auth_headers):
+    user = str(uuid.uuid4())
+    _create_pickem(client, auth_headers(user))  # still a draft
+    client.post(f"{API_PREFIX}/", json={"name": "Money", "league_type": "head_to_head", "period_type": "season",
+                                         "starting_balance_cents": 10000, "sports": ["NFL"]},
+                headers=auth_headers(user))
+    cards = client.get(f"{API_PREFIX}/", headers=auth_headers(user)).get_json()["leagues"]
+    assert len(cards) == 2
+    assert all(c["my_rank"] is None for c in cards)
 
 
 def test_money_league_standings_shape(client, auth_headers, monkeypatch):

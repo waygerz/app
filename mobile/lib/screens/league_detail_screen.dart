@@ -93,8 +93,23 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: WaygerzHeader.league(
-          name: widget.league.name, id: widget.league.id, logo: widget.league.logoUrl, type: widget.league.leagueType),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kHeaderHeight),
+        child: FutureBuilder<League>(
+          future: _future,
+          builder: (context, snap) {
+            // A link opens with a stub (id only) — use the loaded league.
+            final lg = snap.data;
+            final stub = widget.league;
+            return WaygerzHeader.league(
+              name: lg?.name ?? (stub.name.isEmpty ? 'League' : stub.name),
+              id: stub.id,
+              logo: lg?.logoUrl ?? stub.logoUrl,
+              type: lg?.leagueType ?? (stub.name.isEmpty ? null : stub.leagueType),
+            );
+          },
+        ),
+      ),
       body: FutureBuilder<League>(
         future: _future,
         builder: (context, snap) {
@@ -181,14 +196,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
     return _rows?.where((r) => r.userId == me).firstOrNull;
   }
 
-  /// "Week 3 · Open" (green dot while open), or Draft before the league starts.
-  Widget? _periodBadge(WaygerzColors c, League lg) {
-    if (lg.isDraft) return const WzBadge('Draft', variant: BadgeVariant.warning);
-    final p = lg.currentPeriod;
-    if (p == null) return null;
-    final status = p.status.isEmpty ? '' : '${p.status[0].toUpperCase()}${p.status.substring(1)}';
-    return WzBadge('${p.label} · $status', variant: BadgeVariant.secondary, dot: p.status == 'open' ? c.brand : null);
-  }
+  Widget? _periodBadge(WaygerzColors c, League lg) => periodBadge(c, status: lg.status, period: lg.currentPeriod);
 
   /// The league row (web layout.tsx): balance / rank / Draft over the week —
   /// tap for league details — and Invite (Activate for a draft league's

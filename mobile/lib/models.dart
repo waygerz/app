@@ -234,6 +234,7 @@ class League {
     this.currentPeriod,
     this.myBalanceCents,
     this.unreadFeedCount = 0,
+    this.myRank,
     this.topMembers = const [],
     this.members = const [],
     this.sports = const [],
@@ -261,6 +262,9 @@ class League {
 
   /// Unread feed posts/notices (league list cards).
   final int unreadFeedCount;
+
+  /// My season rank — pick'em league list cards only (null for money / draft).
+  final int? myRank;
 
   /// A few members for the list card's avatar stack.
   final List<LeagueMember> topMembers;
@@ -306,6 +310,7 @@ class League {
             : null,
         myBalanceCents: j['my_balance_cents'] as int?,
         unreadFeedCount: (j['unread_feed_count'] as int?) ?? 0,
+        myRank: j['my_rank'] as int?,
         topMembers: _members(j['top_members']),
         members: _members(j['members']),
         rules: (j['rules'] as Map?)?.cast<String, dynamic>() ?? const {},

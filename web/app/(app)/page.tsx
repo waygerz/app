@@ -1,35 +1,85 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext';
-import { leaguesApi, leagueTypeLabel } from '@/lib/leagues';
+import { leaguesApi, leagueTypeLabel, ordinal, type LeagueCard } from '@/lib/leagues';
+import { formatCredits } from '@/lib/wallet';
 import { LeagueAvatar } from '@/components/league-avatar';
+import { PeriodBadge } from '@/components/period-badge';
+import { JoinCodeSheet } from '@/components/join-code-sheet';
 import { UserAvatar } from '@/components/user-avatar';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Trophy, Swords, Inbox, AlertCircle, RefreshCw, type LucideIcon } from 'lucide-react';
+import { Plus, Trophy, Swords, Inbox, AlertCircle, RefreshCw, ChevronRight, KeyRound, type LucideIcon } from 'lucide-react';
 
-// Per-type color accent, matching the landing page: Pick'em = amber, H2H = violet.
-const TYPE_ACCENT: Record<string, { bar: string; chip: string; border: string; icon: LucideIcon }> = {
-  pickem: {
-    bar: 'from-amber-500 to-orange-500',
-    chip: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-    border: 'hover:border-amber-500/50',
-    icon: Trophy,
-  },
-  head_to_head: {
-    bar: 'from-violet-500 to-fuchsia-500',
-    chip: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
-    border: 'hover:border-violet-500/50',
-    icon: Swords,
-  },
+// Per-type icon + color, matching the landing page: Pick'em = amber trophy,
+// H2H = violet swords.
+const TYPE_ICON: Record<string, { icon: LucideIcon; color: string }> = {
+  pickem: { icon: Trophy, color: 'text-amber-600 dark:text-amber-400' },
+  head_to_head: { icon: Swords, color: 'text-violet-600 dark:text-violet-400' },
 };
-const accentFor = (t: string) => TYPE_ACCENT[t] ?? TYPE_ACCENT.head_to_head;
+const typeIconFor = (t: string) => TYPE_ICON[t] ?? TYPE_ICON.head_to_head;
+
+// The number on the right of a card: my balance (money), my rank (pick'em),
+// or "not started" for a draft.
+function CardStat({ c }: { c: LeagueCard }) {
+  const [value, label] =
+    c.status === 'draft'
+      ? ['—', 'not started']
+      : c.my_balance_cents != null
+        ? [formatCredits(c.my_balance_cents), 'balance']
+        : c.my_rank != null
+          ? [ordinal(c.my_rank), `of ${c.member_count}`]
+          : [null, null];
+  if (value == null) return null;
+  return (
+    <div className="flex shrink-0 flex-col items-end">
+      <span className="text-lg font-bold leading-tight tabular-nums text-foreground">{value}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
+  );
+}
+
+// Who else is in: up to 3 faces and "+N" (never the viewer — it's My Leagues);
+// "Just you" when nobody else has joined.
+function MemberFaces({ c, me }: { c: LeagueCard; me?: string }) {
+  const others = (c.top_members ?? []).filter((m) => m.user_id !== me);
+  const shown = others.slice(0, 3);
+  const extra = Math.max(0, c.member_count - 1 - shown.length);
+  return (
+    <div
+      className="flex items-center"
+      role="img"
+      aria-label={`${c.member_count} member${c.member_count === 1 ? '' : 's'}`}
+    >
+      {shown.length === 0 ? (
+        <span className="text-xs text-muted-foreground">Just you</span>
+      ) : (
+        <>
+          <div className="flex -space-x-1.5">
+            {shown.map((m) => (
+              <UserAvatar
+                key={m.user_id}
+                userId={m.user_id}
+                name={m.display_name}
+                imageUrl={m.avatar_key}
+                className="size-6 border-2 border-card"
+                fallbackClassName="text-[10px]"
+                clickable={false}
+              />
+            ))}
+          </div>
+          {extra > 0 && <span className="ms-1.5 text-xs tabular-nums text-muted-foreground">+{extra}</span>}
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function HomePage() {
   const qc = useQueryClient();
@@ -55,6 +105,7 @@ export default function HomePage() {
 
   const data = leagues.data ?? [];
   const pendingInvites = invites.data ?? [];
+  const [joinOpen, setJoinOpen] = useState(false);
 
   return (
     <div className="container py-5 sm:py-8">
@@ -113,15 +164,16 @@ export default function HomePage() {
         // height, same body rows) so nothing shifts when the data lands.
         <div className="flex flex-col gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="flex-row items-center gap-4 border border-border p-4 shadow-sm">
-              <Skeleton className="size-[72px] rounded-xl" />
-              <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-                <Skeleton className="h-6 w-2/3" />
-                <div className="flex items-center gap-2.5">
-                  <Skeleton className="h-6 w-24 rounded-md" />
-                  <Skeleton className="h-9 w-24 rounded-full" />
+            <Card key={i} className="gap-2.5 p-3">
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-11 rounded-xl" />
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
                 </div>
+                <Skeleton className="h-9 w-16" />
               </div>
+              <Skeleton className="h-5 w-28 rounded-md" />
             </Card>
           ))}
         </div>
@@ -163,74 +215,49 @@ export default function HomePage() {
           >
             <Plus className="size-4" /> Create your first league
           </Button>
+          <Button variant="outline" onClick={() => setJoinOpen(true)}>
+            <KeyRound className="size-4" /> Join with code
+          </Button>
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
           {data.map((c) => {
-            const a = accentFor(c.league_type);
-            // Cap the avatar stack so it never spans the whole card on mobile.
-            // Never show the viewer's own avatar — this is "My Leagues", so it's a
-            // given they're a member; the stack is for seeing who else is in.
-            const others = (c.top_members ?? []).filter((m) => m.user_id !== user?.id);
-            const shownMembers = others.slice(0, 3);
-            const extra = Math.max(0, c.member_count - 1 - shownMembers.length);
+            const t = typeIconFor(c.league_type);
+            const unread = c.unread_feed_count ?? 0;
             return (
-              <Link key={c.id} href={`/leagues/${c.id}`} className="group">
-                <Card className="flex-row items-center gap-4 border border-border p-4 shadow-sm transition-all group-hover:border-primary/40 group-hover:shadow-md">
-                  {/* Logo (1.5× the old card): media-resolved, initials fallback. */}
-                  <LeagueAvatar name={c.name} logoUrl={c.logo_url} id={c.id} size={72} />
-
-                  {/* Title + social meta: type chip and the member avatar stack. */}
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-lg font-bold tracking-tight text-foreground transition-colors group-hover:text-primary sm:text-xl">
-                      {c.name}
+              <Link
+                key={c.id}
+                href={`/leagues/${c.id}`}
+                className="group rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                <Card className="gap-2.5 p-3 transition-colors group-hover:border-primary/40">
+                  {/* Row 1: logo, type icon + name over the member faces, my number. */}
+                  <div className="flex items-center gap-3">
+                    <LeagueAvatar name={c.name} logoUrl={c.logo_url} id={c.id} size={44} />
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <t.icon
+                          className={`size-3.5 shrink-0 ${t.color}`}
+                          role="img"
+                          aria-label={leagueTypeLabel(c.league_type)}
+                        />
+                        <span className="truncate text-base font-semibold text-foreground">{c.name}</span>
+                      </div>
+                      <MemberFaces c={c} me={user?.id} />
                     </div>
-                    <div className="mt-2 flex items-center gap-2.5">
-                      <span
-                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs font-medium sm:px-2 ${a.chip}`}
-                        title={leagueTypeLabel(c.league_type)}
-                        aria-label={leagueTypeLabel(c.league_type)}
-                      >
-                        <a.icon className="size-3.5" />
-                        <span className="hidden sm:inline">{leagueTypeLabel(c.league_type)}</span>
-                      </span>
-                      {shownMembers.length > 0 && (
-                        <div className="flex -space-x-2.5">
-                          {shownMembers.map((m) => (
-                            <UserAvatar
-                              key={m.user_id}
-                              userId={m.user_id}
-                              name={m.display_name}
-                              imageUrl={m.avatar_key}
-                              className="size-9 border-2 border-card"
-                              clickable={false}
-                            />
-                          ))}
-                          {extra > 0 && (
-                            <div className="flex size-9 items-center justify-center rounded-full border-2 border-card bg-muted text-[11px] font-semibold text-muted-foreground">
-                              +{extra}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <CardStat c={c} />
                   </div>
-
-                  {/* Right: unread posts (prominent) or draft state. */}
-                  <div className="flex shrink-0 items-center gap-2">
-                    {c.status === 'draft' && (
-                      <Badge size="sm" variant="warning" appearance="light">
-                        Draft
-                      </Badge>
-                    )}
-                    {(c.unread_feed_count ?? 0) > 0 && (
-                      <span
-                        className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-extrabold leading-none text-white"
-                        title="Unread posts and notices"
-                      >
-                        {(c.unread_feed_count ?? 0) > 99 ? '99+' : c.unread_feed_count}
+                  {/* Row 2: the week (or Draft), then new posts, then the chevron. */}
+                  <div className="flex items-center gap-2 border-t border-border pt-2.5 text-xs text-muted-foreground">
+                    <PeriodBadge status={c.status} period={c.current_period} />
+                    <span className="flex-1" />
+                    {unread > 0 && (
+                      <span className="flex items-center gap-1.5 whitespace-nowrap font-semibold text-primary">
+                        <span className="size-1.5 rounded-full bg-primary" aria-hidden />
+                        {unread > 99 ? '99+' : unread} new post{unread === 1 ? '' : 's'}
                       </span>
                     )}
+                    <ChevronRight className="size-4" aria-hidden />
                   </div>
                 </Card>
               </Link>
@@ -240,14 +267,18 @@ export default function HomePage() {
       )}
 
       {data.length > 0 && (
-        <div className="mt-6 flex justify-center">
-          <Button asChild variant="outline" size="lg" className="h-11">
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Button variant="outline" onClick={() => setJoinOpen(true)}>
+            <KeyRound className="size-4" /> Join with code
+          </Button>
+          <Button asChild variant="outline">
             <Link href="/leagues/new">
               <Plus className="size-4" /> Create league
             </Link>
           </Button>
         </div>
       )}
+      <JoinCodeSheet open={joinOpen} onOpenChange={setJoinOpen} />
     </div>
   );
 }

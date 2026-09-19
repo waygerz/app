@@ -12,6 +12,14 @@ void main() {
     expect(formatCredits(0), r'$0');
   });
 
+  test('inviteCodeFrom', () {
+    expect(inviteCodeFrom(' l7k2pqx '), 'L7K2PQX');
+    expect(inviteCodeFrom('https://waygerz.com/c/L7K2PQX'), 'L7K2PQX');
+    expect(inviteCodeFrom('Join me: https://waygerz.com/c/b9xk2m3?ref=sms'), 'B9XK2M3');
+    expect(inviteCodeFrom(''), '');
+    expect(inviteCodeFrom('not a code'), '');
+  });
+
   test('ordinal', () {
     expect(ordinal(1), '1st');
     expect(ordinal(2), '2nd');
