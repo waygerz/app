@@ -127,11 +127,10 @@ class LeaguesScreenState extends State<LeaguesScreen> {
   /// Type or paste an invite code / link, then open it like a shared link
   /// (web components/join-code-sheet.tsx).
   Future<void> _joinWithCode() async {
-    final code = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+    final code = await showWzSheet<String>(
+      context,
+      title: 'Join with code',
+      description: 'Enter the code or paste the invite link a friend sent you.',
       builder: (_) => const _JoinCodeSheet(),
     );
     if (code == null || code.isEmpty || !mounted) return;
@@ -376,7 +375,8 @@ class AvatarStack extends StatelessWidget {
   }
 }
 
-/// Join with code: returns the parsed code (see `inviteCodeFrom`).
+/// Join with code, the body of a `showWzSheet`: returns the parsed code (see
+/// `inviteCodeFrom`).
 class _JoinCodeSheet extends StatefulWidget {
   const _JoinCodeSheet();
 
@@ -395,20 +395,12 @@ class _JoinCodeSheetState extends State<_JoinCodeSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final c = WaygerzColors.of(context);
     final code = inviteCodeFrom(_text.text);
     void submit() {
       if (code.isNotEmpty) Navigator.of(context).pop(code);
     }
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 24 + MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Join with code', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.foreground)),
-        const SizedBox(height: 4),
-        Text('Enter the code or paste the invite link a friend sent you.',
-            style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-        const SizedBox(height: 16),
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         TextField(
           controller: _text,
           autofocus: true,
@@ -422,8 +414,7 @@ class _JoinCodeSheetState extends State<_JoinCodeSheet> {
         ),
         const SizedBox(height: 16),
         WzButton(label: 'Continue', expand: true, onPressed: code.isEmpty ? null : submit),
-      ]),
-    );
+      ]);
   }
 }
 

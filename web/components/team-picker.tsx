@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Check, Search } from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { AppSheet } from '@/components/ui/app-sheet';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchSports, fetchLeagues, fetchTeams, type Sport, type League, type Team } from '@/lib/ingestor';
@@ -123,24 +123,23 @@ export function TeamPicker({
   }
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="flex max-h-[86svh] flex-col gap-0 rounded-t-2xl p-0">
-        <SheetHeader className="flex-row items-center gap-2 space-y-0 border-b px-4 py-3 text-start">
+    <AppSheet
+      open={open}
+      onOpenChange={handleOpenChange}
+      tall
+      title={level === 'sport' ? 'Pick a sport' : level === 'league' ? sport?.name : league?.name}
+    >
+        <div>
+          {/* Drill back up: team → league → sport. */}
           {level !== 'sport' && (
             <button
               type="button"
               onClick={() => setLevel(level === 'team' ? 'league' : 'sport')}
-              className="-ms-1 inline-flex min-h-11 items-center gap-0.5 pe-1 text-sm font-semibold text-primary"
+              className="-ms-1 mb-1 inline-flex min-h-11 items-center gap-0.5 pe-1 text-sm font-semibold text-primary"
             >
               <ChevronLeft className="size-4" /> Back
             </button>
           )}
-          <SheetTitle className="truncate text-base">
-            {level === 'sport' ? 'Pick a sport' : level === 'league' ? sport?.name : league?.name}
-          </SheetTitle>
-        </SheetHeader>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           {atMax && (
             <p className="mb-3 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
               You&apos;ve reached the max of {MAX_FAVORITE_TEAMS} — remove a team to add another.
@@ -231,8 +230,7 @@ export function TeamPicker({
             </>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+    </AppSheet>
   );
 }
 

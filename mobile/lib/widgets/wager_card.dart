@@ -32,7 +32,7 @@ class WagerBetCard extends StatelessWidget {
     final when = event?.startTime != null ? formatStart(event!.startTime) : null;
 
     return InkWell(
-      onTap: () => showWzDialog<void>(context, builder: (_) => _BetDetails(view: v)),
+      onTap: () => showWzSheet<void>(context, title: 'Bet details', builder: (_) => _BetDetails(view: v)),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.border))),
@@ -287,7 +287,7 @@ Widget _pickCell(WaygerzColors c, _BetView v, ({String label, bool mine}) p, {re
 }
 
 /// Read-only bet details (web BetDetailsDialog): opponent + outcome, the board
-/// at dialog size, and a summary line.
+/// at sheet size, and a summary line; the body of a `showWzSheet`.
 class _BetDetails extends StatelessWidget {
   const _BetDetails({required this.view});
   final _BetView view;
@@ -304,7 +304,7 @@ class _BetDetails extends StatelessWidget {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
       Padding(
-        padding: const EdgeInsets.only(right: 32),
+        padding: EdgeInsets.zero,
         child: Row(children: [
           if (opp != null) ...[
             UserAvatar(userId: opp.id, name: opp.name, avatarKey: opp.avatarKey, size: 44),

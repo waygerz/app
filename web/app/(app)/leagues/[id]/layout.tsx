@@ -17,9 +17,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Drawer, DrawerContent, DrawerDescription, DrawerTitle,
-} from '@/components/ui/drawer';
+import { AppSheet } from '@/components/ui/app-sheet';
 import { cn } from '@/lib/utils';
 import { ChevronRight, Swords, Trophy, UserPlus } from 'lucide-react';
 import { LeagueProvider } from './league-context';
@@ -195,21 +193,25 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
         )}
       </div>
 
-      {/* League details — a bottom sheet from the league row. */}
-      <Drawer open={infoOpen} onOpenChange={setInfoOpen} shouldScaleBackground={false}>
-        <DrawerContent className="pb-[env(safe-area-inset-bottom)]">
-          <div className="flex flex-col items-center gap-4 px-4 pb-6 pt-4">
+      {/* League details — a bottom sheet from the league row. The centered
+          logo + name is the visible heading. */}
+      <AppSheet
+        open={infoOpen}
+        onOpenChange={setInfoOpen}
+        hideHeader
+        title={lg.name}
+        description={lg.description || 'League details'}
+      >
+          <div className="flex flex-col items-center gap-4 pb-2 pt-4">
             <LeagueAvatar name={lg.name} logoUrl={lg.logo_url} id={lg.id} size={64} />
             <div className="flex flex-col items-center gap-2 text-center">
-              <DrawerTitle className="text-lg font-bold text-foreground">{lg.name}</DrawerTitle>
+              <p className="text-lg font-bold text-foreground">{lg.name}</p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <LeagueTypeBadge type={lg.league_type} />
                 <PeriodBadge status={lg.status} period={lg.current_period} />
               </div>
-              {lg.description ? (
-                <DrawerDescription className="break-words text-foreground">{lg.description}</DrawerDescription>
-              ) : (
-                <DrawerDescription className="sr-only">League details</DrawerDescription>
+              {lg.description && (
+                <p className="break-words text-sm text-foreground">{lg.description}</p>
               )}
             </div>
 
@@ -237,8 +239,7 @@ export default function LeagueLayout({ children }: { children: ReactNode }) {
               </div>
             )}
           </div>
-        </DrawerContent>
-      </Drawer>
+      </AppSheet>
 
       <InviteToLeagueDialog
         leagueId={id}

@@ -277,17 +277,13 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
       ('Members', '${_memberCount(lg)}'),
       ('Record', mine != null ? formatRecord(mine.wins, mine.losses, mine.pushes) : '—'),
     ];
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+    showWzSheet<void>(
+      context,
+      title: 'League details',
       builder: (ctx) {
         final c = WaygerzColors.of(ctx);
         final period = _periodBadge(c, lg);
-        return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Center(child: LeagueAvatar(name: lg.name, id: lg.id, logo: lg.logoUrl, size: 64)),
             const SizedBox(height: 12),
             Text(lg.name, textAlign: TextAlign.center,
@@ -353,8 +349,7 @@ class _LeagueDetailScreenState extends State<LeagueDetailScreen> {
                 ),
               ]),
             ],
-          ]),
-        );
+          ]);
       },
     );
   }

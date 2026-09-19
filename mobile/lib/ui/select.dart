@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import 'sheet.dart';
 
 /// A bordered select (the web's Combobox / Select trigger): shows the current
 /// label with a chevron; tapping opens a bottom sheet of the options.
@@ -35,10 +36,11 @@ class WzSelect<T> extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () async {
-            final picked = await showModalBottomSheet<T>(
-              context: context,
-              isScrollControlled: true,
-              builder: (ctx) => _Options<T>(title: title, options: options, value: value),
+            final picked = await showWzSheet<T>(
+              context,
+              title: title ?? 'Choose',
+              scroll: false,
+              builder: (ctx) => _Options<T>(options: options, value: value),
             );
             if (picked != null && picked != value) onChanged(picked);
           },
@@ -59,25 +61,16 @@ class WzSelect<T> extends StatelessWidget {
   }
 }
 
+/// The option list, the body of a `showWzSheet`; pops the chosen value.
 class _Options<T> extends StatelessWidget {
-  const _Options({required this.title, required this.options, required this.value});
-  final String? title;
+  const _Options({required this.options, required this.value});
   final List<({T value, String label})> options;
   final T value;
 
   @override
   Widget build(BuildContext context) {
     final c = WaygerzColors.of(context);
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.7),
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (title != null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Text(title!, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.foreground)),
-          ),
-        Flexible(
-          child: ListView(shrinkWrap: true, padding: const EdgeInsets.only(bottom: 16), children: [
+    return ListView(shrinkWrap: true, padding: const EdgeInsets.only(bottom: 16), children: [
             for (final o in options)
               ListTile(
                 title: Text(o.label, style: TextStyle(fontSize: 14,
@@ -85,9 +78,6 @@ class _Options<T> extends StatelessWidget {
                 trailing: o.value == value ? Icon(Icons.check, size: 18, color: c.primary) : null,
                 onTap: () => Navigator.of(context).pop(o.value),
               ),
-          ]),
-        ),
-      ]),
-    );
+          ]);
   }
 }

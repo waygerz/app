@@ -88,8 +88,8 @@ and confirmations.
 Keep short confirms as compact dialogs.
 
 **Work:**
-- [ ] Web: a `ResponsiveSheet` on the existing `drawer` (vaul) for BetDetailsDialog, CounterButton, MemberPicksDialog, league details, invite dialog, bet dialogs.
-- [ ] Mobile: `showWzDialog` callers → `showModalBottomSheet` with a drag handle (bet details, co-winner chooser, league details); `confirmWz` stays a dialog.
+- [x] Web: every read/fill-in dialog and sheet is `AppSheet` (`components/ui/app-sheet.tsx`, vaul): bet + bet-details, counter, member picks, co-winners, league details, invite (+ by link), join with code, post composer, comments, reactions, team picker, user profile, terms/privacy. `AlertDialog` confirms unchanged.
+- [x] Mobile: every read/fill-in dialog and sheet uses `showWzSheet` / `WzSheet` (`ui/sheet.dart`); `showWzDialog` removed; `confirmWz` stays a dialog.
 
 ## 4. Design tokens
 **Today:** about 10 text sizes (10, 10.5, 11, 12, 13, 14…), ad-hoc spacing, and

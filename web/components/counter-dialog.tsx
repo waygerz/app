@@ -4,14 +4,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Minus, Plus } from 'lucide-react';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AppSheet } from '@/components/ui/app-sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { UserAvatar } from '@/components/user-avatar';
@@ -122,19 +115,31 @@ export function CounterButton({
         Counter
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm" onClick={(e) => e.stopPropagation()}>
-          <DialogHeader>
-            <div className="flex items-center gap-3">
-              <UserAvatar userId={otherId} name={otherName} imageUrl={otherAvatar} className="size-11 shrink-0" />
-              <div className="min-w-0">
-                <DialogTitle className="truncate text-base">{otherName}</DialogTitle>
-                <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Countering their bet</div>
-              </div>
+      {/* The sheet renders in a portal, but React events still bubble to the
+          card behind it — stop them here so a tap doesn't open the card. */}
+      <div className="contents" onClick={(e) => e.stopPropagation()}>
+        <AppSheet
+          open={open}
+          onOpenChange={setOpen}
+          title={
+            <span className="flex min-w-0 items-center gap-3">
+              <UserAvatar userId={otherId} name={otherName} imageUrl={otherAvatar} className="size-9 shrink-0" clickable={false} />
+              <span className="truncate">{otherName}</span>
+            </span>
+          }
+          description="Countering their bet"
+          bodyClassName="flex flex-col gap-4"
+          footer={
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => setOpen(false)} disabled={m.isPending}>
+                Cancel
+              </Button>
+              <Button onClick={() => m.mutate()} disabled={m.isPending || invalid || unchanged}>
+                {m.isPending ? 'Sending…' : 'Send counter'}
+              </Button>
             </div>
-          </DialogHeader>
-
-          <DialogBody className="flex flex-col gap-4">
+          }
+        >
             {/* Board: your side on top (original line kept for reference), adjuster beneath. */}
             <div className="flex flex-col gap-1.5">
               <div className="flex h-12 items-center gap-2.5 rounded-md bg-blue-500/15 px-2.5 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.28)]">
@@ -200,18 +205,8 @@ export function CounterButton({
                 </div>
               </div>
             </div>
-          </DialogBody>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={m.isPending}>
-              Cancel
-            </Button>
-            <Button onClick={() => m.mutate()} disabled={m.isPending || invalid || unchanged}>
-              {m.isPending ? 'Sending…' : 'Send counter'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </AppSheet>
+      </div>
     </>
   );
 }

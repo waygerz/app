@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { AppSheet } from '@/components/ui/app-sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserAvatar } from '@/components/user-avatar';
 import { commentsApi, type PostEngagement } from '@/lib/comments';
@@ -144,12 +144,8 @@ function ReactorSheet({
   const reactors = q.data ?? [];
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="flex max-h-[70svh] flex-col gap-0 rounded-t-2xl p-0">
-        <SheetHeader className="border-b px-4 py-3 text-start">
-          <SheetTitle className="text-base">Reactions</SheetTitle>
-        </SheetHeader>
-        <div className="flex-1 overflow-y-auto p-2">
+    <AppSheet open={open} onOpenChange={onOpenChange} title="Reactions" bodyClassName="px-2">
+        <div>
           {q.isPending ? (
             <div className="space-y-2 p-2">
               {[0, 1, 2].map((i) => (
@@ -182,7 +178,6 @@ function ReactorSheet({
             ))
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+    </AppSheet>
   );
 }

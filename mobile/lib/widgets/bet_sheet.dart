@@ -16,10 +16,8 @@ import 'stake_chips.dart';
 /// true when at least one bet was sent.
 Future<bool> showBetSheet(BuildContext context,
     {required ApiClient api, required League league, required SportEvent event, required String me}) async {
-  final sent = await showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
+  final sent = await showWzSheetWith<bool>(
+    context,
     builder: (_) => _BetSheet(api: api, league: league, event: event, me: me),
   );
   return sent ?? false;
@@ -116,12 +114,11 @@ class _BetSheetState extends State<_BetSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        child: _membersStep ? _members(context) : _config(context),
-      ),
+    final ev = widget.event;
+    return WzSheet(
+      title: '${ev.awayTeam} @ ${ev.homeTeam}',
+      description: formatStart(ev.startTime),
+      child: _membersStep ? _members(context) : _config(context),
     );
   }
 
@@ -159,10 +156,6 @@ class _BetSheetState extends State<_BetSheet> {
         );
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Semantics(header: true, child: Text('${ev.awayTeam} @ ${ev.homeTeam}',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.foreground))),
-      Text(formatStart(ev.startTime), style: TextStyle(fontSize: 12, color: c.mutedForeground)),
-      const SizedBox(height: 16),
       Row(children: [
         const SizedBox(width: 4),
         Expanded(child: head('WINNER')),

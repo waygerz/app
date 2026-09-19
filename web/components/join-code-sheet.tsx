@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { inviteCodeFrom } from '@/lib/leagues';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
+import { AppSheet } from '@/components/ui/app-sheet';
 
 /** "Join with code": type or paste an invite code or link, then open it at
  * /c/<code> — the same page a shared link lands on (league or bet). */
@@ -23,13 +23,13 @@ export function JoinCodeSheet({ open, onOpenChange }: { open: boolean; onOpenCha
   };
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
-      <DrawerContent className="pb-[env(safe-area-inset-bottom)]">
-        <form onSubmit={submit} className="flex flex-col gap-4 px-4 pb-6 pt-4">
-          <div className="flex flex-col gap-1">
-            <DrawerTitle className="text-lg font-bold">Join with code</DrawerTitle>
-            <DrawerDescription>Enter the code or paste the invite link a friend sent you.</DrawerDescription>
-          </div>
+    <AppSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Join with code"
+      description="Enter the code or paste the invite link a friend sent you."
+    >
+        <form onSubmit={submit} className="flex flex-col gap-4">
           <Input
             autoFocus
             value={text}
@@ -41,7 +41,6 @@ export function JoinCodeSheet({ open, onOpenChange }: { open: boolean; onOpenCha
           />
           <Button type="submit" disabled={!code}>Continue</Button>
         </form>
-      </DrawerContent>
-    </Drawer>
+    </AppSheet>
   );
 }

@@ -9,13 +9,7 @@ import { formatCredits } from '@/lib/wallet';
 import { UserAvatar } from '@/components/user-avatar';
 import { TeamLogo } from '@/components/event-card';
 import { FavoriteTeamPills } from '@/components/favorite-teams';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AppSheet } from '@/components/ui/app-sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -118,11 +112,10 @@ export function UserProfileDialog({
           : `${firstName} leads ${losses}–${wins} · ${totalLabel}`;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="sr-only">{name}</DialogTitle>
-          <div className="flex flex-col items-center gap-2 text-center">
+    // The centered avatar + name is the visible heading; the sheet title is
+    // kept for screen readers.
+    <AppSheet open={open} onOpenChange={onOpenChange} hideHeader title={name} description={record} tall>
+          <div className="mb-5 flex flex-col items-center gap-2 pt-2 text-center">
             <UserAvatar
               userId={userId}
               name={name}
@@ -136,9 +129,7 @@ export function UserProfileDialog({
               <span className="text-xs text-muted-foreground tabular-nums">{record}</span>
             </div>
           </div>
-        </DialogHeader>
 
-        <DialogBody>
           {favorites.length > 0 && (
             <div className="mb-4">
               <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -163,7 +154,7 @@ export function UserProfileDialog({
               No bets between you two yet.
             </p>
           ) : (
-            <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">
+            <ul className="flex flex-col gap-2">
               {bets.map((w) => {
                 const o = outcome(w, me);
                 const pick = wagerPick(w, viewerSide(w, me));
@@ -203,8 +194,6 @@ export function UserProfileDialog({
               })}
             </ul>
           )}
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
+    </AppSheet>
   );
 }

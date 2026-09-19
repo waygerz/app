@@ -13,10 +13,9 @@ import 'stake_chips.dart';
 /// Open the counter editor for an open bet (web components/counter-dialog.tsx).
 /// Resolves true when a counter was sent.
 Future<bool> showCounterSheet(BuildContext context, {required ApiClient api, required Wager wager, required String me}) async {
-  final sent = await showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
+  final sent = await showWzSheet<bool>(
+    context,
+    title: 'Counter offer',
     builder: (_) => _CounterSheet(api: api, wager: wager, me: me),
   );
   return sent ?? false;
@@ -100,11 +99,7 @@ class _CounterSheetState extends State<_CounterSheet> {
           ),
         );
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             UserAvatar(userId: otherId, name: otherName, avatarKey: otherAvatar, size: 44),
             const SizedBox(width: 12),
@@ -188,8 +183,6 @@ class _CounterSheetState extends State<_CounterSheet> {
           const SizedBox(height: 8),
           WzButton(label: 'Cancel', expand: true, variant: ButtonVariant.outline,
               onPressed: _sending ? null : () => Navigator.of(context).pop(false)),
-        ]),
-      ),
-    );
+        ]);
   }
 }

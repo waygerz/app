@@ -3,40 +3,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import 'button.dart';
 
-/// The web `Dialog`: a centered card (12px radius, 24px padding) with a close
-/// button. Returns what the dialog pops with.
-Future<T?> showWzDialog<T>(BuildContext context, {required WidgetBuilder builder}) {
-  return showDialog<T>(
-    context: context,
-    builder: (ctx) {
-      final c = WaygerzColors.of(ctx);
-      return Dialog(
-        backgroundColor: c.card,
-        surfaceTintColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(WaygerzRadius.xl),
-          side: BorderSide(color: c.border),
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 512),
-          child: Stack(children: [
-            SingleChildScrollView(padding: const EdgeInsets.all(24), child: builder(ctx)),
-            Positioned(
-              top: 4,
-              right: 4,
-              child: IconButton(
-                icon: Icon(Icons.close, size: 18, color: c.mutedForeground),
-                tooltip: 'Close',
-                onPressed: () => Navigator.of(ctx).pop(),
-              ),
-            ),
-          ]),
-        ),
-      );
-    },
-  );
-}
+/// Dialogs are for short yes/no confirms only (web `AlertDialog`); anything
+/// people read or fill in is a sheet — see `showWzSheet` (sheet.dart).
 
 /// The web `AlertDialog` confirm: title, description, Cancel + action.
 /// Resolves true only when the action is chosen.

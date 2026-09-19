@@ -15,14 +15,7 @@ import { ListSearch } from '@/components/list-search';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AppSheet } from '@/components/ui/app-sheet';
 import { X, Check } from 'lucide-react';
 import { STATE, pickBtn, StakeChips, StakeSummary } from './shared';
 
@@ -205,19 +198,17 @@ export function ScheduleBetDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          {/* Title is screen-reader-only: the team names already show in the
-              selection rows below (away on top, home on the bottom), so the
-              visible title is redundant. Kept for dialog accessibility. */}
-          <DialogTitle className="sr-only">{event.away_team} @ {event.home_team}</DialogTitle>
-          <DialogDescription className="sr-only">
-            Configure and send a head-to-head bet to league members. Tap the market and side you want to
-            back.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="flex flex-col gap-4 py-2">
+    // Title is screen-reader-only: the team names already show in the
+    // selection rows below (away on top, home on the bottom), so a visible
+    // title is redundant.
+    <AppSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      hideHeader
+      title={`${event.away_team} @ ${event.home_team}`}
+      description="Configure and send a head-to-head bet to league members. Tap the market and side you want to back."
+      bodyClassName="flex flex-col gap-4 pt-3"
+    >
           {step === 'config' ? (
             <>
               {/* Sportsbook-style selectable rows: Spread | Total | Winner. Total
@@ -315,9 +306,7 @@ export function ScheduleBetDialog({
               </div>
             </>
           )}
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
+    </AppSheet>
   );
 }
 
@@ -387,15 +376,7 @@ export function MatchupBetDialog({
   const canSubmit = selected.length > 0 && configReady;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{event.name}</DialogTitle>
-          <DialogDescription className="sr-only">
-            Pick a matchup and challenge league members.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogBody className="flex flex-col gap-4 py-2">
+    <AppSheet open={open} onOpenChange={onOpenChange} title={event.name} bodyClassName="flex flex-col gap-4">
           {step === 'config' ? (
             <>
               <p className="text-sm text-muted-foreground">
@@ -447,8 +428,6 @@ export function MatchupBetDialog({
               </div>
             </>
           )}
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
+    </AppSheet>
   );
 }

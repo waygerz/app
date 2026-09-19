@@ -11,7 +11,7 @@ import { leaguesApi } from '@/lib/leagues';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
+import { AppSheet } from '@/components/ui/app-sheet';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -109,21 +109,21 @@ export function LeagueFeed() {
             </div>
           )}
 
-          <Drawer open={composerOpen} onOpenChange={setComposerOpen} shouldScaleBackground={false}>
-            <DrawerContent className="pb-[env(safe-area-inset-bottom)]">
-              <div className="flex flex-col gap-3 px-4 pb-4 pt-3">
-                <div className="flex items-center justify-between gap-3">
-                  <DrawerTitle className="text-base font-bold">Post to {lg.name}</DrawerTitle>
-                  <Button
-                    size="sm"
-                    className="rounded-full px-4"
-                    disabled={post.isPending || !announcement.trim()}
-                    onClick={() => post.mutate()}
-                  >
-                    {post.isPending ? 'Posting…' : 'Post'}
-                  </Button>
-                </div>
-                <DrawerDescription className="sr-only">Share an update with your league.</DrawerDescription>
+          <AppSheet
+            open={composerOpen}
+            onOpenChange={setComposerOpen}
+            title={`Post to ${lg.name}`}
+            action={
+              <Button
+                size="sm"
+                className="rounded-full px-4"
+                disabled={post.isPending || !announcement.trim()}
+                onClick={() => post.mutate()}
+              >
+                {post.isPending ? 'Posting…' : 'Post'}
+              </Button>
+            }
+          >
                 <Textarea
                   autoFocus
                   value={announcement}
@@ -132,9 +132,7 @@ export function LeagueFeed() {
                   rows={5}
                   className="min-h-32 resize-none border-0 bg-transparent px-0 text-[15px] shadow-none focus-visible:ring-0"
                 />
-              </div>
-            </DrawerContent>
-          </Drawer>
+          </AppSheet>
           <div className="flex flex-col">
             {(feed.data ?? []).map((item) => (
               <FeedPostCard

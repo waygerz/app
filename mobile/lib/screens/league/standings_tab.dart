@@ -479,10 +479,10 @@ class _PickemResultsState extends State<_PickemResults> {
   }
 
   void _showPicks(WeeklyResultRow member, String weekLabel) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
+    showWzSheet<void>(
+      context,
+      title: '${member.displayName}’s picks',
+      description: weekLabel.isEmpty ? 'Selected week' : weekLabel,
       builder: (_) => _MemberPicks(api: widget.api, league: widget.league, periodId: _periodId, weekLabel: weekLabel, member: member),
     );
   }
@@ -615,14 +615,11 @@ class _WinnerCard extends StatelessWidget {
   }
 
   void _chooser(BuildContext context) {
-    showWzDialog<void>(context, builder: (ctx) {
+    showWzSheet<void>(context,
+        title: 'Co-winners${weekLabel.isNotEmpty ? ' — $weekLabel' : ''}',
+        description: 'Tap a winner to see their picks for the week.', builder: (ctx) {
       final c = WaygerzColors.of(ctx);
       return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Co-winners${weekLabel.isNotEmpty ? ' — $weekLabel' : ''}',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: c.foreground)),
-        const SizedBox(height: 4),
-        Text('Tap a winner to see their picks for the week.', style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-        const SizedBox(height: 12),
         for (final w in winners)
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 8),
@@ -640,8 +637,8 @@ class _WinnerCard extends StatelessWidget {
   }
 }
 
-/// A member's picks for the week (web MemberPicksDialog); hidden by the
-/// backend until an hour before the first game.
+/// A member's picks for the week (web MemberPicksDialog), the body of a
+/// `showWzSheet`; hidden by the backend until an hour before the first game.
 class _MemberPicks extends StatefulWidget {
   const _MemberPicks({required this.api, required this.league, required this.periodId, required this.weekLabel, required this.member});
   final ApiClient api;
@@ -672,13 +669,7 @@ class _MemberPicksState extends State<_MemberPicks> {
   Widget build(BuildContext context) {
     final c = WaygerzColors.of(context);
     final m = widget.member;
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
-      child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(20, 0, 20, 24), children: [
-        Text('${m.displayName}’s picks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: c.foreground)),
-        Text(widget.weekLabel.isEmpty ? 'Selected week' : widget.weekLabel, style: TextStyle(fontSize: 14, color: c.mutedForeground)),
-        const SizedBox(height: 16),
-        FutureBuilder<List<Pick>>(
+    return FutureBuilder<List<Pick>>(
           future: _future,
           builder: (context, snap) {
             if (snap.data == null && snap.connectionState == ConnectionState.waiting) {
@@ -714,8 +705,6 @@ class _MemberPicksState extends State<_MemberPicks> {
                 ),
             ]);
           },
-        ),
-      ]),
     );
   }
 

@@ -14,10 +14,10 @@ import '../ui/ui.dart';
 /// Invite to a league (web leagues/[id]/invite-dialog.tsx): share the league's
 /// invite link with anyone, or send a direct in-app invite to a friend.
 Future<void> showInviteSheet(BuildContext context, {required ApiClient api, required League league}) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
+  return showWzSheet<void>(
+    context,
+    title: 'Invite to ${league.name}',
+    scroll: false,
     builder: (_) => _InviteSheet(api: api, league: league),
   );
 }
@@ -66,13 +66,9 @@ class _InviteSheetState extends State<_InviteSheet> {
   Widget build(BuildContext context) {
     final c = WaygerzColors.of(context);
     final members = {for (final m in widget.league.members) m.userId};
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+    return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text('Invite to ${widget.league.name}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: c.foreground)),
-          const SizedBox(height: 16),
           WzButton(
             label: 'Share invite link',
             icon: LucideIcons.share2,
@@ -128,7 +124,6 @@ class _InviteSheetState extends State<_InviteSheet> {
             ),
           ),
         ]),
-      ),
     );
   }
 }

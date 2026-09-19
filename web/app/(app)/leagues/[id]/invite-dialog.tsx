@@ -15,9 +15,7 @@ import { CenterCard } from '@/components/ui/center-card';
 import { UserAvatar } from '@/components/user-avatar';
 import { ListSearch } from '@/components/list-search';
 import { cn } from '@/lib/utils';
-import {
-  Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
+import { AppSheet } from '@/components/ui/app-sheet';
 
 /**
  * Invite-to-league dialog: the league "Invite" action. Top is a button that
@@ -74,12 +72,7 @@ export function InviteToLeagueDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Invite to {leagueName}</DialogTitle>
-          </DialogHeader>
-          <DialogBody className="flex flex-col gap-4">
+      <AppSheet open={open} onOpenChange={onOpenChange} tall title={`Invite to ${leagueName}`} bodyClassName="flex flex-col gap-4">
             <Button variant="outline" className="w-full" onClick={() => setExtOpen(true)}>
               <Link2 className="size-4" />
               Invite by link
@@ -154,9 +147,7 @@ export function InviteToLeagueDialog({
                 })}
               </div>
             )}
-          </DialogBody>
-        </DialogContent>
-      </Dialog>
+      </AppSheet>
 
       <ExternalInviteDialog
         leagueName={leagueName}
@@ -208,12 +199,7 @@ function ExternalInviteDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invite by link</DialogTitle>
-        </DialogHeader>
-        <DialogBody className="flex flex-col gap-4">
+    <AppSheet open={open} onOpenChange={onOpenChange} title="Invite by link" bodyClassName="flex flex-col gap-4">
           {link ? (
             <>
               <p className="text-sm text-muted-foreground">
@@ -234,8 +220,6 @@ function ExternalInviteDialog({
           ) : (
             <p className="text-sm text-muted-foreground">No invite link for this league yet.</p>
           )}
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
+    </AppSheet>
   );
 }

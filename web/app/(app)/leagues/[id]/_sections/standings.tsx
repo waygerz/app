@@ -26,14 +26,7 @@ import { CenterCard } from '@/components/ui/center-card';
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AppSheet } from '@/components/ui/app-sheet';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -416,13 +409,13 @@ function WeekWinnerCard({
       </button>
 
       {!solo && (
-        <Dialog open={chooserOpen} onOpenChange={setChooserOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Co-winners{weekLabel ? ` — ${weekLabel}` : ''}</DialogTitle>
-              <DialogDescription>Tap a winner to see their picks for the week.</DialogDescription>
-            </DialogHeader>
-            <DialogBody className="flex flex-col gap-1 py-2">
+        <AppSheet
+          open={chooserOpen}
+          onOpenChange={setChooserOpen}
+          title={`Co-winners${weekLabel ? ` — ${weekLabel}` : ''}`}
+          description="Tap a winner to see their picks for the week."
+        >
+          <div className="flex flex-col gap-1">
               {winners.map((w) => (
                 <button
                   key={w.user_id}
@@ -445,9 +438,8 @@ function WeekWinnerCard({
                   <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
                 </button>
               ))}
-            </DialogBody>
-          </DialogContent>
-        </Dialog>
+          </div>
+        </AppSheet>
       )}
     </Card>
   );
@@ -735,13 +727,14 @@ function MemberPicksDialog({
   const starts = startsQ.data ?? {};
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85dvh]">
-        <DialogHeader>
-          <DialogTitle>{member?.display_name}&rsquo;s picks</DialogTitle>
-          <DialogDescription>{periodLabel || 'Selected week'}</DialogDescription>
-        </DialogHeader>
-        <DialogBody className="flex min-h-0 flex-col gap-4 overflow-y-auto py-2">
+    <AppSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      tall
+      title={<>{member?.display_name}&rsquo;s picks</>}
+      description={periodLabel || 'Selected week'}
+      bodyClassName="flex flex-col gap-4"
+    >
           {q.isLoading && <Skeleton className="h-24 rounded-xl" />}
           {q.isError && (
             <p className="text-sm text-muted-foreground">Picks are hidden until an hour before the first game.</p>
@@ -791,9 +784,7 @@ function MemberPicksDialog({
               <span className="text-lg font-bold tabular-nums text-foreground">{member.tiebreaker_total}</span>
             </div>
           )}
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
+    </AppSheet>
   );
 }
 

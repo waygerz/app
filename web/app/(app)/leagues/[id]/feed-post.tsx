@@ -22,7 +22,7 @@ import type { FeedItem, FeedMeta } from '@/lib/leagues';
 import { formatCredits } from '@/lib/wallet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/components/ui/drawer';
+import { AppSheet } from '@/components/ui/app-sheet';
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
 
@@ -315,16 +315,74 @@ function CommentsSheet({
     if (draft.trim() && !addComment.isPending) addComment.mutate();
   };
 
+  // Composer: replying chip, quick emoji, pill input + send — pinned under the threads.
+  const composer = (
+        <div>
+          {replyTo && (
+            <div className="mb-1 flex items-center justify-between rounded-lg bg-muted px-3 py-1.5 text-xs text-muted-foreground">
+              <span>
+                Replying to <span className="font-semibold text-foreground">{replyTo.author_name ?? 'member'}</span>
+              </span>
+              <button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply" className="p-1">
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
+          <div className="flex justify-around">
+            {QUICK_EMOJI.map((e) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => setDraft((d) => d + e)}
+                className="flex size-10 items-center justify-center rounded-full text-xl hover:bg-muted"
+                aria-label={`Add ${e}`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-end gap-2 pt-1">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={replyTo ? `Reply to ${replyTo.author_name ?? 'member'}…` : 'Add a comment…'}
+              rows={1}
+              aria-label={replyTo ? 'Write a reply' : 'Write a comment'}
+              className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-3xl px-4 py-2.5 text-sm [field-sizing:content]"
+              onKeyDown={(e) => {
+                // Enter sends; Shift+Enter inserts a newline.
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+            />
+            <Button
+              size="icon"
+              className="size-10 shrink-0 rounded-full"
+              aria-label={replyTo ? 'Send reply' : 'Post comment'}
+              disabled={addComment.isPending || !draft.trim()}
+              onClick={send}
+            >
+              <ArrowUp className="size-4" />
+            </Button>
+          </div>
+        </div>
+  );
+
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
-      <DrawerContent className="h-[85dvh] max-h-[85dvh]">
-        <DrawerTitle className="border-b border-border pb-2.5 pt-2 text-center text-sm font-bold">
-          {count > 0 ? `${count} comment${count === 1 ? '' : 's'}` : 'Comments'}
-        </DrawerTitle>
-        <DrawerDescription className="sr-only">The post and its comments</DrawerDescription>
+    <AppSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      tall
+      title={count > 0 ? `${count} comment${count === 1 ? '' : 's'}` : 'Comments'}
+      description="The post and its comments"
+      footer={composer}
+      bodyClassName="px-0 pb-0"
+    >
 
         {/* The post, summarized, with its reactions. */}
-        <div className="flex gap-3 border-b border-border bg-muted/30 px-4 py-3">
+        <div className="flex gap-3 border-y border-border bg-muted/30 px-4 py-3">
           {(isPost || showAvatar) && item.author_id ? (
             <UserAvatar
               userId={item.author_id}
@@ -355,7 +413,7 @@ function CommentsSheet({
         </div>
 
         {/* Threads. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <div className="px-4 py-3">
           {comments.isLoading && <p className="text-xs text-muted-foreground">Loading comments…</p>}
           {!comments.isLoading && list.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">No comments yet. Start the conversation.</p>
@@ -405,60 +463,7 @@ function CommentsSheet({
           </div>
         </div>
 
-        {/* Composer: replying chip, quick emoji, pill input + send. */}
-        <div className="border-t border-border pb-[env(safe-area-inset-bottom)]">
-          {replyTo && (
-            <div className="mx-3 mt-2 flex items-center justify-between rounded-lg bg-muted px-3 py-1.5 text-xs text-muted-foreground">
-              <span>
-                Replying to <span className="font-semibold text-foreground">{replyTo.author_name ?? 'member'}</span>
-              </span>
-              <button type="button" onClick={() => setReplyTo(null)} aria-label="Cancel reply" className="p-1">
-                <X className="size-3.5" />
-              </button>
-            </div>
-          )}
-          <div className="flex justify-around px-3 pt-1.5">
-            {QUICK_EMOJI.map((e) => (
-              <button
-                key={e}
-                type="button"
-                onClick={() => setDraft((d) => d + e)}
-                className="flex size-10 items-center justify-center rounded-full text-xl hover:bg-muted"
-                aria-label={`Add ${e}`}
-              >
-                {e}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-end gap-2 px-3 pb-3 pt-1">
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={replyTo ? `Reply to ${replyTo.author_name ?? 'member'}…` : 'Add a comment…'}
-              rows={1}
-              aria-label={replyTo ? 'Write a reply' : 'Write a comment'}
-              className="max-h-28 min-h-10 min-w-0 flex-1 resize-none rounded-3xl px-4 py-2.5 text-sm [field-sizing:content]"
-              onKeyDown={(e) => {
-                // Enter sends; Shift+Enter inserts a newline.
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-            />
-            <Button
-              size="icon"
-              className="size-10 shrink-0 rounded-full"
-              aria-label={replyTo ? 'Send reply' : 'Post comment'}
-              disabled={addComment.isPending || !draft.trim()}
-              onClick={send}
-            >
-              <ArrowUp className="size-4" />
-            </Button>
-          </div>
-        </div>
-      </DrawerContent>
-    </Drawer>
+    </AppSheet>
   );
 }
 

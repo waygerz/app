@@ -9,13 +9,7 @@ import { UserAvatar } from '@/components/user-avatar';
 import { useProfileDialog } from '@/components/profile-dialog-context';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AppSheet } from '@/components/ui/app-sheet';
 import { Lock } from 'lucide-react';
 import { StakeText } from './shared';
 
@@ -125,10 +119,16 @@ function BetDetailsDialog({
   const pickCls = (mine: boolean) => mine ? cn(toneBg, toneText) : 'bg-muted/60 text-muted-foreground';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogTitle className="sr-only">{field ? (w.event_name || 'Matchup') : `${w.away_team} @ ${w.home_team}`}</DialogTitle>
-        <DialogDescription className="sr-only">Bet details</DialogDescription>
+    // The opponent + outcome row is the visible heading; the matchup title is
+    // kept for screen readers.
+    <AppSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      hideHeader
+      title={field ? (w.event_name || 'Matchup') : `${w.away_team} @ ${w.home_team}`}
+      description="Bet details"
+      bodyClassName="pt-2"
+    >
 
         {/* opponent + outcome header */}
         <div className="flex items-center gap-3">
@@ -153,7 +153,7 @@ function BetDetailsDialog({
           </div>
         </div>
 
-        <DialogBody className="mt-4 flex flex-col">
+        <div className="mt-4 flex flex-col">
           {field ? (
             <div className={cn('rounded-md bg-muted/60 px-3 py-3 text-center text-base font-semibold', iWon ? 'text-brand' : iLost ? 'text-destructive' : 'text-foreground')}>
               {wagerPick(w, side)}
@@ -184,9 +184,8 @@ function BetDetailsDialog({
           <div className="mt-3 text-center text-xs text-muted-foreground">
             {betTypeLabel} · <StakeText cents={w.amount_cents} treat={w.treat} /> stake · {field && w.event_name ? w.event_name : `${w.away_team} @ ${w.home_team}`}
           </div>
-        </DialogBody>
-      </DialogContent>
-    </Dialog>
+        </div>
+    </AppSheet>
   );
 }
 

@@ -58,10 +58,8 @@ class _FeedTabState extends State<FeedTab> {
   }
 
   Future<void> _compose() async {
-    final posted = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
+    final posted = await showWzSheetWith<bool>(
+      context,
       builder: (_) => _Composer(api: widget.api, league: widget.league),
     );
     if (posted == true) await _reload();
@@ -220,28 +218,23 @@ class _ComposerState extends State<_Composer> {
 
   @override
   Widget build(BuildContext context) {
-    final c = WaygerzColors.of(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Post to ${widget.league.name}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: c.foreground)),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _text,
-          autofocus: true,
-          minLines: 5,
-          maxLines: 10,
-          style: const TextStyle(fontSize: 16),
-          decoration: const InputDecoration(hintText: "What's on your mind?"),
-        ),
-        const SizedBox(height: 16),
-        WzButton(
-          label: _posting ? 'Posting…' : 'Post',
-          expand: true,
-          busy: _posting,
-          onPressed: _posting || _text.text.trim().isEmpty ? null : _post,
-        ),
-      ]),
+    // Post sits in the header, where the close button would be (web feed.tsx).
+    return WzSheet(
+      title: 'Post to ${widget.league.name}',
+      action: WzButton(
+        label: _posting ? 'Posting…' : 'Post',
+        size: ButtonSize.sm,
+        busy: _posting,
+        onPressed: _posting || _text.text.trim().isEmpty ? null : _post,
+      ),
+      child: TextField(
+        controller: _text,
+        autofocus: true,
+        minLines: 5,
+        maxLines: 10,
+        style: const TextStyle(fontSize: 16),
+        decoration: const InputDecoration(hintText: "What's on your mind?"),
+      ),
     );
   }
 }

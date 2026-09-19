@@ -12,6 +12,7 @@ export 'pill_tabs.dart';
 export 'search_field.dart';
 export 'section_title.dart';
 export 'select.dart';
+export 'sheet.dart';
 export 'skeleton.dart';
 export 'tab_bar.dart';
 export 'toast.dart';

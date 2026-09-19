@@ -6,6 +6,7 @@ import '../../api/users_api.dart';
 import '../../auth/auth_controller.dart';
 import '../../models.dart';
 import '../../theme/app_theme.dart';
+import '../../ui/ui.dart';
 import '../widgets.dart';
 
 /// Favorite teams (web: components/account/favorite-teams-card.tsx). Loads the
@@ -79,10 +80,9 @@ class _FavoriteTeamsCardState extends State<FavoriteTeamsCard> {
   }
 
   Future<void> _openPicker() async {
-    final picked = await showModalBottomSheet<FavoriteTeam>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => FractionallySizedBox(heightFactor: 0.85, child: _TeamPicker(existing: _teams ?? const [])),
+    final picked = await showWzSheetWith<FavoriteTeam>(
+      context,
+      builder: (_) => _TeamPicker(existing: _teams ?? const []),
     );
     if (picked != null) _add(picked);
   }
@@ -179,7 +179,9 @@ class _FavoriteTeamsCardState extends State<FavoriteTeamsCard> {
 }
 
 /// Sport → league → team picker (web: components/team-picker.tsx), with a
-/// search box on the team step. Pops the chosen team.
+/// search box on the team step, in a tall sheet whose title follows the step
+/// (a back arrow replaces the close button past the first step). Pops the
+/// chosen team.
 class _TeamPicker extends StatefulWidget {
   const _TeamPicker({required this.existing});
   final List<FavoriteTeam> existing;
@@ -263,14 +265,19 @@ class _TeamPickerState extends State<_TeamPicker> {
       );
     }
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 16, 8),
-        child: Row(children: [
-          if (step > 0) IconButton(onPressed: _back, icon: const Icon(LucideIcons.chevronLeft)) else const SizedBox(width: 8),
-          Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600))),
-        ]),
-      ),
+    return WzSheet(
+      title: title,
+      tall: true,
+      scroll: false,
+      action: step > 0
+          ? IconButton(
+              tooltip: 'Back',
+              visualDensity: VisualDensity.compact,
+              onPressed: _back,
+              icon: Icon(LucideIcons.chevronLeft, size: 20, color: c.mutedForeground),
+            )
+          : null,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       if (step == 2)
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -305,6 +312,7 @@ class _TeamPickerState extends State<_TeamPicker> {
             ),
         },
       ),
-    ]);
+    ]),
+    );
   }
 }
